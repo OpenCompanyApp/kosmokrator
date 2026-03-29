@@ -62,10 +62,10 @@ class KosmokratorStyleSheet
                 padding: new Padding(1, 2, 0, 2),
             ),
 
-            // Separator
+            // Separator between turns
             '.separator' => new Style(
-                color: Color::hex('#606060'),
-                padding: new Padding(0, 2, 0, 2),
+                color: Color::hex('#404040'),
+                padding: new Padding(1, 2, 0, 2),
             ),
 
             // Response area (markdown)
@@ -73,10 +73,9 @@ class KosmokratorStyleSheet
                 padding: new Padding(0, 2, 0, 2),
             ),
 
-            // Tool call display — double border for mythological ornate feel
+            // Tool call display
             '.tool-call' => new Style(
-                border: Border::all(1, BorderPattern::double(), Color::hex('#806428')),
-                padding: new Padding(0, 1, 0, 1),
+                padding: new Padding(1, 2, 1, 2),
                 color: Color::hex('#ffc850'),
             ),
 
@@ -141,9 +140,18 @@ class KosmokratorStyleSheet
 
             // Thinking loader (animated spinner)
             CancellableLoaderWidget::class => new Style(
-                color: Color::hex('#ffc850'),
+                color: Color::hex('#70a0d0'),
                 italic: true,
                 padding: new Padding(1, 2, 0, 2),
+            ),
+
+            CancellableLoaderWidget::class . '::spinner' => new Style(
+                color: Color::hex('#70a0d0'),
+            ),
+
+            CancellableLoaderWidget::class . '::message' => new Style(
+                color: Color::hex('#70a0d0'),
+                italic: true,
             ),
 
             // Markdown widget — cap width for readability

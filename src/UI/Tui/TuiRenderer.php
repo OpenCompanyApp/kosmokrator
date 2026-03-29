@@ -9,6 +9,7 @@ use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
+use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Tempest\Highlight\Highlighter;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
@@ -70,15 +71,38 @@ class TuiRenderer implements RendererInterface
         '☽ Scrying the heavens...',
     ];
 
+    private const SPINNERS = [
+        'cosmos'    => ['✦', '✧', '⊛', '◈', '⊛', '✧'],                       // Pulsing cosmic gem
+        'planets'   => ['☿', '♀', '♁', '♂', '♃', '♄', '♅', '♆'],            // Planetary orbit
+        'elements'  => ['🜁', '🜂', '🜃', '🜄'],                               // Alchemical elements
+        'stars'     => ['⋆', '✧', '★', '✦', '★', '✧'],                       // Twinkling stars
+        'ouroboros'  => ['◴', '◷', '◶', '◵'],                                 // Serpent cycle
+        'oracle'    => ['◉', '◎', '◉', '○', '◎', '○'],                       // All-seeing eye
+        'runes'     => ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ'],         // Elder Futhark runes
+        'fate'      => ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'],                     // Dice of fate
+        'sigil'     => ['᛭', '⊹', '✳', '✴', '✳', '⊹'],                      // Arcane sigil pulse
+        'serpent'   => ['∿', '≀', '∾', '≀'],                                  // Cosmic serpent wave
+        'eclipse'   => ['◐', '◓', '◑', '◒'],                                  // Solar eclipse
+        'hourglass' => ['⧗', '⧖', '⧗', '⧖'],                                 // Sands of Chronos
+        'trident'   => ['ψ', 'Ψ', 'ψ', '⊥'],                                 // Poseidon's trident
+        'aether'    => ['·', '∘', '○', '◌', '○', '∘'],                        // Aetheric ripple
+    ];
+
+    private bool $spinnersRegistered = false;
+    private int $spinnerIndex = 0;
+
     private ?Suspension $promptSuspension = null;
 
     private ?SelectListWidget $slashCompletion = null;
 
     private const SLASH_COMMANDS = [
-        ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
+        ['value' => '/edit', 'label' => '/edit', 'description' => 'Switch to edit mode (full tool access)'],
+        ['value' => '/plan', 'label' => '/plan', 'description' => 'Switch to plan mode (read-only)'],
+        ['value' => '/ask', 'label' => '/ask', 'description' => 'Switch to ask mode (read-only, conversational)'],
+        ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Auto-approve all tools until next prompt'],
         ['value' => '/reset', 'label' => '/reset', 'description' => 'Clear conversation history'],
         ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
-        ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Auto-approve all tools until next prompt'],
+        ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
         ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
     ];
 
@@ -102,7 +126,7 @@ class TuiRenderer implements RendererInterface
         $this->conversation->expandVertically(true);
 
         // Status bar at bottom — context progress bar
-        $this->statusBar = new ProgressBarWidget(200_000, '%message%  %bar%  %percent%%');
+        $this->statusBar = new ProgressBarWidget(200_000, '%message%  %bar%');
         $this->statusBar->setId('status-bar');
         $this->statusBar->setBarCharacter('━');
         $this->statusBar->setEmptyBarCharacter('─');
@@ -110,7 +134,8 @@ class TuiRenderer implements RendererInterface
         $this->statusBar->setBarWidth(20);
         $red = "\033[38;2;255;60;40m";
         $r = "\033[0m";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  ·  {$red}KosmoKrator{$r}  ·  Ready");
+        $sep = "\033[38;5;240m·{$r}";
+        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  Ready");
         $this->statusBar->start(200_000, 0);
 
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
@@ -124,10 +149,18 @@ class TuiRenderer implements RendererInterface
             'cycle_mode' => ['shift+tab'],                 // Cycle through edit → plan → ask
         ]));
 
-        // Shift+Tab — cycle mode
+        // Keyboard shortcuts on input
         $this->input->onInput(function (string $data): bool {
             $kb = $this->input->getKeybindings();
 
+            // Ctrl+O — toggle all tool results expanded/collapsed
+            if ($kb->matches($data, 'expand_tools')) {
+                $this->toggleAllToolResults();
+
+                return true;
+            }
+
+            // Shift+Tab — cycle mode (submit as slash command)
             if ($kb->matches($data, 'cycle_mode') && $this->promptSuspension !== null) {
                 $nextMode = $this->cycleMode();
                 $this->input->setText('');
@@ -255,11 +288,21 @@ class TuiRenderer implements RendererInterface
     {
         $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
 
+        // Register custom spinners on first use
+        if (!$this->spinnersRegistered) {
+            foreach (self::SPINNERS as $name => $frames) {
+                CancellableLoaderWidget::addSpinner($name, $frames);
+            }
+            $this->spinnersRegistered = true;
+        }
+
         $this->requestCancellation = new DeferredCancellation();
 
         $this->loader = new CancellableLoaderWidget($phrase);
         $this->loader->setId('loader');
-        $this->loader->setSpinner('dots');
+        $spinnerNames = array_keys(self::SPINNERS);
+        $this->loader->setSpinner($spinnerNames[$this->spinnerIndex % count($spinnerNames)]);
+        $this->spinnerIndex++;
         $this->loader->start();
 
         $this->loader->onCancel(function () {
@@ -327,12 +370,6 @@ class TuiRenderer implements RendererInterface
     {
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
-
-        // Add separator after response
-        $separator = new TextWidget('─────────────────────────────────────────');
-        $separator->addStyleClass('separator');
-        $this->conversation->add($separator);
-
         $this->tui->processRender();
     }
 
@@ -368,29 +405,21 @@ class TuiRenderer implements RendererInterface
         $indicator = $success ? '✓' : '✗';
         $r = Theme::reset();
         $dim = Theme::dim();
+        $text = Theme::text();
 
-        // File read: just show status badge, no content
-        if ($name === 'file_read') {
-            $lineCount = count(explode("\n", $output));
-            $ansi = "{$statusColor}{$indicator}{$r} {$dim}{$name}  ({$lineCount} lines){$r}";
-            $widget = new AnsiArtWidget($ansi);
-            $widget->addStyleClass('tool-result');
-            $this->conversation->add($widget);
+        $header = "{$statusColor}{$indicator}{$r}";
+        $lineCount = count(explode("\n", $output));
+
+        // Syntax-highlight file_read content
+        if ($name === 'file_read' && $success) {
+            $content = $this->highlightFileOutput($output);
         } else {
-            $lines = explode("\n", $output);
-            $maxLines = 10;
-            $preview = array_slice($lines, 0, $maxLines);
-            $suffix = count($lines) > $maxLines
-                ? "\n{$dim}... +" . (count($lines) - $maxLines) . " more lines{$r}"
-                : '';
-
-            $header = "{$statusColor}{$indicator}{$r} {$dim}{$name}{$r}";
-            $body = implode("\n", array_map(fn (string $l) => "{$dim}{$l}{$r}", $preview));
-            $widget = new AnsiArtWidget("{$header}\n{$body}{$suffix}");
-            $widget->addStyleClass('tool-result');
-            $this->conversation->add($widget);
+            $content = implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $output)));
         }
 
+        $widget = new CollapsibleWidget($header, $content, $lineCount);
+        $widget->addStyleClass('tool-result');
+        $this->conversation->add($widget);
         $this->tui->processRender();
     }
 
@@ -482,14 +511,6 @@ class TuiRenderer implements RendererInterface
         $this->tui->processRender();
     }
 
-    public function showError(string $message): void
-    {
-        $widget = new TextWidget("✗ Error: {$message}");
-        $widget->addStyleClass('tool-error');
-        $this->conversation->add($widget);
-        $this->tui->processRender();
-    }
-
     public function showMode(string $label, string $color = ''): void
     {
         $this->currentModeLabel = $label;
@@ -498,12 +519,26 @@ class TuiRenderer implements RendererInterface
         }
         $r = "\033[0m";
         $red = "\033[38;2;255;60;40m";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}  ·  {$red}KosmoKrator{$r}");
+        $sep = "\033[38;5;240m·{$r}";
+        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  Ready");
+        $this->tui->processRender();
+    }
+
+    public function showError(string $message): void
+    {
+        $widget = new TextWidget("✗ Error: {$message}");
+        $widget->addStyleClass('tool-error');
+        $this->conversation->add($widget);
         $this->tui->processRender();
     }
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
+        // Separator after complete turn
+        $separator = new TextWidget(str_repeat('─', 200));
+        $separator->addStyleClass('separator');
+        $this->conversation->add($separator);
+
         // Update progress bar max if model changed
         if ($this->statusBar->getMaxSteps() !== $maxContext) {
             $this->statusBar->start($maxContext, $tokensIn);
@@ -511,11 +546,19 @@ class TuiRenderer implements RendererInterface
             $this->statusBar->setProgress($tokensIn);
         }
 
-        $r = "\033[0m";
-        $red = "\033[38;2;255;60;40m";
         $inLabel = Theme::formatTokenCount($tokensIn);
         $maxLabel = Theme::formatTokenCount($maxContext);
-        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  ·  {$red}KosmoKrator{$r}  ·  {$model}  ·  {$inLabel}/{$maxLabel}  ·  \${$cost}");
+        $ratio = min(1.0, $tokensIn / max(1, $maxContext));
+        $r = "\033[0m";
+        $red = "\033[38;2;255;60;40m";
+        $sep = "\033[38;5;240m·{$r}";
+        $dimWhite = "\033[38;2;140;140;150m";
+        $ctxColor = Theme::contextColor($ratio);
+        $costColor = "\033[38;5;245m";
+
+        $this->statusBar->setMessage(
+            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}\${$cost}{$r}"
+        );
         $this->tui->processRender();
     }
 
@@ -588,6 +631,16 @@ class TuiRenderer implements RendererInterface
             $this->slashCompletion = null;
             $this->tui->processRender();
         }
+    }
+
+    private function toggleAllToolResults(): void
+    {
+        foreach ($this->conversation->all() as $widget) {
+            if ($widget instanceof CollapsibleWidget) {
+                $widget->toggle();
+            }
+        }
+        $this->tui->processRender();
     }
 
     private function containsAnsiEscapes(string $text): bool

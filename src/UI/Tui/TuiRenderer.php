@@ -45,6 +45,9 @@ class TuiRenderer implements RendererInterface
     /** @var string[] */
     private array $messageQueue = [];
 
+    private string $currentModeLabel = 'Edit';
+    private string $currentModeColor = "\033[38;2;80;200;120m";
+
     private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
 
     private bool $activeResponseIsAnsi = false;
@@ -105,7 +108,9 @@ class TuiRenderer implements RendererInterface
         $this->statusBar->setEmptyBarCharacter('─');
         $this->statusBar->setProgressCharacter('━');
         $this->statusBar->setBarWidth(20);
-        $this->statusBar->setMessage('KosmoKrator · Ready');
+        $red = "\033[38;2;255;60;40m";
+        $r = "\033[0m";
+        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  ·  {$red}KosmoKrator{$r}  ·  Ready");
         $this->statusBar->start(200_000, 0);
 
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
@@ -116,7 +121,26 @@ class TuiRenderer implements RendererInterface
         $this->input->setKeybindings(new Keybindings([
             'copy' => [],                                  // Free ctrl+c for cancel
             'new_line' => ['shift+enter', 'alt+enter'],    // Both work: shift+enter with kitty, alt+enter without
+            'cycle_mode' => ['shift+tab'],                 // Cycle through edit → plan → ask
         ]));
+
+        // Shift+Tab — cycle mode
+        $this->input->onInput(function (string $data): bool {
+            $kb = $this->input->getKeybindings();
+
+            if ($kb->matches($data, 'cycle_mode') && $this->promptSuspension !== null) {
+                $nextMode = $this->cycleMode();
+                $this->input->setText('');
+
+                $suspension = $this->promptSuspension;
+                $this->promptSuspension = null;
+                $suspension->resume("/{$nextMode}");
+
+                return true;
+            }
+
+            return false;
+        });
 
         // Ctrl+C / Escape on input — context-aware
         $this->input->onCancel(function (CancelEvent $event) {
@@ -466,6 +490,18 @@ class TuiRenderer implements RendererInterface
         $this->tui->processRender();
     }
 
+    public function showMode(string $label, string $color = ''): void
+    {
+        $this->currentModeLabel = $label;
+        if ($color !== '') {
+            $this->currentModeColor = $color;
+        }
+        $r = "\033[0m";
+        $red = "\033[38;2;255;60;40m";
+        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}  ·  {$red}KosmoKrator{$r}");
+        $this->tui->processRender();
+    }
+
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
         // Update progress bar max if model changed
@@ -475,9 +511,11 @@ class TuiRenderer implements RendererInterface
             $this->statusBar->setProgress($tokensIn);
         }
 
+        $r = "\033[0m";
+        $red = "\033[38;2;255;60;40m";
         $inLabel = Theme::formatTokenCount($tokensIn);
         $maxLabel = Theme::formatTokenCount($maxContext);
-        $this->statusBar->setMessage("{$model}  ·  {$inLabel}/{$maxLabel}  ·  \${$cost}");
+        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  ·  {$red}KosmoKrator{$r}  ·  {$model}  ·  {$inLabel}/{$maxLabel}  ·  \${$cost}");
         $this->tui->processRender();
     }
 
@@ -506,6 +544,16 @@ class TuiRenderer implements RendererInterface
         if ($this->tui->isRunning()) {
             $this->tui->stop();
         }
+    }
+
+    private function cycleMode(): string
+    {
+        $modes = ['edit', 'plan', 'ask'];
+        $current = strtolower($this->currentModeLabel);
+        $index = array_search($current, $modes, true);
+        $next = $modes[($index + 1) % count($modes)];
+
+        return $next;
     }
 
     private function showSlashCompletion(string $filter): void

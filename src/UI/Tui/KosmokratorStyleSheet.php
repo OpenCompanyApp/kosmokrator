@@ -122,6 +122,18 @@ class KosmokratorStyleSheet
                 padding: new Padding(0, 1, 0, 1),
             ),
 
+            ProgressBarWidget::class . '::bar-fill' => new Style(
+                color: Color::hex('#50c878'),
+            ),
+
+            ProgressBarWidget::class . '::bar-progress' => new Style(
+                color: Color::hex('#50c878'),
+            ),
+
+            ProgressBarWidget::class . '::bar-empty' => new Style(
+                color: Color::hex('#404040'),
+            ),
+
             // ANSI art response (no color/attribute styling to preserve raw ANSI codes)
             '.ansi-art' => new Style(
                 padding: new Padding(0, 2, 0, 2),

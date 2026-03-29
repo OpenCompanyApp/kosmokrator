@@ -1,5 +1,5 @@
 <?php
 
-it('inspires artisans', function () {
-    $this->artisan('inspire')->assertExitCode(0);
+it('launches the agent', function () {
+    $this->artisan('agent')->assertExitCode(0);
 });

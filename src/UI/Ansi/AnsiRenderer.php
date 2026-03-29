@@ -123,10 +123,12 @@ class AnsiRenderer implements RendererInterface
         $dim = Theme::dim();
         $status = $success ? Theme::success() . '✓' : Theme::error() . '✗';
 
+        $friendly = Theme::toolLabel($name);
+
         // File read: just show status
         if ($name === 'file_read') {
             $lineCount = count(explode("\n", $output));
-            echo "{$border}  ┃ {$status} {$dim}{$name}{$r} {$dim}({$lineCount} lines){$r}\n";
+            echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r} {$dim}({$lineCount} lines){$r}\n";
             return;
         }
 
@@ -141,7 +143,7 @@ class AnsiRenderer implements RendererInterface
             echo "{$border}  ┃ {$dim}⊛ +" . (count($lines) - $maxLines) . " more lines{$r}\n";
         }
 
-        echo "{$border}  ┃ {$status} {$dim}{$name}{$r}\n";
+        echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
     }
 
     public function askToolPermission(string $toolName, array $args): string
@@ -257,6 +259,12 @@ class AnsiRenderer implements RendererInterface
     public function teardown(): void
     {
         echo Theme::showCursor();
+    }
+
+    public function playTheogony(): void
+    {
+        $theogony = new AnsiTheogony();
+        $theogony->animate();
     }
 
     public function showWelcome(): void

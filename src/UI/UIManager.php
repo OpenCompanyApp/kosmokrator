@@ -59,6 +59,15 @@ class UIManager implements RendererInterface
         }
     }
 
+    public function playTheogony(): void
+    {
+        if ($this->renderer instanceof TuiRenderer) {
+            $this->renderer->playTheogony();
+        } elseif ($this->renderer instanceof AnsiRenderer) {
+            $this->renderer->playTheogony();
+        }
+    }
+
     private function resolveRenderer(string $preference): RendererInterface
     {
         if ($preference === 'ansi') {

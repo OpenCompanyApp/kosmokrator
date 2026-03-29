@@ -5,6 +5,7 @@ namespace Kosmokrator\UI\Tui;
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
 use Kosmokrator\UI\Ansi\AnsiIntro;
+use Kosmokrator\UI\Ansi\AnsiTheogony;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
@@ -104,6 +105,7 @@ class TuiRenderer implements RendererInterface
         ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
         ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
         ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
+        ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
     ];
 
     private ?Highlighter $highlighter = null;
@@ -571,6 +573,23 @@ class TuiRenderer implements RendererInterface
     public function showWelcome(): void
     {
         // Already handled in renderIntro
+    }
+
+    public function playTheogony(): void
+    {
+        // Suspend TUI — restores terminal to normal mode
+        $this->tui->stop();
+        echo "\033[2J\033[H";
+
+        // Play raw ANSI animation
+        $theogony = new AnsiTheogony();
+        $theogony->animate();
+
+        // Pause to admire, then restore TUI
+        usleep(800000);
+        echo "\033[2J\033[H";
+        $this->tui->start();
+        $this->tui->processRender();
     }
 
     public function consumeQueuedMessage(): ?string

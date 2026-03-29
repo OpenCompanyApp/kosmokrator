@@ -126,6 +126,11 @@ class AgentCommand extends Command
                 continue;
             }
 
+            if (in_array($command, ['/theogony', '/cosmogony'])) {
+                $ui->playTheogony();
+                continue;
+            }
+
             if (in_array($command, ['/edit', '/plan', '/ask'])) {
                 $mode = AgentMode::from(ltrim($command, '/'));
                 $agentLoop->setMode($mode);

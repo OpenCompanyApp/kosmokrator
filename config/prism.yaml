@@ -1,0 +1,14 @@
+prism_server:
+  enabled: false
+
+providers:
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    url: https://api.anthropic.com
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    url: https://api.openai.com/v1
+  ollama:
+    url: http://localhost:11434/v1
+
+request_timeout: 120

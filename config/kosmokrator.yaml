@@ -1,0 +1,31 @@
+agent:
+  default_provider: anthropic
+  default_model: claude-sonnet-4-20250514
+  max_tokens: 8192
+  temperature: 0.0
+  max_tool_rounds: 25
+  system_prompt: |
+    You are KosmoKrator, a coding assistant operating in the user's terminal.
+    You have access to tools for reading, writing, and searching files,
+    executing shell commands, and interacting with git.
+    Always prefer reading files before editing them.
+    Be concise but thorough.
+
+ui:
+  renderer: auto
+  intro_animated: true
+  theme: default
+
+tools:
+  approval_required:
+    - file_write
+    - file_edit
+    - bash
+  bash:
+    timeout: 120
+    blocked_commands:
+      - "rm -rf /"
+
+session:
+  auto_save: true
+  history_dir: ~/.kosmokrator/sessions

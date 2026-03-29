@@ -1,0 +1,47 @@
+<?php
+
+namespace Kosmokrator\Tool\Coding;
+
+use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\ToolResult;
+
+class FileWriteTool implements ToolInterface
+{
+    public function name(): string { return 'file_write'; }
+
+    public function description(): string
+    {
+        return 'Write content to a file. Creates the file and any parent directories if they do not exist. Overwrites existing files.';
+    }
+
+    public function parameters(): array
+    {
+        return [
+            'path' => ['type' => 'string', 'description' => 'Path to the file to write'],
+            'content' => ['type' => 'string', 'description' => 'The content to write to the file'],
+        ];
+    }
+
+    public function requiredParameters(): array { return ['path', 'content']; }
+
+    public function execute(array $args): ToolResult
+    {
+        $path = $args['path'] ?? '';
+        $content = $args['content'] ?? '';
+
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            if (! mkdir($dir, 0755, true)) {
+                return ToolResult::error("Failed to create directory: {$dir}");
+            }
+        }
+
+        if (file_put_contents($path, $content) === false) {
+            return ToolResult::error("Failed to write file: {$path}");
+        }
+
+        $lines = substr_count($content, "\n") + 1;
+
+        return ToolResult::success("Wrote {$lines} lines to {$path}");
+    }
+}

@@ -1,5 +1,7 @@
 /vendor
+/vendor-src
 /.idea
 /.vscode
 /.vagrant
 .phpunit.result.cache
+.DS_Store

@@ -1,0 +1,25 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+define('KOSMOKRATOR_START', microtime(true));
+
+// Autoloader
+$autoloader = require file_exists(__DIR__ . '/../vendor/autoload.php')
+    ? __DIR__ . '/../vendor/autoload.php'
+    : __DIR__ . '/../../../autoload.php';
+
+// Boot the kernel
+$kernel = new Kosmokrator\Kernel(dirname(__DIR__));
+$kernel->boot();
+
+// Register commands
+$console = $kernel->getConsole();
+$console->addCommand(new Kosmokrator\Command\AgentCommand($kernel->getContainer()));
+$console->setDefaultCommand('agent', true);
+
+// Run
+$status = $console->run();
+
+exit($status);

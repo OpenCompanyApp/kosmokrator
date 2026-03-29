@@ -1,0 +1,13 @@
+colors:
+  primary: [255, 60, 40]        # Red (logo, prompt gem)
+  primary_dim: [160, 30, 30]    # Dark red (borders)
+  accent: [255, 200, 80]        # Gold (titles, lightning)
+  success: [80, 220, 100]       # Green (created, passed)
+  warning: [255, 200, 80]       # Yellow (edits, thinking)
+  error: [255, 80, 60]          # Red (errors)
+  info: [100, 200, 255]         # Cyan (search, read, bash)
+  link: [80, 140, 255]          # Blue (file paths)
+  code: [200, 120, 255]         # Magenta (syntax)
+  dim: [128, 128, 128]          # Gray (timestamps, metadata)
+  text: [220, 220, 220]         # Light gray (body text)
+  bg_code: [40, 40, 40]         # Dark background for code blocks

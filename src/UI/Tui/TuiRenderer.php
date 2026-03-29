@@ -535,7 +535,7 @@ class TuiRenderer implements RendererInterface
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
         // Separator after complete turn
-        $separator = new TextWidget(str_repeat('─', 200));
+        $separator = new TextWidget(str_repeat('─', 80));
         $separator->addStyleClass('separator');
         $this->conversation->add($separator);
 

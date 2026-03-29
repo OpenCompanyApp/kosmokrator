@@ -24,12 +24,17 @@ class AsyncLlmClient implements LlmClientInterface
         private readonly string $apiKey,
         private readonly string $baseUrl,
         private readonly string $model,
-        private readonly string $systemPrompt,
+        private string $systemPrompt,
         private readonly ?int $maxTokens = null,
         private readonly int|float|null $temperature = null,
         private readonly string $provider = 'z',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
+    }
+
+    public function setSystemPrompt(string $prompt): void
+    {
+        $this->systemPrompt = $prompt;
     }
 
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
@@ -56,8 +61,8 @@ class AsyncLlmClient implements LlmClientInterface
         $request->setHeader('Authorization', 'Bearer ' . $this->apiKey);
         $request->setHeader('Content-Type', 'application/json');
         $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR));
-        $request->setTransferTimeout(300);
-        $request->setInactivityTimeout(120);
+        $request->setTransferTimeout(600);
+        $request->setInactivityTimeout(300);
 
         // This suspends the fiber — Revolt event loop ticks freely
         $response = $this->httpClient->request($request, $cancellation);

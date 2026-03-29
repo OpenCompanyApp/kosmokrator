@@ -14,6 +14,8 @@ interface LlmClientInterface
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse;
 
+    public function setSystemPrompt(string $prompt): void;
+
     public function getProvider(): string;
 
     public function getModel(): string;

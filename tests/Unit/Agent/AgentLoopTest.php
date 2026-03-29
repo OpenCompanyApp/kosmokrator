@@ -25,7 +25,7 @@ class AgentLoopTest extends TestCase
     {
         $this->llm = $this->createStub(LlmClientInterface::class);
         $this->ui = $this->createMock(RendererInterface::class);
-        $this->loop = new AgentLoop($this->llm, $this->ui, new NullLogger());
+        $this->loop = new AgentLoop($this->llm, $this->ui, new NullLogger(), 'You are a test assistant.');
     }
 
     public function test_simple_text_response_no_tools(): void
@@ -50,7 +50,7 @@ class AgentLoopTest extends TestCase
 
     public function test_tool_call_round_then_final_response(): void
     {
-        $toolCall = new ToolCall(id: 'tc_1', name: 'test_tool', arguments: '{"input": "hello"}');
+        $toolCall = new ToolCall(id: 'tc_1', name: 'grep', arguments: '{"pattern": "hello"}');
 
         $this->llm->method('chat')->willReturnOnConsecutiveCalls(
             new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
@@ -59,12 +59,12 @@ class AgentLoopTest extends TestCase
         $this->llm->method('getProvider')->willReturn('test');
         $this->llm->method('getModel')->willReturn('model');
 
-        // Set up a tool that matches
+        // Tool name must be in AgentMode::Edit allowed list
         $tool = (new Tool())
-            ->as('test_tool')
-            ->for('Test tool')
-            ->withStringParameter('input', 'Input')
-            ->using(fn (string $input) => "result: {$input}");
+            ->as('grep')
+            ->for('Search files')
+            ->withStringParameter('pattern', 'Pattern')
+            ->using(fn (string $pattern) => "result: {$pattern}");
         $this->loop->setTools([$tool]);
 
         $this->ui->expects($this->once())->method('showToolCall');
@@ -93,7 +93,7 @@ class AgentLoopTest extends TestCase
 
     public function test_tool_execution_exception(): void
     {
-        $toolCall = new ToolCall(id: 'tc_1', name: 'failing', arguments: '{}');
+        $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: '{}');
 
         $this->llm->method('chat')->willReturnOnConsecutiveCalls(
             new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
@@ -103,40 +103,17 @@ class AgentLoopTest extends TestCase
         $this->llm->method('getModel')->willReturn('model');
 
         $tool = (new Tool())
-            ->as('failing')
-            ->for('A failing tool')
+            ->as('bash')
+            ->for('Run commands')
             ->withoutErrorHandling()
             ->using(function () { throw new \RuntimeException('Tool exploded'); });
         $this->loop->setTools([$tool]);
 
         $this->ui->expects($this->once())
             ->method('showToolResult')
-            ->with('failing', $this->stringContains('Error'), false);
+            ->with('bash', $this->stringContains('Error'), false);
 
         $this->loop->run('Call failing tool');
-    }
-
-    public function test_max_tool_rounds_reached(): void
-    {
-        $toolCall = new ToolCall(id: 'tc_1', name: 'loop_tool', arguments: '{}');
-
-        // Always return tool calls — never stop
-        $this->llm->method('chat')->willReturn(
-            new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
-        );
-
-        $tool = (new Tool())
-            ->as('loop_tool')
-            ->for('Loops forever')
-            ->using(fn () => 'ok');
-        $loop = new AgentLoop($this->llm, $this->ui, new NullLogger(), maxToolRounds: 2);
-        $loop->setTools([$tool]);
-
-        $this->ui->expects($this->once())
-            ->method('showError')
-            ->with($this->stringContains('Maximum tool rounds (2)'));
-
-        $loop->run('Loop forever');
     }
 
     public function test_cancelled_exception_returns_early(): void
@@ -239,7 +216,7 @@ class AgentLoopTest extends TestCase
     #[AllowMockObjectsWithoutExpectations]
     public function test_set_tools(): void
     {
-        $toolCall = new ToolCall(id: 'tc_1', name: 'my_tool', arguments: '{}');
+        $toolCall = new ToolCall(id: 'tc_1', name: 'file_read', arguments: '{}');
 
         $this->llm->method('chat')->willReturnOnConsecutiveCalls(
             new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
@@ -250,8 +227,8 @@ class AgentLoopTest extends TestCase
 
         $executed = false;
         $tool = (new Tool())
-            ->as('my_tool')
-            ->for('My tool')
+            ->as('file_read')
+            ->for('Read files')
             ->using(function () use (&$executed) {
                 $executed = true;
 

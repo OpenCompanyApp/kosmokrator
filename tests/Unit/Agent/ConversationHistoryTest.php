@@ -143,10 +143,10 @@ class ConversationHistoryTest extends TestCase
         $this->assertTrue($result);
 
         $messages = $this->history->messages();
-        // trimOldest stops after removing the AssistantMessage, leaving the ToolResultMessage
-        // A second trim is needed to get past the tool result to the next user turn
-        $this->assertCount(3, $messages);
-        $this->assertInstanceOf(ToolResultMessage::class, $messages[0]);
+        // Entire turn (user + assistant + tool_result) removed, only turn 2 remains
+        $this->assertCount(2, $messages);
+        $this->assertInstanceOf(UserMessage::class, $messages[0]);
+        $this->assertSame('q2', $messages[0]->content);
     }
 
     public function test_trim_oldest_reindexes_array(): void

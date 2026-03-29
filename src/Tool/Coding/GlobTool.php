@@ -4,7 +4,6 @@ namespace Kosmokrator\Tool\Coding;
 
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
-use Symfony\Component\Finder\Finder;
 
 class GlobTool implements ToolInterface
 {
@@ -12,13 +11,13 @@ class GlobTool implements ToolInterface
 
     public function description(): string
     {
-        return 'Find files matching a glob pattern. Returns matching file paths.';
+        return 'Find files matching a glob pattern. Returns matching file paths sorted by name.';
     }
 
     public function parameters(): array
     {
         return [
-            'pattern' => ['type' => 'string', 'description' => 'Glob pattern to match (e.g., "**/*.php", "src/**/*.ts")'],
+            'pattern' => ['type' => 'string', 'description' => 'Glob pattern to match (e.g., "**/*.php", "src/**/*.ts", "*.json")'],
             'path' => ['type' => 'string', 'description' => 'Directory to search in. Defaults to current working directory.'],
         ];
     }
@@ -28,27 +27,82 @@ class GlobTool implements ToolInterface
     public function execute(array $args): ToolResult
     {
         $pattern = $args['pattern'] ?? '';
-        $path = $args['path'] ?? getcwd();
+        $basePath = rtrim($args['path'] ?? getcwd(), '/');
 
-        if (! is_dir($path)) {
-            return ToolResult::error("Directory not found: {$path}");
+        if (! is_dir($basePath)) {
+            return ToolResult::error("Directory not found: {$basePath}");
         }
 
-        $finder = new Finder();
-        $finder->files()->in($path)->path($pattern)->sortByName();
+        $fullPattern = $basePath . '/' . ltrim($pattern, '/');
+        $files = $this->recursiveGlob($fullPattern);
 
-        $files = [];
-        foreach ($finder as $file) {
-            $files[] = $file->getRelativePathname();
-            if (count($files) >= 200) {
-                break;
+        // Make paths relative to basePath
+        $prefixLen = strlen($basePath) + 1;
+        $relative = array_unique(array_map(fn (string $f) => substr($f, $prefixLen), $files));
+        sort($relative);
+
+        if (count($relative) > 200) {
+            $relative = array_slice($relative, 0, 200);
+            $relative[] = '... (truncated at 200 files)';
+        }
+
+        if (empty($relative)) {
+            return ToolResult::success("No files matching '{$pattern}' in {$basePath}");
+        }
+
+        return ToolResult::success(implode("\n", $relative));
+    }
+
+    /**
+     * @return string[]
+     */
+    private function recursiveGlob(string $pattern): array
+    {
+        // Handle ** (recursive directory matching)
+        if (str_contains($pattern, '**')) {
+            return $this->globStar($pattern);
+        }
+
+        return glob($pattern) ?: [];
+    }
+
+    /**
+     * @return string[]
+     */
+    private function globStar(string $pattern): array
+    {
+        // Split on ** and handle recursion
+        $parts = explode('**', $pattern, 2);
+        $base = rtrim($parts[0], '/');
+        $rest = ltrim($parts[1] ?? '', '/');
+
+        if (! is_dir($base)) {
+            return [];
+        }
+
+        $results = [];
+
+        // Match in the base directory itself
+        if ($rest !== '') {
+            $results = array_merge($results, glob($base . '/' . $rest) ?: []);
+        }
+
+        // Recurse into subdirectories
+        $dirs = glob($base . '/*', GLOB_ONLYDIR | GLOB_NOSORT) ?: [];
+        foreach ($dirs as $dir) {
+            $basename = basename($dir);
+            // Skip hidden directories and common excludes
+            if ($basename[0] === '.' || $basename === 'vendor' || $basename === 'node_modules') {
+                continue;
             }
+
+            if ($rest !== '') {
+                $results = array_merge($results, glob($dir . '/' . $rest) ?: []);
+            }
+            // Continue recursing with **
+            $results = array_merge($results, $this->globStar($dir . '/**' . ($rest !== '' ? '/' . $rest : '')));
         }
 
-        if (empty($files)) {
-            return ToolResult::success("No files matching '{$pattern}' in {$path}");
-        }
-
-        return ToolResult::success(implode("\n", $files));
+        return array_filter($results, 'is_file');
     }
 }

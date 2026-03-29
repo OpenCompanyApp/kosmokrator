@@ -37,6 +37,8 @@ interface RendererInterface
 
     public function showNotice(string $message): void;
 
+    public function showMode(string $label, string $color = ''): void;
+
     /**
      * Consume a message queued during thinking.
      * Returns null if no message was queued.
@@ -45,7 +47,7 @@ interface RendererInterface
 
     public function showError(string $message): void;
 
-    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost): void;
+    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void;
 
     public function teardown(): void;
 }

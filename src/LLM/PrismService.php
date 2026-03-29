@@ -15,10 +15,15 @@ class PrismService implements LlmClientInterface
     public function __construct(
         private readonly string $provider,
         private readonly string $model,
-        private readonly string $systemPrompt,
+        private string $systemPrompt,
         private readonly ?int $maxTokens = null,
         private readonly int|float|null $temperature = null,
     ) {}
+
+    public function setSystemPrompt(string $prompt): void
+    {
+        $this->systemPrompt = $prompt;
+    }
 
     public function getProvider(): string
     {

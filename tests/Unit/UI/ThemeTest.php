@@ -86,41 +86,15 @@ class ThemeTest extends TestCase
         $this->assertSame('0', Theme::formatTokenCount(0));
     }
 
-    public function test_max_context_for_claude_model(): void
-    {
-        $this->assertSame(200_000, Theme::maxContextForModel('claude-4-sonnet'));
-    }
-
-    public function test_max_context_for_glm_model(): void
-    {
-        $this->assertSame(128_000, Theme::maxContextForModel('glm-4'));
-    }
-
-    public function test_max_context_for_gpt4_model(): void
-    {
-        $this->assertSame(128_000, Theme::maxContextForModel('gpt-4-turbo'));
-    }
-
-    public function test_max_context_for_unknown_model(): void
-    {
-        $this->assertSame(200_000, Theme::maxContextForModel('llama-3'));
-    }
-
-    public function test_max_context_case_insensitive(): void
-    {
-        $this->assertSame(200_000, Theme::maxContextForModel('CLAUDE-4'));
-    }
-
     public function test_context_bar_green_at_low_usage(): void
     {
-        $bar = Theme::contextBar(50_000, 200_000); // 25%
-        // Should contain success (green) color
+        $bar = Theme::contextBar(40_000, 200_000); // 20%
         $this->assertStringContainsString(Theme::success(), $bar);
     }
 
     public function test_context_bar_yellow_at_medium_usage(): void
     {
-        $bar = Theme::contextBar(150_000, 200_000); // 75%
+        $bar = Theme::contextBar(120_000, 200_000); // 60%
         $this->assertStringContainsString(Theme::warning(), $bar);
     }
 
@@ -130,26 +104,26 @@ class ThemeTest extends TestCase
         $this->assertStringContainsString(Theme::error(), $bar);
     }
 
-    public function test_context_bar_boundary_60_percent(): void
+    public function test_context_bar_boundary_50_percent(): void
     {
-        // At 59% — should be green
-        $bar59 = Theme::contextBar(59_000, 100_000);
-        $this->assertStringContainsString(Theme::success(), $bar59);
+        // At 49% — should be green
+        $bar49 = Theme::contextBar(49_000, 100_000);
+        $this->assertStringContainsString(Theme::success(), $bar49);
 
-        // At 60% — should be yellow
-        $bar60 = Theme::contextBar(60_000, 100_000);
-        $this->assertStringContainsString(Theme::warning(), $bar60);
+        // At 50% — should be yellow
+        $bar50 = Theme::contextBar(50_000, 100_000);
+        $this->assertStringContainsString(Theme::warning(), $bar50);
     }
 
-    public function test_context_bar_boundary_85_percent(): void
+    public function test_context_bar_boundary_75_percent(): void
     {
-        // At 84% — should be yellow
-        $bar84 = Theme::contextBar(84_000, 100_000);
-        $this->assertStringContainsString(Theme::warning(), $bar84);
+        // At 74% — should be yellow
+        $bar74 = Theme::contextBar(74_000, 100_000);
+        $this->assertStringContainsString(Theme::warning(), $bar74);
 
-        // At 85% — should be red
-        $bar85 = Theme::contextBar(85_000, 100_000);
-        $this->assertStringContainsString(Theme::error(), $bar85);
+        // At 75% — should be red
+        $bar75 = Theme::contextBar(75_000, 100_000);
+        $this->assertStringContainsString(Theme::error(), $bar75);
     }
 
     public function test_context_bar_contains_label_and_percentage(): void

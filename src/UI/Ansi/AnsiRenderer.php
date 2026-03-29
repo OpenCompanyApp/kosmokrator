@@ -57,9 +57,9 @@ class AnsiRenderer implements RendererInterface
     {
         $r = Theme::reset();
         $dim = Theme::dim();
-        $yellow = Theme::warning();
+        $blue = Theme::rgb(112, 160, 208);
 
-        echo "\n{$dim}  ┌ {$yellow}⚡ Thinking...{$r}\n";
+        echo "\n{$dim}  ┌ {$blue}⚡ Thinking...{$r}\n";
     }
 
     public function clearThinking(): void
@@ -102,10 +102,10 @@ class AnsiRenderer implements RendererInterface
 
         $border = Theme::rgb(128, 100, 40);
 
-        echo "\n{$border}  ┌ {$gold}{$icon} {$name}{$r}";
+        echo "\n{$border}  ┃ {$gold}{$icon} {$name}{$r}";
         foreach ($args as $key => $value) {
             $display = is_string($value) ? $value : json_encode($value);
-            echo "\n{$border}  │{$r} {$dim}{$key}:{$r} {$display}";
+            echo "\n{$border}  ┃{$r} {$dim}{$key}:{$r} {$display}";
         }
         echo "\n";
     }
@@ -118,10 +118,10 @@ class AnsiRenderer implements RendererInterface
         $dim = Theme::dim();
         $status = $success ? Theme::success() . '✓' : Theme::error() . '✗';
 
-        // File read: just show status, no content
+        // File read: just show status
         if ($name === 'file_read') {
             $lineCount = count(explode("\n", $output));
-            echo "{$border}  └ {$status} {$dim}{$name}{$r} {$dim}({$lineCount} lines){$r}\n";
+            echo "{$border}  ┃ {$status} {$dim}{$name}{$r} {$dim}({$lineCount} lines){$r}\n";
             return;
         }
 
@@ -129,14 +129,14 @@ class AnsiRenderer implements RendererInterface
         $maxLines = 20;
 
         foreach (array_slice($lines, 0, $maxLines) as $line) {
-            echo "{$border}  │{$r} {$text}{$line}{$r}\n";
+            echo "{$border}  ┃{$r} {$text}{$line}{$r}\n";
         }
 
         if (count($lines) > $maxLines) {
-            echo "{$border}  │ {$dim}... +" . (count($lines) - $maxLines) . " more lines{$r}\n";
+            echo "{$border}  ┃ {$dim}⊛ +" . (count($lines) - $maxLines) . " more lines{$r}\n";
         }
 
-        echo "{$border}  └ {$status} {$dim}{$name}{$r}\n";
+        echo "{$border}  ┃ {$status} {$dim}{$name}{$r}\n";
     }
 
     public function askToolPermission(string $toolName, array $args): string
@@ -223,6 +223,11 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$yellow}  {$message}{$r}\n\n";
     }
 
+    public function showMode(string $label, string $color = ''): void
+    {
+        // ANSI mode shows mode in the prompt prefix — no-op here
+    }
+
     public function consumeQueuedMessage(): ?string
     {
         return null; // ANSI mode is synchronous, no queuing
@@ -235,12 +240,11 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$err}  ✗ Error: {$message}{$r}\n\n";
     }
 
-    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost): void
+    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
         $r = Theme::reset();
         $dim = Theme::dim();
-        $maxCtx = Theme::maxContextForModel($model);
-        $bar = Theme::contextBar($tokensIn, $maxCtx);
+        $bar = Theme::contextBar($tokensIn, $maxContext);
 
         echo "{$dim}  {$model} · {$bar} {$dim}· \${$cost}{$r}\n\n";
     }

@@ -4,8 +4,11 @@ namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\AgentMode;
+use Kosmokrator\Agent\EnvironmentContext;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
@@ -68,8 +71,11 @@ class AgentCommand extends Command
             : $this->container->make(PrismService::class);
         $toolRegistry = $this->container->make(ToolRegistry::class);
         $permissions = $this->container->make(PermissionEvaluator::class);
-        $maxRounds = $config->get('kosmokrator.agent.max_tool_rounds', 25);
-        $agentLoop = new AgentLoop($llm, $ui, $log, $maxRounds, $permissions);
+        $models = $this->container->make(ModelCatalog::class);
+        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+            . EnvironmentContext::gather();
+        $maxRounds = (int) $config->get('kosmokrator.agent.max_tool_rounds', 25);
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         return $this->repl($ui, $agentLoop, $permissions);
@@ -115,6 +121,14 @@ class AgentCommand extends Command
             if ($command === '/prometheus') {
                 $permissions->setAutoApprove(true);
                 $ui->showNotice('⚡ Prometheus unbound — all tools auto-approved until next prompt.');
+                continue;
+            }
+
+            if (in_array($command, ['/edit', '/plan', '/ask'])) {
+                $mode = AgentMode::from(ltrim($command, '/'));
+                $agentLoop->setMode($mode);
+                $ui->showMode($mode->label(), $mode->color());
+                $ui->showNotice("Switched to {$mode->label()} mode.");
                 continue;
             }
 

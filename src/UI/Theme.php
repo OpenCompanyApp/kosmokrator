@@ -65,6 +65,18 @@ class Theme
         };
     }
 
+    // Context usage color: green → yellow → red
+    public static function contextColor(float $ratio): string
+    {
+        if ($ratio < 0.5) {
+            return self::success();
+        } elseif ($ratio < 0.75) {
+            return self::warning();
+        } else {
+            return self::error();
+        }
+    }
+
     // Context bar
     public static function contextBar(int $tokensIn, int $maxContext): string
     {
@@ -74,15 +86,7 @@ class Theme
         $empty = $barWidth - $filled;
 
         $pct = (int) round($ratio * 100);
-
-        // Color gradient: green → yellow → red
-        if ($ratio < 0.6) {
-            $color = self::success();
-        } elseif ($ratio < 0.85) {
-            $color = self::warning();
-        } else {
-            $color = self::error();
-        }
+        $color = self::contextColor($ratio);
 
         $bar = $color . str_repeat('━', $filled) . self::dimmer() . str_repeat('─', $empty) . self::reset();
         $label = self::formatTokenCount($tokensIn) . '/' . self::formatTokenCount($maxContext);
@@ -102,20 +106,4 @@ class Theme
         return (string) $tokens;
     }
 
-    public static function maxContextForModel(string $model): int
-    {
-        $m = strtolower($model);
-
-        if (str_contains($m, 'claude')) {
-            return 200_000;
-        }
-        if (str_contains($m, 'glm')) {
-            return 128_000;
-        }
-        if (str_contains($m, 'gpt-4')) {
-            return 128_000;
-        }
-
-        return 200_000;
-    }
 }

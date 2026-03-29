@@ -11,6 +11,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Facade;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
@@ -152,6 +153,10 @@ class Kernel
             maxTokens: $config->get('kosmokrator.agent.max_tokens', 8192),
             temperature: $config->get('kosmokrator.agent.temperature', 0.0),
             provider: $provider,
+        ));
+
+        $this->container->singleton(ModelCatalog::class, fn () => new ModelCatalog(
+            $config->get('models', []),
         ));
 
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);

@@ -4,6 +4,7 @@ namespace Kosmokrator\Agent;
 
 use Amp\CancelledException;
 use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\RendererInterface;
@@ -17,17 +18,24 @@ class AgentLoop
 {
     private ConversationHistory $history;
 
-    /** @var Tool[] */
+    /** @var Tool[] Full set of tools from registry */
+    private array $allTools = [];
+
+    /** @var Tool[] Active tools (filtered by mode) */
     private array $tools = [];
 
     private int $maxToolRounds;
+
+    private AgentMode $mode = AgentMode::Edit;
 
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
         private readonly LoggerInterface $log,
+        private readonly string $baseSystemPrompt,
         int $maxToolRounds = 25,
         private readonly ?PermissionEvaluator $permissions = null,
+        private readonly ?ModelCatalog $models = null,
     ) {
         $this->history = new ConversationHistory();
         $this->maxToolRounds = $maxToolRounds;
@@ -38,7 +46,29 @@ class AgentLoop
      */
     public function setTools(array $tools): void
     {
-        $this->tools = $tools;
+        $this->allTools = $tools;
+        $this->applyModeFilter();
+    }
+
+    public function setMode(AgentMode $mode): void
+    {
+        $this->mode = $mode;
+        $this->applyModeFilter();
+        $this->llm->setSystemPrompt($this->baseSystemPrompt . $mode->systemPromptSuffix());
+    }
+
+    public function getMode(): AgentMode
+    {
+        return $this->mode;
+    }
+
+    private function applyModeFilter(): void
+    {
+        $allowed = $this->mode->allowedTools();
+        $this->tools = array_values(array_filter(
+            $this->allTools,
+            fn (Tool $tool) => in_array($tool->name(), $allowed, true),
+        ));
     }
 
     public function run(string $userInput): void
@@ -49,7 +79,7 @@ class AgentLoop
         $round = 0;
         $trimAttempts = 0;
 
-        while ($round < $this->maxToolRounds) {
+        while (true) {
             $round++;
 
             $this->ui->showThinking();
@@ -114,17 +144,19 @@ class AgentLoop
                 'rounds' => $round,
             ]);
             $this->history->addAssistant($fullText);
+            $modelName = $this->getModelName();
             $this->ui->showStatus(
-                $this->getModelName(),
+                $modelName,
                 $tokensIn,
                 $tokensOut,
-                $this->estimateCost($tokensIn, $tokensOut),
+                $this->estimateCost($modelName, $tokensIn, $tokensOut),
+                $this->getContextWindow($modelName),
             );
 
             return;
         }
 
-        $this->ui->showError("Maximum tool rounds ({$this->maxToolRounds}) reached.");
+        // Unreachable — loop exits via return
     }
 
     public function history(): ConversationHistory
@@ -242,10 +274,23 @@ class AgentLoop
         return $this->llm->getProvider() . '/' . $this->llm->getModel();
     }
 
-    private function estimateCost(int $tokensIn, int $tokensOut): float
+    private function estimateCost(string $model, int $tokensIn, int $tokensOut): float
     {
-        // Rough Claude Sonnet pricing: $3/M input, $15/M output
+        if ($this->models !== null) {
+            return $this->models->estimateCost($model, $tokensIn, $tokensOut);
+        }
+
+        // Fallback: Sonnet-like pricing
         return round(($tokensIn * 3 / 1_000_000) + ($tokensOut * 15 / 1_000_000), 4);
+    }
+
+    private function getContextWindow(string $model): int
+    {
+        if ($this->models !== null) {
+            return $this->models->contextWindow($model);
+        }
+
+        return 200_000;
     }
 
     private function isContextOverflow(\Throwable $e): bool

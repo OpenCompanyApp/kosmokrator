@@ -37,9 +37,10 @@ class UIManager implements RendererInterface
     public function showToolResult(string $name, string $output, bool $success): void { $this->renderer->showToolResult($name, $output, $success); }
     public function askToolPermission(string $toolName, array $args): string { return $this->renderer->askToolPermission($toolName, $args); }
     public function showNotice(string $message): void { $this->renderer->showNotice($message); }
+    public function showMode(string $label, string $color = ''): void { $this->renderer->showMode($label, $color); }
     public function consumeQueuedMessage(): ?string { return $this->renderer->consumeQueuedMessage(); }
     public function showError(string $message): void { $this->renderer->showError($message); }
-    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost): void { $this->renderer->showStatus($model, $tokensIn, $tokensOut, $cost); }
+    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void { $this->renderer->showStatus($model, $tokensIn, $tokensOut, $cost, $maxContext); }
     public function teardown(): void { $this->renderer->teardown(); }
 
     public function showWelcome(): void

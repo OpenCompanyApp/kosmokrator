@@ -38,8 +38,7 @@ class GlobToolTest extends TestCase
         $this->createFile('b.php');
         $this->createFile('c.txt');
 
-        // Symfony Finder path() accepts regexes with delimiters or plain substrings
-        $result = $this->tool->execute(['pattern' => '/\.php$/', 'path' => $this->tempDir]);
+        $result = $this->tool->execute(['pattern' => '*.php', 'path' => $this->tempDir]);
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('a.php', $result->output);
@@ -51,7 +50,7 @@ class GlobToolTest extends TestCase
     {
         $this->createFile('a.txt');
 
-        $result = $this->tool->execute(['pattern' => '/\.xyz$/', 'path' => $this->tempDir]);
+        $result = $this->tool->execute(['pattern' => '*.xyz', 'path' => $this->tempDir]);
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('No files matching', $result->output);
@@ -61,7 +60,7 @@ class GlobToolTest extends TestCase
     {
         $filePath = $this->createFile('test.txt');
 
-        $result = $this->tool->execute(['pattern' => '.*', 'path' => $filePath]);
+        $result = $this->tool->execute(['pattern' => '*', 'path' => $filePath]);
 
         $this->assertFalse($result->success);
         $this->assertStringContainsString('Directory not found', $result->output);
@@ -73,11 +72,12 @@ class GlobToolTest extends TestCase
             $this->createFile(sprintf('file_%03d.txt', $i));
         }
 
-        $result = $this->tool->execute(['pattern' => '/\.txt$/', 'path' => $this->tempDir]);
+        $result = $this->tool->execute(['pattern' => '*.txt', 'path' => $this->tempDir]);
 
         $this->assertTrue($result->success);
         $lines = array_filter(explode("\n", $result->output));
-        $this->assertLessThanOrEqual(200, count($lines));
+        // 200 files + 1 truncation message
+        $this->assertLessThanOrEqual(201, count($lines));
     }
 
     public function test_nested_directory_pattern(): void
@@ -87,7 +87,7 @@ class GlobToolTest extends TestCase
         file_put_contents($this->tempDir . '/src/foo.php', 'content');
         file_put_contents($this->tempDir . '/src/sub/bar.php', 'content');
 
-        $result = $this->tool->execute(['pattern' => '/src\/.*\.php$/', 'path' => $this->tempDir]);
+        $result = $this->tool->execute(['pattern' => 'src/**/*.php', 'path' => $this->tempDir]);
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('foo.php', $result->output);
@@ -99,7 +99,7 @@ class GlobToolTest extends TestCase
         mkdir($this->tempDir . '/subdir', 0755, true);
         file_put_contents($this->tempDir . '/subdir/file.txt', 'content');
 
-        $result = $this->tool->execute(['pattern' => '/\.txt$/', 'path' => $this->tempDir]);
+        $result = $this->tool->execute(['pattern' => '**/*.txt', 'path' => $this->tempDir]);
 
         $this->assertTrue($result->success);
         // Should not contain the full absolute tempDir path in each line
@@ -112,7 +112,7 @@ class GlobToolTest extends TestCase
     public function test_defaults_to_cwd_when_no_path(): void
     {
         // Just verify it doesn't error out when path is omitted
-        $result = $this->tool->execute(['pattern' => '.php']);
+        $result = $this->tool->execute(['pattern' => '*.php']);
 
         $this->assertTrue($result->success);
     }

@@ -466,19 +466,17 @@ class TuiRenderer implements RendererInterface
         $this->tui->processRender();
     }
 
-    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost): void
+    public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
-        $maxCtx = Theme::maxContextForModel($model);
-
         // Update progress bar max if model changed
-        if ($this->statusBar->getMaxSteps() !== $maxCtx) {
-            $this->statusBar->start($maxCtx, $tokensIn);
+        if ($this->statusBar->getMaxSteps() !== $maxContext) {
+            $this->statusBar->start($maxContext, $tokensIn);
         } else {
             $this->statusBar->setProgress($tokensIn);
         }
 
         $inLabel = Theme::formatTokenCount($tokensIn);
-        $maxLabel = Theme::formatTokenCount($maxCtx);
+        $maxLabel = Theme::formatTokenCount($maxContext);
         $this->statusBar->setMessage("{$model}  ·  {$inLabel}/{$maxLabel}  ·  \${$cost}");
         $this->tui->processRender();
     }

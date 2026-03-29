@@ -19,4 +19,12 @@ interface LlmClientInterface
     public function getProvider(): string;
 
     public function getModel(): string;
+
+    public function getTemperature(): int|float|null;
+
+    public function setTemperature(int|float|null $temperature): void;
+
+    public function getMaxTokens(): ?int;
+
+    public function setMaxTokens(?int $maxTokens): void;
 }

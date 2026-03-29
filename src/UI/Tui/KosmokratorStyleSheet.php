@@ -15,6 +15,7 @@ use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
+use Symfony\Component\Tui\Widget\SettingsListWidget;
 
 class KosmokratorStyleSheet
 {
@@ -171,6 +172,36 @@ class KosmokratorStyleSheet
             '.slash-completion' => new Style(
                 color: Color::hex('#a0a0a0'),
                 padding: new Padding(0, 2, 0, 2),
+            ),
+
+            // Settings panel
+            SettingsListWidget::class => new Style(
+                border: Border::all(1, BorderPattern::rounded(), Color::hex('#ffc850')),
+                padding: new Padding(0, 1, 0, 1),
+                color: Color::hex('#dcdcdc'),
+            ),
+
+            SettingsListWidget::class . '::label-selected' => new Style(
+                color: Color::hex('#ffffff'),
+                bold: true,
+            ),
+
+            SettingsListWidget::class . '::value' => new Style(
+                color: Color::hex('#70a0d0'),
+            ),
+
+            SettingsListWidget::class . '::value-selected' => new Style(
+                color: Color::hex('#50c878'),
+                bold: true,
+            ),
+
+            SettingsListWidget::class . '::description' => new Style(
+                color: Color::hex('#808080'),
+                italic: true,
+            ),
+
+            SettingsListWidget::class . '::hint' => new Style(
+                color: Color::hex('#606060'),
             ),
         ]);
     }

@@ -16,8 +16,8 @@ class PrismService implements LlmClientInterface
         private readonly string $provider,
         private readonly string $model,
         private string $systemPrompt,
-        private readonly ?int $maxTokens = null,
-        private readonly int|float|null $temperature = null,
+        private ?int $maxTokens = null,
+        private int|float|null $temperature = null,
     ) {}
 
     public function setSystemPrompt(string $prompt): void
@@ -33,6 +33,26 @@ class PrismService implements LlmClientInterface
     public function getModel(): string
     {
         return $this->model;
+    }
+
+    public function getTemperature(): int|float|null
+    {
+        return $this->temperature;
+    }
+
+    public function setTemperature(int|float|null $temperature): void
+    {
+        $this->temperature = $temperature;
+    }
+
+    public function getMaxTokens(): ?int
+    {
+        return $this->maxTokens;
+    }
+
+    public function setMaxTokens(?int $maxTokens): void
+    {
+        $this->maxTokens = $maxTokens;
     }
 
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse

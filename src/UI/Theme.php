@@ -41,6 +41,8 @@ class Theme
     // Diff colors
     public static function diffAdd(): string { return self::rgb(60, 160, 80); }
     public static function diffRemove(): string { return self::rgb(180, 60, 60); }
+    public static function diffAddBg(): string { return self::bgRgb(20, 45, 20); }
+    public static function diffRemoveBg(): string { return self::bgRgb(55, 15, 15); }
 
     // Code background
     public static function codeBg(): string { return self::bgRgb(40, 40, 40); }

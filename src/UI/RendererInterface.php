@@ -49,5 +49,13 @@ interface RendererInterface
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void;
 
+    /**
+     * Show the settings panel and block until the user closes it.
+     *
+     * @param array<string, mixed> $currentSettings
+     * @return array<string, string> Changed settings (id => new value)
+     */
+    public function showSettings(array $currentSettings): array;
+
     public function teardown(): void;
 }

@@ -17,6 +17,7 @@ use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
+use Symfony\Component\Tui\Event\SettingChangeEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
@@ -26,6 +27,8 @@ use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
+use Symfony\Component\Tui\Widget\SettingItem;
+use Symfony\Component\Tui\Widget\SettingsListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 class TuiRenderer implements RendererInterface
@@ -38,11 +41,16 @@ class TuiRenderer implements RendererInterface
 
     private ProgressBarWidget $statusBar;
 
+    private ContainerWidget $overlay;
+
     private EditorWidget $input;
 
     private ?CancellableLoaderWidget $loader = null;
 
     private ?DeferredCancellation $requestCancellation = null;
+
+    private float $thinkingStartTime = 0.0;
+    private ?string $thinkingTimerId = null;
 
     /** @var string[] */
     private array $messageQueue = [];
@@ -105,6 +113,7 @@ class TuiRenderer implements RendererInterface
         ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
         ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
         ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
+        ['value' => '/settings', 'label' => '/settings', 'description' => 'Open the settings panel'],
         ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
     ];
 
@@ -140,6 +149,10 @@ class TuiRenderer implements RendererInterface
         $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  Ready");
         $this->statusBar->start(200_000, 0);
 
+        // Overlay container — pinned between status bar and input, zero-height when empty
+        $this->overlay = new ContainerWidget();
+        $this->overlay->setId('overlay');
+
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
         $this->input = new EditorWidget();
         $this->input->setId('prompt');
@@ -154,6 +167,45 @@ class TuiRenderer implements RendererInterface
         // Keyboard shortcuts on input
         $this->input->onInput(function (string $data): bool {
             $kb = $this->input->getKeybindings();
+
+            // Slash completion navigation — intercept when menu is visible
+            if ($this->slashCompletion !== null) {
+                if ($kb->matches($data, 'cursor_up') || $kb->matches($data, 'cursor_down')) {
+                    $this->slashCompletion->handleInput($data);
+                    $this->tui->processRender();
+
+                    return true;
+                }
+                if ($kb->matches($data, 'submit')) {
+                    $selected = $this->slashCompletion->getSelectedItem();
+                    if ($selected !== null) {
+                        $command = $selected['value'];
+                        $this->input->setText('');
+                        $this->hideSlashCompletion();
+                        if ($this->promptSuspension !== null) {
+                            $suspension = $this->promptSuspension;
+                            $this->promptSuspension = null;
+                            $suspension->resume($command);
+                        }
+                    }
+
+                    return true;
+                }
+                if ($data === "\t") {
+                    $selected = $this->slashCompletion->getSelectedItem();
+                    if ($selected !== null) {
+                        $this->input->setText($selected['value']);
+                    }
+                    $this->hideSlashCompletion();
+
+                    return true;
+                }
+                if ($data === "\x1b") {
+                    $this->hideSlashCompletion();
+
+                    return true;
+                }
+            }
 
             // Ctrl+O — toggle all tool results expanded/collapsed
             if ($kb->matches($data, 'expand_tools')) {
@@ -210,6 +262,7 @@ class TuiRenderer implements RendererInterface
         // Assemble layout
         $this->session->add($this->conversation);
         $this->session->add($this->statusBar);
+        $this->session->add($this->overlay);
         $this->session->add($this->input);
 
         // Submit handler on editor (Ctrl+Enter)
@@ -299,6 +352,7 @@ class TuiRenderer implements RendererInterface
         }
 
         $this->requestCancellation = new DeferredCancellation();
+        $this->thinkingStartTime = microtime(true);
 
         $this->loader = new CancellableLoaderWidget($phrase);
         $this->loader->setId('loader');
@@ -313,6 +367,16 @@ class TuiRenderer implements RendererInterface
             }
         });
 
+        // Elapsed timer — update every second
+        $this->thinkingTimerId = EventLoop::repeat(1.0, function () use ($phrase) {
+            $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+            $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+            $dim = "\033[38;5;245m";
+            $r = "\033[0m";
+            $this->loader?->setMessage("{$phrase} {$dim}({$formatted}){$r}");
+            $this->tui->processRender();
+        });
+
         $this->conversation->add($this->loader);
         // Keep focus on input so user can type while thinking
         $this->tui->processRender();
@@ -320,6 +384,11 @@ class TuiRenderer implements RendererInterface
 
     public function clearThinking(): void
     {
+        if ($this->thinkingTimerId !== null) {
+            EventLoop::cancel($this->thinkingTimerId);
+            $this->thinkingTimerId = null;
+        }
+
         if ($this->loader !== null) {
             $this->loader->setFinishedIndicator('✓');
             $this->loader->stop();
@@ -412,17 +481,25 @@ class TuiRenderer implements RendererInterface
         $statusColor = $success ? Theme::success() : Theme::error();
         $indicator = $success ? '✓' : '✗';
         $r = Theme::reset();
-        $dim = Theme::dim();
         $text = Theme::text();
 
         $header = "{$statusColor}{$indicator}{$r}";
-        $lineCount = count(explode("\n", $output));
 
-        // Syntax-highlight file_read content
-        if ($name === 'file_read' && $success) {
+        // Diff view for file_edit
+        if ($name === 'file_edit' && $success && isset($this->lastToolArgs['old_string'])) {
+            $content = $this->buildDiffView(
+                $this->lastToolArgs['old_string'],
+                $this->lastToolArgs['new_string'] ?? '',
+                $this->lastToolArgs['path'] ?? '',
+            );
+            $lineCount = count(explode("\n", $content));
+        } elseif ($name === 'file_read' && $success) {
+            // Syntax-highlight file_read content
             $content = $this->highlightFileOutput($output);
+            $lineCount = count(explode("\n", $output));
         } else {
             $content = implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $output)));
+            $lineCount = count(explode("\n", $output));
         }
 
         $widget = new CollapsibleWidget($header, $content, $lineCount);
@@ -506,6 +583,46 @@ class TuiRenderer implements RendererInterface
         return implode("\n", $result);
     }
 
+    private function buildDiffView(string $old, string $new, string $path): string
+    {
+        $r = Theme::reset();
+        $removeFg = Theme::diffRemove();
+        $addFg = Theme::diffAdd();
+        $removeBg = Theme::diffRemoveBg();
+        $addBg = Theme::diffAddBg();
+
+        $language = KosmokratorTerminalTheme::detectLanguage($path);
+
+        $oldHighlighted = $this->highlightBlock($old, $language);
+        $newHighlighted = $this->highlightBlock($new, $language);
+
+        $oldLines = explode("\n", $oldHighlighted);
+        $newLines = explode("\n", $newHighlighted);
+
+        $result = [];
+        foreach ($oldLines as $line) {
+            $result[] = "{$removeBg}{$removeFg} - {$r}{$removeBg} {$line}{$r}";
+        }
+        foreach ($newLines as $line) {
+            $result[] = "{$addBg}{$addFg} + {$r}{$addBg} {$line}{$r}";
+        }
+
+        return implode("\n", $result);
+    }
+
+    private function highlightBlock(string $code, string $language): string
+    {
+        if ($language === '') {
+            return $code;
+        }
+
+        try {
+            return $this->getHighlighter()->parse($code, $language);
+        } catch (\Throwable) {
+            return $code;
+        }
+    }
+
     private function getHighlighter(): Highlighter
     {
         return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
@@ -568,6 +685,78 @@ class TuiRenderer implements RendererInterface
             "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}\${$cost}{$r}"
         );
         $this->tui->processRender();
+    }
+
+    public function showSettings(array $currentSettings): array
+    {
+        $items = [
+            new SettingItem(
+                id: 'mode',
+                label: 'Mode',
+                currentValue: $currentSettings['mode'] ?? 'edit',
+                description: 'Agent mode — edit (full access), plan (read-only), ask (conversational)',
+                values: ['edit', 'plan', 'ask'],
+            ),
+            new SettingItem(
+                id: 'auto_approve',
+                label: 'Auto-approve',
+                currentValue: $currentSettings['auto_approve'] ?? 'off',
+                description: 'Automatically approve all tool executions (Prometheus mode)',
+                values: ['off', 'on'],
+            ),
+            new SettingItem(
+                id: 'temperature',
+                label: 'Temperature',
+                currentValue: $currentSettings['temperature'] ?? '0.0',
+                description: 'LLM sampling temperature (0.0 = deterministic, 1.0 = creative)',
+                values: ['0.0', '0.1', '0.2', '0.3', '0.5', '0.7', '1.0'],
+            ),
+            new SettingItem(
+                id: 'max_tokens',
+                label: 'Max Tokens',
+                currentValue: $currentSettings['max_tokens'] ?? '8192',
+                description: 'Maximum output tokens per LLM response',
+                values: ['2048', '4096', '8192', '16384', '32768'],
+            ),
+            new SettingItem(
+                id: 'provider',
+                label: 'Provider',
+                currentValue: $currentSettings['provider'] ?? '',
+                description: 'LLM provider (change in config)',
+            ),
+            new SettingItem(
+                id: 'model',
+                label: 'Model',
+                currentValue: $currentSettings['model'] ?? '',
+                description: 'LLM model (change in config)',
+            ),
+        ];
+
+        $settingsWidget = new SettingsListWidget($items);
+        $settingsWidget->setId('settings-panel');
+
+        $this->overlay->add($settingsWidget);
+        $this->tui->setFocus($settingsWidget);
+        $this->tui->processRender();
+
+        $changes = [];
+        $suspension = EventLoop::getSuspension();
+
+        $settingsWidget->onChange(function (SettingChangeEvent $event) use (&$changes) {
+            $changes[$event->getId()] = $event->getValue();
+        });
+
+        $settingsWidget->onCancel(function () use ($suspension) {
+            $suspension->resume(null);
+        });
+
+        $suspension->suspend();
+
+        $this->overlay->remove($settingsWidget);
+        $this->tui->setFocus($this->input);
+        $this->tui->processRender();
+
+        return $changes;
     }
 
     public function showWelcome(): void
@@ -641,7 +830,7 @@ class TuiRenderer implements RendererInterface
             $this->slashCompletion = new SelectListWidget($filtered);
             $this->slashCompletion->setId('slash-completion');
             $this->slashCompletion->addStyleClass('slash-completion');
-            $this->conversation->add($this->slashCompletion);
+            $this->overlay->add($this->slashCompletion);
         } else {
             $this->slashCompletion->setItems($filtered);
         }
@@ -652,7 +841,7 @@ class TuiRenderer implements RendererInterface
     private function hideSlashCompletion(): void
     {
         if ($this->slashCompletion !== null) {
-            $this->conversation->remove($this->slashCompletion);
+            $this->overlay->remove($this->slashCompletion);
             $this->slashCompletion = null;
             $this->tui->processRender();
         }

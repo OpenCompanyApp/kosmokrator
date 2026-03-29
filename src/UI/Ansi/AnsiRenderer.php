@@ -132,6 +132,24 @@ class AnsiRenderer implements RendererInterface
             return;
         }
 
+        // File edit: show diff view
+        if ($name === 'file_edit' && $success && isset($this->lastToolArgs['old_string'])) {
+            $diffLines = $this->buildDiffLines(
+                $this->lastToolArgs['old_string'],
+                $this->lastToolArgs['new_string'] ?? '',
+                $this->lastToolArgs['path'] ?? '',
+            );
+            $maxLines = 20;
+            foreach (array_slice($diffLines, 0, $maxLines) as $line) {
+                echo "{$border}  ┃{$r} {$line}{$r}\n";
+            }
+            if (count($diffLines) > $maxLines) {
+                echo "{$border}  ┃ {$dim}⊛ +" . (count($diffLines) - $maxLines) . " more lines{$r}\n";
+            }
+            echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
+            return;
+        }
+
         $lines = explode("\n", $output);
         $maxLines = 20;
 
@@ -223,6 +241,41 @@ class AnsiRenderer implements RendererInterface
         return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
     }
 
+    /**
+     * @return string[]
+     */
+    private function buildDiffLines(string $old, string $new, string $path): array
+    {
+        $r = Theme::reset();
+        $removeFg = Theme::diffRemove();
+        $addFg = Theme::diffAdd();
+        $removeBg = Theme::diffRemoveBg();
+        $addBg = Theme::diffAddBg();
+
+        $language = KosmokratorTerminalTheme::detectLanguage($path);
+        $oldCode = ($language !== '') ? $this->tryHighlight($old, $language) : $old;
+        $newCode = ($language !== '') ? $this->tryHighlight($new, $language) : $new;
+
+        $result = [];
+        foreach (explode("\n", $oldCode) as $line) {
+            $result[] = "{$removeBg}{$removeFg} - {$r}{$removeBg} {$line}{$r}";
+        }
+        foreach (explode("\n", $newCode) as $line) {
+            $result[] = "{$addBg}{$addFg} + {$r}{$addBg} {$line}{$r}";
+        }
+
+        return $result;
+    }
+
+    private function tryHighlight(string $code, string $language): string
+    {
+        try {
+            return $this->getHighlighter()->parse($code, $language);
+        } catch (\Throwable) {
+            return $code;
+        }
+    }
+
     public function showNotice(string $message): void
     {
         $r = Theme::reset();
@@ -254,6 +307,22 @@ class AnsiRenderer implements RendererInterface
         $bar = Theme::contextBar($tokensIn, $maxContext);
 
         echo "{$dim}  {$model} · {$bar} {$dim}· \${$cost}{$r}\n\n";
+    }
+
+    public function showSettings(array $currentSettings): array
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $accent = Theme::warning();
+        $white = "\033[1;37m";
+
+        echo "\n{$accent}  ⚙ Settings{$r}\n";
+        foreach ($currentSettings as $key => $value) {
+            echo "{$dim}    {$white}{$key}{$r}{$dim}: {$value}{$r}\n";
+        }
+        echo "{$dim}  (Interactive settings panel requires TUI mode){$r}\n\n";
+
+        return [];
     }
 
     public function teardown(): void

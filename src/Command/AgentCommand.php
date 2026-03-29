@@ -80,10 +80,10 @@ class AgentCommand extends Command
         $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
-        return $this->repl($ui, $agentLoop, $permissions);
+        return $this->repl($ui, $agentLoop, $permissions, $llm);
     }
 
-    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions): int
+    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm): int
     {
         $nextInput = null;
 
@@ -128,6 +128,38 @@ class AgentCommand extends Command
 
             if (in_array($command, ['/theogony', '/cosmogony'])) {
                 $ui->playTheogony();
+                continue;
+            }
+
+            if ($command === '/settings') {
+                $currentSettings = [
+                    'mode' => $agentLoop->getMode()->value,
+                    'auto_approve' => $permissions->isAutoApprove() ? 'on' : 'off',
+                    'temperature' => (string) ($llm->getTemperature() ?? 0.0),
+                    'max_tokens' => (string) ($llm->getMaxTokens() ?? 8192),
+                    'provider' => $llm->getProvider(),
+                    'model' => $llm->getModel(),
+                ];
+
+                $changes = $ui->showSettings($currentSettings);
+
+                foreach ($changes as $id => $value) {
+                    match ($id) {
+                        'mode' => (function () use ($agentLoop, $ui, $value) {
+                            $mode = AgentMode::from($value);
+                            $agentLoop->setMode($mode);
+                            $ui->showMode($mode->label(), $mode->color());
+                        })(),
+                        'auto_approve' => $permissions->setAutoApprove($value === 'on'),
+                        'temperature' => $llm->setTemperature((float) $value),
+                        'max_tokens' => $llm->setMaxTokens((int) $value),
+                        default => null,
+                    };
+                }
+
+                if ($changes !== []) {
+                    $ui->showNotice('Settings updated: ' . implode(', ', array_keys($changes)));
+                }
                 continue;
             }
 

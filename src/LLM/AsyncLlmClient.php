@@ -25,8 +25,8 @@ class AsyncLlmClient implements LlmClientInterface
         private readonly string $baseUrl,
         private readonly string $model,
         private string $systemPrompt,
-        private readonly ?int $maxTokens = null,
-        private readonly int|float|null $temperature = null,
+        private ?int $maxTokens = null,
+        private int|float|null $temperature = null,
         private readonly string $provider = 'z',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
@@ -78,6 +78,26 @@ class AsyncLlmClient implements LlmClientInterface
     public function getModel(): string
     {
         return $this->model;
+    }
+
+    public function getTemperature(): int|float|null
+    {
+        return $this->temperature;
+    }
+
+    public function setTemperature(int|float|null $temperature): void
+    {
+        $this->temperature = $temperature;
+    }
+
+    public function getMaxTokens(): ?int
+    {
+        return $this->maxTokens;
+    }
+
+    public function setMaxTokens(?int $maxTokens): void
+    {
+        $this->maxTokens = $maxTokens;
     }
 
     private function parseResponse(Response $response, ?Cancellation $cancellation): LlmResponse

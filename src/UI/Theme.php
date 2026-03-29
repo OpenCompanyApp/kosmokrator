@@ -33,7 +33,7 @@ class Theme
     public static function code(): string { return self::rgb(200, 120, 255); }
     public static function dim(): string { return self::color256(240); }
     public static function dimmer(): string { return self::color256(236); }
-    public static function text(): string { return self::color256(245); }
+    public static function text(): string { return self::rgb(180, 180, 190); }
     public static function white(): string { return self::ESC . '[1;37m'; }
     public static function bold(): string { return self::ESC . '[1m'; }
     public static function reset(): string { return self::ESC . '[0m'; }
@@ -50,4 +50,72 @@ class Theme
     public static function showCursor(): string { return self::ESC . '[?25h'; }
     public static function clearScreen(): string { return self::ESC . '[2J' . self::ESC . '[H'; }
     public static function moveTo(int $row, int $col): string { return self::ESC . "[{$row};{$col}H"; }
+
+    // Tool icons
+    public static function toolIcon(string $name): string
+    {
+        return match ($name) {
+            'file_read' => '☽',   // Moon — illumination, revealing hidden text
+            'file_write' => '☉',  // Sun — creation, bringing into being
+            'file_edit' => '♅',   // Uranus — transformation, change
+            'bash' => '⚡',       // Lightning — raw power, execution
+            'grep' => '⊛',       // Astral search — seeking through the cosmos
+            'glob' => '✧',       // Star cluster — surveying many points of light
+            default => '◈',       // Gemstone — generic cosmic artifact
+        };
+    }
+
+    // Context bar
+    public static function contextBar(int $tokensIn, int $maxContext): string
+    {
+        $ratio = min(1.0, $tokensIn / max(1, $maxContext));
+        $barWidth = 16;
+        $filled = (int) round($ratio * $barWidth);
+        $empty = $barWidth - $filled;
+
+        $pct = (int) round($ratio * 100);
+
+        // Color gradient: green → yellow → red
+        if ($ratio < 0.6) {
+            $color = self::success();
+        } elseif ($ratio < 0.85) {
+            $color = self::warning();
+        } else {
+            $color = self::error();
+        }
+
+        $bar = $color . str_repeat('━', $filled) . self::dimmer() . str_repeat('─', $empty) . self::reset();
+        $label = self::formatTokenCount($tokensIn) . '/' . self::formatTokenCount($maxContext);
+
+        return $bar . ' ' . self::dim() . $label . ' (' . $pct . '%)' . self::reset();
+    }
+
+    public static function formatTokenCount(int $tokens): string
+    {
+        if ($tokens >= 1_000_000) {
+            return round($tokens / 1_000_000, 1) . 'M';
+        }
+        if ($tokens >= 1_000) {
+            return round($tokens / 1_000, 1) . 'k';
+        }
+
+        return (string) $tokens;
+    }
+
+    public static function maxContextForModel(string $model): int
+    {
+        $m = strtolower($model);
+
+        if (str_contains($m, 'claude')) {
+            return 200_000;
+        }
+        if (str_contains($m, 'glm')) {
+            return 128_000;
+        }
+        if (str_contains($m, 'gpt-4')) {
+            return 128_000;
+        }
+
+        return 200_000;
+    }
 }

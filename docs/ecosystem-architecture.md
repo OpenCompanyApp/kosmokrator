@@ -8,26 +8,28 @@ KosmoKrator is not just a CLI coding agent — it's a runtime that can host any 
                     opencompanyapp/integration-core
                     (framework-agnostic contracts)
                               │
-                    opencompanyapp/ai-tool-*
+                    opencompanyapp/integration-*
                     (ClickUp, Google, Plausible, ...)
                               │
               ┌───────────────┼───────────────┐
               │                               │
         OpenCompany                      KosmoKrator
-        (web platform)                   (CLI agent)
+        (web platform)                   (the engine)
               │                               │
-   integration-laravel-ai              native ToolInterface
-   (bridge to laravel/ai)             (direct integration)
-              │                               │
-         LuaBridge                       LuaBridge
-              │                               │
-         LuaSandbox                      LuaSandbox
-         (PECL ext)                      (PECL ext)
-              │                               │
-         MCP Client                      MCP Client
+         LuaBridge                  ┌─────────┼─────────┐
+              │                     │         │         │
+         LuaSandbox              CLI       Desktop   (Mobile)
+         (PECL ext)           terminal    NativePHP  future
+              │               ANSI/TUI    Electron
+         MCP Client               │         │
+                              LuaBridge  LuaBridge
+                                  │         │
+                              LuaSandbox LuaSandbox
+                                  │         │
+                              MCP Client MCP Client
 ```
 
-Tools are written once as Composer packages. Both platforms consume them through the same `integration-core` contracts.
+KosmoKrator is one engine with multiple surfaces. Tools are written once as Composer packages. OpenCompany is an optional cloud backend for hosted integrations. See `docs/desktop-app.md` for the desktop surface architecture.
 
 ---
 

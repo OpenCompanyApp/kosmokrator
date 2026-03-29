@@ -2,6 +2,7 @@
 
 namespace Kosmokrator\LLM;
 
+use Amp\Cancellation;
 use Generator;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Prism;
@@ -9,7 +10,7 @@ use Prism\Prism\Streaming\Events\StreamEvent;
 use Prism\Prism\Text\Response;
 use Prism\Prism\Tool;
 
-class PrismService
+class PrismService implements LlmClientInterface
 {
     public function __construct(
         private readonly string $provider,
@@ -27,6 +28,19 @@ class PrismService
     public function getModel(): string
     {
         return $this->model;
+    }
+
+    public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+    {
+        $response = $this->text($messages, $tools);
+
+        return new LlmResponse(
+            text: $response->text,
+            finishReason: $response->finishReason,
+            toolCalls: $response->toolCalls,
+            promptTokens: $response->usage->promptTokens,
+            completionTokens: $response->usage->completionTokens,
+        );
     }
 
     /**

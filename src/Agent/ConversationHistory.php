@@ -43,4 +43,38 @@ class ConversationHistory
     {
         $this->messages = [];
     }
+
+    /**
+     * Remove the oldest user + assistant/tool turn from history.
+     * Returns false if there aren't enough messages to trim.
+     */
+    public function trimOldest(): bool
+    {
+        // Need at least 3 messages to trim (keep at least the latest user message)
+        if (count($this->messages) < 3) {
+            return false;
+        }
+
+        // Drop messages from the front until we've removed a complete user turn
+        // (user message + any following assistant/tool messages before the next user message)
+        $removed = 0;
+        while (count($this->messages) > 1) {
+            $first = $this->messages[0];
+            array_shift($this->messages);
+            $removed++;
+
+            // Stop after removing the assistant reply (complete turn removed)
+            if ($first instanceof AssistantMessage && $removed > 1) {
+                break;
+            }
+            // Also stop if next message is a new user message (turn boundary)
+            if ($removed > 1 && isset($this->messages[0]) && $this->messages[0] instanceof UserMessage) {
+                break;
+            }
+        }
+
+        $this->messages = array_values($this->messages);
+
+        return $removed > 0;
+    }
 }

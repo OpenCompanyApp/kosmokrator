@@ -2,16 +2,28 @@
 
 namespace Kosmokrator\UI\Tui;
 
+use Amp\Cancellation;
+use Amp\DeferredCancellation;
+use Kosmokrator\UI\Ansi\AnsiIntro;
+use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\RendererInterface;
+use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
+use Tempest\Highlight\Highlighter;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Event\CancelEvent;
+use Symfony\Component\Tui\Event\ChangeEvent;
+use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
-use Symfony\Component\Tui\Widget\InputWidget;
+use Symfony\Component\Tui\Input\Keybindings;
+use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
+use Symfony\Component\Tui\Widget\ProgressBarWidget;
+use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 class TuiRenderer implements RendererInterface
@@ -22,15 +34,54 @@ class TuiRenderer implements RendererInterface
 
     private ContainerWidget $conversation;
 
-    private TextWidget $statusBar;
+    private ProgressBarWidget $statusBar;
 
-    private InputWidget $input;
+    private EditorWidget $input;
 
-    private CancellableLoaderWidget $loader;
+    private ?CancellableLoaderWidget $loader = null;
 
-    private ?MarkdownWidget $activeResponse = null;
+    private ?DeferredCancellation $requestCancellation = null;
+
+    /** @var string[] */
+    private array $messageQueue = [];
+
+    private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
+
+    private bool $activeResponseIsAnsi = false;
+
+    private const THINKING_PHRASES = [
+        '☿ Consulting the Oracle at Delphi...',
+        '♃ Aligning the celestial spheres...',
+        '⚡ Channeling Prometheus\' fire...',
+        '♄ Weaving the threads of Fate...',
+        '☽ Reading the astral charts...',
+        '♂ Invoking the nine Muses...',
+        '♆ Traversing the Aether...',
+        '♅ Deciphering cosmic glyphs...',
+        '⚡ Summoning Athena\'s wisdom...',
+        '☉ Attuning to the Music of the Spheres...',
+        '♃ Gazing into the cosmic void...',
+        '☿ Unraveling the Labyrinth...',
+        '♆ Communing with the Titans...',
+        '♄ Forging in Hephaestus\' workshop...',
+        '☽ Scrying the heavens...',
+    ];
 
     private ?Suspension $promptSuspension = null;
+
+    private ?SelectListWidget $slashCompletion = null;
+
+    private const SLASH_COMMANDS = [
+        ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
+        ['value' => '/reset', 'label' => '/reset', 'description' => 'Clear conversation history'],
+        ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
+        ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Auto-approve all tools until next prompt'],
+        ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
+    ];
+
+    private ?Highlighter $highlighter = null;
+
+    private array $lastToolArgs = [];
 
     public function initialize(): void
     {
@@ -47,28 +98,53 @@ class TuiRenderer implements RendererInterface
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
 
-        // Status bar at bottom
-        $this->statusBar = new TextWidget('KosmoKrator · Ready');
+        // Status bar at bottom — context progress bar
+        $this->statusBar = new ProgressBarWidget(200_000, '%message%  %bar%  %percent%%');
         $this->statusBar->setId('status-bar');
-        $this->statusBar->addStyleClass('status-bar');
+        $this->statusBar->setBarCharacter('━');
+        $this->statusBar->setEmptyBarCharacter('─');
+        $this->statusBar->setProgressCharacter('━');
+        $this->statusBar->setBarWidth(20);
+        $this->statusBar->setMessage('KosmoKrator · Ready');
+        $this->statusBar->start(200_000, 0);
 
-        // Cancellable thinking loader
-        $this->loader = new CancellableLoaderWidget('⚡ Thinking...');
-        $this->loader->setId('loader');
-        $this->loader->setSpinner('dots');
-        $this->loader->stop(); // Don't animate until needed
-
-        // Input prompt
-        $this->input = new InputWidget();
+        // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
+        $this->input = new EditorWidget();
         $this->input->setId('prompt');
-        $this->input->setPrompt('⟡ ');
+        $this->input->setMinVisibleLines(1);
+        $this->input->setMaxVisibleLines(2);
+        $this->input->setKeybindings(new Keybindings([
+            'copy' => [],                                  // Free ctrl+c for cancel
+            'new_line' => ['shift+enter', 'alt+enter'],    // Both work: shift+enter with kitty, alt+enter without
+        ]));
 
-        // Ctrl+C / Escape on input → quit
+        // Ctrl+C / Escape on input — context-aware
         $this->input->onCancel(function (CancelEvent $event) {
+            // During thinking: cancel the LLM request
+            if ($this->requestCancellation !== null) {
+                $this->requestCancellation->cancel();
+
+                return;
+            }
+
+            // At prompt: quit
             if ($this->promptSuspension !== null) {
                 $suspension = $this->promptSuspension;
                 $this->promptSuspension = null;
                 $suspension->resume('/quit');
+            }
+        });
+
+        // Slash command completion on input change
+        $this->input->onChange(function (ChangeEvent $event) {
+            $value = $event->getValue();
+
+            if (str_starts_with($value, '/') && $value !== '/') {
+                $this->showSlashCompletion($value);
+            } elseif ($value === '/') {
+                $this->showSlashCompletion('');
+            } else {
+                $this->hideSlashCompletion();
             }
         });
 
@@ -77,20 +153,31 @@ class TuiRenderer implements RendererInterface
         $this->session->add($this->statusBar);
         $this->session->add($this->input);
 
-        $this->tui->add($this->session);
-        $this->tui->setFocus($this->input);
+        // Submit handler on editor (Ctrl+Enter)
+        $this->input->onSubmit(function (SubmitEvent $event) {
+            $value = $event->getValue();
+            $this->input->setText('');
+            $this->hideSlashCompletion();
 
-        // Submit handler — resume the suspended prompt()
-        $this->tui->on(SubmitEvent::class, function (SubmitEvent $event) {
-            if ($event->getTarget() === $this->input && $this->promptSuspension !== null) {
-                $value = $event->getValue();
-                $this->input->setValue('');
+            // During thinking: queue the message for after current response
+            if ($this->requestCancellation !== null) {
+                if (trim($value) !== '') {
+                    $this->queueMessage($value);
+                }
 
+                return;
+            }
+
+            // At prompt: normal submit
+            if ($this->promptSuspension !== null) {
                 $suspension = $this->promptSuspension;
                 $this->promptSuspension = null;
                 $suspension->resume($value);
             }
         });
+
+        $this->tui->add($this->session);
+        $this->tui->setFocus($this->input);
 
         // Start TUI — registers stdin/signal watchers with Revolt
         $this->tui->start();
@@ -98,28 +185,24 @@ class TuiRenderer implements RendererInterface
 
     public function renderIntro(bool $animated): void
     {
-        // FIGlet banner
-        $header = new TextWidget('KOSMOKRATOR');
-        $header->setId('header');
-        $header->addStyleClass('figlet-header');
+        // Run the full ANSI animated intro first (before TUI takes over the screen)
+        $intro = new AnsiIntro();
+        if ($animated) {
+            $intro->animate();
+            // Pause to admire, then clear for TUI
+            usleep(800000);
+            echo "\033[2J\033[H";
+        } else {
+            $intro->renderStatic();
+            sleep(1);
+            echo "\033[2J\033[H";
+        }
+
+        // Now add a compact header inside the TUI conversation
+        $header = new TextWidget('⚡ KosmoKrator — Ruler of the Cosmos ⚡');
+        $header->addStyleClass('subtitle');
         $this->conversation->add($header);
 
-        // Mythology subtitle
-        $subtitle = new TextWidget('⚡ Κοσμοκράτωρ — Ruler of the Cosmos ⚡');
-        $subtitle->addStyleClass('subtitle');
-        $this->conversation->add($subtitle);
-
-        // Planetary symbols
-        $planets = new TextWidget('☿  ♀  ♁  ♂  ♃  ♄  ♅  ♆  ✦  ☽  ☉  ★  ✧  ⊛  ◈');
-        $planets->addStyleClass('tagline');
-        $this->conversation->add($planets);
-
-        // Tagline
-        $tagline = new TextWidget('Your AI coding agent by OpenCompany');
-        $tagline->addStyleClass('tagline');
-        $this->conversation->add($tagline);
-
-        // Welcome message
         $welcome = new TextWidget('Type a message to begin. Press Ctrl+C to exit.');
         $welcome->addStyleClass('welcome');
         $this->conversation->add($welcome);
@@ -129,33 +212,85 @@ class TuiRenderer implements RendererInterface
 
     public function prompt(): string
     {
+        $this->input->setText('');
         $this->tui->setFocus($this->input);
         $this->promptSuspension = EventLoop::getSuspension();
 
         return $this->promptSuspension->suspend();
     }
 
+    public function showUserMessage(string $text): void
+    {
+        $widget = new TextWidget('⟡ ' . $text);
+        $widget->addStyleClass('user-message');
+        $this->conversation->add($widget);
+        $this->tui->processRender();
+    }
+
     public function showThinking(): void
     {
-        $this->loader->reset();
-        $this->loader->setMessage('⚡ Thinking...');
+        $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
+
+        $this->requestCancellation = new DeferredCancellation();
+
+        $this->loader = new CancellableLoaderWidget($phrase);
+        $this->loader->setId('loader');
+        $this->loader->setSpinner('dots');
         $this->loader->start();
+
+        $this->loader->onCancel(function () {
+            if ($this->requestCancellation !== null) {
+                $this->requestCancellation->cancel();
+            }
+        });
+
         $this->conversation->add($this->loader);
-        $this->tui->setFocus($this->loader); // Focus loader so Ctrl+C cancels
+        // Keep focus on input so user can type while thinking
         $this->tui->processRender();
+    }
+
+    public function clearThinking(): void
+    {
+        if ($this->loader !== null) {
+            $this->loader->setFinishedIndicator('✓');
+            $this->loader->stop();
+            $this->conversation->remove($this->loader);
+            $this->loader = null;
+        }
+
+        $this->requestCancellation = null;
+        $this->tui->processRender();
+    }
+
+    public function getCancellation(): ?Cancellation
+    {
+        return $this->requestCancellation?->getCancellation();
     }
 
     public function streamChunk(string $text): void
     {
         if ($this->activeResponse === null) {
-            // Remove loader
-            $this->loader->setFinishedIndicator('✓');
-            $this->loader->stop();
-            $this->conversation->remove($this->loader);
+            $this->clearThinking();
 
-            // Start markdown response widget
-            $this->activeResponse = new MarkdownWidget('');
-            $this->activeResponse->addStyleClass('response');
+            if ($this->containsAnsiEscapes($text)) {
+                $this->activeResponse = new AnsiArtWidget('');
+                $this->activeResponse->addStyleClass('ansi-art');
+                $this->activeResponseIsAnsi = true;
+            } else {
+                $this->activeResponse = new MarkdownWidget('');
+                $this->activeResponse->addStyleClass('response');
+                $this->activeResponseIsAnsi = false;
+            }
+
+            $this->conversation->add($this->activeResponse);
+        } elseif (! $this->activeResponseIsAnsi && $this->containsAnsiEscapes($text)) {
+            // Mid-stream ANSI detection: swap MarkdownWidget → AnsiArtWidget
+            $accumulated = $this->activeResponse->getText();
+            $this->conversation->remove($this->activeResponse);
+
+            $this->activeResponse = new AnsiArtWidget($accumulated);
+            $this->activeResponse->addStyleClass('ansi-art');
+            $this->activeResponseIsAnsi = true;
             $this->conversation->add($this->activeResponse);
         }
 
@@ -167,6 +302,7 @@ class TuiRenderer implements RendererInterface
     public function streamComplete(): void
     {
         $this->activeResponse = null;
+        $this->activeResponseIsAnsi = false;
 
         // Add separator after response
         $separator = new TextWidget('─────────────────────────────────────────');
@@ -178,13 +314,25 @@ class TuiRenderer implements RendererInterface
 
     public function showToolCall(string $name, array $args): void
     {
-        $argsLines = '';
-        foreach ($args as $key => $value) {
-            $display = is_string($value) ? $value : json_encode($value);
-            $argsLines .= "\n  {$key}: {$display}";
+        $this->lastToolArgs = $args;
+        $icon = Theme::toolIcon($name);
+
+        // Compact single-line display for file tools
+        if ($name === 'file_read' && isset($args['path'])) {
+            $label = "{$icon} {$name}  {$args['path']}";
+            if (isset($args['offset'])) {
+                $label .= ":{$args['offset']}";
+            }
+        } else {
+            $parts = [];
+            foreach ($args as $key => $value) {
+                $display = is_string($value) ? $value : json_encode($value);
+                $parts[] = "{$key}: {$display}";
+            }
+            $label = "{$icon} {$name}  " . implode('  ', $parts);
         }
 
-        $widget = new TextWidget("◈ {$name}{$argsLines}");
+        $widget = new TextWidget($label);
         $widget->addStyleClass('tool-call');
         $this->conversation->add($widget);
         $this->tui->processRender();
@@ -192,15 +340,120 @@ class TuiRenderer implements RendererInterface
 
     public function showToolResult(string $name, string $output, bool $success): void
     {
+        $statusColor = $success ? Theme::success() : Theme::error();
         $indicator = $success ? '✓' : '✗';
-        $lines = explode("\n", $output);
-        $preview = implode("\n", array_slice($lines, 0, 10));
-        if (count($lines) > 10) {
-            $preview .= "\n... +" . (count($lines) - 10) . ' more lines';
+        $r = Theme::reset();
+        $dim = Theme::dim();
+
+        // File read: just show status badge, no content
+        if ($name === 'file_read') {
+            $lineCount = count(explode("\n", $output));
+            $ansi = "{$statusColor}{$indicator}{$r} {$dim}{$name}  ({$lineCount} lines){$r}";
+            $widget = new AnsiArtWidget($ansi);
+            $widget->addStyleClass('tool-result');
+            $this->conversation->add($widget);
+        } else {
+            $lines = explode("\n", $output);
+            $maxLines = 10;
+            $preview = array_slice($lines, 0, $maxLines);
+            $suffix = count($lines) > $maxLines
+                ? "\n{$dim}... +" . (count($lines) - $maxLines) . " more lines{$r}"
+                : '';
+
+            $header = "{$statusColor}{$indicator}{$r} {$dim}{$name}{$r}";
+            $body = implode("\n", array_map(fn (string $l) => "{$dim}{$l}{$r}", $preview));
+            $widget = new AnsiArtWidget("{$header}\n{$body}{$suffix}");
+            $widget->addStyleClass('tool-result');
+            $this->conversation->add($widget);
         }
 
-        $widget = new TextWidget("{$indicator} {$name}\n{$preview}");
-        $widget->addStyleClass($success ? 'tool-success' : 'tool-error');
+        $this->tui->processRender();
+    }
+
+    public function askToolPermission(string $toolName, array $args): string
+    {
+        $selectList = new SelectListWidget([
+            ['value' => 'allow', 'label' => 'Allow', 'description' => 'Execute this tool call'],
+            ['value' => 'deny', 'label' => 'Deny', 'description' => 'Block and tell the LLM'],
+            ['value' => 'always', 'label' => 'Always Allow', 'description' => 'Allow this tool for the session'],
+        ]);
+        $selectList->setId('permission-prompt');
+        $selectList->addStyleClass('permission-prompt');
+
+        $this->conversation->add($selectList);
+        $this->tui->setFocus($selectList);
+        $this->tui->processRender();
+
+        $suspension = EventLoop::getSuspension();
+
+        $selectList->onSelect(function (SelectEvent $event) use ($suspension) {
+            $suspension->resume($event->getValue());
+        });
+
+        $selectList->onCancel(function () use ($suspension) {
+            $suspension->resume('deny');
+        });
+
+        $decision = $suspension->suspend();
+
+        $this->conversation->remove($selectList);
+        $this->tui->setFocus($this->input);
+        $this->tui->processRender();
+
+        return $decision;
+    }
+
+    private function highlightFileOutput(string $output): string
+    {
+        $path = $this->lastToolArgs['path'] ?? '';
+        $language = KosmokratorTerminalTheme::detectLanguage($path);
+        if ($language === '') {
+            return $output;
+        }
+
+        $lines = explode("\n", $output);
+        $lineNums = [];
+        $codeLines = [];
+
+        foreach ($lines as $line) {
+            if (preg_match('/^(\s*\d+)\t(.*)$/', $line, $m)) {
+                $lineNums[] = $m[1];
+                $codeLines[] = $m[2];
+            } else {
+                $lineNums[] = null;
+                $codeLines[] = $line;
+            }
+        }
+
+        $code = implode("\n", $codeLines);
+        try {
+            $highlighted = $this->getHighlighter()->parse($code, $language);
+        } catch (\Throwable) {
+            return $output;
+        }
+
+        $highlightedLines = explode("\n", $highlighted);
+        $result = [];
+        foreach ($highlightedLines as $i => $hLine) {
+            if (isset($lineNums[$i]) && $lineNums[$i] !== null) {
+                $result[] = "\033[38;5;240m{$lineNums[$i]}\033[0m\t{$hLine}";
+            } else {
+                $result[] = $hLine;
+            }
+        }
+
+        return implode("\n", $result);
+    }
+
+    private function getHighlighter(): Highlighter
+    {
+        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
+    }
+
+    public function showNotice(string $message): void
+    {
+        $widget = new TextWidget($message);
+        $widget->addStyleClass('subtitle');
         $this->conversation->add($widget);
         $this->tui->processRender();
     }
@@ -215,9 +468,18 @@ class TuiRenderer implements RendererInterface
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost): void
     {
-        $this->statusBar->setText(
-            "{$model}  ·  {$tokensIn} in / {$tokensOut} out  ·  \${$cost}"
-        );
+        $maxCtx = Theme::maxContextForModel($model);
+
+        // Update progress bar max if model changed
+        if ($this->statusBar->getMaxSteps() !== $maxCtx) {
+            $this->statusBar->start($maxCtx, $tokensIn);
+        } else {
+            $this->statusBar->setProgress($tokensIn);
+        }
+
+        $inLabel = Theme::formatTokenCount($tokensIn);
+        $maxLabel = Theme::formatTokenCount($maxCtx);
+        $this->statusBar->setMessage("{$model}  ·  {$inLabel}/{$maxLabel}  ·  \${$cost}");
         $this->tui->processRender();
     }
 
@@ -226,10 +488,64 @@ class TuiRenderer implements RendererInterface
         // Already handled in renderIntro
     }
 
+    public function consumeQueuedMessage(): ?string
+    {
+        if ($this->messageQueue === []) {
+            return null;
+        }
+
+        return array_shift($this->messageQueue);
+    }
+
+    private function queueMessage(string $message): void
+    {
+        $this->messageQueue[] = $message;
+        $this->showUserMessage($message);
+    }
+
     public function teardown(): void
     {
         if ($this->tui->isRunning()) {
             $this->tui->stop();
         }
+    }
+
+    private function showSlashCompletion(string $filter): void
+    {
+        $filtered = array_values(array_filter(
+            self::SLASH_COMMANDS,
+            fn (array $cmd) => $filter === '' || str_starts_with($cmd['value'], $filter),
+        ));
+
+        if ($filtered === []) {
+            $this->hideSlashCompletion();
+
+            return;
+        }
+
+        if ($this->slashCompletion === null) {
+            $this->slashCompletion = new SelectListWidget($filtered);
+            $this->slashCompletion->setId('slash-completion');
+            $this->slashCompletion->addStyleClass('slash-completion');
+            $this->conversation->add($this->slashCompletion);
+        } else {
+            $this->slashCompletion->setItems($filtered);
+        }
+
+        $this->tui->processRender();
+    }
+
+    private function hideSlashCompletion(): void
+    {
+        if ($this->slashCompletion !== null) {
+            $this->conversation->remove($this->slashCompletion);
+            $this->slashCompletion = null;
+            $this->tui->processRender();
+        }
+    }
+
+    private function containsAnsiEscapes(string $text): bool
+    {
+        return str_contains($text, "\x1b[");
     }
 }

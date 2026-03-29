@@ -2,21 +2,13 @@
 
 namespace Kosmokrator\Agent;
 
-use Kosmokrator\Agent\Event\ResponseCompleteEvent;
-use Kosmokrator\Agent\Event\StreamChunkEvent;
-use Kosmokrator\Agent\Event\ThinkingEvent;
-use Kosmokrator\Agent\Event\ToolCallEvent;
-use Kosmokrator\Agent\Event\ToolResultEvent;
-use Kosmokrator\LLM\PrismService;
+use Amp\CancelledException;
+use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\Tool\Permission\PermissionAction;
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\RendererInterface;
 use Psr\Log\LoggerInterface;
 use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Streaming\Events\ErrorEvent;
-use Prism\Prism\Streaming\Events\StreamEndEvent;
-use Prism\Prism\Streaming\Events\StreamStartEvent;
-use Prism\Prism\Streaming\Events\TextDeltaEvent;
-use Prism\Prism\Streaming\Events\ToolCallEvent as PrismToolCallEvent;
-use Prism\Prism\Streaming\Events\ToolResultEvent as PrismToolResultEvent;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
@@ -31,10 +23,11 @@ class AgentLoop
     private int $maxToolRounds;
 
     public function __construct(
-        private readonly PrismService $llm,
+        private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
         private readonly LoggerInterface $log,
         int $maxToolRounds = 25,
+        private readonly ?PermissionEvaluator $permissions = null,
     ) {
         $this->history = new ConversationHistory();
         $this->maxToolRounds = $maxToolRounds;
@@ -54,43 +47,45 @@ class AgentLoop
         $this->history->addUser($userInput);
 
         $round = 0;
+        $trimAttempts = 0;
 
         while ($round < $this->maxToolRounds) {
             $round++;
 
             $this->ui->showThinking();
 
-            $fullText = '';
-            $toolCalls = [];
-            $finishReason = FinishReason::Stop;
-            $tokensIn = 0;
-            $tokensOut = 0;
-
             try {
-                if ($this->llm->supportsStreaming()) {
-                    $stream = $this->llm->stream($this->history->messages(), $this->tools);
+                $cancellation = $this->ui->getCancellation();
+                $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+                $this->ui->clearThinking();
+                $trimAttempts = 0;
 
-                    foreach ($stream as $event) {
-                        match (true) {
-                            $event instanceof TextDeltaEvent => $this->handleTextDelta($event, $fullText),
-                            $event instanceof PrismToolCallEvent => $this->handleToolCall($event, $toolCalls),
-                            $event instanceof PrismToolResultEvent => $this->handleToolResult($event),
-                            $event instanceof StreamEndEvent => $this->handleStreamEnd($event, $finishReason, $tokensIn, $tokensOut),
-                            $event instanceof ErrorEvent => $this->handleError($event),
-                            default => null,
-                        };
-                    }
-                } else {
-                    // Non-streaming fallback
-                    $response = $this->llm->text($this->history->messages(), $this->tools);
-                    $fullText = $response->text;
+                $fullText = $response->text;
+                $toolCalls = $response->toolCalls;
+                $finishReason = $response->finishReason;
+                $tokensIn = $response->promptTokens;
+                $tokensOut = $response->completionTokens;
+
+                if ($fullText !== '') {
                     $this->ui->streamChunk($fullText);
-                    $finishReason = $response->finishReason;
-                    $toolCalls = $response->toolCalls;
-                    $tokensIn = $response->usage->promptTokens;
-                    $tokensOut = $response->usage->completionTokens;
                 }
+            } catch (CancelledException $e) {
+                $this->ui->clearThinking();
+                $this->log->info('LLM request cancelled by user', ['round' => $round]);
+
+                return;
             } catch (\Throwable $e) {
+                $this->ui->clearThinking();
+
+                // Context window overflow — trim oldest messages and retry
+                if ($this->isContextOverflow($e) && $trimAttempts < 3 && $this->history->trimOldest()) {
+                    $trimAttempts++;
+                    $round--; // Don't count this as a tool round
+                    $this->log->warning('Context overflow, trimmed oldest messages', ['attempt' => $trimAttempts]);
+
+                    continue;
+                }
+
                 $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
                 $this->ui->showError($e->getMessage());
                 $this->history->addAssistant('Error: ' . $e->getMessage());
@@ -137,42 +132,6 @@ class AgentLoop
         return $this->history;
     }
 
-    private function handleTextDelta(TextDeltaEvent $event, string &$fullText): void
-    {
-        $fullText .= $event->delta;
-        $this->ui->streamChunk($event->delta);
-    }
-
-    private function handleToolCall(PrismToolCallEvent $event, array &$toolCalls): void
-    {
-        $toolCalls[] = $event->toolCall;
-    }
-
-    private function handleToolResult(PrismToolResultEvent $event): void
-    {
-        // Prism handled a tool internally — display it
-        $this->ui->showToolResult(
-            $event->toolResult->toolName,
-            is_string($event->toolResult->result) ? $event->toolResult->result : json_encode($event->toolResult->result),
-            $event->success,
-        );
-    }
-
-    private function handleStreamEnd(StreamEndEvent $event, FinishReason &$finishReason, int &$tokensIn, int &$tokensOut): void
-    {
-        $finishReason = $event->finishReason;
-
-        if ($event->usage !== null) {
-            $tokensIn = $event->usage->promptTokens;
-            $tokensOut = $event->usage->completionTokens;
-        }
-    }
-
-    private function handleError(ErrorEvent $event): void
-    {
-        $this->ui->showError("{$event->errorType}: {$event->message}");
-    }
-
     /**
      * @param ToolCall[] $toolCalls
      * @return ToolResult[]
@@ -184,6 +143,47 @@ class AgentLoop
         foreach ($toolCalls as $toolCall) {
             $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $toolCall->arguments()]);
             $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+
+            // Permission check — before tool lookup/execution
+            if ($this->permissions !== null) {
+                $action = $this->permissions->evaluate($toolCall->name, $toolCall->arguments());
+
+                if ($action === PermissionAction::Deny) {
+                    $output = "Permission denied: '{$toolCall->name}' is blocked by policy. Try a different approach.";
+                    $this->log->info('Tool denied by policy', ['tool' => $toolCall->name]);
+                    $this->ui->showToolResult($toolCall->name, $output, false);
+                    $results[] = new ToolResult(
+                        toolCallId: $toolCall->id,
+                        toolName: $toolCall->name,
+                        args: $toolCall->arguments(),
+                        result: $output,
+                    );
+
+                    continue;
+                }
+
+                if ($action === PermissionAction::Ask) {
+                    $decision = $this->ui->askToolPermission($toolCall->name, $toolCall->arguments());
+
+                    if ($decision === 'deny') {
+                        $output = "User denied permission for '{$toolCall->name}'. Try a different approach.";
+                        $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
+                        $this->ui->showToolResult($toolCall->name, $output, false);
+                        $results[] = new ToolResult(
+                            toolCallId: $toolCall->id,
+                            toolName: $toolCall->name,
+                            args: $toolCall->arguments(),
+                            result: $output,
+                        );
+
+                        continue;
+                    }
+
+                    if ($decision === 'always') {
+                        $this->permissions->grantSession($toolCall->name);
+                    }
+                }
+            }
 
             $tool = $this->findTool($toolCall->name);
 
@@ -246,5 +246,16 @@ class AgentLoop
     {
         // Rough Claude Sonnet pricing: $3/M input, $15/M output
         return round(($tokensIn * 3 / 1_000_000) + ($tokensOut * 15 / 1_000_000), 4);
+    }
+
+    private function isContextOverflow(\Throwable $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'max length')
+            || str_contains($message, 'max tokens')
+            || str_contains($message, 'context length')
+            || str_contains($message, 'too long')
+            || str_contains($message, 'token limit');
     }
 }

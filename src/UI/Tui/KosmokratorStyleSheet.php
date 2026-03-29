@@ -11,8 +11,10 @@ use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\StyleSheet;
 use Symfony\Component\Tui\Style\TextAlign;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
-use Symfony\Component\Tui\Widget\InputWidget;
+use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
+use Symfony\Component\Tui\Widget\ProgressBarWidget;
+use Symfony\Component\Tui\Widget\SelectListWidget;
 
 class KosmokratorStyleSheet
 {
@@ -42,16 +44,14 @@ class KosmokratorStyleSheet
 
             // Tagline
             '.tagline' => new Style(
-                color: Color::hex('#808080'),
-                dim: true,
+                color: Color::hex('#a0a0a0'),
                 textAlign: TextAlign::Center,
                 padding: new Padding(0, 2, 0, 2),
             ),
 
             // Welcome message
             '.welcome' => new Style(
-                color: Color::hex('#808080'),
-                dim: true,
+                color: Color::hex('#a0a0a0'),
                 padding: new Padding(1, 2, 0, 2),
             ),
 
@@ -64,8 +64,7 @@ class KosmokratorStyleSheet
 
             // Separator
             '.separator' => new Style(
-                color: Color::hex('#404040'),
-                dim: true,
+                color: Color::hex('#606060'),
                 padding: new Padding(0, 2, 0, 2),
             ),
 
@@ -74,16 +73,16 @@ class KosmokratorStyleSheet
                 padding: new Padding(0, 2, 0, 2),
             ),
 
-            // Tool call display
+            // Tool call display — double border for mythological ornate feel
             '.tool-call' => new Style(
-                border: Border::all(1, BorderPattern::rounded(), Color::hex('#64c8ff')),
+                border: Border::all(1, BorderPattern::double(), Color::hex('#806428')),
                 padding: new Padding(0, 1, 0, 1),
-                color: Color::hex('#64c8ff'),
+                color: Color::hex('#ffc850'),
             ),
 
             '.tool-result' => new Style(
+                color: Color::hex('#a0a0a0'),
                 padding: new Padding(0, 3, 0, 3),
-                dim: true,
             ),
 
             '.tool-success' => new Style(
@@ -98,30 +97,59 @@ class KosmokratorStyleSheet
 
             // Status bar
             '.status-bar' => new Style(
-                color: Color::hex('#808080'),
-                dim: true,
+                color: Color::hex('#909090'),
                 padding: new Padding(0, 1, 0, 1),
             ),
 
-            // Input prompt
-            InputWidget::class => new Style(
-                border: Border::all(1, BorderPattern::rounded(), Color::hex('#a02018')),
+            // Editor prompt (Enter = submit, Shift+Enter = newline)
+            // EditorWidget draws its own ─── top/bottom borders via 'frame' sub-element
+            EditorWidget::class => new Style(
                 padding: new Padding(0, 1, 0, 1),
                 color: Color::hex('#dcdcdc'),
             ),
 
-            InputWidget::class . ':focus' => new Style(
-                border: Border::all(1, BorderPattern::rounded(), Color::hex('#ff5040')),
+            EditorWidget::class . '::frame' => new Style(
+                color: Color::hex('#a02018'),
             ),
 
-            // Thinking loader
-            CancellableLoaderWidget::class => new Style(
-                color: Color::hex('#ffc850'),
+            EditorWidget::class . ':focus::frame' => new Style(
+                color: Color::hex('#ff5040'),
+            ),
+
+            // Context progress bar
+            ProgressBarWidget::class => new Style(
+                color: Color::hex('#909090'),
+                padding: new Padding(0, 1, 0, 1),
+            ),
+
+            // ANSI art response (no color/attribute styling to preserve raw ANSI codes)
+            '.ansi-art' => new Style(
                 padding: new Padding(0, 2, 0, 2),
             ),
 
-            // Markdown widget
+            // Thinking loader (animated spinner)
+            CancellableLoaderWidget::class => new Style(
+                color: Color::hex('#ffc850'),
+                italic: true,
+                padding: new Padding(1, 2, 0, 2),
+            ),
+
+            // Markdown widget — cap width for readability
             MarkdownWidget::class => new Style(
+                padding: new Padding(0, 2, 0, 2),
+                maxColumns: 100,
+            ),
+
+            // Permission prompt (tool approval)
+            '.permission-prompt' => new Style(
+                border: Border::all(1, BorderPattern::rounded(), Color::hex('#ffc850')),
+                padding: new Padding(0, 1, 0, 1),
+                color: Color::hex('#ffc850'),
+            ),
+
+            // Slash command completion
+            '.slash-completion' => new Style(
+                color: Color::hex('#a0a0a0'),
                 padding: new Padding(0, 2, 0, 2),
             ),
         ]);

@@ -10,6 +10,7 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Facade;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
@@ -17,6 +18,9 @@ use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
+use Kosmokrator\Tool\Permission\PermissionConfigParser;
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Dotenv\Dotenv;
 use Monolog\Handler\RotatingFileHandler;
@@ -139,6 +143,17 @@ class Kernel
             temperature: $config->get('kosmokrator.agent.temperature', 0.0),
         ));
 
+        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $this->container->singleton(AsyncLlmClient::class, fn () => new AsyncLlmClient(
+            apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
+            baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
+            model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
+            systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+            maxTokens: $config->get('kosmokrator.agent.max_tokens', 8192),
+            temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+            provider: $provider,
+        ));
+
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
 
         $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout) {
@@ -151,6 +166,14 @@ class Kernel
             $registry->register(new BashTool($bashTimeout));
 
             return $registry;
+        });
+
+        $this->container->singleton(SessionGrants::class);
+        $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
+            $parser = new PermissionConfigParser();
+            $rules = $parser->parse($config);
+
+            return new PermissionEvaluator($rules, $this->container->make(SessionGrants::class));
         });
     }
 

@@ -2,12 +2,18 @@
 
 namespace Kosmokrator\UI\Ansi;
 
+use Amp\Cancellation;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
+use Tempest\Highlight\Highlighter;
 
 class AnsiRenderer implements RendererInterface
 {
     private readonly AnsiIntro $intro;
+    private string $streamBuffer = '';
+    private ?MarkdownToAnsi $markdownRenderer = null;
+    private ?Highlighter $highlighter = null;
+    private array $lastToolArgs = [];
 
     public function __construct()
     {
@@ -42,6 +48,11 @@ class AnsiRenderer implements RendererInterface
         return trim($input);
     }
 
+    public function showUserMessage(string $text): void
+    {
+        // No-op: readline already displays the typed input
+    }
+
     public function showThinking(): void
     {
         $r = Theme::reset();
@@ -51,26 +62,50 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$dim}  ┌ {$yellow}⚡ Thinking...{$r}\n";
     }
 
+    public function clearThinking(): void
+    {
+        // No-op for ANSI — thinking indicator is static text
+    }
+
+    public function getCancellation(): ?Cancellation
+    {
+        return null;
+    }
+
     public function streamChunk(string $text): void
     {
-        echo $text;
+        $this->streamBuffer .= $text;
     }
 
     public function streamComplete(): void
     {
-        echo "\n\n";
+        if ($this->streamBuffer !== '') {
+            if (str_contains($this->streamBuffer, "\x1b[")) {
+                // Raw ANSI art — output directly, don't parse as markdown
+                echo "\n" . $this->streamBuffer . Theme::reset() . "\n";
+            } else {
+                $rendered = $this->getMarkdownRenderer()->render($this->streamBuffer);
+                echo "\n" . $rendered;
+            }
+            $this->streamBuffer = '';
+        }
     }
 
     public function showToolCall(string $name, array $args): void
     {
         $r = Theme::reset();
         $dim = Theme::dim();
-        $cyan = Theme::info();
+        $gold = Theme::accent();
+        $icon = Theme::toolIcon($name);
 
-        echo "\n{$dim}  ┌ {$cyan}◈ {$name}{$r}";
+        $this->lastToolArgs = $args;
+
+        $border = Theme::rgb(128, 100, 40);
+
+        echo "\n{$border}  ┌ {$gold}{$icon} {$name}{$r}";
         foreach ($args as $key => $value) {
             $display = is_string($value) ? $value : json_encode($value);
-            echo "\n{$dim}  │{$r} {$dim}{$key}:{$r} {$display}";
+            echo "\n{$border}  │{$r} {$dim}{$key}:{$r} {$display}";
         }
         echo "\n";
     }
@@ -78,18 +113,119 @@ class AnsiRenderer implements RendererInterface
     public function showToolResult(string $name, string $output, bool $success): void
     {
         $r = Theme::reset();
+        $border = Theme::rgb(128, 100, 40);
+        $text = Theme::text();
         $dim = Theme::dim();
         $status = $success ? Theme::success() . '✓' : Theme::error() . '✗';
 
-        $lines = explode("\n", $output);
-        foreach (array_slice($lines, 0, 20) as $line) {
-            echo "{$dim}  │{$r} {$line}\n";
-        }
-        if (count($lines) > 20) {
-            echo "{$dim}  │ ... +" . (count($lines) - 20) . " more lines{$r}\n";
+        // File read: just show status, no content
+        if ($name === 'file_read') {
+            $lineCount = count(explode("\n", $output));
+            echo "{$border}  └ {$status} {$dim}{$name}{$r} {$dim}({$lineCount} lines){$r}\n";
+            return;
         }
 
-        echo "{$dim}  └ {$status} {$name}{$r}\n";
+        $lines = explode("\n", $output);
+        $maxLines = 20;
+
+        foreach (array_slice($lines, 0, $maxLines) as $line) {
+            echo "{$border}  │{$r} {$text}{$line}{$r}\n";
+        }
+
+        if (count($lines) > $maxLines) {
+            echo "{$border}  │ {$dim}... +" . (count($lines) - $maxLines) . " more lines{$r}\n";
+        }
+
+        echo "{$border}  └ {$status} {$dim}{$name}{$r}\n";
+    }
+
+    public function askToolPermission(string $toolName, array $args): string
+    {
+        $r = Theme::reset();
+        $yellow = Theme::warning();
+        $dim = Theme::dim();
+
+        while (true) {
+            $answer = readline("{$yellow}  ⟡ Allow?{$r} {$dim}[Y]es / [n]o / [a]lways ▸{$r} ");
+
+            if ($answer === false) {
+                return 'deny';
+            }
+
+            $char = strtolower(trim($answer));
+
+            if ($char === '' || $char === 'y') {
+                return 'allow';
+            }
+
+            if ($char === 'n') {
+                return 'deny';
+            }
+
+            if ($char === 'a') {
+                return 'always';
+            }
+        }
+    }
+
+    private function renderFileReadResult(array $lines, int $maxLines): void
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $gray = Theme::text();
+
+        // Detect language from file extension
+        $path = $this->lastToolArgs['path'] ?? '';
+        $language = KosmokratorTerminalTheme::detectLanguage($path);
+
+        // Separate line numbers from code content
+        $codeLines = [];
+        $lineNums = [];
+        foreach (array_slice($lines, 0, $maxLines) as $line) {
+            if (preg_match('/^(\s*\d+)\t(.*)$/', $line, $m)) {
+                $lineNums[] = $m[1];
+                $codeLines[] = $m[2];
+            } else {
+                $lineNums[] = '';
+                $codeLines[] = $line;
+            }
+        }
+
+        // Highlight the code block
+        $code = implode("\n", $codeLines);
+        if ($language !== '') {
+            try {
+                $highlighted = $this->getHighlighter()->parse($code, $language);
+            } catch (\Throwable) {
+                $highlighted = $code;
+            }
+            $highlightedLines = explode("\n", $highlighted);
+        } else {
+            $highlightedLines = $codeLines;
+        }
+
+        // Output with line numbers
+        foreach ($highlightedLines as $i => $hLine) {
+            $num = $lineNums[$i] ?? '';
+            echo "{$dim}  │{$r} {$gray}{$num}{$r}\t{$hLine}{$r}\n";
+        }
+    }
+
+    private function getHighlighter(): Highlighter
+    {
+        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
+    }
+
+    public function showNotice(string $message): void
+    {
+        $r = Theme::reset();
+        $yellow = Theme::warning();
+        echo "\n{$yellow}  {$message}{$r}\n\n";
+    }
+
+    public function consumeQueuedMessage(): ?string
+    {
+        return null; // ANSI mode is synchronous, no queuing
     }
 
     public function showError(string $message): void
@@ -103,7 +239,10 @@ class AnsiRenderer implements RendererInterface
     {
         $r = Theme::reset();
         $dim = Theme::dim();
-        echo "{$dim}  Tokens: {$tokensIn} in · {$tokensOut} out · cost: \${$cost}{$r}\n\n";
+        $maxCtx = Theme::maxContextForModel($model);
+        $bar = Theme::contextBar($tokensIn, $maxCtx);
+
+        echo "{$dim}  {$model} · {$bar} {$dim}· \${$cost}{$r}\n\n";
     }
 
     public function teardown(): void
@@ -263,6 +402,11 @@ class AnsiRenderer implements RendererInterface
             $step();
             usleep(300000);
         }
+    }
+
+    private function getMarkdownRenderer(): MarkdownToAnsi
+    {
+        return $this->markdownRenderer ??= new MarkdownToAnsi();
     }
 
     private function typeOut(string $text, int $charDelay): void

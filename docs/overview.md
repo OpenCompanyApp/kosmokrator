@@ -686,7 +686,7 @@ interface RendererInterface
 }
 ```
 
-### Two Implementations
+### Three Implementations
 
 **AnsiRenderer** (current default): Raw ANSI escape codes. Synchronous. Works everywhere. Includes animated ASCII intro, colored tool output, streaming text display, mock session demo (`/seed`).
 
@@ -713,6 +713,14 @@ class UIManager implements RendererInterface
 ```
 
 Override via CLI: `--renderer=ansi` or `--renderer=tui`.
+
+**WebRenderer** (Desktop app): NativePHP + Electron. Broadcasts render events over WebSocket to a Vue frontend in an Electron BrowserWindow. Adds system tray, native notifications, global shortcuts, OAuth flows, file dialogs, auto-updater. Same engine, GUI face. See `docs/desktop-app.md` for full architecture.
+
+| Surface | Renderer | Runtime |
+|---------|----------|---------|
+| Terminal (ANSI) | `AnsiRenderer` | `php bin/kosmokrator` |
+| Terminal (TUI) | `TuiRenderer` | `php bin/kosmokrator` |
+| Desktop | `WebRenderer` | NativePHP (bundled PHP + Electron) |
 
 ### Theme System
 
@@ -847,11 +855,13 @@ providers:
 | 13 | TUI widgets (SessionWidget, PromptWidget, ResponseWidget, etc.) | — |
 | 14 | Markdown rendering + syntax highlighting in responses | — |
 | 15 | PHAR build (box compile) | — |
+| 16 | Desktop app (NativePHP + Electron + WebRenderer) | Phase 7+ |
 
 Phases 5-7 are independent quality-of-life improvements.
 Phase 8 (Lua) is the major architectural addition.
 Phases 9-12 depend on `integration-core` being refactored (separate effort, see `docs/integration-refactor-plan.md`).
 Phases 13-15 are polish.
+Phase 16 (Desktop) can start once session persistence and the core agent experience are solid. See `docs/desktop-app.md`.
 
 ---
 

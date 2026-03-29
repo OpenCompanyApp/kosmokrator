@@ -4,7 +4,10 @@ namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
 use Psr\Log\LoggerInterface;
@@ -60,19 +63,25 @@ class AgentCommand extends Command
         $log = $this->container->make(LoggerInterface::class);
         $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
 
-        $llm = $this->container->make(PrismService::class);
+        $llm = ($ui->getActiveRenderer() === 'tui')
+            ? $this->container->make(AsyncLlmClient::class)
+            : $this->container->make(PrismService::class);
         $toolRegistry = $this->container->make(ToolRegistry::class);
+        $permissions = $this->container->make(PermissionEvaluator::class);
         $maxRounds = $config->get('kosmokrator.agent.max_tool_rounds', 25);
-        $agentLoop = new AgentLoop($llm, $ui, $log, $maxRounds);
+        $agentLoop = new AgentLoop($llm, $ui, $log, $maxRounds, $permissions);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
-        return $this->repl($ui, $agentLoop);
+        return $this->repl($ui, $agentLoop, $permissions);
     }
 
-    private function repl(UIManager $ui, AgentLoop $agentLoop): int
+    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions): int
     {
+        $nextInput = null;
+
         while (true) {
-            $input = $ui->prompt();
+            $input = $nextInput ?? $ui->prompt();
+            $nextInput = null;
 
             if ($input === '') {
                 continue;
@@ -97,13 +106,25 @@ class AgentCommand extends Command
 
             if ($command === '/reset') {
                 $agentLoop->history()->clear();
-                echo "\n\033[38;5;245m  Conversation history cleared.\033[0m\n\n";
+                $permissions->resetGrants();
+                $permissions->setAutoApprove(false);
+                $ui->showNotice('Conversation history cleared.');
+                continue;
+            }
+
+            if ($command === '/prometheus') {
+                $permissions->setAutoApprove(true);
+                $ui->showNotice('⚡ Prometheus unbound — all tools auto-approved until next prompt.');
                 continue;
             }
 
             // Send to agent
-            echo "\n";
+            $ui->showUserMessage($input);
             $agentLoop->run($input);
+            $permissions->setAutoApprove(false);
+
+            // Check for messages queued during thinking
+            $nextInput = $ui->consumeQueuedMessage();
         }
 
         $ui->teardown();

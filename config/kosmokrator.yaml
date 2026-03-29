@@ -16,6 +16,10 @@ agent:
 
     Follow existing code conventions. Read files before editing. Never assume a library is available — check first. Never introduce security vulnerabilities or commit secrets.
 
+    # Tasks
+
+    Use `task_create` (batch mode for multiple), `task_update`, `task_list`, `task_get` to track multi-step work (3+ actions). Skip for trivial one-step tasks. Create all tasks upfront, mark `in_progress` before starting each, `completed` immediately after. Keep subjects short and imperative. Use nesting (parent_id) for complex work — children auto-complete the parent.
+
 ui:
   renderer: auto
   intro_animated: true

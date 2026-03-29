@@ -7,10 +7,13 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\EnvironmentContext;
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Agent\MemoryInjector;
+use Kosmokrator\Task\TaskStore;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
@@ -34,6 +37,8 @@ class AgentCommand extends Command
     {
         $this->addOption('no-animation', null, InputOption::VALUE_NONE, 'Skip the intro animation');
         $this->addOption('renderer', null, InputOption::VALUE_REQUIRED, 'Force renderer (tui or ansi)', 'auto');
+        $this->addOption('resume', null, InputOption::VALUE_NONE, 'Resume last session for this project');
+        $this->addOption('session', null, InputOption::VALUE_REQUIRED, 'Resume a specific session by ID');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -73,17 +78,51 @@ class AgentCommand extends Command
         $toolRegistry = $this->container->make(ToolRegistry::class);
         $permissions = $this->container->make(PermissionEvaluator::class);
         $models = $this->container->make(ModelCatalog::class);
+        $sessionManager = $this->container->make(SessionManager::class);
+
+        // Set project scope for settings/memories
+        $project = InstructionLoader::gitRoot() ?? getcwd();
+        $sessionManager->setProject($project);
+
+        // Load persisted settings
+        $this->applyPersistedSettings($sessionManager, $llm, $permissions);
+
+        // Build system prompt: base + memories + instructions + environment
+        $memoriesEnabled = ($sessionManager->getSetting('memories') ?? 'on') !== 'off';
+        $memories = $memoriesEnabled ? $sessionManager->getMemories() : [];
+
         $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+            . MemoryInjector::format($memories)
             . InstructionLoader::gather()
             . EnvironmentContext::gather();
         $maxRounds = (int) $config->get('kosmokrator.agent.max_tool_rounds', 25);
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models);
+        $taskStore = $this->container->make(TaskStore::class);
+        $ui->setTaskStore($taskStore);
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
-        return $this->repl($ui, $agentLoop, $permissions, $llm);
+        // Session: resume or create new
+        $resumeId = $input->getOption('session');
+        if ($resumeId === null && $input->getOption('resume')) {
+            $resumeId = $sessionManager->latestSession();
+        }
+
+        if ($resumeId !== null) {
+            $sessionManager->setCurrentSession($resumeId);
+            $history = $sessionManager->loadHistory($resumeId);
+            if ($history->count() > 0) {
+                $agentLoop->setHistory($history);
+                $ui->showNotice("Resumed session ({$resumeId})");
+            }
+        } else {
+            $modelName = $llm->getProvider() . '/' . $llm->getModel();
+            $sessionManager->createSession($modelName);
+        }
+
+        return $this->repl($ui, $agentLoop, $permissions, $llm, $sessionManager);
     }
 
-    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm): int
+    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm, SessionManager $sessionManager): int
     {
         $nextInput = null;
 
@@ -116,7 +155,9 @@ class AgentCommand extends Command
                 $agentLoop->history()->clear();
                 $permissions->resetGrants();
                 $permissions->setAutoApprove(false);
-                $ui->showNotice('Conversation history cleared.');
+                $modelName = $llm->getProvider() . '/' . $llm->getModel();
+                $sessionManager->createSession($modelName);
+                $ui->showNotice('Conversation cleared. New session started.');
                 continue;
             }
 
@@ -132,9 +173,14 @@ class AgentCommand extends Command
             }
 
             if ($command === '/settings') {
+                $memoriesEnabled = $sessionManager->getSetting('memories') ?? 'on';
+                $autoCompact = $sessionManager->getSetting('auto_compact') ?? 'on';
+
                 $currentSettings = [
                     'mode' => $agentLoop->getMode()->value,
                     'auto_approve' => $permissions->isAutoApprove() ? 'on' : 'off',
+                    'memories' => $memoriesEnabled,
+                    'auto_compact' => $autoCompact,
                     'temperature' => (string) ($llm->getTemperature() ?? 0.0),
                     'max_tokens' => (string) ($llm->getMaxTokens() ?? 8192),
                     'provider' => $llm->getProvider(),
@@ -145,14 +191,26 @@ class AgentCommand extends Command
 
                 foreach ($changes as $id => $value) {
                     match ($id) {
-                        'mode' => (function () use ($agentLoop, $ui, $value) {
+                        'mode' => (function () use ($agentLoop, $ui, $value, $sessionManager) {
                             $mode = AgentMode::from($value);
                             $agentLoop->setMode($mode);
                             $ui->showMode($mode->label(), $mode->color());
+                            $sessionManager->setSetting('mode', $value);
                         })(),
-                        'auto_approve' => $permissions->setAutoApprove($value === 'on'),
-                        'temperature' => $llm->setTemperature((float) $value),
-                        'max_tokens' => $llm->setMaxTokens((int) $value),
+                        'auto_approve' => (function () use ($permissions, $value, $sessionManager) {
+                            $permissions->setAutoApprove($value === 'on');
+                            $sessionManager->setSetting('auto_approve', $value);
+                        })(),
+                        'memories' => $sessionManager->setSetting('memories', $value),
+                        'auto_compact' => $sessionManager->setSetting('auto_compact', $value),
+                        'temperature' => (function () use ($llm, $value, $sessionManager) {
+                            $llm->setTemperature((float) $value);
+                            $sessionManager->setSetting('temperature', $value);
+                        })(),
+                        'max_tokens' => (function () use ($llm, $value, $sessionManager) {
+                            $llm->setMaxTokens((int) $value);
+                            $sessionManager->setSetting('max_tokens', $value);
+                        })(),
                         default => null,
                     };
                 }
@@ -163,10 +221,52 @@ class AgentCommand extends Command
                 continue;
             }
 
+            if ($command === '/sessions') {
+                $sessions = $sessionManager->listSessions(10);
+                if ($sessions === []) {
+                    $ui->showNotice('No sessions found for this project.');
+                } else {
+                    $lines = [];
+                    foreach ($sessions as $s) {
+                        $title = $s['title'] ?? '(untitled)';
+                        $id = substr($s['id'], 0, 8);
+                        $lines[] = "  {$id}  {$title}";
+                    }
+                    $ui->showNotice("Recent sessions:\n" . implode("\n", $lines));
+                }
+                continue;
+            }
+
+            if ($command === '/memories') {
+                $memories = $sessionManager->getMemories();
+                if ($memories === []) {
+                    $ui->showNotice('No memories stored yet.');
+                } else {
+                    $lines = [];
+                    foreach ($memories as $m) {
+                        $lines[] = "  [{$m['id']}] ({$m['type']}) {$m['title']}";
+                    }
+                    $ui->showNotice("Memories:\n" . implode("\n", $lines));
+                }
+                continue;
+            }
+
+            if (str_starts_with($command, '/forget ')) {
+                $id = (int) trim(substr($input, 8));
+                if ($id > 0) {
+                    $sessionManager->deleteMemory($id);
+                    $ui->showNotice("Memory #{$id} deleted.");
+                } else {
+                    $ui->showNotice('Usage: /forget <id>');
+                }
+                continue;
+            }
+
             if (in_array($command, ['/edit', '/plan', '/ask'])) {
                 $mode = AgentMode::from(ltrim($command, '/'));
                 $agentLoop->setMode($mode);
                 $ui->showMode($mode->label(), $mode->color());
+                $sessionManager->setSetting('mode', $mode->value);
                 $ui->showNotice("Switched to {$mode->label()} mode.");
                 continue;
             }
@@ -183,5 +283,23 @@ class AgentCommand extends Command
         $ui->teardown();
 
         return Command::SUCCESS;
+    }
+
+    private function applyPersistedSettings(SessionManager $sm, LlmClientInterface $llm, PermissionEvaluator $permissions): void
+    {
+        $temp = $sm->getSetting('temperature');
+        if ($temp !== null) {
+            $llm->setTemperature((float) $temp);
+        }
+
+        $maxTokens = $sm->getSetting('max_tokens');
+        if ($maxTokens !== null) {
+            $llm->setMaxTokens((int) $maxTokens);
+        }
+
+        $autoApprove = $sm->getSetting('auto_approve');
+        if ($autoApprove === 'on') {
+            $permissions->setAutoApprove(true);
+        }
     }
 }

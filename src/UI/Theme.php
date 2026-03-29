@@ -63,6 +63,10 @@ class Theme
             'bash' => '⚡',       // Lightning — raw power, execution
             'grep' => '⊛',       // Astral search — seeking through the cosmos
             'glob' => '✧',       // Star cluster — surveying many points of light
+            'task_create' => '⊕', // Circled plus — bringing new labors into being
+            'task_update' => '⊙', // Circled dot — altering the fate of a labor
+            'task_list' => '☰',   // Trigram — surveying all labors
+            'task_get' => '⊘',    // Circled division — examining a single labor
             default => '◈',       // Gemstone — generic cosmic artifact
         };
     }
@@ -77,6 +81,10 @@ class Theme
             'bash' => 'Bash',
             'grep' => 'Search',
             'glob' => 'Glob',
+            'task_create' => 'Task',
+            'task_update' => 'Task',
+            'task_list' => 'Tasks',
+            'task_get' => 'Task',
             default => $name,
         };
     }

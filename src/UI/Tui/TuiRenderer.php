@@ -4,6 +4,7 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
+use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiIntro;
 use Kosmokrator\UI\Ansi\AnsiTheogony;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
@@ -42,6 +43,8 @@ class TuiRenderer implements RendererInterface
     private ProgressBarWidget $statusBar;
 
     private ContainerWidget $overlay;
+
+    private TextWidget $taskBar;
 
     private EditorWidget $input;
 
@@ -114,12 +117,22 @@ class TuiRenderer implements RendererInterface
         ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
         ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
         ['value' => '/settings', 'label' => '/settings', 'description' => 'Open the settings panel'],
+        ['value' => '/sessions', 'label' => '/sessions', 'description' => 'List recent sessions'],
+        ['value' => '/memories', 'label' => '/memories', 'description' => 'Show stored memories'],
+        ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
         ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
     ];
 
     private ?Highlighter $highlighter = null;
 
     private array $lastToolArgs = [];
+
+    private ?TaskStore $taskStore = null;
+
+    public function setTaskStore(TaskStore $store): void
+    {
+        $this->taskStore = $store;
+    }
 
     public function initialize(): void
     {
@@ -152,6 +165,10 @@ class TuiRenderer implements RendererInterface
         // Overlay container — pinned between status bar and input, zero-height when empty
         $this->overlay = new ContainerWidget();
         $this->overlay->setId('overlay');
+
+        // Task bar — persistent task tree above the input, empty when no tasks
+        $this->taskBar = new TextWidget('');
+        $this->taskBar->setId('task-bar');
 
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
         $this->input = new EditorWidget();
@@ -263,6 +280,7 @@ class TuiRenderer implements RendererInterface
         $this->session->add($this->conversation);
         $this->session->add($this->statusBar);
         $this->session->add($this->overlay);
+        $this->session->add($this->taskBar);
         $this->session->add($this->input);
 
         // Submit handler on editor (Ctrl+Enter)
@@ -449,6 +467,20 @@ class TuiRenderer implements RendererInterface
         $this->lastToolArgs = $args;
         $icon = Theme::toolIcon($name);
         $friendly = Theme::toolLabel($name);
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $white = Theme::white();
+
+        // Task tools: clean human-readable display
+        if ($this->isTaskTool($name)) {
+            $label = $this->formatTaskToolCall($name, $args, $icon, $friendly, $white, $dim, $r);
+            $widget = new TextWidget($label);
+            $widget->addStyleClass('tool-call');
+            $this->conversation->add($widget);
+            $this->tui->processRender();
+
+            return;
+        }
 
         // Compact single-line display for file tools
         if (in_array($name, ['file_read', 'file_write', 'file_edit']) && isset($args['path'])) {
@@ -484,6 +516,14 @@ class TuiRenderer implements RendererInterface
         $text = Theme::text();
 
         $header = "{$statusColor}{$indicator}{$r}";
+
+        // Task tools: silent result — the call line + sticky task bar are enough
+        if ($this->isTaskTool($name)) {
+            $this->refreshTaskBar();
+            $this->tui->processRender();
+
+            return;
+        }
 
         // Diff view for file_edit
         if ($name === 'file_edit' && $success && isset($this->lastToolArgs['old_string'])) {
@@ -705,6 +745,20 @@ class TuiRenderer implements RendererInterface
                 values: ['off', 'on'],
             ),
             new SettingItem(
+                id: 'memories',
+                label: 'Memories',
+                currentValue: $currentSettings['memories'] ?? 'on',
+                description: 'Long-term knowledge persistence across sessions',
+                values: ['on', 'off'],
+            ),
+            new SettingItem(
+                id: 'auto_compact',
+                label: 'Auto-compact',
+                currentValue: $currentSettings['auto_compact'] ?? 'on',
+                description: 'Automatically compact context when approaching token limit',
+                values: ['on', 'off'],
+            ),
+            new SettingItem(
                 id: 'temperature',
                 label: 'Temperature',
                 currentValue: $currentSettings['temperature'] ?? '0.0',
@@ -860,5 +914,91 @@ class TuiRenderer implements RendererInterface
     private function containsAnsiEscapes(string $text): bool
     {
         return str_contains($text, "\x1b[");
+    }
+
+    private function refreshTaskBar(): void
+    {
+        if ($this->taskStore === null || $this->taskStore->isEmpty()) {
+            $this->taskBar->setText('');
+
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $border = Theme::rgb(128, 100, 40);
+        $accent = Theme::accent();
+
+        $tree = $this->taskStore->renderAnsiTree();
+        $lines = explode("\n", $tree);
+
+        $bar = "{$border}┌ {$accent}Tasks{$r}";
+        foreach ($lines as $line) {
+            $bar .= "\n{$border}│{$r} {$line}";
+        }
+        $bar .= "\n{$border}└{$r}";
+
+        $this->taskBar->setText($bar);
+    }
+
+    private function isTaskTool(string $name): bool
+    {
+        return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
+    }
+
+    private function formatTaskToolCall(string $name, array $args, string $icon, string $friendly, string $white, string $dim, string $r): string
+    {
+        if ($name === 'task_create') {
+            if (isset($args['tasks']) && $args['tasks'] !== '') {
+                $items = json_decode($args['tasks'], true);
+                if (is_array($items)) {
+                    $lines = "{$icon} {$friendly}  {$dim}" . count($items) . " tasks{$r}";
+                    foreach ($items as $item) {
+                        $subject = $item['subject'] ?? '(untitled)';
+                        $lines .= "\n  {$dim}+{$r} {$white}{$subject}{$r}";
+                    }
+
+                    return $lines;
+                }
+            }
+            $subject = $args['subject'] ?? '';
+            $suffix = '';
+            if (isset($args['parent_id']) && $args['parent_id'] !== '') {
+                $parent = $this->taskStore?->get($args['parent_id']);
+                $parentLabel = $parent?->subject ?? $args['parent_id'];
+                $suffix = " {$dim}(under {$parentLabel}){$r}";
+            }
+
+            return "{$icon} {$friendly}  {$white}{$subject}{$r}{$suffix}";
+        }
+
+        if ($name === 'task_update') {
+            $id = $args['id'] ?? '';
+            $task = $this->taskStore?->get($id);
+            $subject = $task?->subject ?? $id;
+            $statusPart = '';
+            if (isset($args['status']) && $args['status'] !== '') {
+                $statusColor = match ($args['status']) {
+                    'in_progress' => "\033[38;2;255;200;80m",
+                    'completed' => "\033[38;2;80;220;100m",
+                    'cancelled' => "\033[38;2;255;80;60m",
+                    default => $dim,
+                };
+                $statusPart = " {$dim}\u{2192}{$r} {$statusColor}{$args['status']}{$r}";
+            }
+
+            return "{$icon} {$friendly}  {$white}{$subject}{$r}{$statusPart}";
+        }
+
+        if ($name === 'task_get') {
+            $id = $args['id'] ?? '';
+            $task = $this->taskStore?->get($id);
+            $subject = $task?->subject ?? $id;
+
+            return "{$icon} {$friendly}  {$white}{$subject}{$r}";
+        }
+
+        // task_list
+        return "{$icon} {$friendly}";
     }
 }

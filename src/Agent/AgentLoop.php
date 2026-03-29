@@ -5,6 +5,8 @@ namespace Kosmokrator\Agent;
 use Amp\CancelledException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\RendererInterface;
@@ -36,9 +38,19 @@ class AgentLoop
         int $maxToolRounds = 25,
         private readonly ?PermissionEvaluator $permissions = null,
         private readonly ?ModelCatalog $models = null,
+        private readonly ?TaskStore $taskStore = null,
+        private readonly ?SessionManager $sessionManager = null,
     ) {
         $this->history = new ConversationHistory();
         $this->maxToolRounds = $maxToolRounds;
+    }
+
+    /**
+     * Replace history with a pre-loaded one (for session resume).
+     */
+    public function setHistory(ConversationHistory $history): void
+    {
+        $this->history = $history;
     }
 
     /**
@@ -75,6 +87,7 @@ class AgentLoop
     {
         $this->log->debug('User input', ['input' => $userInput]);
         $this->history->addUser($userInput);
+        $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
 
         $round = 0;
         $trimAttempts = 0;
@@ -82,6 +95,7 @@ class AgentLoop
         while (true) {
             $round++;
 
+            $this->refreshSystemPrompt();
             $this->ui->showThinking();
 
             try {
@@ -130,8 +144,10 @@ class AgentLoop
             // If there were tool calls, execute them and loop
             if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
                 $this->history->addAssistant($fullText, $toolCalls);
+                $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
                 $toolResults = $this->executeToolCalls($toolCalls);
                 $this->history->addToolResults($toolResults);
+                $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
 
                 continue;
             }
@@ -144,6 +160,7 @@ class AgentLoop
                 'rounds' => $round,
             ]);
             $this->history->addAssistant($fullText);
+            $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
             $modelName = $this->getModelName();
             $this->ui->showStatus(
                 $modelName,
@@ -302,5 +319,21 @@ class AgentLoop
             || str_contains($message, 'context length')
             || str_contains($message, 'too long')
             || str_contains($message, 'token limit');
+    }
+
+    private function persistMessage(\Prism\Prism\Contracts\Message $message, int $tokensIn = 0, int $tokensOut = 0): void
+    {
+        $this->sessionManager?->saveMessage($message, $tokensIn, $tokensOut);
+    }
+
+    private function refreshSystemPrompt(): void
+    {
+        $prompt = $this->baseSystemPrompt . $this->mode->systemPromptSuffix();
+
+        if ($this->taskStore !== null && ! $this->taskStore->isEmpty()) {
+            $prompt .= "\n\n## Current Tasks\n" . $this->taskStore->renderTree();
+        }
+
+        $this->llm->setSystemPrompt($prompt);
     }
 }

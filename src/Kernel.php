@@ -13,12 +13,23 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\Task\TaskStore;
+use Kosmokrator\Task\Tool\TaskCreateTool;
+use Kosmokrator\Task\Tool\TaskGetTool;
+use Kosmokrator\Task\Tool\TaskListTool;
+use Kosmokrator\Task\Tool\TaskUpdateTool;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
+use Kosmokrator\Session\Database as SessionDatabase;
+use Kosmokrator\Session\MemoryRepository;
+use Kosmokrator\Session\MessageRepository;
+use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\SessionRepository;
+use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Permission\PermissionConfigParser;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\SessionGrants;
@@ -161,6 +172,8 @@ class Kernel
 
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
 
+        $this->container->singleton(TaskStore::class);
+
         $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout) {
             $registry = new ToolRegistry();
             $registry->register(new FileReadTool());
@@ -170,8 +183,36 @@ class Kernel
             $registry->register(new GrepTool());
             $registry->register(new BashTool($bashTimeout));
 
+            $taskStore = $this->container->make(TaskStore::class);
+            $registry->register(new TaskCreateTool($taskStore));
+            $registry->register(new TaskUpdateTool($taskStore));
+            $registry->register(new TaskListTool($taskStore));
+            $registry->register(new TaskGetTool($taskStore));
+
             return $registry;
         });
+
+        // Session persistence (SQLite)
+        $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase());
+        $this->container->singleton(SettingsRepository::class, fn () => new SettingsRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
+        $this->container->singleton(SessionRepository::class, fn () => new SessionRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
+        $this->container->singleton(MessageRepository::class, fn () => new MessageRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
+        $this->container->singleton(MemoryRepository::class, fn () => new MemoryRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
+        $this->container->singleton(SessionManager::class, fn () => new SessionManager(
+            sessions: $this->container->make(SessionRepository::class),
+            messages: $this->container->make(MessageRepository::class),
+            settings: $this->container->make(SettingsRepository::class),
+            memories: $this->container->make(MemoryRepository::class),
+            log: $this->container->make(LoggerInterface::class),
+        ));
 
         $this->container->singleton(SessionGrants::class);
         $this->container->singleton(PermissionEvaluator::class, function () use ($config) {

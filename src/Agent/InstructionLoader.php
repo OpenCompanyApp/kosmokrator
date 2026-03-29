@@ -91,7 +91,7 @@ class InstructionLoader
         return trim($content);
     }
 
-    private static function gitRoot(): ?string
+    public static function gitRoot(): ?string
     {
         $result = trim((string) shell_exec('git rev-parse --show-toplevel 2>/dev/null'));
 

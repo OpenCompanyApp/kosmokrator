@@ -3,6 +3,7 @@
 namespace Kosmokrator\UI;
 
 use Amp\Cancellation;
+use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiRenderer;
 use Kosmokrator\UI\Tui\TuiRenderer;
 
@@ -13,6 +14,15 @@ class UIManager implements RendererInterface
     public function __construct(string $preference = 'auto')
     {
         $this->renderer = $this->resolveRenderer($preference);
+    }
+
+    public function setTaskStore(TaskStore $store): void
+    {
+        if ($this->renderer instanceof AnsiRenderer) {
+            $this->renderer->setTaskStore($store);
+        } elseif ($this->renderer instanceof TuiRenderer) {
+            $this->renderer->setTaskStore($store);
+        }
     }
 
     public function getActiveRenderer(): string

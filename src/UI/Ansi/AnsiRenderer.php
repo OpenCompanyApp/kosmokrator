@@ -3,6 +3,7 @@
 namespace Kosmokrator\UI\Ansi;
 
 use Amp\Cancellation;
+use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
 use Tempest\Highlight\Highlighter;
@@ -14,10 +15,16 @@ class AnsiRenderer implements RendererInterface
     private ?MarkdownToAnsi $markdownRenderer = null;
     private ?Highlighter $highlighter = null;
     private array $lastToolArgs = [];
+    private ?TaskStore $taskStore = null;
 
     public function __construct()
     {
         $this->intro = new AnsiIntro();
+    }
+
+    public function setTaskStore(TaskStore $store): void
+    {
+        $this->taskStore = $store;
     }
 
     public function initialize(): void
@@ -36,6 +43,8 @@ class AnsiRenderer implements RendererInterface
 
     public function prompt(): string
     {
+        $this->echoTaskBar();
+
         $r = Theme::reset();
         $red = Theme::primary();
 
@@ -100,9 +109,18 @@ class AnsiRenderer implements RendererInterface
 
         $this->lastToolArgs = $args;
         $friendly = Theme::toolLabel($name);
-        $skipKeys = ['content', 'old_string', 'new_string'];
-
         $border = Theme::rgb(128, 100, 40);
+
+        // Task tools: clean formatted display
+        if ($this->isTaskTool($name)) {
+            echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
+            $this->echoTaskToolCallArgs($name, $args, $border, $dim, $r);
+            echo "\n";
+
+            return;
+        }
+
+        $skipKeys = ['content', 'old_string', 'new_string'];
 
         echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
         foreach ($args as $key => $value) {
@@ -124,6 +142,11 @@ class AnsiRenderer implements RendererInterface
         $status = $success ? Theme::success() . '✓' : Theme::error() . '✗';
 
         $friendly = Theme::toolLabel($name);
+
+        // Task tools: silent — the call line + sticky bar are enough
+        if ($this->isTaskTool($name)) {
+            return;
+        }
 
         // File read: just show status
         if ($name === 'file_read') {
@@ -503,5 +526,78 @@ class AnsiRenderer implements RendererInterface
                 usleep($charDelay);
             }
         }
+    }
+
+    private function isTaskTool(string $name): bool
+    {
+        return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
+    }
+
+    private function echoTaskToolCallArgs(string $name, array $args, string $border, string $dim, string $r): void
+    {
+        $white = Theme::white();
+
+        if ($name === 'task_create') {
+            if (isset($args['tasks']) && $args['tasks'] !== '') {
+                // Batch mode — parse and show count + subjects
+                $items = json_decode($args['tasks'], true);
+                if (is_array($items)) {
+                    $count = count($items);
+                    echo " {$dim}({$count} tasks){$r}";
+                    foreach ($items as $item) {
+                        $subject = $item['subject'] ?? '(untitled)';
+                        echo "\n{$border}  ┃{$r}  {$dim}+{$r} {$white}{$subject}{$r}";
+                    }
+                }
+            } else {
+                // Single mode
+                $subject = $args['subject'] ?? '';
+                echo " {$white}{$subject}{$r}";
+                if (isset($args['parent_id']) && $args['parent_id'] !== '') {
+                    echo " {$dim}(child of {$args['parent_id']}){$r}";
+                }
+            }
+        } elseif ($name === 'task_update') {
+            $id = $args['id'] ?? '';
+            $task = $this->taskStore?->get($id);
+            $subject = $task?->subject ?? $id;
+            echo " {$white}{$subject}{$r}";
+
+            if (isset($args['status']) && $args['status'] !== '') {
+                $statusLabel = match ($args['status']) {
+                    'in_progress' => "\033[38;2;255;200;80min progress{$r}",
+                    'completed' => "\033[38;2;80;220;100mcompleted{$r}",
+                    'cancelled' => "\033[38;2;255;80;60mcancelled{$r}",
+                    default => $dim . $args['status'] . $r,
+                };
+                echo " {$dim}\u{2192}{$r} {$statusLabel}";
+            }
+        } elseif ($name === 'task_get') {
+            $id = $args['id'] ?? '';
+            $task = $this->taskStore?->get($id);
+            $subject = $task?->subject ?? $id;
+            echo " {$white}{$subject}{$r}";
+        }
+        // task_list: no args to display
+    }
+
+    private function echoTaskBar(): void
+    {
+        if ($this->taskStore === null || $this->taskStore->isEmpty()) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $border = Theme::rgb(128, 100, 40);
+        $accent = Theme::accent();
+
+        $tree = $this->taskStore->renderAnsiTree();
+        $lines = explode("\n", $tree);
+
+        echo "{$border}  ┌ {$accent}Tasks{$r}\n";
+        foreach ($lines as $line) {
+            echo "{$border}  │{$r} {$line}{$r}\n";
+        }
+        echo "{$border}  └{$r}\n";
     }
 }

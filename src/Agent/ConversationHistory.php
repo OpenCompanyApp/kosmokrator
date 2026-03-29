@@ -2,7 +2,9 @@
 
 namespace Kosmokrator\Agent;
 
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolCall;
@@ -32,6 +34,14 @@ class ConversationHistory
     }
 
     /**
+     * Add a pre-built message (used when restoring from persistence).
+     */
+    public function addMessage(Message $message): void
+    {
+        $this->messages[] = $message;
+    }
+
+    /**
      * @return array<int, \Prism\Prism\Contracts\Message>
      */
     public function messages(): array
@@ -39,9 +49,45 @@ class ConversationHistory
         return $this->messages;
     }
 
+    public function count(): int
+    {
+        return count($this->messages);
+    }
+
     public function clear(): void
     {
         $this->messages = [];
+    }
+
+    /**
+     * Replace old messages with a summary, keeping the most recent turns.
+     */
+    public function compact(string $summary, int $keepRecent = 3): void
+    {
+        $total = count($this->messages);
+        if ($total <= $keepRecent) {
+            return;
+        }
+
+        // Count recent complete turns from the end
+        $keepFrom = $total;
+        $turnsFound = 0;
+        for ($i = $total - 1; $i >= 0; $i--) {
+            if ($this->messages[$i] instanceof UserMessage) {
+                $turnsFound++;
+                if ($turnsFound >= $keepRecent) {
+                    $keepFrom = $i;
+                    break;
+                }
+            }
+        }
+
+        if ($keepFrom <= 0) {
+            return;
+        }
+
+        $recent = array_slice($this->messages, $keepFrom);
+        $this->messages = [new SystemMessage($summary), ...$recent];
     }
 
     /**

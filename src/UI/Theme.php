@@ -65,6 +65,20 @@ class Theme
         };
     }
 
+    // Friendly display names for tools
+    public static function toolLabel(string $name): string
+    {
+        return match ($name) {
+            'file_read' => 'Read',
+            'file_write' => 'Write',
+            'file_edit' => 'Edit',
+            'bash' => 'Bash',
+            'grep' => 'Search',
+            'glob' => 'Glob',
+            default => $name,
+        };
+    }
+
     // Context usage color: green → yellow → red
     public static function contextColor(float $ratio): string
     {

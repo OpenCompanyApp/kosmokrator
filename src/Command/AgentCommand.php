@@ -6,6 +6,7 @@ use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\EnvironmentContext;
+use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
@@ -73,6 +74,7 @@ class AgentCommand extends Command
         $permissions = $this->container->make(PermissionEvaluator::class);
         $models = $this->container->make(ModelCatalog::class);
         $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+            . InstructionLoader::gather()
             . EnvironmentContext::gather();
         $maxRounds = (int) $config->get('kosmokrator.agent.max_tool_rounds', 25);
         $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models);

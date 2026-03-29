@@ -377,20 +377,26 @@ class TuiRenderer implements RendererInterface
     {
         $this->lastToolArgs = $args;
         $icon = Theme::toolIcon($name);
+        $friendly = Theme::toolLabel($name);
 
         // Compact single-line display for file tools
-        if ($name === 'file_read' && isset($args['path'])) {
-            $label = "{$icon} {$name}  {$args['path']}";
+        if (in_array($name, ['file_read', 'file_write', 'file_edit']) && isset($args['path'])) {
+            $label = "{$icon} {$friendly}  {$args['path']}";
             if (isset($args['offset'])) {
                 $label .= ":{$args['offset']}";
             }
         } else {
+            // Skip large content args
+            $skipKeys = ['content', 'old_string', 'new_string'];
             $parts = [];
             foreach ($args as $key => $value) {
+                if (in_array($key, $skipKeys, true)) {
+                    continue;
+                }
                 $display = is_string($value) ? $value : json_encode($value);
                 $parts[] = "{$key}: {$display}";
             }
-            $label = "{$icon} {$name}  " . implode('  ', $parts);
+            $label = "{$icon} {$friendly}  " . implode('  ', $parts);
         }
 
         $widget = new TextWidget($label);

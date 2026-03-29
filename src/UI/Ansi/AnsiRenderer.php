@@ -99,11 +99,16 @@ class AnsiRenderer implements RendererInterface
         $icon = Theme::toolIcon($name);
 
         $this->lastToolArgs = $args;
+        $friendly = Theme::toolLabel($name);
+        $skipKeys = ['content', 'old_string', 'new_string'];
 
         $border = Theme::rgb(128, 100, 40);
 
-        echo "\n{$border}  ┃ {$gold}{$icon} {$name}{$r}";
+        echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
         foreach ($args as $key => $value) {
+            if (in_array($key, $skipKeys, true)) {
+                continue;
+            }
             $display = is_string($value) ? $value : json_encode($value);
             echo "\n{$border}  ┃{$r} {$dim}{$key}:{$r} {$display}";
         }

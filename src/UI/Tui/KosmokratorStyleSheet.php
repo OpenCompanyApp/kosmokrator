@@ -10,38 +10,68 @@ use Symfony\Component\Tui\Style\Padding;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\StyleSheet;
 use Symfony\Component\Tui\Style\TextAlign;
-use Symfony\Component\Tui\Widget\ContainerWidget;
+use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\InputWidget;
-use Symfony\Component\Tui\Widget\LoaderWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
-use Symfony\Component\Tui\Widget\TextWidget;
 
 class KosmokratorStyleSheet
 {
     public static function create(): StyleSheet
     {
         return new StyleSheet([
-            // Root container
+            // Root session container
             '.session' => new Style(
                 direction: Direction::Vertical,
             ),
 
-            // Header / intro
-            '.header' => new Style(
+            // FIGlet header
+            '.figlet-header' => new Style(
                 color: Color::hex('#ff3c28'),
                 bold: true,
-                padding: new Padding(0, 1, 0, 1),
+                font: 'big',
+                padding: new Padding(1, 2, 0, 2),
             ),
 
+            // Subtitle line
             '.subtitle' => new Style(
                 color: Color::hex('#ffc850'),
                 italic: true,
                 textAlign: TextAlign::Center,
+                padding: new Padding(0, 2, 0, 2),
             ),
 
-            // Response area
+            // Tagline
+            '.tagline' => new Style(
+                color: Color::hex('#808080'),
+                dim: true,
+                textAlign: TextAlign::Center,
+                padding: new Padding(0, 2, 0, 2),
+            ),
+
+            // Welcome message
+            '.welcome' => new Style(
+                color: Color::hex('#808080'),
+                dim: true,
+                padding: new Padding(1, 2, 0, 2),
+            ),
+
+            // User message echo
+            '.user-message' => new Style(
+                color: Color::hex('#ffffff'),
+                bold: true,
+                padding: new Padding(1, 2, 0, 2),
+            ),
+
+            // Separator
+            '.separator' => new Style(
+                color: Color::hex('#404040'),
+                dim: true,
+                padding: new Padding(0, 2, 0, 2),
+            ),
+
+            // Response area (markdown)
             '.response' => new Style(
-                padding: new Padding(1, 2, 1, 2),
+                padding: new Padding(0, 2, 0, 2),
             ),
 
             // Tool call display
@@ -52,16 +82,18 @@ class KosmokratorStyleSheet
             ),
 
             '.tool-result' => new Style(
-                padding: new Padding(0, 2, 0, 2),
+                padding: new Padding(0, 3, 0, 3),
                 dim: true,
             ),
 
             '.tool-success' => new Style(
                 color: Color::hex('#50dc64'),
+                padding: new Padding(0, 3, 0, 3),
             ),
 
             '.tool-error' => new Style(
                 color: Color::hex('#ff5040'),
+                padding: new Padding(0, 3, 0, 3),
             ),
 
             // Status bar
@@ -73,7 +105,7 @@ class KosmokratorStyleSheet
 
             // Input prompt
             InputWidget::class => new Style(
-                border: Border::all(1, BorderPattern::rounded(), Color::hex('#ff3c28')),
+                border: Border::all(1, BorderPattern::rounded(), Color::hex('#a02018')),
                 padding: new Padding(0, 1, 0, 1),
                 color: Color::hex('#dcdcdc'),
             ),
@@ -82,8 +114,8 @@ class KosmokratorStyleSheet
                 border: Border::all(1, BorderPattern::rounded(), Color::hex('#ff5040')),
             ),
 
-            // Loader / thinking
-            LoaderWidget::class => new Style(
+            // Thinking loader
+            CancellableLoaderWidget::class => new Style(
                 color: Color::hex('#ffc850'),
                 padding: new Padding(0, 2, 0, 2),
             ),

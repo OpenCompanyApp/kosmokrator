@@ -18,7 +18,11 @@ use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
 use Kosmokrator\Tool\ToolRegistry;
+use Dotenv\Dotenv;
+use Monolog\Handler\RotatingFileHandler;
+use Monolog\Logger;
 use Prism\Prism\PrismServiceProvider;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Application;
 
 class Kernel
@@ -36,7 +40,9 @@ class Kernel
         $this->container = new LaravelApp($this->basePath);
         Container::setInstance($this->container);
 
+        $this->loadEnv();
         $this->registerConfig();
+        $this->registerLogger();
         $this->registerCoreServices();
         $this->registerPrism();
         $this->registerFacades();
@@ -52,6 +58,30 @@ class Kernel
     public function getContainer(): Container
     {
         return $this->container;
+    }
+
+    private function loadEnv(): void
+    {
+        if (file_exists($this->basePath . '/.env')) {
+            Dotenv::createImmutable($this->basePath)->safeLoad();
+        }
+    }
+
+    private function registerLogger(): void
+    {
+        $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
+        $logDir = $home . '/.kosmokrator/logs';
+
+        if (! is_dir($logDir)) {
+            mkdir($logDir, 0700, true);
+        }
+
+        $logger = new Logger('kosmokrator');
+        $logger->pushHandler(new RotatingFileHandler($logDir . '/kosmokrator.log', 7, Logger::DEBUG));
+
+        $this->container->instance('log', $logger);
+        $this->container->alias('log', LoggerInterface::class);
+        $this->container->alias('log', Logger::class);
     }
 
     private function registerConfig(): void

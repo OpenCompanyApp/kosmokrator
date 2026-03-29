@@ -9,6 +9,7 @@ use Kosmokrator\Agent\Event\ToolCallEvent;
 use Kosmokrator\Agent\Event\ToolResultEvent;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\UI\RendererInterface;
+use Psr\Log\LoggerInterface;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Streaming\Events\ErrorEvent;
 use Prism\Prism\Streaming\Events\StreamEndEvent;
@@ -32,6 +33,7 @@ class AgentLoop
     public function __construct(
         private readonly PrismService $llm,
         private readonly RendererInterface $ui,
+        private readonly LoggerInterface $log,
         int $maxToolRounds = 25,
     ) {
         $this->history = new ConversationHistory();
@@ -48,6 +50,7 @@ class AgentLoop
 
     public function run(string $userInput): void
     {
+        $this->log->debug('User input', ['input' => $userInput]);
         $this->history->addUser($userInput);
 
         $round = 0;
@@ -88,6 +91,7 @@ class AgentLoop
                     $tokensOut = $response->usage->completionTokens;
                 }
             } catch (\Throwable $e) {
+                $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
                 $this->ui->showError($e->getMessage());
                 $this->history->addAssistant('Error: ' . $e->getMessage());
 
@@ -108,6 +112,12 @@ class AgentLoop
             }
 
             // No tool calls — final response
+            $this->log->info('LLM response complete', [
+                'model' => $this->getModelName(),
+                'tokens_in' => $tokensIn,
+                'tokens_out' => $tokensOut,
+                'rounds' => $round,
+            ]);
             $this->history->addAssistant($fullText);
             $this->ui->showStatus(
                 $this->getModelName(),
@@ -172,6 +182,7 @@ class AgentLoop
         $results = [];
 
         foreach ($toolCalls as $toolCall) {
+            $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $toolCall->arguments()]);
             $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
 
             $tool = $this->findTool($toolCall->name);
@@ -200,6 +211,7 @@ class AgentLoop
                     result: $outputStr,
                 );
             } catch (\Throwable $e) {
+                $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
                 $error = "Error: {$e->getMessage()}";
                 $this->ui->showToolResult($toolCall->name, $error, false);
                 $results[] = new ToolResult(

@@ -513,8 +513,9 @@ opencompanyapp/integration-*             (tool packages)
     ┌────┴────┐
     │         │
 OpenCompany  KosmoKrator
-(bridge via   (native ToolInterface,
-laravel/ai)   direct execute())
+(Lua-only,    (native ToolInterface,
+dual-dispatch  direct execute())
+in LuaBridge)
 ```
 
 ### Dual-Mode: Local vs Hosted

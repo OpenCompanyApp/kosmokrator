@@ -79,7 +79,7 @@ interface ToolProvider
     public function isIntegration(): bool;
     public function createTool(string $class, array $context = []): Tool;
     public function luaDocsPath(): ?string;       // NEW — null = auto-generated only
-    public function credentialFields(): array;     // NEW — for setup flows
+    // credentialFields() deferred to Phase 5 (multi-account credential system)
 }
 ```
 
@@ -98,55 +98,7 @@ In OpenCompany: `IntegrationSettingCredentialResolver` resolves from DB. In Kosm
 
 ## Phase 2: Bridge Package `integration-laravel-ai`
 
-**Goal**: OpenCompany keeps working during migration. Thin adapter from `integration-core` Tool to `Laravel\Ai\Contracts\Tool`.
-
-```php
-// integration-laravel-ai/src/LaravelAiToolAdapter.php
-class LaravelAiToolAdapter implements \Laravel\Ai\Contracts\Tool
-{
-    public function __construct(
-        private \OpenCompany\IntegrationCore\Contracts\Tool $tool,
-    ) {}
-
-    public function description(): string
-    {
-        return $this->tool->description();
-    }
-
-    public function schema(JsonSchema $schema): array
-    {
-        return ParameterSchemaConverter::toJsonSchema($this->tool->parameters(), $schema);
-    }
-
-    public function handle(Request $request): string
-    {
-        $result = $this->tool->execute($request->all());
-        return $result->error ?? json_encode($result->data);
-    }
-}
-```
-
-`ParameterSchemaConverter` maps the plain parameter arrays to `JsonSchema` calls:
-
-```php
-class ParameterSchemaConverter
-{
-    public static function toJsonSchema(array $parameters, JsonSchema $schema): array
-    {
-        $result = [];
-        foreach ($parameters as $name => $def) {
-            $type = $schema->{$def['type'] ?? 'string'}();
-            if (!empty($def['description'])) $type = $type->description($def['description']);
-            if (!empty($def['required'])) $type = $type->required();
-            if (!empty($def['enum'])) $type = $type->enum($def['enum']);
-            $result[$name] = $type;
-        }
-        return $result;
-    }
-}
-```
-
-OpenCompany's `ToolRegistry` wraps tools through this adapter when handing them to laravel/ai's agent loop. KosmoKrator calls `execute()` directly.
+> **OUTCOME: Skipped.** The plan assumed we'd need a `LaravelAiToolAdapter` to wrap new-style tools back into `Laravel\Ai\Contracts\Tool` for the agent loop. In practice, vendor package tools are never passed to the agent loop — they're Lua-only. Built-in tools (tasks, system, agents, memory, lua) still implement `Laravel\Ai\Contracts\Tool` directly. The dual-dispatch `instanceof` check in `LuaBridge` and `getToolCatalog()` was sufficient. No bridge package needed.
 
 ---
 
@@ -375,7 +327,7 @@ Do this **after** the contract changes (phases 1-4) so each package is only touc
 | Phase | What | Why This Order |
 | --- | --- | --- |
 | **1** | New `Tool` contract in `integration-core` | Unblocks everything — KosmoKrator can't exist without this |
-| **2** | `integration-laravel-ai` bridge package | OpenCompany keeps working during migration |
+| **~~2~~** | ~~`integration-laravel-ai` bridge package~~ | ~~Skipped — Lua-only tools don't need the adapter~~ |
 | **3** | Migrate tool packages to new contract | Each package becomes framework-agnostic |
 | **4** | Built-in `ToolProvider` implementations | Eliminates ToolRegistry monolith |
 | **5** | Multi-account `CredentialResolver` | Required for KosmoKrator multi-account |

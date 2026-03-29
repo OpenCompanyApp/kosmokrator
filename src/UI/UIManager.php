@@ -39,6 +39,8 @@ class UIManager implements RendererInterface
     {
         if ($this->renderer instanceof AnsiRenderer) {
             $this->renderer->showWelcome();
+        } elseif ($this->renderer instanceof TuiRenderer) {
+            $this->renderer->showWelcome();
         }
     }
 
@@ -51,13 +53,12 @@ class UIManager implements RendererInterface
 
     private function resolveRenderer(string $preference): RendererInterface
     {
-        $tuiAvailable = class_exists(\Symfony\Component\Tui\Tui::class);
-
-        if ($preference === 'tui' && $tuiAvailable) {
-            return new TuiRenderer();
+        if ($preference === 'ansi') {
+            return new AnsiRenderer();
         }
 
-        if ($preference === 'auto' && $tuiAvailable) {
+        // Default: use TUI if available
+        if (class_exists(\Symfony\Component\Tui\Tui::class)) {
             return new TuiRenderer();
         }
 

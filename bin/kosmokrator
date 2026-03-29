@@ -17,7 +17,15 @@ $kernel->boot();
 // Register commands
 $console = $kernel->getConsole();
 $console->addCommand(new Kosmokrator\Command\AgentCommand($kernel->getContainer()));
-$console->setDefaultCommand('agent', true);
+$console->addCommand(new Kosmokrator\Command\SetupCommand($kernel->getContainer()));
+
+// Run setup if explicitly requested, otherwise default to agent (single-command style)
+$args = $_SERVER['argv'] ?? [];
+$isSetup = in_array('setup', $args, true);
+
+if (! $isSetup) {
+    $console->setDefaultCommand('agent', true);
+}
 
 // Run
 $status = $console->run();

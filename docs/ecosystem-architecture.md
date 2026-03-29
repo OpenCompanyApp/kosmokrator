@@ -210,17 +210,13 @@ opencompanyapp/integration-core          (framework-agnostic)
 │   ├── ConfigCredentialResolver
 │   └── ToolProviderRegistry
 └── composer.json                        ← NO laravel/ai dependency
-
-opencompanyapp/integration-laravel-ai    (bridge for OpenCompany web app)
-├── LaravelAiToolAdapter                 ← implements Laravel\Ai\Contracts\Tool
-│   wraps integration-core Tool          ← delegates to framework-agnostic tool
-├── LaravelAiSchemaAdapter               ← converts parameters() to JsonSchema
-└── composer.json                        ← requires laravel/ai + integration-core
 ```
 
+No bridge package needed. Vendor package tools are Lua-only — they're never passed to the laravel/ai agent loop. Built-in tools (tasks, system, agents, memory, lua) still implement `Laravel\Ai\Contracts\Tool` directly. `LuaBridge` and `getToolCatalog()` use a dual-dispatch `instanceof` check to handle both tool types.
+
 **Result:**
-- All `ai-tool-*` packages depend only on `integration-core` (no laravel/ai)
-- OpenCompany adds `integration-laravel-ai` to bridge into Laravel AI SDK
+- All tool packages depend only on `integration-core` (no laravel/ai)
+- OpenCompany's built-in tools keep their `Laravel\Ai\Contracts\Tool` implementation
 - KosmoKrator uses the tools natively through its own `ToolInterface`
 - Tool packages become truly framework-agnostic
 

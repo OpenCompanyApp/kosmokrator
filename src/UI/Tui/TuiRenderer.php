@@ -3,12 +3,14 @@
 namespace Kosmokrator\UI\Tui;
 
 use Kosmokrator\UI\RendererInterface;
+use Revolt\EventLoop;
+use Revolt\EventLoop\Suspension;
+use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
-use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\InputWidget;
-use Symfony\Component\Tui\Widget\LoaderWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
@@ -24,48 +26,50 @@ class TuiRenderer implements RendererInterface
 
     private InputWidget $input;
 
-    private LoaderWidget $loader;
+    private CancellableLoaderWidget $loader;
 
     private ?MarkdownWidget $activeResponse = null;
 
-    private ?string $pendingInput = null;
-
-    private bool $waitingForInput = false;
+    private ?Suspension $promptSuspension = null;
 
     public function initialize(): void
     {
         $this->tui = new Tui(KosmokratorStyleSheet::create());
 
-        // Session root container
+        // Root layout: conversation + status bar + input (vertical)
         $this->session = new ContainerWidget();
         $this->session->setId('session');
         $this->session->addStyleClass('session');
         $this->session->expandVertically(true);
 
-        // Scrollable conversation area
+        // Scrollable conversation
         $this->conversation = new ContainerWidget();
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
 
-        // Status bar
-        $this->statusBar = new TextWidget('');
+        // Status bar at bottom
+        $this->statusBar = new TextWidget('KosmoKrator · Ready');
         $this->statusBar->setId('status-bar');
         $this->statusBar->addStyleClass('status-bar');
 
-        // Loader for thinking state
-        $this->loader = new LoaderWidget('Thinking...');
+        // Cancellable thinking loader
+        $this->loader = new CancellableLoaderWidget('⚡ Thinking...');
         $this->loader->setId('loader');
         $this->loader->setSpinner('dots');
+        $this->loader->stop(); // Don't animate until needed
 
         // Input prompt
         $this->input = new InputWidget();
         $this->input->setId('prompt');
         $this->input->setPrompt('⟡ ');
 
-        // Handle submit
-        $this->input->onSubmit(function (SubmitEvent $event) {
-            $this->pendingInput = $event->getValue();
-            $this->input->setValue('');
+        // Ctrl+C / Escape on input → quit
+        $this->input->onCancel(function (CancelEvent $event) {
+            if ($this->promptSuspension !== null) {
+                $suspension = $this->promptSuspension;
+                $this->promptSuspension = null;
+                $suspension->resume('/quit');
+            }
         });
 
         // Assemble layout
@@ -75,61 +79,81 @@ class TuiRenderer implements RendererInterface
 
         $this->tui->add($this->session);
         $this->tui->setFocus($this->input);
+
+        // Submit handler — resume the suspended prompt()
+        $this->tui->on(SubmitEvent::class, function (SubmitEvent $event) {
+            if ($event->getTarget() === $this->input && $this->promptSuspension !== null) {
+                $value = $event->getValue();
+                $this->input->setValue('');
+
+                $suspension = $this->promptSuspension;
+                $this->promptSuspension = null;
+                $suspension->resume($value);
+            }
+        });
+
+        // Start TUI — registers stdin/signal watchers with Revolt
+        $this->tui->start();
     }
 
     public function renderIntro(bool $animated): void
     {
-        $header = new TextWidget('K O S M O K R A T O R');
+        // FIGlet banner
+        $header = new TextWidget('KOSMOKRATOR');
         $header->setId('header');
-        $header->addStyleClass('header');
+        $header->addStyleClass('figlet-header');
         $this->conversation->add($header);
 
+        // Mythology subtitle
         $subtitle = new TextWidget('⚡ Κοσμοκράτωρ — Ruler of the Cosmos ⚡');
         $subtitle->addStyleClass('subtitle');
         $this->conversation->add($subtitle);
 
+        // Planetary symbols
+        $planets = new TextWidget('☿  ♀  ♁  ♂  ♃  ♄  ♅  ♆  ✦  ☽  ☉  ★  ✧  ⊛  ◈');
+        $planets->addStyleClass('tagline');
+        $this->conversation->add($planets);
+
+        // Tagline
         $tagline = new TextWidget('Your AI coding agent by OpenCompany');
-        $tagline->addStyleClass('status-bar');
+        $tagline->addStyleClass('tagline');
         $this->conversation->add($tagline);
 
-        $this->tui->requestRender(true);
+        // Welcome message
+        $welcome = new TextWidget('Type a message to begin. Press Ctrl+C to exit.');
+        $welcome->addStyleClass('welcome');
+        $this->conversation->add($welcome);
+
+        $this->tui->processRender();
     }
 
     public function prompt(): string
     {
-        $this->waitingForInput = true;
-        $this->pendingInput = null;
+        $this->tui->setFocus($this->input);
+        $this->promptSuspension = EventLoop::getSuspension();
 
-        $this->tui->start();
-
-        // Poll the event loop until we get input
-        while ($this->pendingInput === null) {
-            $this->tui->tick();
-            usleep(10000); // 100Hz
-        }
-
-        $this->waitingForInput = false;
-        $result = $this->pendingInput;
-        $this->pendingInput = null;
-
-        return $result;
+        return $this->promptSuspension->suspend();
     }
 
     public function showThinking(): void
     {
-        $this->loader->setMessage('Thinking...');
+        $this->loader->reset();
+        $this->loader->setMessage('⚡ Thinking...');
         $this->loader->start();
         $this->conversation->add($this->loader);
-        $this->tui->requestRender();
+        $this->tui->setFocus($this->loader); // Focus loader so Ctrl+C cancels
+        $this->tui->processRender();
     }
 
     public function streamChunk(string $text): void
     {
         if ($this->activeResponse === null) {
-            // Remove loader, start response widget
-            $this->conversation->remove($this->loader);
+            // Remove loader
+            $this->loader->setFinishedIndicator('✓');
             $this->loader->stop();
+            $this->conversation->remove($this->loader);
 
+            // Start markdown response widget
             $this->activeResponse = new MarkdownWidget('');
             $this->activeResponse->addStyleClass('response');
             $this->conversation->add($this->activeResponse);
@@ -137,28 +161,32 @@ class TuiRenderer implements RendererInterface
 
         $current = $this->activeResponse->getText();
         $this->activeResponse->setText($current . $text);
-        $this->tui->requestRender();
         $this->tui->processRender();
     }
 
     public function streamComplete(): void
     {
         $this->activeResponse = null;
-        $this->tui->requestRender();
+
+        // Add separator after response
+        $separator = new TextWidget('─────────────────────────────────────────');
+        $separator->addStyleClass('separator');
+        $this->conversation->add($separator);
+
+        $this->tui->processRender();
     }
 
     public function showToolCall(string $name, array $args): void
     {
-        $argsDisplay = '';
+        $argsLines = '';
         foreach ($args as $key => $value) {
             $display = is_string($value) ? $value : json_encode($value);
-            $argsDisplay .= "  {$key}: {$display}\n";
+            $argsLines .= "\n  {$key}: {$display}";
         }
 
-        $widget = new TextWidget("◈ {$name}\n{$argsDisplay}");
+        $widget = new TextWidget("◈ {$name}{$argsLines}");
         $widget->addStyleClass('tool-call');
         $this->conversation->add($widget);
-        $this->tui->requestRender();
         $this->tui->processRender();
     }
 
@@ -174,7 +202,6 @@ class TuiRenderer implements RendererInterface
         $widget = new TextWidget("{$indicator} {$name}\n{$preview}");
         $widget->addStyleClass($success ? 'tool-success' : 'tool-error');
         $this->conversation->add($widget);
-        $this->tui->requestRender();
         $this->tui->processRender();
     }
 
@@ -183,7 +210,7 @@ class TuiRenderer implements RendererInterface
         $widget = new TextWidget("✗ Error: {$message}");
         $widget->addStyleClass('tool-error');
         $this->conversation->add($widget);
-        $this->tui->requestRender();
+        $this->tui->processRender();
     }
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost): void
@@ -191,7 +218,12 @@ class TuiRenderer implements RendererInterface
         $this->statusBar->setText(
             "{$model}  ·  {$tokensIn} in / {$tokensOut} out  ·  \${$cost}"
         );
-        $this->tui->requestRender();
+        $this->tui->processRender();
+    }
+
+    public function showWelcome(): void
+    {
+        // Already handled in renderIntro
     }
 
     public function teardown(): void

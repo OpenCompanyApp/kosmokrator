@@ -19,7 +19,7 @@ class AgentCommandTest extends TestCase
 
         // Provide /quit as stdin so the REPL exits immediately
         $tester->setInputs(['/quit']);
-        $tester->execute(['--no-animation' => true]);
+        $tester->execute(['--no-animation' => true, '--renderer' => 'ansi']);
 
         $this->assertSame(0, $tester->getStatusCode());
     }

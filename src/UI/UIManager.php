@@ -3,6 +3,7 @@
 namespace Kosmokrator\UI;
 
 use Kosmokrator\UI\Ansi\AnsiRenderer;
+use Kosmokrator\UI\Tui\TuiRenderer;
 
 class UIManager implements RendererInterface
 {
@@ -16,6 +17,7 @@ class UIManager implements RendererInterface
     public function getActiveRenderer(): string
     {
         return match (true) {
+            $this->renderer instanceof TuiRenderer => 'tui',
             $this->renderer instanceof AnsiRenderer => 'ansi',
             default => get_class($this->renderer),
         };
@@ -49,10 +51,14 @@ class UIManager implements RendererInterface
 
     private function resolveRenderer(string $preference): RendererInterface
     {
-        // TUI renderer will be added here when implemented
-        // For now, always use ANSI
-        if ($preference === 'tui' && class_exists(\Symfony\Component\Tui\Tui::class)) {
-            // TODO: return new TuiRenderer() when implemented
+        $tuiAvailable = class_exists(\Symfony\Component\Tui\Tui::class);
+
+        if ($preference === 'tui' && $tuiAvailable) {
+            return new TuiRenderer();
+        }
+
+        if ($preference === 'auto' && $tuiAvailable) {
+            return new TuiRenderer();
         }
 
         return new AnsiRenderer();

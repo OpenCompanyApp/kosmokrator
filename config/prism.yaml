@@ -8,6 +8,9 @@ providers:
   openai:
     api_key: ${OPENAI_API_KEY}
     url: https://api.openai.com/v1
+  z:
+    api_key: ${ZAI_API_KEY}
+    url: https://api.z.ai/api/coding/paas/v4
   ollama:
     url: http://localhost:11434/v1
 

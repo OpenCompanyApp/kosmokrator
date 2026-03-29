@@ -4,6 +4,7 @@ namespace Kosmokrator;
 
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
+use Illuminate\Foundation\Application as LaravelApp;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -32,7 +33,7 @@ class Kernel
 
     public function boot(): void
     {
-        $this->container = new Container();
+        $this->container = new LaravelApp($this->basePath);
         Container::setInstance($this->container);
 
         $this->registerConfig();

@@ -1,6 +1,6 @@
 agent:
-  default_provider: anthropic
-  default_model: claude-sonnet-4-20250514
+  default_provider: z
+  default_model: GLM-5.1
   max_tokens: 8192
   temperature: 0.0
   max_tool_rounds: 25

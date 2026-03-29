@@ -39,22 +39,12 @@ class ToolRegistry
 
     private function toPrismTool(ToolInterface $tool): PrismTool
     {
+        // Prism calls tool handlers with named arguments matching the parameter names
         $prismTool = (new PrismTool())
             ->as($tool->name())
             ->for($tool->description())
-            ->using(function () use ($tool) {
-                $args = func_get_args();
-
-                // Map positional args back to named params
-                $paramNames = array_keys($tool->parameters());
-                $namedArgs = [];
-                foreach ($paramNames as $i => $name) {
-                    if (isset($args[$i])) {
-                        $namedArgs[$name] = $args[$i];
-                    }
-                }
-
-                $result = $tool->execute($namedArgs);
+            ->using(function (...$args) use ($tool) {
+                $result = $tool->execute($args);
 
                 return $result->output;
             });

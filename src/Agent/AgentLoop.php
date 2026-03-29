@@ -64,17 +64,28 @@ class AgentLoop
             $tokensOut = 0;
 
             try {
-                $stream = $this->llm->stream($this->history->messages(), $this->tools);
+                if ($this->llm->supportsStreaming()) {
+                    $stream = $this->llm->stream($this->history->messages(), $this->tools);
 
-                foreach ($stream as $event) {
-                    match (true) {
-                        $event instanceof TextDeltaEvent => $this->handleTextDelta($event, $fullText),
-                        $event instanceof PrismToolCallEvent => $this->handleToolCall($event, $toolCalls),
-                        $event instanceof PrismToolResultEvent => $this->handleToolResult($event),
-                        $event instanceof StreamEndEvent => $this->handleStreamEnd($event, $finishReason, $tokensIn, $tokensOut),
-                        $event instanceof ErrorEvent => $this->handleError($event),
-                        default => null,
-                    };
+                    foreach ($stream as $event) {
+                        match (true) {
+                            $event instanceof TextDeltaEvent => $this->handleTextDelta($event, $fullText),
+                            $event instanceof PrismToolCallEvent => $this->handleToolCall($event, $toolCalls),
+                            $event instanceof PrismToolResultEvent => $this->handleToolResult($event),
+                            $event instanceof StreamEndEvent => $this->handleStreamEnd($event, $finishReason, $tokensIn, $tokensOut),
+                            $event instanceof ErrorEvent => $this->handleError($event),
+                            default => null,
+                        };
+                    }
+                } else {
+                    // Non-streaming fallback
+                    $response = $this->llm->text($this->history->messages(), $this->tools);
+                    $fullText = $response->text;
+                    $this->ui->streamChunk($fullText);
+                    $finishReason = $response->finishReason;
+                    $toolCalls = $response->toolCalls;
+                    $tokensIn = $response->usage->promptTokens;
+                    $tokensOut = $response->usage->completionTokens;
                 }
             } catch (\Throwable $e) {
                 $this->ui->showError($e->getMessage());
@@ -216,8 +227,7 @@ class AgentLoop
 
     private function getModelName(): string
     {
-        // Extract from config — simplified
-        return 'claude';
+        return $this->llm->getProvider() . '/' . $this->llm->getModel();
     }
 
     private function estimateCost(int $tokensIn, int $tokensOut): float

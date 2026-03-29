@@ -75,7 +75,7 @@ class KosmokratorStyleSheet
 
             // Tool call display
             '.tool-call' => new Style(
-                padding: new Padding(1, 2, 1, 2),
+                padding: new Padding(1, 2, 0, 2),
                 color: Color::hex('#ffc850'),
             ),
 

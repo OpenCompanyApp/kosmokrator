@@ -48,12 +48,14 @@ class CollapsibleWidget extends AbstractWidget
         $total = count($contentLines);
         $border = Theme::rgb(128, 100, 40);
 
-        $result = [AnsiUtils::truncateToWidth($this->header, $cols)];
-
         $showLines = $this->expanded ? $contentLines : array_slice($contentLines, 0, self::PREVIEW_LINES);
+        $result = [];
         foreach ($showLines as $i => $line) {
-            $prefix = $i === 0 ? "{$border}  ⏋{$r} " : '    ';
-            $indented = $prefix . $line;
+            if ($i === 0) {
+                $indented = "{$this->header} {$border}⏋{$r} {$line}";
+            } else {
+                $indented = '    ' . $line;
+            }
             $result[] = AnsiUtils::visibleWidth($indented) > $cols
                 ? AnsiUtils::truncateToWidth($indented, $cols, '')
                 : $indented;

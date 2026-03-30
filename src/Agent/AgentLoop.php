@@ -40,6 +40,7 @@ class AgentLoop
         private readonly ?ModelCatalog $models = null,
         private readonly ?TaskStore $taskStore = null,
         private readonly ?SessionManager $sessionManager = null,
+        private readonly ?ContextCompactor $compactor = null,
     ) {
         $this->history = new ConversationHistory();
         $this->maxToolRounds = $maxToolRounds;
@@ -121,11 +122,18 @@ class AgentLoop
             } catch (\Throwable $e) {
                 $this->ui->clearThinking();
 
-                // Context window overflow — trim oldest messages and retry
-                if ($this->isContextOverflow($e) && $trimAttempts < 3 && $this->history->trimOldest()) {
+                // Context window overflow — compact or trim and retry
+                if ($this->isContextOverflow($e) && $trimAttempts < 3) {
                     $trimAttempts++;
-                    $round--; // Don't count this as a tool round
-                    $this->log->warning('Context overflow, trimmed oldest messages', ['attempt' => $trimAttempts]);
+                    $round--;
+
+                    if ($this->compactor !== null && $trimAttempts === 1) {
+                        $this->performCompaction();
+                    } else {
+                        $this->history->trimOldest();
+                    }
+
+                    $this->log->warning('Context overflow, compacted/trimmed', ['attempt' => $trimAttempts]);
 
                     continue;
                 }
@@ -161,6 +169,11 @@ class AgentLoop
             ]);
             $this->history->addAssistant($fullText);
             $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
+            // Auto-compaction check
+            if ($this->compactor !== null && $this->compactor->needsCompaction($tokensIn, $this->getModelName())) {
+                $this->performCompaction();
+            }
+
             $modelName = $this->getModelName();
             $this->ui->showStatus(
                 $modelName,

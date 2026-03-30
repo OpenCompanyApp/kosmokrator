@@ -27,8 +27,6 @@ class AgentLoop
     /** @var Tool[] Active tools (filtered by mode) */
     private array $tools = [];
 
-    private int $maxToolRounds;
-
     private AgentMode $mode = AgentMode::Edit;
 
     private int $sessionTokensIn = 0;
@@ -40,7 +38,6 @@ class AgentLoop
         private readonly RendererInterface $ui,
         private readonly LoggerInterface $log,
         private readonly string $baseSystemPrompt,
-        int $maxToolRounds = 25,
         private readonly ?PermissionEvaluator $permissions = null,
         private readonly ?ModelCatalog $models = null,
         private readonly ?TaskStore $taskStore = null,
@@ -51,7 +48,6 @@ class AgentLoop
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
     ) {
         $this->history = new ConversationHistory();
-        $this->maxToolRounds = $maxToolRounds;
     }
 
     /**
@@ -110,14 +106,6 @@ class AgentLoop
 
         while (true) {
             $round++;
-
-            if ($round > $this->maxToolRounds) {
-                $this->log->warning('Max tool rounds reached', ['max' => $this->maxToolRounds]);
-                $this->ui->showNotice("Reached maximum of {$this->maxToolRounds} tool rounds.");
-                $this->history->addAssistant("Stopped: maximum tool rounds reached.");
-
-                return;
-            }
 
             $this->preFlightContextCheck();
             $this->refreshSystemPrompt();

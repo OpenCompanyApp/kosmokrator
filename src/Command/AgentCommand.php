@@ -81,6 +81,8 @@ class AgentCommand extends Command
             ? $this->container->make(AsyncLlmClient::class)
             : $this->container->make(PrismService::class);
         $toolRegistry = $this->container->make(ToolRegistry::class);
+        $toolRegistry->register(new \Kosmokrator\Tool\AskUserTool($ui));
+        $toolRegistry->register(new \Kosmokrator\Tool\AskChoiceTool($ui));
         $permissions = $this->container->make(PermissionEvaluator::class);
         $models = $this->container->make(ModelCatalog::class);
         $sessionManager = $this->container->make(SessionManager::class);
@@ -104,7 +106,6 @@ class AgentCommand extends Command
             . MemoryInjector::format($memories)
             . InstructionLoader::gather()
             . EnvironmentContext::gather();
-        $maxRounds = (int) $config->get('kosmokrator.agent.max_tool_rounds', 25);
         $taskStore = $this->container->make(TaskStore::class);
         $ui->setTaskStore($taskStore);
         $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
@@ -122,7 +123,7 @@ class AgentCommand extends Command
         $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
 
         $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $memoryWarningThreshold);
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $memoryWarningThreshold);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         // Session: resume or create new
@@ -416,6 +417,14 @@ class AgentCommand extends Command
                 continue;
             }
 
+            if ($command === '/tasks clear') {
+                $count = count($taskStore->all());
+                $taskStore->clearAll();
+                $ui->refreshTaskBar();
+                $ui->showNotice($count > 0 ? "Cleared {$count} tasks." : 'No tasks to clear.');
+                continue;
+            }
+
             if (in_array($command, ['/edit', '/plan', '/ask'])) {
                 $mode = AgentMode::from(ltrim($command, '/'));
                 $agentLoop->setMode($mode);
@@ -428,6 +437,36 @@ class AgentCommand extends Command
             // Send to agent
             $ui->showUserMessage($input);
             $agentLoop->run($input);
+
+            // Plan mode: show approval dialog after run completes
+            if ($agentLoop->getMode() === AgentMode::Plan) {
+                $approval = $ui->approvePlan($permissions->getPermissionMode()->value);
+
+                if ($approval !== null) {
+                    // Handle context strategy
+                    if ($approval['context'] === 'compact') {
+                        $agentLoop->performCompaction();
+                    } elseif ($approval['context'] === 'clear') {
+                        $agentLoop->history()->clearKeepingLast();
+                    }
+
+                    // Switch to Edit mode
+                    $editMode = AgentMode::Edit;
+                    $agentLoop->setMode($editMode);
+                    $ui->showMode($editMode->label(), $editMode->color());
+                    $sessionManager->setSetting('mode', 'edit');
+
+                    // Switch permission mode
+                    $permMode = PermissionMode::from($approval['permission']);
+                    $permissions->setPermissionMode($permMode);
+                    $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
+                    $sessionManager->setSetting('permission_mode', $permMode->value);
+
+                    // Start implementing
+                    $nextInput = 'Implement the plan.';
+                    continue;
+                }
+            }
 
             // Check for messages queued during thinking
             $nextInput = $ui->consumeQueuedMessage();

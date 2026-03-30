@@ -65,12 +65,55 @@ class MemoryRepository
         return $row ?: null;
     }
 
-    public function update(int $id, string $content): void
+    public function update(int $id, string $content, ?string $title = null): void
     {
-        $stmt = $this->db->connection()->prepare(
-            'UPDATE memories SET content = :content, updated_at = :now WHERE id = :id'
-        );
-        $stmt->execute(['id' => $id, 'content' => $content, 'now' => date('c')]);
+        if ($title !== null) {
+            $stmt = $this->db->connection()->prepare(
+                'UPDATE memories SET title = :title, content = :content, updated_at = :now WHERE id = :id'
+            );
+            $stmt->execute(['id' => $id, 'title' => $title, 'content' => $content, 'now' => date('c')]);
+        } else {
+            $stmt = $this->db->connection()->prepare(
+                'UPDATE memories SET content = :content, updated_at = :now WHERE id = :id'
+            );
+            $stmt->execute(['id' => $id, 'content' => $content, 'now' => date('c')]);
+        }
+    }
+
+    /**
+     * Search memories with optional type and text filters.
+     *
+     * @return array[]
+     */
+    public function search(?string $project, ?string $type = null, ?string $query = null, int $limit = 20): array
+    {
+        $sql = 'SELECT * FROM memories WHERE 1=1';
+        $params = [];
+
+        if ($project !== null) {
+            $sql .= ' AND (project = :project OR project IS NULL)';
+            $params['project'] = $project;
+        } else {
+            $sql .= ' AND project IS NULL';
+        }
+
+        if ($type !== null) {
+            $sql .= ' AND type = :type';
+            $params['type'] = $type;
+        }
+
+        if ($query !== null && $query !== '') {
+            $sql .= ' AND (title LIKE :query OR content LIKE :query)';
+            $params['query'] = "%{$query}%";
+        }
+
+        $sql .= ' ORDER BY type, created_at DESC LIMIT :limit';
+        $params['limit'] = $limit;
+
+        $stmt = $this->db->connection()->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
     }
 
     public function delete(int $id): void

@@ -169,7 +169,7 @@ class TaskStore
     /**
      * Render tree with ANSI colors for terminal display.
      */
-    public function renderAnsiTree(): string
+    public function renderAnsiTree(?string $inProgressColor = null): string
     {
         if ($this->tasks === []) {
             return '';
@@ -177,7 +177,7 @@ class TaskStore
 
         $lines = [];
         foreach ($this->roots() as $root) {
-            $this->renderAnsiNode($root, 0, $lines);
+            $this->renderAnsiNode($root, 0, $lines, $inProgressColor);
         }
 
         return implode("\n", $lines);
@@ -186,7 +186,7 @@ class TaskStore
     /**
      * @param string[] $lines
      */
-    private function renderAnsiNode(Task $task, int $depth, array &$lines): void
+    private function renderAnsiNode(Task $task, int $depth, array &$lines, ?string $inProgressColor = null): void
     {
         if ($task->status === TaskStatus::Cancelled) {
             return;
@@ -198,7 +198,7 @@ class TaskStore
 
         $statusColor = match ($task->status) {
             TaskStatus::Pending => "\033[38;5;245m",
-            TaskStatus::InProgress => "\033[38;2;255;200;80m",
+            TaskStatus::InProgress => $inProgressColor ?? "\033[38;2;255;200;80m",
             TaskStatus::Completed => "\033[38;2;80;220;100m",
             TaskStatus::Cancelled => "\033[38;2;255;80;60m",
         };
@@ -208,7 +208,12 @@ class TaskStore
         $subjectText = mb_strlen($task->subject) > 50
             ? mb_substr($task->subject, 0, 47) . '...'
             : $task->subject;
-        $subject = $task->status->isTerminal() ? $dim . $subjectText : $white . $subjectText;
+        $subjectColor = match (true) {
+            $task->status->isTerminal() => $dim,
+            $task->status === TaskStatus::InProgress && $inProgressColor !== null => $inProgressColor,
+            default => $white,
+        };
+        $subject = $subjectColor . $subjectText;
 
         $line = "{$indent}{$statusColor}{$icon}{$r} {$subject}{$r}";
 
@@ -228,7 +233,7 @@ class TaskStore
         $lines[] = $line;
 
         foreach ($this->children($task->id) as $child) {
-            $this->renderAnsiNode($child, $depth + 1, $lines);
+            $this->renderAnsiNode($child, $depth + 1, $lines, $inProgressColor);
         }
     }
 
@@ -247,6 +252,14 @@ class TaskStore
                 unset($this->tasks[$id]);
             }
         }
+    }
+
+    /**
+     * Remove all tasks regardless of status.
+     */
+    public function clearAll(): void
+    {
+        $this->tasks = [];
     }
 
     private function hasActiveChildren(string $taskId): bool

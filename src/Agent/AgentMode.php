@@ -23,13 +23,14 @@ enum AgentMode: string
      * @return string[]
      */
     private const TASK_TOOLS = ['task_create', 'task_update', 'task_list', 'task_get'];
+    private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
     public function allowedTools(): array
     {
         return match ($this) {
-            self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', ...self::TASK_TOOLS],
-            self::Plan => ['file_read', 'glob', 'grep', ...self::TASK_TOOLS],
-            self::Ask => ['file_read', 'glob', 'grep', ...self::TASK_TOOLS],
+            self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Plan => ['file_read', 'glob', 'grep', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Ask => ['file_read', 'glob', 'grep', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
         };
     }
 

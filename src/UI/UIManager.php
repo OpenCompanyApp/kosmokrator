@@ -65,6 +65,9 @@ class UIManager implements RendererInterface
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void { $this->renderer->showStatus($model, $tokensIn, $tokensOut, $cost, $maxContext); }
     public function showSettings(array $currentSettings): array { return $this->renderer->showSettings($currentSettings); }
     public function pickSession(array $items): ?string { return $this->renderer->pickSession($items); }
+    public function approvePlan(string $currentPermissionMode): ?array { return $this->renderer->approvePlan($currentPermissionMode); }
+    public function askUser(string $question): string { return $this->renderer->askUser($question); }
+    public function askChoice(string $question, array $choices): string { return $this->renderer->askChoice($question, $choices); }
     public function teardown(): void { $this->renderer->teardown(); }
 
     public function showWelcome(): void

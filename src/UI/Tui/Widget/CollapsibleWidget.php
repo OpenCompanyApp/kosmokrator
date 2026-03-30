@@ -47,7 +47,7 @@ class CollapsibleWidget extends AbstractWidget
         $cols = $context->getColumns();
         $contentLines = explode("\n", $this->content);
         $total = count($contentLines);
-        $border = Theme::rgb(128, 100, 40);
+        $border = Theme::borderTask();
 
         $showLines = $this->expanded ? $contentLines : array_slice($contentLines, 0, self::PREVIEW_LINES);
         $charTruncated = false;
@@ -78,6 +78,14 @@ class CollapsibleWidget extends AbstractWidget
                 $result[] = "    {$dim}⊛ +{$remaining} lines (ctrl+o to reveal){$r}";
             } elseif ($charTruncated) {
                 $result[] = "    {$dim}⊛ (ctrl+o to reveal full command){$r}";
+            }
+        }
+
+        // Safety clamp: ensure no line exceeds available width
+        // (ANSI codes in content can cause visibleWidth edge cases)
+        foreach ($result as $i => $line) {
+            if (AnsiUtils::visibleWidth($line) > $cols) {
+                $result[$i] = AnsiUtils::truncateToWidth($line, $cols, '');
             }
         }
 

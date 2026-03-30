@@ -14,6 +14,8 @@ class GuardianEvaluator
         'task_update',
         'task_list',
         'task_get',
+        'memory_save',
+        'memory_search',
     ];
 
     /**

@@ -111,7 +111,7 @@ class AnsiRenderer implements RendererInterface
 
         $this->lastToolArgs = $args;
         $friendly = Theme::toolLabel($name);
-        $border = Theme::rgb(128, 100, 40);
+        $border = Theme::borderTask();
 
         // Task tools: compact display, suppress noise
         if ($this->isTaskTool($name)) {
@@ -120,6 +120,11 @@ class AnsiRenderer implements RendererInterface
                 echo "{$border}  ┃ {$gold}{$label}{$r}\n";
             }
 
+            return;
+        }
+
+        // Ask tools: silent — the question is shown by the tool's UI method
+        if (in_array($name, ['ask_user', 'ask_choice'], true)) {
             return;
         }
 
@@ -145,7 +150,7 @@ class AnsiRenderer implements RendererInterface
     public function showToolResult(string $name, string $output, bool $success): void
     {
         $r = Theme::reset();
-        $border = Theme::rgb(128, 100, 40);
+        $border = Theme::borderTask();
         $text = Theme::text();
         $dim = Theme::dim();
         $status = $success ? Theme::success() . '✓' : Theme::error() . '✗';
@@ -154,6 +159,11 @@ class AnsiRenderer implements RendererInterface
 
         // Task tools: silent — the call line + sticky bar are enough
         if ($this->isTaskTool($name)) {
+            return;
+        }
+
+        // Ask tools: silent result — the user already saw their own answer
+        if (in_array($name, ['ask_user', 'ask_choice'], true)) {
             return;
         }
 
@@ -327,7 +337,7 @@ class AnsiRenderer implements RendererInterface
         $dim = Theme::dim();
         $white = Theme::white();
         $gold = Theme::accent();
-        $border = Theme::rgb(128, 100, 40);
+        $border = Theme::borderTask();
 
         // Index tool results by toolCallId for pairing
         $resultsByCallId = [];
@@ -412,9 +422,7 @@ class AnsiRenderer implements RendererInterface
 
     public function showAutoApproveIndicator(string $toolName): void
     {
-        $dim = Theme::dim();
-        $r = Theme::reset();
-        echo "{$dim}  \u{2713} auto{$r}\n";
+        // Intentionally silent — auto-approve is already visible in the status bar
     }
 
     public function consumeQueuedMessage(): ?string
@@ -484,6 +492,44 @@ class AnsiRenderer implements RendererInterface
         return $items[$choice - 1]['value'];
     }
 
+    public function approvePlan(string $currentPermissionMode): ?array
+    {
+        // ANSI fallback: no interactive dialog, user types manually
+        return null;
+    }
+
+    public function askUser(string $question): string
+    {
+        $r = Theme::reset();
+        $accent = Theme::accent();
+        echo "\n{$accent}?{$r} {$question}\n";
+
+        return readline('> ') ?: '';
+    }
+
+    public function askChoice(string $question, array $choices): string
+    {
+        $r = Theme::reset();
+        $accent = Theme::accent();
+        $dim = Theme::dim();
+
+        echo "\n{$accent}?{$r} {$question}\n";
+        foreach ($choices as $i => $choice) {
+            echo "  {$accent}" . ($i + 1) . ".{$r} {$choice['label']}\n";
+            if ($choice['detail'] !== null) {
+                echo "{$dim}{$choice['detail']}{$r}\n";
+            }
+        }
+        echo "  {$dim}" . (count($choices) + 1) . ". Dismiss{$r}\n";
+
+        $pick = (int) readline("{$dim}>{$r} ");
+        if ($pick >= 1 && $pick <= count($choices)) {
+            return $choices[$pick - 1]['label'];
+        }
+
+        return 'dismissed';
+    }
+
     public function teardown(): void
     {
         echo Theme::showCursor();
@@ -545,7 +591,7 @@ class AnsiRenderer implements RendererInterface
         echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
         echo "  {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}\n";
         echo "  {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}\n";
-        echo "  {$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$r}           {$dim}Context and session management{$r}\n";
+        echo "  {$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$dim}  {$cyan}/tasks clear{$r}  {$dim}Context and session management{$r}\n";
         $muted = Theme::rgb(160, 160, 170);
         echo "  {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}\n";
         echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
@@ -764,7 +810,7 @@ class AnsiRenderer implements RendererInterface
         }
 
         $r = Theme::reset();
-        $border = Theme::rgb(128, 100, 40);
+        $border = Theme::borderTask();
         $accent = Theme::accent();
 
         $tree = $this->taskStore->renderAnsiTree();

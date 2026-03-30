@@ -21,7 +21,9 @@ class AgentModeTest extends TestCase
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
         $this->assertContains('task_get', $tools);
-        $this->assertCount(10, $tools);
+        $this->assertContains('ask_user', $tools);
+        $this->assertContains('ask_choice', $tools);
+        $this->assertCount(12, $tools);
     }
 
     public function test_plan_mode_has_read_only_tools(): void
@@ -35,6 +37,8 @@ class AgentModeTest extends TestCase
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
         $this->assertContains('task_get', $tools);
+        $this->assertContains('ask_user', $tools);
+        $this->assertContains('ask_choice', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('bash', $tools);
@@ -51,6 +55,8 @@ class AgentModeTest extends TestCase
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
         $this->assertContains('task_get', $tools);
+        $this->assertContains('ask_user', $tools);
+        $this->assertContains('ask_choice', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('bash', $tools);

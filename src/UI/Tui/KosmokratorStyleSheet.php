@@ -71,7 +71,7 @@ class KosmokratorStyleSheet
 
             // Response area (markdown)
             '.response' => new Style(
-                padding: new Padding(0, 2, 0, 2),
+                padding: new Padding(1, 2, 0, 2),
             ),
 
             // Tool call display
@@ -142,7 +142,7 @@ class KosmokratorStyleSheet
 
             // ANSI art response (no color/attribute styling to preserve raw ANSI codes)
             '.ansi-art' => new Style(
-                padding: new Padding(0, 2, 0, 2),
+                padding: new Padding(1, 2, 0, 2),
             ),
 
             // Thinking loader (animated spinner)

@@ -183,6 +183,24 @@ class SessionManager
         );
     }
 
+    public function findMemory(int $id): ?array
+    {
+        return $this->memories->find($id);
+    }
+
+    public function updateMemory(int $id, string $content, ?string $title = null): void
+    {
+        $this->memories->update($id, $content, $title);
+    }
+
+    /**
+     * @return array[]
+     */
+    public function searchMemories(?string $type = null, ?string $query = null, int $limit = 20): array
+    {
+        return $this->memories->search($this->project, $type, $query, $limit);
+    }
+
     public function deleteMemory(int $id): void
     {
         $this->memories->delete($id);

@@ -38,6 +38,11 @@ class Theme
     public static function bold(): string { return self::ESC . '[1m'; }
     public static function reset(): string { return self::ESC . '[0m'; }
 
+    // Border colors — dimmed variants of mode/accent colors
+    public static function borderAccent(): string { return self::rgb(180, 140, 50); }   // dimmed gold — for agent dialogs (ask_user, ask_choice, permissions)
+    public static function borderPlan(): string { return self::rgb(120, 90, 200); }      // dimmed purple — for plan mode dialogs
+    public static function borderTask(): string { return self::rgb(128, 100, 40); }      // warm brown — for task bar and collapsible results
+
     // Diff colors
     public static function diffAdd(): string { return self::rgb(60, 160, 80); }
     public static function diffRemove(): string { return self::rgb(180, 60, 60); }

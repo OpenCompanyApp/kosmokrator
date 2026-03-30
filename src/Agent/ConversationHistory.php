@@ -60,6 +60,24 @@ class ConversationHistory
     }
 
     /**
+     * Clear all messages except the last assistant message (the plan).
+     * Gives maximum context space while preserving the plan text.
+     */
+    public function clearKeepingLast(): void
+    {
+        for ($i = count($this->messages) - 1; $i >= 0; $i--) {
+            if ($this->messages[$i] instanceof AssistantMessage) {
+                $this->messages = [$this->messages[$i]];
+
+                return;
+            }
+        }
+
+        // No assistant message found — clear everything
+        $this->messages = [];
+    }
+
+    /**
      * Replace old messages with a summary, keeping the most recent turns.
      */
     public function compact(string $summary, int $keepRecent = 3): void

@@ -78,6 +78,65 @@ class MemoryRepositoryTest extends TestCase
         $this->assertCount(3, $all);
     }
 
+    public function test_update_with_title(): void
+    {
+        $id = $this->repo->add('decision', 'Auth choice', 'Use JWT', '/proj');
+        $this->repo->update($id, 'Use OAuth instead', 'Auth method');
+
+        $memory = $this->repo->find($id);
+        $this->assertSame('Use OAuth instead', $memory['content']);
+        $this->assertSame('Auth method', $memory['title']);
+    }
+
+    public function test_search_by_type(): void
+    {
+        $this->repo->add('project', 'Fact A', 'Content A', '/proj');
+        $this->repo->add('user', 'Pref B', 'Content B', '/proj');
+        $this->repo->add('project', 'Fact C', 'Content C', '/proj');
+
+        $results = $this->repo->search('/proj', 'project');
+        $this->assertCount(2, $results);
+        $this->assertSame('project', $results[0]['type']);
+        $this->assertSame('project', $results[1]['type']);
+    }
+
+    public function test_search_by_query(): void
+    {
+        $this->repo->add('project', 'JWT Auth', 'Uses JWT tokens', '/proj');
+        $this->repo->add('project', 'Database', 'Uses SQLite', '/proj');
+
+        $results = $this->repo->search('/proj', null, 'JWT');
+        $this->assertCount(1, $results);
+        $this->assertSame('JWT Auth', $results[0]['title']);
+    }
+
+    public function test_search_combined_type_and_query(): void
+    {
+        $this->repo->add('project', 'JWT Auth', 'Uses JWT tokens', '/proj');
+        $this->repo->add('decision', 'JWT Decision', 'Chose JWT over OAuth', '/proj');
+
+        $results = $this->repo->search('/proj', 'decision', 'JWT');
+        $this->assertCount(1, $results);
+        $this->assertSame('decision', $results[0]['type']);
+    }
+
+    public function test_search_no_results(): void
+    {
+        $this->repo->add('project', 'Fact', 'Content', '/proj');
+
+        $results = $this->repo->search('/proj', null, 'nonexistent');
+        $this->assertSame([], $results);
+    }
+
+    public function test_search_includes_global_memories(): void
+    {
+        $this->repo->add('user', 'Global pref', 'Prefers tabs', null);
+        $this->repo->add('project', 'Project fact', 'Content', '/proj');
+
+        $results = $this->repo->search('/proj');
+        $this->assertCount(2, $results);
+    }
+
     public function test_add_with_session_id(): void
     {
         // Create a session first for FK

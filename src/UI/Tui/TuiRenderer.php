@@ -13,12 +13,14 @@ use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
+use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Tempest\Highlight\Highlighter;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
+use Symfony\Component\Tui\Event\SelectionChangeEvent;
 use Symfony\Component\Tui\Event\SettingChangeEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Tui;
@@ -48,6 +50,8 @@ class TuiRenderer implements RendererInterface
 
     private TextWidget $taskBar;
 
+    private ContainerWidget $thinkingBar;
+
     private EditorWidget $input;
 
     private ?CancellableLoaderWidget $loader = null;
@@ -59,6 +63,7 @@ class TuiRenderer implements RendererInterface
     private float $thinkingStartTime = 0.0;
     private ?string $thinkingTimerId = null;
     private int $breathTick = 0;
+    private ?string $breathColor = null;
     /** @var string[] */
     private array $activeSpinnerFrames = [];
 
@@ -114,6 +119,8 @@ class TuiRenderer implements RendererInterface
     private int $spinnerIndex = 0;
 
     private ?Suspension $promptSuspension = null;
+
+    private ?Suspension $askSuspension = null;
 
     private ?SelectListWidget $slashCompletion = null;
 
@@ -184,6 +191,10 @@ class TuiRenderer implements RendererInterface
         $this->taskBar = new TextWidget('');
         $this->taskBar->setId('task-bar');
 
+        // Thinking bar — loader sits between task bar and status bar
+        $this->thinkingBar = new ContainerWidget();
+        $this->thinkingBar->setId('thinking-bar');
+
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
         $this->input = new EditorWidget();
         $this->input->setId('prompt');
@@ -245,15 +256,28 @@ class TuiRenderer implements RendererInterface
                 return true;
             }
 
-            // Shift+Tab — cycle mode (submit as slash command, preserve editor text)
-            if ($kb->matches($data, 'cycle_mode') && $this->promptSuspension !== null) {
+            // Shift+Tab — cycle mode
+            if ($kb->matches($data, 'cycle_mode')) {
                 $nextMode = $this->cycleMode();
-                $savedText = $this->input->getText();
 
-                $suspension = $this->promptSuspension;
-                $this->promptSuspension = null;
-                $this->pendingEditorRestore = $savedText;
-                $suspension->resume("/{$nextMode}");
+                if ($this->promptSuspension !== null) {
+                    // At prompt: submit as slash command, preserve editor text
+                    $savedText = $this->input->getText();
+                    $suspension = $this->promptSuspension;
+                    $this->promptSuspension = null;
+                    $this->pendingEditorRestore = $savedText;
+                    $suspension->resume("/{$nextMode}");
+                } else {
+                    // During run: switch UI immediately, queue command, cancel request
+                    $modeColors = [
+                        'edit' => "\033[38;2;80;200;120m",
+                        'plan' => "\033[38;2;160;120;255m",
+                        'ask' => "\033[38;2;255;180;60m",
+                    ];
+                    $this->showMode(ucfirst($nextMode), $modeColors[$nextMode] ?? '');
+                    $this->messageQueue[] = "/{$nextMode}";
+                    $this->requestCancellation?->cancel();
+                }
 
                 return true;
             }
@@ -291,18 +315,28 @@ class TuiRenderer implements RendererInterface
             }
         });
 
-        // Assemble layout: conversation → overlay → taskBar → statusBar → input
+        // Assemble layout: conversation → overlay → taskBar → thinkingBar → input → statusBar
         $this->session->add($this->conversation);
         $this->session->add($this->overlay);
         $this->session->add($this->taskBar);
-        $this->session->add($this->statusBar);
+        $this->session->add($this->thinkingBar);
         $this->session->add($this->input);
+        $this->session->add($this->statusBar);
 
         // Submit handler on editor (Ctrl+Enter)
         $this->input->onSubmit(function (SubmitEvent $event) {
             $value = $event->getValue();
             $this->input->setText('');
             $this->hideSlashCompletion();
+
+            // During ask_user tool: return answer to the tool
+            if ($this->askSuspension !== null) {
+                $suspension = $this->askSuspension;
+                $this->askSuspension = null;
+                $suspension->resume($value);
+
+                return;
+            }
 
             // During thinking: queue the message for after current response
             if ($this->requestCancellation !== null) {
@@ -318,6 +352,13 @@ class TuiRenderer implements RendererInterface
                 $suspension = $this->promptSuspension;
                 $this->promptSuspension = null;
                 $suspension->resume($value);
+
+                return;
+            }
+
+            // Fallback: queue text submitted during transitional states
+            if (trim($value) !== '') {
+                $this->queueMessage($value);
             }
         });
 
@@ -392,7 +433,7 @@ ART;
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}
 {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}
-{$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$r}           {$dim}Context and session management{$r}
+{$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$dim}  {$cyan}/tasks clear{$r}  {$dim}Context and session management{$r}
 {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 HELP;
@@ -430,7 +471,14 @@ HELP;
 
     public function showUserMessage(string $text): void
     {
-        $widget = new TextWidget('⟡ ' . $text);
+        $r = Theme::reset();
+        $bg = Theme::bgRgb(35, 35, 45);
+        $white = Theme::white();
+        $content = "⟡ {$text}";
+        $cols = $this->tui->getTerminal()->getColumns();
+        $visible = \Symfony\Component\Tui\Ansi\AnsiUtils::visibleWidth($content);
+        $pad = max(0, $cols - $visible - 4);
+        $widget = new TextWidget("{$bg}{$white}{$content}" . str_repeat(' ', $pad) . "{$r}");
         $widget->addStyleClass('user-message');
         $this->conversation->add($widget);
         $this->tui->processRender();
@@ -439,38 +487,43 @@ HELP;
     public function showThinking(): void
     {
         $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
-
-        // Register custom spinners on first use
-        if (!$this->spinnersRegistered) {
-            foreach (self::SPINNERS as $name => $frames) {
-                CancellableLoaderWidget::addSpinner($name, $frames);
-            }
-            $this->spinnersRegistered = true;
-        }
+        $hasTasks = $this->taskStore !== null && !$this->taskStore->isEmpty();
 
         $this->requestCancellation = new DeferredCancellation();
         $this->thinkingStartTime = microtime(true);
         $this->breathTick = 0;
 
-        // Pick spinner and store its frames for trail effect
-        $spinnerNames = array_keys(self::SPINNERS);
-        $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
-        $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
-        $this->spinnerIndex++;
-
-        $this->loader = new CancellableLoaderWidget($phrase);
-        $this->loader->setId('loader');
-        $this->loader->setSpinner($spinnerName);
-        $this->loader->setIntervalMs(120);
-        $this->loader->start();
-
-        $this->loader->onCancel(function () {
-            if ($this->requestCancellation !== null) {
-                $this->requestCancellation->cancel();
+        // Only show the standalone loader when there are no tasks
+        if (!$hasTasks) {
+            // Register custom spinners on first use
+            if (!$this->spinnersRegistered) {
+                foreach (self::SPINNERS as $name => $frames) {
+                    CancellableLoaderWidget::addSpinner($name, $frames);
+                }
+                $this->spinnersRegistered = true;
             }
-        });
 
-        // Breathing pulse at 30fps — smooth color animation on the phrase text
+            $spinnerNames = array_keys(self::SPINNERS);
+            $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
+            $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
+            $this->spinnerIndex++;
+
+            $this->loader = new CancellableLoaderWidget($phrase);
+            $this->loader->setId('loader');
+            $this->loader->setSpinner($spinnerName);
+            $this->loader->setIntervalMs(120);
+            $this->loader->start();
+
+            $this->loader->onCancel(function () {
+                if ($this->requestCancellation !== null) {
+                    $this->requestCancellation->cancel();
+                }
+            });
+
+            $this->thinkingBar->add($this->loader);
+        }
+
+        // Breathing pulse at 30fps — animates loader text OR in-progress task color
         $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
             $this->breathTick++;
             $r = "\033[0m";
@@ -480,17 +533,19 @@ HELP;
             $br = (int) (112 + 40 * $t);
             $bg = (int) (160 + 40 * $t);
             $bb = (int) (208 + 47 * $t);
-            $breathColor = "\033[38;2;{$br};{$bg};{$bb}m";
+            $this->breathColor = "\033[38;2;{$br};{$bg};{$bb}m";
 
-            // Elapsed time
-            $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
-            $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-            $dim = "\033[38;5;245m";
+            if ($this->loader !== null) {
+                // Animate the standalone loader text
+                $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                $dim = "\033[38;5;245m";
+                $this->loader->setMessage("{$this->breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
+            }
 
-            $this->loader?->setMessage("{$breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
-
-            // Refresh task bar timers once per second (~30 ticks)
-            if ($this->breathTick % 30 === 0) {
+            // Refresh task bar — every tick when breathing (animates in-progress color),
+            // or every ~1s just for timers
+            if ($this->taskStore !== null && !$this->taskStore->isEmpty()) {
                 $this->refreshTaskBar();
             }
 
@@ -498,7 +553,6 @@ HELP;
             $this->tui->processRender();
         });
 
-        $this->overlay->add($this->loader);
         // Keep focus on input so user can type while thinking
         $this->tui->processRender();
     }
@@ -513,11 +567,16 @@ HELP;
         if ($this->loader !== null) {
             $this->loader->setFinishedIndicator('✓');
             $this->loader->stop();
-            $this->overlay->remove($this->loader);
+            $this->thinkingBar->remove($this->loader);
             $this->loader = null;
         }
 
+        // Reset breath color so task bar returns to static colors
+        $this->breathColor = null;
+        $this->refreshTaskBar();
+
         $this->requestCancellation = null;
+        $this->tui->requestRender(force: true);
         $this->tui->processRender();
     }
 
@@ -574,18 +633,17 @@ HELP;
         $dim = Theme::dim();
         $white = Theme::white();
 
-        // Task tools: compact display, null = suppress entirely
+        // Task tools: update task bar only, no conversation widget (task bar shows the tree)
         if ($this->isTaskTool($name)) {
-            $label = $this->formatTaskToolCall($name, $args, $icon, $friendly, $white, $dim, $r);
-            if ($label !== null) {
-                $widget = new TextWidget($label);
-                $widget->addStyleClass('task-call');
-                $this->conversation->add($widget);
-            }
             $this->refreshTaskBar();
             $this->tui->requestRender();
             $this->tui->processRender();
 
+            return;
+        }
+
+        // Ask tools: silent — the question is shown by the tool's UI method
+        if (in_array($name, ['ask_user', 'ask_choice'], true)) {
             return;
         }
 
@@ -641,6 +699,11 @@ HELP;
             $this->tui->requestRender();
             $this->tui->processRender();
 
+            return;
+        }
+
+        // Ask tools: silent result — the user already saw their own answer
+        if (in_array($name, ['ask_user', 'ask_choice'], true)) {
             return;
         }
 
@@ -720,6 +783,7 @@ HELP;
         $this->overlay->remove($selectList);
         $this->overlay->remove($header);
         $this->tui->setFocus($this->input);
+        $this->tui->requestRender(force: true);
         $this->tui->processRender();
 
         return $decision;
@@ -727,12 +791,7 @@ HELP;
 
     public function showAutoApproveIndicator(string $toolName): void
     {
-        $dim = Theme::dim();
-        $r = Theme::reset();
-        $widget = new TextWidget("{$dim}  \u{2713} auto{$r}");
-        $widget->addStyleClass('auto-approve-indicator');
-        $this->conversation->add($widget);
-        $this->tui->processRender();
+        // Intentionally silent — auto-approve is already visible in the status bar
     }
 
     public function setPermissionMode(string $label, string $color): void
@@ -743,11 +802,166 @@ HELP;
         // Refresh status bar to reflect the new permission mode
         $r = "\033[0m";
         $sep = "\033[38;5;240m·{$r}";
-        $permPart = in_array($this->currentModeLabel, ['Plan', 'Ask'])
-            ? '' : "  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}{$permPart}  {$sep}  Ready");
+        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  Ready");
         $this->tui->requestRender();
         $this->tui->processRender();
+    }
+
+    public function approvePlan(string $currentPermissionMode): ?array
+    {
+        $widget = new PlanApprovalWidget($currentPermissionMode);
+        $widget->setId('plan-approval');
+
+        $this->overlay->add($widget);
+        $this->tui->setFocus($widget);
+        $this->tui->processRender();
+
+        $suspension = EventLoop::getSuspension();
+
+        $widget->onConfirm(function () use ($suspension, $widget) {
+            $suspension->resume([
+                'permission' => $widget->getPermissionId(),
+                'context' => $widget->getContextId(),
+            ]);
+        });
+
+        $widget->onDismiss(function () use ($suspension) {
+            $suspension->resume(null);
+        });
+
+        $result = $suspension->suspend();
+
+        $this->overlay->remove($widget);
+        $this->tui->setFocus($this->input);
+        $this->tui->requestRender(force: true);
+        $this->tui->processRender();
+
+        return $result;
+    }
+
+    public function askUser(string $question): string
+    {
+        $r = Theme::reset();
+        $accent = Theme::accent();
+        $white = Theme::white();
+        $border = Theme::borderAccent();
+
+        $widget = new TextWidget(
+            "{$border}┌─{$accent} Question {$border}─────────────────────────────────────────────────┐{$r}\n"
+            . "{$border}│{$r} {$white}{$question}{$r}\n"
+            . "{$border}└────────────────────────────────────────────────────────────┘{$r}"
+        );
+        $this->overlay->add($widget);
+
+        $this->tui->setFocus($this->input);
+        $this->tui->processRender();
+
+        $this->askSuspension = EventLoop::getSuspension();
+        $answer = $this->askSuspension->suspend();
+
+        // Clean up overlay and show Q&A inline in conversation
+        $this->overlay->remove($widget);
+        $dim = Theme::dim();
+        $qWidget = new TextWidget("{$accent}?{$r} {$dim}{$question}{$r}");
+        $this->conversation->add($qWidget);
+        $this->showUserMessage($answer);
+        $this->tui->requestRender(force: true);
+        $this->tui->processRender();
+
+        return $answer;
+    }
+
+    public function askChoice(string $question, array $choices): string
+    {
+        $r = Theme::reset();
+        $accent = Theme::accent();
+        $dim = Theme::dim();
+        $white = Theme::white();
+        $border = Theme::borderAccent();
+
+        $widgets = [];
+
+        // Detail widget — shows the currently highlighted choice's detail/mockup
+        $detailWidget = new TextWidget('');
+        $this->overlay->add($detailWidget);
+        $widgets[] = $detailWidget;
+
+        // Index details by value for quick lookup
+        $detailsByValue = [];
+        foreach ($choices as $choice) {
+            if ($choice['detail'] !== null) {
+                $detailsByValue[$choice['label']] = $choice['detail'];
+            }
+        }
+
+        // Show first choice's detail initially
+        $firstDetail = $choices[0]['detail'] ?? null;
+        if ($firstDetail !== null) {
+            $detailWidget->setText($firstDetail);
+        }
+
+        // Bordered header
+        $header = new TextWidget(
+            "{$border}┌─{$accent} Choose {$border}──────────────────────────────────────────────────┐{$r}\n"
+            . "{$border}│{$r} {$white}{$question}{$r}"
+        );
+        $this->overlay->add($header);
+        $widgets[] = $header;
+
+        // Build select list — user choices + always a Dismiss option
+        $items = [];
+        foreach ($choices as $choice) {
+            $items[] = ['value' => $choice['label'], 'label' => $choice['label']];
+        }
+        $items[] = ['value' => 'dismissed', 'label' => 'Dismiss'];
+
+        $selectList = new SelectListWidget($items);
+        $selectList->setId('ask-choice');
+        $this->overlay->add($selectList);
+        $widgets[] = $selectList;
+
+        // Bottom border
+        $footer = new TextWidget("{$border}└────────────────────────────────────────────────────────────┘{$r}");
+        $this->overlay->add($footer);
+        $widgets[] = $footer;
+
+        // Update detail when selection changes
+        $selectList->onSelectionChange(function (SelectionChangeEvent $event) use ($detailWidget, $detailsByValue) {
+            $value = $event->getValue();
+            $detail = $detailsByValue[$value] ?? null;
+            $detailWidget->setText($detail ?? '');
+        });
+
+        $this->tui->setFocus($selectList);
+        $this->tui->processRender();
+
+        $suspension = EventLoop::getSuspension();
+
+        $selectList->onSelect(function (SelectEvent $event) use ($suspension) {
+            $suspension->resume($event->getValue());
+        });
+
+        $selectList->onCancel(function () use ($suspension) {
+            $suspension->resume('dismissed');
+        });
+
+        $result = $suspension->suspend();
+
+        // Clean up overlay
+        foreach ($widgets as $w) {
+            $this->overlay->remove($w);
+        }
+
+        // Show Q&A inline in conversation
+        $qWidget = new TextWidget("{$accent}?{$r} {$dim}{$question}{$r}");
+        $this->conversation->add($qWidget);
+        $this->showUserMessage($result === 'dismissed' ? '(dismissed)' : $result);
+
+        $this->tui->setFocus($this->input);
+        $this->tui->requestRender(force: true);
+        $this->tui->processRender();
+
+        return $result;
     }
 
     private function highlightFileOutput(string $output): string
@@ -893,17 +1107,8 @@ HELP;
                     $name = $toolCall->name;
                     $args = $toolCall->arguments();
 
+                    // Task tools: skip — task bar shows the tree
                     if ($this->isTaskTool($name)) {
-                        if ($name === 'task_create') {
-                            $icon = Theme::toolIcon($name);
-                            $friendly = Theme::toolLabel($name);
-                            $label = $this->formatTaskToolCall($name, $args, $icon, $friendly, $white, $dim, $r);
-                            if ($label !== null) {
-                                $w = new TextWidget($label);
-                                $w->addStyleClass('task-call');
-                                $this->conversation->add($w);
-                            }
-                        }
                         continue;
                     }
 
@@ -995,9 +1200,7 @@ HELP;
         $r = "\033[0m";
         $red = "\033[38;2;255;60;40m";
         $sep = "\033[38;5;240m·{$r}";
-        $permPart = in_array($label, ['Plan', 'Ask'])
-            ? '' : "  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}{$permPart}  {$sep}  Ready");
+        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  Ready");
         $this->tui->processRender();
     }
 
@@ -1029,11 +1232,8 @@ HELP;
         $costColor = "\033[38;5;245m";
         $costLabel = Theme::formatCost($cost);
 
-        $permPart = in_array($this->currentModeLabel, ['Plan', 'Ask'])
-            ? '' : "  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}";
-
         $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r}{$permPart}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}"
+            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}"
         );
         $this->tui->processRender();
     }
@@ -1149,6 +1349,7 @@ HELP;
 
         $this->overlay->remove($settingsWidget);
         $this->tui->setFocus($this->input);
+        $this->tui->requestRender(force: true);
         $this->tui->processRender();
 
         return $changes;
@@ -1182,6 +1383,7 @@ HELP;
 
         $this->overlay->remove($selectList);
         $this->tui->setFocus($this->input);
+        $this->tui->requestRender(force: true);
         $this->tui->processRender();
 
         return $result;
@@ -1315,10 +1517,10 @@ HELP;
 
         $r = Theme::reset();
         $dim = Theme::dim();
-        $border = Theme::rgb(128, 100, 40);
+        $border = Theme::borderTask();
         $accent = Theme::accent();
 
-        $tree = $this->taskStore->renderAnsiTree();
+        $tree = $this->taskStore->renderAnsiTree($this->breathColor);
         $lines = explode("\n", $tree);
 
         $bar = "  {$border}┌ {$accent}Tasks{$r}";
@@ -1371,42 +1573,4 @@ HELP;
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
     }
 
-    /**
-     * Format task tool call for display. Returns null to suppress output entirely.
-     */
-    private function formatTaskToolCall(string $name, array $args, string $icon, string $friendly, string $white, string $dim, string $r): ?string
-    {
-        if ($name === 'task_create') {
-            if (isset($args['tasks']) && $args['tasks'] !== '') {
-                $items = json_decode($args['tasks'], true);
-                if (is_array($items)) {
-                    return "{$icon} {$friendly} {$dim}created " . count($items) . " tasks{$r}";
-                }
-            }
-            $subject = $args['subject'] ?? '';
-
-            return "{$icon} {$friendly} {$white}{$subject}{$r}";
-        }
-
-        if ($name === 'task_update') {
-            $status = $args['status'] ?? '';
-            // Starting a task is noise — the task bar already shows it
-            if ($status === 'in_progress') {
-                return null;
-            }
-            $id = $args['id'] ?? '';
-            $task = $this->taskStore?->get($id);
-            $subject = $task?->subject ?? $id;
-            $statusIcon = match ($status) {
-                'completed' => "\033[38;2;80;220;100m\u{25CF}{$r}",  // ● green
-                'cancelled' => "\033[38;2;255;80;60m\u{2717}{$r}",   // ✗ red
-                default => '',
-            };
-
-            return "{$icon} {$friendly} {$statusIcon} {$white}{$subject}{$r}";
-        }
-
-        // task_get, task_list: silent — task bar is sufficient
-        return null;
-    }
 }

@@ -30,6 +30,8 @@ use Kosmokrator\Session\MessageRepository;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\Tool\MemorySaveTool;
+use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionConfigParser;
@@ -295,6 +297,10 @@ class Kernel
             $registry->register(new TaskUpdateTool($taskStore));
             $registry->register(new TaskListTool($taskStore));
             $registry->register(new TaskGetTool($taskStore));
+
+            $sessionManager = $this->container->make(SessionManager::class);
+            $registry->register(new MemorySaveTool($sessionManager));
+            $registry->register(new MemorySearchTool($sessionManager));
 
             return $registry;
         });

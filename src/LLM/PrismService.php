@@ -124,7 +124,6 @@ class PrismService implements LlmClientInterface
 
         if (! empty($tools)) {
             $request->withTools($tools);
-            $request->withMaxSteps(10);
         }
 
         return $request;

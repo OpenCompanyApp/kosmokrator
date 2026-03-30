@@ -19,6 +19,13 @@ class GuardianEvaluator
     ];
 
     /**
+     * Shell metacharacters that indicate chaining, piping, redirection,
+     * or command substitution. Presence of ANY of these means the command
+     * is not provably safe by static analysis.
+     */
+    private const SHELL_META_PATTERN = '/[;&|`$><\n]/';
+
+    /**
      * @param string[] $safeCommandPatterns Glob patterns for bash commands to auto-approve
      */
     public function __construct(
@@ -75,6 +82,10 @@ class GuardianEvaluator
             return false;
         }
 
+        if ($this->containsShellOperators($command)) {
+            return false;
+        }
+
         foreach ($this->safeCommandPatterns as $pattern) {
             if (PermissionRule::matchesGlob($command, $pattern)) {
                 return true;
@@ -82,5 +93,10 @@ class GuardianEvaluator
         }
 
         return false;
+    }
+
+    private function containsShellOperators(string $command): bool
+    {
+        return (bool) preg_match(self::SHELL_META_PATTERN, $command);
     }
 }

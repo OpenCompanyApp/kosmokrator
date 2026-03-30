@@ -60,10 +60,20 @@ class ModelCatalog
         }
 
         // Substring match (e.g. "z/GLM-5.1" matches "glm-5.1")
+        // Use longest match first to avoid "glm" matching before "glm-5.1"
+        $bestMatch = null;
+        $bestLength = 0;
+
         foreach ($this->models as $name => $spec) {
-            if (str_contains($key, strtolower($name))) {
-                return $spec;
+            $lowerName = strtolower($name);
+            if (str_contains($key, $lowerName) && strlen($lowerName) > $bestLength) {
+                $bestMatch = $spec;
+                $bestLength = strlen($lowerName);
             }
+        }
+
+        if ($bestMatch !== null) {
+            return $bestMatch;
         }
 
         return $this->default;

@@ -86,6 +86,10 @@ tools:
   blocked_paths:
     - "*.env"
     - ".git/*"
+    - "*.pem"
+    - "*id_rsa*"
+    - "*id_ed25519*"
+    - "*.key"
   default_permission_mode: guardian
   guardian_safe_commands:
     - "git *"

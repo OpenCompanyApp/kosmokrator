@@ -80,12 +80,28 @@ class PermissionEvaluator
             return null;
         }
 
-        $basename = basename($path);
+        // Check both raw path and resolved (symlink-followed) path
+        $pathsToCheck = [$path];
+
+        $resolved = realpath($path);
+        if ($resolved === false) {
+            // File doesn't exist yet — resolve parent directory
+            $parentResolved = realpath(dirname($path));
+            if ($parentResolved !== false) {
+                $resolved = $parentResolved . '/' . basename($path);
+            }
+        }
+        if ($resolved !== false && $resolved !== $path) {
+            $pathsToCheck[] = $resolved;
+        }
 
         foreach ($this->blockedPaths as $pattern) {
-            if (PermissionRule::matchesGlob($path, $pattern)
-                || PermissionRule::matchesGlob($basename, $pattern)) {
-                return $pattern;
+            foreach ($pathsToCheck as $candidate) {
+                $basename = basename($candidate);
+                if (PermissionRule::matchesGlob($candidate, $pattern)
+                    || PermissionRule::matchesGlob($basename, $pattern)) {
+                    return $pattern;
+                }
             }
         }
 

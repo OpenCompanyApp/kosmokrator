@@ -300,4 +300,76 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertNotNull($result->reason);
         $this->assertStringContainsString('rm -rf *', $result->reason);
     }
+
+    // --- Symlink resolution in blocked paths ---
+
+    public function test_blocked_path_catches_symlink_to_blocked_file(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/guardian_test_' . uniqid();
+        mkdir($tmpDir);
+        $envFile = $tmpDir . '/.env';
+        $linkPath = $tmpDir . '/config_link';
+
+        try {
+            file_put_contents($envFile, 'SECRET=x');
+            symlink($envFile, $linkPath);
+
+            $evaluator = new PermissionEvaluator([], $this->grants, ['*.env']);
+
+            // Raw path "config_link" doesn't match *.env, but resolved path does
+            $result = $evaluator->evaluate('file_read', ['path' => $linkPath]);
+            $this->assertSame(PermissionAction::Deny, $result->action);
+        } finally {
+            @unlink($linkPath);
+            @unlink($envFile);
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function test_blocked_path_catches_symlink_via_parent_directory(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/guardian_test_' . uniqid();
+        $targetDir = $tmpDir . '/real';
+        $linkDir = $tmpDir . '/link';
+
+        try {
+            mkdir($tmpDir);
+            mkdir($targetDir);
+            file_put_contents($targetDir . '/.env', 'SECRET=x');
+            symlink($targetDir, $linkDir);
+
+            $evaluator = new PermissionEvaluator([], $this->grants, ['*.env']);
+
+            // Path through symlinked directory — basename is .env so it matches directly
+            $result = $evaluator->evaluate('file_read', ['path' => $linkDir . '/.env']);
+            $this->assertSame(PermissionAction::Deny, $result->action);
+        } finally {
+            @unlink($linkDir);
+            @unlink($targetDir . '/.env');
+            @rmdir($targetDir);
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function test_blocked_path_still_works_for_nonexistent_paths(): void
+    {
+        $evaluator = new PermissionEvaluator([], $this->grants, ['*.env']);
+
+        // Path doesn't exist — realpath returns false, but raw path matching still works
+        $result = $evaluator->evaluate('file_read', ['path' => '/nonexistent/dir/.env']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+    }
+
+    public function test_guardian_rejects_shell_injection_in_safe_command(): void
+    {
+        $guardian = new GuardianEvaluator('/project', ['git *']);
+        $rules = [new PermissionRule('bash', PermissionAction::Ask)];
+        $evaluator = new PermissionEvaluator($rules, $this->grants, [], $guardian);
+        $evaluator->setPermissionMode(PermissionMode::Guardian);
+
+        // This previously matched 'git *' and auto-approved — now it should Ask
+        $result = $evaluator->evaluate('bash', ['command' => 'git status && rm -rf /']);
+        $this->assertSame(PermissionAction::Ask, $result->action);
+        $this->assertFalse($result->autoApproved);
+    }
 }

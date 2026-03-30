@@ -238,10 +238,6 @@ class TaskStore
     }
 
     /**
-     * Remove all completed tasks (and their completed children).
-     * Keeps pending and in-progress tasks intact.
-     */
-    /**
      * Remove all terminal (completed/cancelled) tasks.
      * Keeps pending and in-progress tasks intact.
      */

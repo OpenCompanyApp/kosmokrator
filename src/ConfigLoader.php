@@ -55,7 +55,9 @@ class ConfigLoader
 
         // Resolve ${ENV_VAR} placeholders (check $_ENV, $_SERVER, then getenv)
         $content = preg_replace_callback('/\$\{(\w+)\}/', function (array $matches) {
-            return $_ENV[$matches[1]] ?? $_SERVER[$matches[1]] ?? getenv($matches[1]) ?: '';
+            $value = $_ENV[$matches[1]] ?? $_SERVER[$matches[1]] ?? getenv($matches[1]);
+
+            return $value !== false ? $value : '';
         }, $content);
 
         return Yaml::parse($content) ?? [];

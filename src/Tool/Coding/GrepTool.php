@@ -4,9 +4,14 @@ namespace Kosmokrator\Tool\Coding;
 
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
+use Symfony\Component\Process\Process;
 
 class GrepTool implements ToolInterface
 {
+    public function __construct(
+        private readonly int $timeout = 30,
+    ) {}
+
     public function name(): string { return 'grep'; }
 
     public function description(): string
@@ -48,23 +53,27 @@ class GrepTool implements ToolInterface
             }
         }
 
-        $output = [];
-        $returnCode = 0;
-        exec($fullCmd . ' 2>&1', $output, $returnCode);
+        $process = Process::fromShellCommandline($fullCmd);
+        $process->setTimeout($this->timeout);
+        $process->run();
 
-        if ($returnCode !== 0 && empty($output)) {
+        $output = trim($process->getOutput() . $process->getErrorOutput());
+
+        if ($process->getExitCode() !== 0 && $output === '') {
             return ToolResult::success("No matches found for '{$pattern}'");
         }
 
-        $result = implode("\n", array_slice($output, 0, 100));
+        $lines = explode("\n", $output);
+        $result = implode("\n", array_slice($lines, 0, 100));
 
         return ToolResult::success($result ?: "No matches found for '{$pattern}'");
     }
 
     private function hasRipgrep(): bool
     {
-        exec('which rg 2>/dev/null', $output, $code);
+        $process = Process::fromShellCommandline('which rg');
+        $process->run();
 
-        return $code === 0;
+        return $process->isSuccessful();
     }
 }

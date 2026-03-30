@@ -114,6 +114,27 @@ class SessionManager
     }
 
     /**
+     * Find a session by full or partial ID.
+     */
+    public function findSession(string $idOrPrefix): ?array
+    {
+        $session = $this->sessions->find($idOrPrefix);
+
+        return $session ?? $this->sessions->findByPrefix($idOrPrefix);
+    }
+
+    /**
+     * Resume a session: set it as current and load its history.
+     */
+    public function resumeSession(string $sessionId): ConversationHistory
+    {
+        $this->currentSessionId = $sessionId;
+        $this->sessions->touch($sessionId);
+
+        return $this->loadHistory($sessionId);
+    }
+
+    /**
      * @return array[]
      */
     public function listSessions(int $limit = 20): array
@@ -165,6 +186,54 @@ class SessionManager
     public function deleteMemory(int $id): void
     {
         $this->memories->delete($id);
+    }
+
+    // --- Compaction ---
+
+    /**
+     * Persist compaction: mark old messages as compacted, insert summary.
+     */
+    public function persistCompaction(string $summary, int $keepRecentTurns = 3): void
+    {
+        if ($this->currentSessionId === null) {
+            return;
+        }
+
+        $raw = $this->messages->loadRaw($this->currentSessionId);
+        if (count($raw) === 0) {
+            return;
+        }
+
+        // Find the boundary: count keepRecentTurns user messages from the end
+        $turnsFound = 0;
+        $boundaryId = null;
+        for ($i = count($raw) - 1; $i >= 0; $i--) {
+            if ($raw[$i]['role'] === 'user') {
+                $turnsFound++;
+                if ($turnsFound >= $keepRecentTurns) {
+                    $boundaryId = (int) $raw[$i]['id'];
+                    break;
+                }
+            }
+        }
+
+        if ($boundaryId === null) {
+            return;
+        }
+
+        $this->messages->markCompacted($this->currentSessionId, $boundaryId);
+
+        // Insert summary as a system message
+        $this->messages->append(
+            sessionId: $this->currentSessionId,
+            role: 'system',
+            content: $summary,
+        );
+
+        $this->log->info('Compaction persisted', [
+            'session' => $this->currentSessionId,
+            'boundary_id' => $boundaryId,
+        ]);
     }
 
     /**

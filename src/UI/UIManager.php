@@ -52,6 +52,7 @@ class UIManager implements RendererInterface
     public function showError(string $message): void { $this->renderer->showError($message); }
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void { $this->renderer->showStatus($model, $tokensIn, $tokensOut, $cost, $maxContext); }
     public function showSettings(array $currentSettings): array { return $this->renderer->showSettings($currentSettings); }
+    public function pickSession(array $items): ?string { return $this->renderer->pickSession($items); }
     public function teardown(): void { $this->renderer->teardown(); }
 
     public function showWelcome(): void

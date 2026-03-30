@@ -1,7 +1,6 @@
 agent:
   default_provider: z
   default_model: GLM-5.1
-  max_tokens: 8192
   temperature: 0.0
   max_tool_rounds: 25
   system_prompt: |

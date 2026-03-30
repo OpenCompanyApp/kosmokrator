@@ -3,19 +3,16 @@
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\UI\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Yaml\Yaml;
 
 #[AsCommand(name: 'setup', description: 'Configure KosmoKrator (API keys, provider, model)')]
 class SetupCommand extends Command
 {
-    private const CONFIG_DIR = '/.kosmokrator';
-    private const CONFIG_FILE = '/.kosmokrator/config.yaml';
-
     public function __construct(
         private readonly Container $container,
     ) {
@@ -24,9 +21,7 @@ class SetupCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $home = $this->getHomeDir();
-        $configPath = $home . self::CONFIG_FILE;
-        $existing = $this->loadExisting($configPath);
+        $settings = $this->container->make(SettingsRepository::class);
 
         $r = Theme::reset();
         $white = Theme::white();
@@ -38,7 +33,7 @@ class SetupCommand extends Command
 
         // Provider selection
         $providers = ['z' => 'Z.AI (GLM-5.1)', 'anthropic' => 'Anthropic (Claude)', 'openai' => 'OpenAI (GPT)'];
-        $currentProvider = $existing['agent']['default_provider'] ?? 'z';
+        $currentProvider = $settings->get('global', 'agent.default_provider') ?? 'z';
 
         echo "{$dim}  Available providers:{$r}\n";
         foreach ($providers as $key => $label) {
@@ -52,19 +47,12 @@ class SetupCommand extends Command
 
         // Model selection
         $defaultModels = ['z' => 'GLM-5.1', 'anthropic' => 'claude-sonnet-4-20250514', 'openai' => 'gpt-4o'];
-        $currentModel = $existing['agent']['default_model'] ?? ($defaultModels[$provider] ?? 'GLM-5.1');
+        $currentModel = $settings->get('global', 'agent.default_model') ?? ($defaultModels[$provider] ?? 'GLM-5.1');
         $model = readline("{$dim}  Model [{$currentModel}]: {$r}") ?: $currentModel;
         $model = trim($model);
 
         // API key
-        $envKey = match ($provider) {
-            'z' => 'ZAI_API_KEY',
-            'anthropic' => 'ANTHROPIC_API_KEY',
-            'openai' => 'OPENAI_API_KEY',
-            default => strtoupper($provider) . '_API_KEY',
-        };
-
-        $currentKey = $existing['providers'][$provider]['api_key'] ?? '';
+        $currentKey = $settings->get('global', "provider.{$provider}.api_key") ?? '';
         $maskedKey = $currentKey !== '' ? substr($currentKey, 0, 8) . '...' . substr($currentKey, -4) : '';
         $keyPrompt = $maskedKey !== '' ? " [{$maskedKey}]" : '';
 
@@ -73,50 +61,18 @@ class SetupCommand extends Command
 
         if ($apiKey === '') {
             echo "\n{$primary}  ✗ API key is required.{$r}\n\n";
+
             return Command::FAILURE;
         }
 
-        // Build config
-        $config = [
-            'agent' => [
-                'default_provider' => $provider,
-                'default_model' => $model,
-            ],
-            'providers' => [
-                $provider => [
-                    'api_key' => $apiKey,
-                ],
-            ],
-        ];
+        // Save to SQLite
+        $settings->set('global', 'agent.default_provider', $provider);
+        $settings->set('global', 'agent.default_model', $model);
+        $settings->set('global', "provider.{$provider}.api_key", $apiKey);
 
-        // Write config
-        $dir = $home . self::CONFIG_DIR;
-        if (! is_dir($dir)) {
-            mkdir($dir, 0700, true);
-        }
-
-        // Merge with existing config (preserve other keys)
-        $merged = array_replace_recursive($existing, $config);
-        file_put_contents($configPath, Yaml::dump($merged, 4, 2));
-        chmod($configPath, 0600);
-
-        echo "\n{$accent}  ✓ Config saved to {$configPath}{$r}\n";
+        echo "\n{$accent}  ✓ Settings saved.{$r}\n";
         echo "{$dim}  Run {$white}php bin/kosmokrator{$dim} to start.{$r}\n\n";
 
         return Command::SUCCESS;
-    }
-
-    private function getHomeDir(): string
-    {
-        return getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-    }
-
-    private function loadExisting(string $path): array
-    {
-        if (! file_exists($path)) {
-            return [];
-        }
-
-        return Yaml::parseFile($path) ?? [];
     }
 }

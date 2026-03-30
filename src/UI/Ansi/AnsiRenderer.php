@@ -348,6 +348,32 @@ class AnsiRenderer implements RendererInterface
         return [];
     }
 
+    public function pickSession(array $items): ?string
+    {
+        if ($items === []) {
+            return null;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $white = "\033[1;37m";
+
+        echo "\n{$white}  Select a session:{$r}\n";
+        foreach ($items as $i => $item) {
+            $num = $i + 1;
+            $desc = $item['description'] ?? '';
+            echo "{$dim}  [{$num}] {$white}{$item['label']}{$r}  {$dim}{$desc}{$r}\n";
+        }
+        echo "{$dim}  [0] Cancel{$r}\n";
+
+        $choice = (int) readline('  > ');
+        if ($choice < 1 || $choice > count($items)) {
+            return null;
+        }
+
+        return $items[$choice - 1]['value'];
+    }
+
     public function teardown(): void
     {
         echo Theme::showCursor();

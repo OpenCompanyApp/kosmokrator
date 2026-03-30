@@ -59,6 +59,8 @@ class Kernel
         $this->loadEnv();
         $this->registerConfig();
         $this->registerLogger();
+        $this->registerDatabase();
+        $this->injectSqliteSettings();
         $this->registerCoreServices();
         $this->registerPrism();
         $this->registerFacades();
@@ -112,6 +114,99 @@ class Kernel
         $config->set('prism', $config->get('prism', []));
     }
 
+    private function registerDatabase(): void
+    {
+        $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase());
+        $this->container->singleton(SettingsRepository::class, fn () => new SettingsRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
+    }
+
+    private function injectSqliteSettings(): void
+    {
+        $config = $this->container->make('config');
+        $settings = $this->container->make(SettingsRepository::class);
+
+        // Provider and model from SQLite override YAML defaults (env vars already resolved)
+        $sqliteProvider = $settings->get('global', 'agent.default_provider');
+        if ($sqliteProvider !== null) {
+            $config->set('kosmokrator.agent.default_provider', $sqliteProvider);
+        }
+
+        $sqliteModel = $settings->get('global', 'agent.default_model');
+        if ($sqliteModel !== null) {
+            $config->set('kosmokrator.agent.default_model', $sqliteModel);
+        }
+
+        // API key: env var takes priority, then SQLite
+        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $configKey = "prism.providers.{$provider}.api_key";
+        if (empty($config->get($configKey))) {
+            $sqliteKey = $settings->get('global', "provider.{$provider}.api_key");
+            if ($sqliteKey !== null) {
+                $config->set($configKey, $sqliteKey);
+            }
+        }
+
+        // Auto-migrate: if YAML has a key but SQLite doesn't, move it
+        $this->migrateYamlKeys($config, $settings);
+    }
+
+    private function migrateYamlKeys(Repository $config, SettingsRepository $settings): void
+    {
+        $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
+        $yamlPath = $home . '/.kosmokrator/config.yaml';
+
+        if (! file_exists($yamlPath)) {
+            return;
+        }
+
+        $yaml = \Symfony\Component\Yaml\Yaml::parseFile($yamlPath) ?? [];
+        $providers = $yaml['providers'] ?? [];
+        $migrated = false;
+
+        foreach ($providers as $name => $providerConfig) {
+            $key = $providerConfig['api_key'] ?? '';
+            if ($key === '' || str_starts_with($key, '${')) {
+                continue; // Skip empty or env var placeholders
+            }
+
+            // Only migrate if SQLite doesn't already have a key for this provider
+            if ($settings->get('global', "provider.{$name}.api_key") === null) {
+                $settings->set('global', "provider.{$name}.api_key", $key);
+                $config->set("prism.providers.{$name}.api_key", $key);
+                $migrated = true;
+            }
+
+            // Remove from YAML regardless
+            unset($yaml['providers'][$name]['api_key']);
+            if (empty($yaml['providers'][$name])) {
+                unset($yaml['providers'][$name]);
+            }
+        }
+
+        if (empty($yaml['providers'])) {
+            unset($yaml['providers']);
+        }
+
+        // Also migrate provider/model preferences
+        if (isset($yaml['agent']['default_provider']) && $settings->get('global', 'agent.default_provider') === null) {
+            $settings->set('global', 'agent.default_provider', $yaml['agent']['default_provider']);
+        }
+        if (isset($yaml['agent']['default_model']) && $settings->get('global', 'agent.default_model') === null) {
+            $settings->set('global', 'agent.default_model', $yaml['agent']['default_model']);
+        }
+
+        // Rewrite YAML without sensitive data
+        if ($migrated || ! isset($yaml['providers'])) {
+            if (empty($yaml)) {
+                @unlink($yamlPath);
+            } else {
+                file_put_contents($yamlPath, \Symfony\Component\Yaml\Yaml::dump($yaml, 4, 2));
+            }
+        }
+    }
+
     private function registerCoreServices(): void
     {
         // App instance bindings that Prism/Laravel expects
@@ -151,7 +246,7 @@ class Kernel
             provider: $config->get('kosmokrator.agent.default_provider', 'anthropic'),
             model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
             systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-            maxTokens: $config->get('kosmokrator.agent.max_tokens', 8192),
+            maxTokens: $config->get('kosmokrator.agent.max_tokens'),
             temperature: $config->get('kosmokrator.agent.temperature', 0.0),
         ));
 
@@ -161,7 +256,7 @@ class Kernel
             baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
             model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
             systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-            maxTokens: $config->get('kosmokrator.agent.max_tokens', 8192),
+            maxTokens: $config->get('kosmokrator.agent.max_tokens'),
             temperature: $config->get('kosmokrator.agent.temperature', 0.0),
             provider: $provider,
         ));
@@ -192,11 +287,7 @@ class Kernel
             return $registry;
         });
 
-        // Session persistence (SQLite)
-        $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase());
-        $this->container->singleton(SettingsRepository::class, fn () => new SettingsRepository(
-            $this->container->make(SessionDatabase::class),
-        ));
+        // Session persistence (Database + SettingsRepository registered earlier in registerDatabase)
         $this->container->singleton(SessionRepository::class, fn () => new SessionRepository(
             $this->container->make(SessionDatabase::class),
         ));

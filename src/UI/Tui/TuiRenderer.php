@@ -112,11 +112,13 @@ class TuiRenderer implements RendererInterface
         ['value' => '/plan', 'label' => '/plan', 'description' => 'Switch to plan mode (read-only)'],
         ['value' => '/ask', 'label' => '/ask', 'description' => 'Switch to ask mode (read-only, conversational)'],
         ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Auto-approve all tools until next prompt'],
+        ['value' => '/compact', 'label' => '/compact', 'description' => 'Compact conversation context'],
         ['value' => '/reset', 'label' => '/reset', 'description' => 'Clear conversation history'],
         ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
         ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
         ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
         ['value' => '/settings', 'label' => '/settings', 'description' => 'Open the settings panel'],
+        ['value' => '/resume', 'label' => '/resume', 'description' => 'Resume a previous session'],
         ['value' => '/sessions', 'label' => '/sessions', 'description' => 'List recent sessions'],
         ['value' => '/memories', 'label' => '/memories', 'description' => 'Show stored memories'],
         ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
@@ -811,6 +813,39 @@ class TuiRenderer implements RendererInterface
         $this->tui->processRender();
 
         return $changes;
+    }
+
+    public function pickSession(array $items): ?string
+    {
+        if ($items === []) {
+            return null;
+        }
+
+        $selectList = new SelectListWidget($items, maxVisible: 8);
+        $selectList->setId('session-picker');
+        $selectList->addStyleClass('slash-completion');
+
+        $this->overlay->add($selectList);
+        $this->tui->setFocus($selectList);
+        $this->tui->processRender();
+
+        $suspension = EventLoop::getSuspension();
+
+        $selectList->onSelect(function (SelectEvent $event) use ($suspension) {
+            $suspension->resume($event->getValue());
+        });
+
+        $selectList->onCancel(function () use ($suspension) {
+            $suspension->resume(null);
+        });
+
+        $result = $suspension->suspend();
+
+        $this->overlay->remove($selectList);
+        $this->tui->setFocus($this->input);
+        $this->tui->processRender();
+
+        return $result;
     }
 
     public function showWelcome(): void

@@ -37,6 +37,21 @@ class SessionRepository
         return $row ?: null;
     }
 
+    /**
+     * Find a session by ID prefix (for short-ID input).
+     */
+    public function findByPrefix(string $prefix): ?array
+    {
+        $stmt = $this->db->connection()->prepare(
+            'SELECT * FROM sessions WHERE id LIKE :prefix LIMIT 2'
+        );
+        $stmt->execute(['prefix' => $prefix . '%']);
+        $rows = $stmt->fetchAll();
+
+        // Only return if exactly one match (ambiguous prefix → null)
+        return count($rows) === 1 ? $rows[0] : null;
+    }
+
     public function updateTitle(string $id, string $title): void
     {
         $stmt = $this->db->connection()->prepare(
@@ -58,9 +73,15 @@ class SessionRepository
      */
     public function listByProject(string $project, int $limit = 20): array
     {
-        $stmt = $this->db->connection()->prepare(
-            'SELECT * FROM sessions WHERE project = :project ORDER BY updated_at DESC LIMIT :limit'
-        );
+        $stmt = $this->db->connection()->prepare('
+            SELECT s.*,
+                (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count,
+                (SELECT m.content FROM messages m WHERE m.session_id = s.id AND m.role = \'user\' ORDER BY m.id DESC LIMIT 1) AS last_user_message
+            FROM sessions s
+            WHERE s.project = :project
+            ORDER BY s.updated_at DESC
+            LIMIT :limit
+        ');
         $stmt->execute(['project' => $project, 'limit' => $limit]);
 
         return $stmt->fetchAll();

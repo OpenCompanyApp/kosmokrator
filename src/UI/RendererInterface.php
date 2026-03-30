@@ -57,5 +57,12 @@ interface RendererInterface
      */
     public function showSettings(array $currentSettings): array;
 
+    /**
+     * Show an interactive session picker. Returns selected session ID or null.
+     *
+     * @param array<array{value: string, label: string, description?: string}> $items
+     */
+    public function pickSession(array $items): ?string;
+
     public function teardown(): void;
 }

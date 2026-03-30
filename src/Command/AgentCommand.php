@@ -7,6 +7,7 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\EnvironmentContext;
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\MemoryInjector;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\LLM\AsyncLlmClient;
@@ -98,7 +99,9 @@ class AgentCommand extends Command
         $maxRounds = (int) $config->get('kosmokrator.agent.max_tool_rounds', 25);
         $taskStore = $this->container->make(TaskStore::class);
         $ui->setTaskStore($taskStore);
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager);
+        $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
+        $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log) : null;
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager, $compactor);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         // Session: resume or create new
@@ -148,6 +151,11 @@ class AgentCommand extends Command
 
             if ($command === '/clear') {
                 echo "\033[2J\033[H";
+                continue;
+            }
+
+            if ($command === '/compact') {
+                $agentLoop->performCompaction();
                 continue;
             }
 
@@ -221,6 +229,54 @@ class AgentCommand extends Command
                 continue;
             }
 
+            if ($command === '/resume' || str_starts_with($command, '/resume ')) {
+                $arg = trim(substr($input, 7));
+                $sessionId = null;
+
+                if ($arg === '') {
+                    // Interactive picker
+                    $sessions = $sessionManager->listSessions(10);
+                    if ($sessions === []) {
+                        $ui->showNotice('No sessions to resume.');
+                        continue;
+                    }
+
+                    $items = [];
+                    foreach ($sessions as $s) {
+                        $current = $s['id'] === $sessionManager->currentSessionId() ? ' (current)' : '';
+                        $msgCount = $s['message_count'] ?? 0;
+                        $age = $this->formatAge($s['updated_at'] ?? '');
+                        $preview = $s['last_user_message'] ?? $s['title'] ?? '(empty)';
+                        $preview = mb_substr(trim(str_replace("\n", ' ', $preview)), 0, 50);
+
+                        $items[] = [
+                            'value' => $s['id'],
+                            'label' => $preview . $current,
+                            'description' => "{$msgCount} msgs, {$age}",
+                        ];
+                    }
+
+                    $sessionId = $ui->pickSession($items);
+                } else {
+                    $found = $sessionManager->findSession($arg);
+                    $sessionId = $found ? $found['id'] : null;
+                    if ($sessionId === null) {
+                        $ui->showNotice("No session found matching '{$arg}'.");
+                        continue;
+                    }
+                }
+
+                if ($sessionId !== null) {
+                    $history = $sessionManager->resumeSession($sessionId);
+                    $agentLoop->setHistory($history);
+                    $permissions->resetGrants();
+                    $session = $sessionManager->findSession($sessionId);
+                    $title = $session['title'] ?? '(untitled)';
+                    $ui->showNotice("Resumed: {$title} ({$history->count()} messages)");
+                }
+                continue;
+            }
+
             if ($command === '/sessions') {
                 $sessions = $sessionManager->listSessions(10);
                 if ($sessions === []) {
@@ -228,9 +284,7 @@ class AgentCommand extends Command
                 } else {
                     $lines = [];
                     foreach ($sessions as $s) {
-                        $title = $s['title'] ?? '(untitled)';
-                        $id = substr($s['id'], 0, 8);
-                        $lines[] = "  {$id}  {$title}";
+                        $lines[] = $this->formatSessionLine($s, $sessionManager->currentSessionId());
                     }
                     $ui->showNotice("Recent sessions:\n" . implode("\n", $lines));
                 }
@@ -301,5 +355,44 @@ class AgentCommand extends Command
         if ($autoApprove === 'on') {
             $permissions->setAutoApprove(true);
         }
+    }
+
+    private function formatSessionLine(array $session, ?string $currentId): string
+    {
+        $id = substr($session['id'], 0, 8);
+        $current = $session['id'] === $currentId ? ' ←' : '';
+        $msgCount = $session['message_count'] ?? 0;
+        $age = $this->formatAge($session['updated_at'] ?? '');
+
+        // Use last user message as preview, fall back to title
+        $preview = $session['last_user_message'] ?? $session['title'] ?? null;
+        if ($preview !== null) {
+            $preview = mb_substr(trim(str_replace("\n", ' ', $preview)), 0, 60);
+        } else {
+            $preview = '(empty)';
+        }
+
+        return "  {$id}  {$preview}  ({$msgCount} msgs, {$age}){$current}";
+    }
+
+    private function formatAge(string $timestamp): string
+    {
+        if ($timestamp === '') {
+            return '?';
+        }
+
+        $seconds = time() - (int) ((float) $timestamp);
+
+        if ($seconds < 60) {
+            return 'just now';
+        }
+        if ($seconds < 3600) {
+            return (int) ($seconds / 60) . 'm ago';
+        }
+        if ($seconds < 86400) {
+            return (int) ($seconds / 3600) . 'h ago';
+        }
+
+        return (int) ($seconds / 86400) . 'd ago';
     }
 }

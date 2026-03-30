@@ -250,7 +250,11 @@ class AgentLoop
             $tool = $this->findTool($toolCall->name);
 
             if ($tool === null) {
-                $output = "Tool '{$toolCall->name}' not found.";
+                // Check if the tool exists but is blocked by mode
+                $existsInAll = null !== $this->findToolInAll($toolCall->name);
+                $output = $existsInAll
+                    ? "Tool '{$toolCall->name}' is not available in {$this->mode->label()} mode. Switch to Edit mode to use write tools."
+                    : "Tool '{$toolCall->name}' not found.";
                 $this->ui->showToolResult($toolCall->name, $output, false);
                 $results[] = new ToolResult(
                     toolCallId: $toolCall->id,
@@ -299,6 +303,17 @@ class AgentLoop
         return null;
     }
 
+    private function findToolInAll(string $name): ?Tool
+    {
+        foreach ($this->allTools as $tool) {
+            if ($tool->name() === $name) {
+                return $tool;
+            }
+        }
+
+        return null;
+    }
+
     private function getModelName(): string
     {
         return $this->llm->getProvider() . '/' . $this->llm->getModel();
@@ -337,6 +352,54 @@ class AgentLoop
     private function persistMessage(\Prism\Prism\Contracts\Message $message, int $tokensIn = 0, int $tokensOut = 0): void
     {
         $this->sessionManager?->saveMessage($message, $tokensIn, $tokensOut);
+    }
+
+    public function performCompaction(): void
+    {
+        if ($this->compactor === null) {
+            $this->log->warning('Compaction requested but no compactor configured');
+
+            return;
+        }
+
+        $this->log->info('Starting context compaction');
+        $this->ui->showNotice('Compacting context...');
+
+        try {
+            $summary = $this->compactor->compact($this->history);
+
+            if ($summary === '') {
+                $this->ui->showNotice('Nothing to compact.');
+
+                return;
+            }
+
+            // Persist compaction to database
+            $this->sessionManager?->persistCompaction($summary);
+
+            // In-memory: replace old messages with summary
+            $this->history->compact($summary);
+
+            // Save compaction summary as memory
+            if ($this->sessionManager !== null) {
+                $title = mb_substr($summary, 0, 80);
+                $this->sessionManager->addMemory('compaction', $title, $summary);
+            }
+
+            // Extract durable memories from summary (best-effort)
+            $extracted = $this->compactor->extractMemories($summary);
+            if ($this->sessionManager !== null) {
+                foreach ($extracted as $item) {
+                    $this->sessionManager->addMemory($item['type'], $item['title'], $item['content']);
+                }
+            }
+
+            $this->ui->showNotice('Context compacted.');
+            $this->log->info('Compaction complete', ['memories_extracted' => count($extracted)]);
+        } catch (\Throwable $e) {
+            $this->log->error('Compaction failed, falling back to trimOldest', ['error' => $e->getMessage()]);
+            $this->history->trimOldest();
+        }
     }
 
     private function refreshSystemPrompt(): void

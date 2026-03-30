@@ -111,9 +111,9 @@ class AnsiRenderer implements RendererInterface
         $friendly = Theme::toolLabel($name);
         $border = Theme::rgb(128, 100, 40);
 
-        // Task tools: clean formatted display
+        // Task tools: clean formatted display (no leading blank line)
         if ($this->isTaskTool($name)) {
-            echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
+            echo "{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
             $this->echoTaskToolCallArgs($name, $args, $border, $dim, $r);
             echo "\n";
 
@@ -546,7 +546,7 @@ class AnsiRenderer implements RendererInterface
                     echo " {$dim}({$count} tasks){$r}";
                     foreach ($items as $item) {
                         $subject = $item['subject'] ?? '(untitled)';
-                        echo "\n{$border}  ┃{$r}  {$dim}+{$r} {$white}{$subject}{$r}";
+                        echo "\n{$border}  ┃{$r}    {$dim}+{$r} {$white}{$subject}{$r}";
                     }
                 }
             } else {

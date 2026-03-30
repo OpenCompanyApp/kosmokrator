@@ -80,6 +80,12 @@ class KosmokratorStyleSheet
                 color: Color::hex('#ffc850'),
             ),
 
+            // Task tool calls — no top padding for compact consecutive display
+            '.task-call' => new Style(
+                padding: new Padding(0, 2, 0, 2),
+                color: Color::hex('#ffc850'),
+            ),
+
             '.tool-result' => new Style(
                 color: Color::hex('#a0a0a0'),
                 padding: new Padding(0, 3, 0, 3),

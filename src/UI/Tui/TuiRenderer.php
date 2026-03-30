@@ -475,7 +475,7 @@ class TuiRenderer implements RendererInterface
         if ($this->isTaskTool($name)) {
             $label = $this->formatTaskToolCall($name, $args, $icon, $friendly, $white, $dim, $r);
             $widget = new TextWidget($label);
-            $widget->addStyleClass('tool-call');
+            $widget->addStyleClass('task-call');
             $this->conversation->add($widget);
             $this->tui->processRender();
 
@@ -932,11 +932,11 @@ class TuiRenderer implements RendererInterface
         $tree = $this->taskStore->renderAnsiTree();
         $lines = explode("\n", $tree);
 
-        $bar = "{$border}┌ {$accent}Tasks{$r}";
+        $bar = "  {$border}┌ {$accent}Tasks{$r}";
         foreach ($lines as $line) {
-            $bar .= "\n{$border}│{$r} {$line}";
+            $bar .= "\n  {$border}│{$r} {$line}";
         }
-        $bar .= "\n{$border}└{$r}";
+        $bar .= "\n  {$border}└{$r}";
 
         $this->taskBar->setText($bar);
     }
@@ -952,10 +952,10 @@ class TuiRenderer implements RendererInterface
             if (isset($args['tasks']) && $args['tasks'] !== '') {
                 $items = json_decode($args['tasks'], true);
                 if (is_array($items)) {
-                    $lines = "{$icon} {$friendly}  {$dim}" . count($items) . " tasks{$r}";
+                    $lines = "{$icon} {$friendly} {$dim}" . count($items) . " tasks{$r}";
                     foreach ($items as $item) {
                         $subject = $item['subject'] ?? '(untitled)';
-                        $lines .= "\n  {$dim}+{$r} {$white}{$subject}{$r}";
+                        $lines .= "\n    {$dim}+{$r} {$white}{$subject}{$r}";
                     }
 
                     return $lines;
@@ -969,7 +969,7 @@ class TuiRenderer implements RendererInterface
                 $suffix = " {$dim}(under {$parentLabel}){$r}";
             }
 
-            return "{$icon} {$friendly}  {$white}{$subject}{$r}{$suffix}";
+            return "{$icon} {$friendly} {$white}{$subject}{$r}{$suffix}";
         }
 
         if ($name === 'task_update') {
@@ -987,7 +987,7 @@ class TuiRenderer implements RendererInterface
                 $statusPart = " {$dim}\u{2192}{$r} {$statusColor}{$args['status']}{$r}";
             }
 
-            return "{$icon} {$friendly}  {$white}{$subject}{$r}{$statusPart}";
+            return "{$icon} {$friendly} {$white}{$subject}{$r}{$statusPart}";
         }
 
         if ($name === 'task_get') {
@@ -995,7 +995,7 @@ class TuiRenderer implements RendererInterface
             $task = $this->taskStore?->get($id);
             $subject = $task?->subject ?? $id;
 
-            return "{$icon} {$friendly}  {$white}{$subject}{$r}";
+            return "{$icon} {$friendly} {$white}{$subject}{$r}";
         }
 
         // task_list

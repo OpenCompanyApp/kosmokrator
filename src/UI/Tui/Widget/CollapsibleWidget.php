@@ -23,6 +23,7 @@ class CollapsibleWidget extends AbstractWidget
         private string $header,
         string $content,
         private int $lineCount,
+        private ?int $previewWidth = null,
     ) {
         // Normalize tabs — TUI renderer expands them but visibleWidth may not
         $this->content = str_replace("\t", '   ', $content);
@@ -49,6 +50,16 @@ class CollapsibleWidget extends AbstractWidget
         $border = Theme::rgb(128, 100, 40);
 
         $showLines = $this->expanded ? $contentLines : array_slice($contentLines, 0, self::PREVIEW_LINES);
+        $charTruncated = false;
+
+        // Character-level truncation for single-line content when collapsed
+        if (! $this->expanded && $this->previewWidth !== null && count($contentLines) <= self::PREVIEW_LINES) {
+            if (isset($showLines[0]) && mb_strlen($showLines[0]) > $this->previewWidth) {
+                $showLines[0] = mb_substr($showLines[0], 0, $this->previewWidth) . '…';
+                $charTruncated = true;
+            }
+        }
+
         $result = [];
         foreach ($showLines as $i => $line) {
             if ($i === 0) {
@@ -61,10 +72,12 @@ class CollapsibleWidget extends AbstractWidget
                 : $indented;
         }
 
-        if (!$this->expanded) {
+        if (! $this->expanded) {
             $remaining = $total - self::PREVIEW_LINES;
             if ($remaining > 0) {
                 $result[] = "    {$dim}⊛ +{$remaining} lines (ctrl+o to reveal){$r}";
+            } elseif ($charTruncated) {
+                $result[] = "    {$dim}⊛ (ctrl+o to reveal full command){$r}";
             }
         }
 

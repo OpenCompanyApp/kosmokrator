@@ -205,7 +205,10 @@ class TaskStore
 
         $indent = str_repeat('  ', $depth);
         $icon = $task->status->icon();
-        $subject = $task->status->isTerminal() ? $dim . $task->subject : $white . $task->subject;
+        $subjectText = mb_strlen($task->subject) > 50
+            ? mb_substr($task->subject, 0, 47) . '...'
+            : $task->subject;
+        $subject = $task->status->isTerminal() ? $dim . $subjectText : $white . $subjectText;
 
         $line = "{$indent}{$statusColor}{$icon}{$r} {$subject}{$r}";
 
@@ -227,6 +230,37 @@ class TaskStore
         foreach ($this->children($task->id) as $child) {
             $this->renderAnsiNode($child, $depth + 1, $lines);
         }
+    }
+
+    /**
+     * Remove all completed tasks (and their completed children).
+     * Keeps pending and in-progress tasks intact.
+     */
+    /**
+     * Remove all terminal (completed/cancelled) tasks.
+     * Keeps pending and in-progress tasks intact.
+     */
+    public function clearTerminal(): void
+    {
+        foreach ($this->tasks as $id => $task) {
+            if ($task->status->isTerminal()) {
+                unset($this->tasks[$id]);
+            }
+        }
+    }
+
+    private function hasActiveChildren(string $taskId): bool
+    {
+        foreach ($this->children($taskId) as $child) {
+            if (! $child->status->isTerminal()) {
+                return true;
+            }
+            if ($this->hasActiveChildren($child->id)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function maybeCompleteParent(string $parentId): void

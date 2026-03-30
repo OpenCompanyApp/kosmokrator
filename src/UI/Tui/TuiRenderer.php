@@ -282,10 +282,10 @@ class TuiRenderer implements RendererInterface
             }
         });
 
-        // Assemble layout
+        // Assemble layout (bottom-up: input, taskBar, statusBar, overlay, conversation)
         $this->session->add($this->conversation);
-        $this->session->add($this->statusBar);
         $this->session->add($this->overlay);
+        $this->session->add($this->statusBar);
         $this->session->add($this->taskBar);
         $this->session->add($this->input);
 
@@ -408,7 +408,7 @@ class TuiRenderer implements RendererInterface
             $this->tui->processRender();
         });
 
-        $this->conversation->add($this->loader);
+        $this->overlay->add($this->loader);
         // Keep focus on input so user can type while thinking
         $this->tui->processRender();
     }
@@ -423,7 +423,7 @@ class TuiRenderer implements RendererInterface
         if ($this->loader !== null) {
             $this->loader->setFinishedIndicator('✓');
             $this->loader->stop();
-            $this->conversation->remove($this->loader);
+            $this->overlay->remove($this->loader);
             $this->loader = null;
         }
 
@@ -497,7 +497,8 @@ class TuiRenderer implements RendererInterface
 
         // Compact single-line display for file tools
         if (in_array($name, ['file_read', 'file_write', 'file_edit']) && isset($args['path'])) {
-            $label = "{$icon} {$friendly}  {$args['path']}";
+            $path = Theme::relativePath($args['path']);
+            $label = "{$icon} {$friendly}  {$path}";
             if (isset($args['offset'])) {
                 $label .= ":{$args['offset']}";
             }
@@ -515,8 +516,18 @@ class TuiRenderer implements RendererInterface
             $label = "{$icon} {$friendly}  " . implode('  ', $parts);
         }
 
-        $widget = new TextWidget($label);
-        $widget->addStyleClass('tool-call');
+        $maxToolCallWidth = 120;
+
+        if (mb_strlen($label) > $maxToolCallWidth) {
+            $header = "{$icon} {$friendly}";
+            $argsStr = mb_substr($label, mb_strlen($header) + 2); // strip "icon label  " prefix
+            $widget = new CollapsibleWidget($header, $argsStr, 1, $maxToolCallWidth);
+            $widget->addStyleClass('tool-call');
+        } else {
+            $widget = new TextWidget($label);
+            $widget->addStyleClass('tool-call');
+        }
+
         $this->conversation->add($widget);
         $this->tui->processRender();
     }
@@ -563,6 +574,27 @@ class TuiRenderer implements RendererInterface
 
     public function askToolPermission(string $toolName, array $args): string
     {
+        $r = Theme::reset();
+        $gold = Theme::accent();
+        $dim = Theme::dim();
+        $white = Theme::white();
+        $icon = Theme::toolIcon($toolName);
+        $friendly = Theme::toolLabel($toolName);
+
+        // Build tool call summary for context
+        $summary = "{$gold}{$icon} {$friendly}{$r}";
+        if ($toolName === 'bash' && isset($args['command'])) {
+            $cmd = mb_strlen($args['command']) > 80
+                ? mb_substr($args['command'], 0, 77) . '...'
+                : $args['command'];
+            $summary .= " {$dim}{$cmd}{$r}";
+        } elseif (isset($args['path'])) {
+            $summary .= " {$dim}" . Theme::relativePath($args['path']) . "{$r}";
+        }
+
+        $header = new TextWidget("{$gold}Allow?{$r}  {$summary}");
+        $header->addStyleClass('tool-call');
+
         $selectList = new SelectListWidget([
             ['value' => 'allow', 'label' => 'Allow', 'description' => 'Execute this tool call'],
             ['value' => 'deny', 'label' => 'Deny', 'description' => 'Block and tell the LLM'],
@@ -571,7 +603,8 @@ class TuiRenderer implements RendererInterface
         $selectList->setId('permission-prompt');
         $selectList->addStyleClass('permission-prompt');
 
-        $this->conversation->add($selectList);
+        $this->overlay->add($header);
+        $this->overlay->add($selectList);
         $this->tui->setFocus($selectList);
         $this->tui->processRender();
 
@@ -587,7 +620,8 @@ class TuiRenderer implements RendererInterface
 
         $decision = $suspension->suspend();
 
-        $this->conversation->remove($selectList);
+        $this->overlay->remove($selectList);
+        $this->overlay->remove($header);
         $this->tui->setFocus($this->input);
         $this->tui->processRender();
 
@@ -986,7 +1020,7 @@ class TuiRenderer implements RendererInterface
         return str_contains($text, "\x1b[");
     }
 
-    private function refreshTaskBar(): void
+    public function refreshTaskBar(): void
     {
         if ($this->taskStore === null || $this->taskStore->isEmpty()) {
             $this->taskBar->setText('');
@@ -1090,7 +1124,8 @@ class TuiRenderer implements RendererInterface
                     'cancelled' => "\033[38;2;255;80;60m",
                     default => $dim,
                 };
-                $statusPart = " {$dim}\u{2192}{$r} {$statusColor}{$args['status']}{$r}";
+                $label = str_replace('_', ' ', $args['status']);
+                $statusPart = " {$dim}\u{2192}{$r} {$statusColor}{$label}{$r}";
             }
 
             return "{$icon} {$friendly} {$white}{$subject}{$r}{$statusPart}";

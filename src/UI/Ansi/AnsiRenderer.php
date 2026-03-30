@@ -128,6 +128,12 @@ class AnsiRenderer implements RendererInterface
                 continue;
             }
             $display = is_string($value) ? $value : json_encode($value);
+            if ($key === 'path' || $key === 'file_path') {
+                $display = Theme::relativePath($display);
+            }
+            if (mb_strlen($display) > 100) {
+                $display = mb_substr($display, 0, 100) . '…';
+            }
             echo "\n{$border}  ┃{$r} {$dim}{$key}:{$r} {$display}";
         }
         echo "\n";

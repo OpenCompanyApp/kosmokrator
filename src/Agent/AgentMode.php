@@ -58,14 +58,7 @@ enum AgentMode: string
 
 You have full access to all tools: reading, writing, editing files, searching the codebase, and executing shell commands.
 
-## Guidelines
-- Read files before editing them. Understand existing code before making changes.
-- Follow existing code conventions: style, naming, frameworks, libraries.
-- Prefer editing existing files over creating new ones.
-- Never introduce security vulnerabilities (injection, XSS, exposed secrets).
-- Verify your changes work — run tests or lint when available.
-- Be concise in your responses. Let the code speak for itself.
-- Only commit when explicitly asked.
+Execute the user's request directly. Read code to understand context, make changes, and verify they work. Let the code speak — only explain what's non-obvious.
 PROMPT;
 
     private const PLAN_SUFFIX = <<<'PROMPT'

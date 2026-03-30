@@ -139,4 +139,17 @@ class Theme
         return '$' . number_format($cost, 2);
     }
 
+    /**
+     * Strip the current working directory prefix from a path to show relative paths.
+     */
+    public static function relativePath(string $path): string
+    {
+        $cwd = getcwd();
+        if ($cwd !== false && str_starts_with($path, $cwd . '/')) {
+            return substr($path, strlen($cwd) + 1);
+        }
+
+        return $path;
+    }
+
 }

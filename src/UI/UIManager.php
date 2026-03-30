@@ -25,6 +25,14 @@ class UIManager implements RendererInterface
         }
     }
 
+    public function refreshTaskBar(): void
+    {
+        if ($this->renderer instanceof TuiRenderer) {
+            $this->renderer->refreshTaskBar();
+        }
+        // ANSI: task bar is rendered fresh on each prompt() call, no explicit refresh needed
+    }
+
     public function getActiveRenderer(): string
     {
         return match (true) {

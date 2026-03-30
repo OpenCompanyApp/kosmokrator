@@ -140,9 +140,14 @@ class AgentCommand extends Command
 
     private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm, SessionManager $sessionManager): int
     {
+        $taskStore = $this->container->make(TaskStore::class);
         $nextInput = null;
 
         while (true) {
+            // Clear completed tasks from previous run before showing prompt
+            $taskStore->clearTerminal();
+            $ui->refreshTaskBar();
+
             $input = $nextInput ?? $ui->prompt();
             $nextInput = null;
 

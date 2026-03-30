@@ -71,6 +71,29 @@ tools:
   blocked_paths:
     - "*.env"
     - ".git/*"
+  default_permission_mode: guardian
+  guardian_safe_commands:
+    - "git *"
+    - "ls *"
+    - "pwd"
+    - "cat *"
+    - "head *"
+    - "tail *"
+    - "wc *"
+    - "find *"
+    - "which *"
+    - "echo *"
+    - "diff *"
+    - "php vendor/bin/phpunit*"
+    - "php vendor/bin/pint*"
+    - "composer *"
+    - "npm *"
+    - "npx *"
+    - "node *"
+    - "python *"
+    - "cargo *"
+    - "go *"
+    - "make *"
 
 context:
   max_output_lines: 2000

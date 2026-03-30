@@ -6,6 +6,7 @@ use Amp\Cancellation;
 use Amp\DeferredCancellation;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiIntro;
+use Kosmokrator\UI\Ansi\AnsiPrometheus;
 use Kosmokrator\UI\Ansi\AnsiTheogony;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\RendererInterface;
@@ -67,12 +68,15 @@ class TuiRenderer implements RendererInterface
     private string $currentModeLabel = 'Edit';
     private string $currentModeColor = "\033[38;2;80;200;120m";
 
+    private string $currentPermissionLabel = 'Guardian ◈';
+    private string $currentPermissionColor = "\033[38;2;180;180;200m";
+
     private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
 
     private bool $activeResponseIsAnsi = false;
 
     private const THINKING_PHRASES = [
-        '☿ Consulting the Oracle at Delphi...',
+        '◈ Consulting the Oracle at Delphi...',
         '♃ Aligning the celestial spheres...',
         '⚡ Channeling Prometheus\' fire...',
         '♄ Weaving the threads of Fate...',
@@ -83,7 +87,7 @@ class TuiRenderer implements RendererInterface
         '⚡ Summoning Athena\'s wisdom...',
         '☉ Attuning to the Music of the Spheres...',
         '♃ Gazing into the cosmic void...',
-        '☿ Unraveling the Labyrinth...',
+        '◈ Unraveling the Labyrinth...',
         '♆ Communing with the Titans...',
         '♄ Forging in Hephaestus\' workshop...',
         '☽ Scrying the heavens...',
@@ -117,7 +121,9 @@ class TuiRenderer implements RendererInterface
         ['value' => '/edit', 'label' => '/edit', 'description' => 'Switch to edit mode (full tool access)'],
         ['value' => '/plan', 'label' => '/plan', 'description' => 'Switch to plan mode (read-only)'],
         ['value' => '/ask', 'label' => '/ask', 'description' => 'Switch to ask mode (read-only, conversational)'],
-        ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Auto-approve all tools until next prompt'],
+        ['value' => '/guardian', 'label' => '/guardian', 'description' => 'Guardian mode — smart auto-approve for safe operations'],
+        ['value' => '/argus', 'label' => '/argus', 'description' => 'Argus mode — ask before every write and command'],
+        ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Prometheus mode — auto-approve all tool calls'],
         ['value' => '/compact', 'label' => '/compact', 'description' => 'Compact conversation context'],
         ['value' => '/reset', 'label' => '/reset', 'description' => 'Clear conversation history'],
         ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
@@ -167,7 +173,7 @@ class TuiRenderer implements RendererInterface
         $red = "\033[38;2;255;60;40m";
         $r = "\033[0m";
         $sep = "\033[38;5;240m·{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  Ready");
+        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  Ready");
         $this->statusBar->start(200_000, 0);
 
         // Overlay container — pinned between status bar and input, zero-height when empty
@@ -342,14 +348,66 @@ class TuiRenderer implements RendererInterface
         // Force full re-render so ScreenWriter doesn't diff against stale state
         $this->tui->requestRender(force: true);
 
-        // Now add a compact header inside the TUI conversation
-        $header = new TextWidget('⚡ KosmoKrator — Ruler of the Cosmos ⚡');
+        // Now add a compact header + tutorial inside the TUI conversation
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $white = Theme::white();
+        $gold = Theme::accent();
+        $border = Theme::primaryDim();
+        $orbit = Theme::rgb(60, 50, 70);
+        $sun = Theme::rgb(255, 220, 80);
+        $mercury = Theme::rgb(180, 180, 200);
+        $venus = Theme::rgb(255, 180, 100);
+        $earth = Theme::rgb(80, 160, 255);
+        $mars = Theme::rgb(255, 80, 60);
+        $jupiter = Theme::rgb(255, 200, 130);
+        $saturn = Theme::rgb(210, 180, 140);
+        $neptune = Theme::rgb(70, 100, 220);
+
+        $uranus = Theme::rgb(130, 210, 230);
+        $ring = Theme::rgb(80, 70, 90);
+        $ringDim = Theme::rgb(50, 45, 60);
+
+        $orrery = <<<ART
+                  {$ringDim}·  ·  ·  {$uranus}♅{$r}  {$ringDim}·  ·  ·{$r}
+              {$orbit}·{$r}        {$ring}·{$r} {$earth}♁{$r} {$ring}·{$r}        {$orbit}·{$r}
+           {$orbit}·{$r}     {$ring}·{$r}    {$ring}·{$mercury}☿{$ring}·{$r}    {$ring}·{$r}     {$orbit}·{$r}
+         {$saturn}♄{$r}   {$ring}·{$r}         {$sun}☉{$r}         {$ring}·{$r}   {$jupiter}♃{$r}
+           {$orbit}·{$r}     {$ring}·{$r}    {$ring}·{$venus}♀{$ring}·{$r}    {$ring}·{$r}     {$orbit}·{$r}
+              {$orbit}·{$r}        {$ring}·{$r} {$mars}♂{$r} {$ring}·{$r}        {$orbit}·{$r}
+                  {$ringDim}·  ·  ·  {$neptune}♆{$r}  {$ringDim}·  ·  ·{$r}
+ART;
+
+        $green = Theme::rgb(80, 200, 120);
+        $purple = Theme::rgb(160, 120, 255);
+        $orange = Theme::rgb(255, 180, 60);
+        $silver = Theme::rgb(180, 180, 200);
+        $steel = Theme::rgb(100, 140, 200);
+        $cyan = Theme::rgb(100, 200, 200);
+        $muted = Theme::rgb(160, 160, 170);
+
+        $tutorial = <<<HELP
+
+{$gold}Quick Reference{$r}
+{$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
+{$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}
+{$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}
+{$cyan}/compact{$dim}  {$cyan}/reset{$dim}  {$cyan}/resume{$r}         {$dim}Context and session management{$r}
+{$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}
+{$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
+HELP;
+
+        $header = new TextWidget("{$gold}⚡ KosmoKrator — Ruler of the Cosmos ⚡{$r}");
         $header->addStyleClass('subtitle');
         $this->conversation->add($header);
 
-        $welcome = new TextWidget('Type a message to begin. Press Ctrl+C to exit.');
-        $welcome->addStyleClass('welcome');
-        $this->conversation->add($welcome);
+        $orreryWidget = new TextWidget($orrery);
+        $orreryWidget->addStyleClass('welcome');
+        $this->conversation->add($orreryWidget);
+
+        $tutorialWidget = new TextWidget($tutorial);
+        $tutorialWidget->addStyleClass('welcome');
+        $this->conversation->add($tutorialWidget);
 
         $this->tui->processRender();
     }
@@ -622,8 +680,10 @@ class TuiRenderer implements RendererInterface
 
         $selectList = new SelectListWidget([
             ['value' => 'allow', 'label' => 'Allow', 'description' => 'Execute this tool call'],
-            ['value' => 'deny', 'label' => 'Deny', 'description' => 'Block and tell the LLM'],
             ['value' => 'always', 'label' => 'Always Allow', 'description' => 'Allow this tool for the session'],
+            ['value' => 'guardian', 'label' => "\u{2192} Guardian \u{25C8}", 'description' => 'Switch to smart auto-approve'],
+            ['value' => 'prometheus', 'label' => "\u{2192} Prometheus \u{26A1}", 'description' => 'Switch to auto-approve all'],
+            ['value' => 'deny', 'label' => 'Deny', 'description' => 'Block and tell the LLM'],
         ]);
         $selectList->setId('permission-prompt');
         $selectList->addStyleClass('permission-prompt');
@@ -651,6 +711,22 @@ class TuiRenderer implements RendererInterface
         $this->tui->processRender();
 
         return $decision;
+    }
+
+    public function showAutoApproveIndicator(string $toolName): void
+    {
+        $dim = Theme::dim();
+        $r = Theme::reset();
+        $widget = new TextWidget("{$dim}  \u{2713} auto{$r}");
+        $widget->addStyleClass('auto-approve-indicator');
+        $this->conversation->add($widget);
+        $this->tui->processRender();
+    }
+
+    public function setPermissionMode(string $label, string $color): void
+    {
+        $this->currentPermissionLabel = $label;
+        $this->currentPermissionColor = $color;
     }
 
     private function highlightFileOutput(string $output): string
@@ -765,7 +841,9 @@ class TuiRenderer implements RendererInterface
         $r = "\033[0m";
         $red = "\033[38;2;255;60;40m";
         $sep = "\033[38;5;240m·{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  Ready");
+        $permPart = in_array($label, ['Plan', 'Ask'])
+            ? '' : "  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}";
+        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}{$permPart}  {$sep}  Ready");
         $this->tui->processRender();
     }
 
@@ -802,8 +880,11 @@ class TuiRenderer implements RendererInterface
         $costColor = "\033[38;5;245m";
         $costLabel = Theme::formatCost($cost);
 
+        $permPart = in_array($this->currentModeLabel, ['Plan', 'Ask'])
+            ? '' : "  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}";
+
         $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}"
+            "{$this->currentModeColor}{$this->currentModeLabel}{$r}{$permPart}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}"
         );
         $this->tui->processRender();
     }
@@ -840,11 +921,11 @@ class TuiRenderer implements RendererInterface
                 values: ['edit', 'plan', 'ask'],
             ),
             new SettingItem(
-                id: 'auto_approve',
-                label: 'Auto-approve',
-                currentValue: $currentSettings['auto_approve'] ?? 'off',
-                description: 'Automatically approve all tool executions (Prometheus mode)',
-                values: ['off', 'on'],
+                id: 'permission_mode',
+                label: 'Permission Mode',
+                currentValue: $currentSettings['permission_mode'] ?? 'guardian',
+                description: 'Guardian (smart auto), Argus (ask all), Prometheus (approve all)',
+                values: ['guardian', 'argus', 'prometheus'],
             ),
             new SettingItem(
                 id: 'memories',
@@ -974,6 +1055,20 @@ class TuiRenderer implements RendererInterface
 
         // Pause to admire, then restore TUI
         usleep(800000);
+        echo "\033[2J\033[H";
+        $this->tui->start();
+        $this->tui->requestRender(force: true);
+        $this->tui->processRender();
+    }
+
+    public function playPrometheus(): void
+    {
+        $this->tui->stop();
+        echo "\033[2J\033[H";
+
+        $prometheus = new AnsiPrometheus();
+        $prometheus->animate();
+
         echo "\033[2J\033[H";
         $this->tui->start();
         $this->tui->requestRender(force: true);

@@ -100,4 +100,49 @@ class PermissionConfigParserTest extends TestCase
 
         $this->assertSame([], $result['blocked_paths']);
     }
+
+    public function test_parses_guardian_safe_commands(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'approval_required' => ['bash'],
+                    'guardian_safe_commands' => ['git *', 'ls *', 'pwd'],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser();
+        $result = $parser->parse($config);
+
+        $this->assertSame(['git *', 'ls *', 'pwd'], $result['guardian_safe_commands']);
+    }
+
+    public function test_parses_default_permission_mode(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'approval_required' => ['bash'],
+                    'default_permission_mode' => 'argus',
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser();
+        $result = $parser->parse($config);
+
+        $this->assertSame('argus', $result['default_permission_mode']);
+    }
+
+    public function test_defaults_when_guardian_config_missing(): void
+    {
+        $config = new Repository([]);
+
+        $parser = new PermissionConfigParser();
+        $result = $parser->parse($config);
+
+        $this->assertSame([], $result['guardian_safe_commands']);
+        $this->assertSame('guardian', $result['default_permission_mode']);
+    }
 }

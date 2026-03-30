@@ -9,6 +9,7 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\UI\RendererInterface;
 use Psr\Log\LoggerInterface;
 use Prism\Prism\Enums\FinishReason;
@@ -109,6 +110,14 @@ class AgentLoop
 
         while (true) {
             $round++;
+
+            if ($round > $this->maxToolRounds) {
+                $this->log->warning('Max tool rounds reached', ['max' => $this->maxToolRounds]);
+                $this->ui->showNotice("Reached maximum of {$this->maxToolRounds} tool rounds.");
+                $this->history->addAssistant("Stopped: maximum tool rounds reached.");
+
+                return;
+            }
 
             $this->preFlightContextCheck();
             $this->refreshSystemPrompt();
@@ -273,11 +282,13 @@ class AgentLoop
 
             // Permission check — before tool lookup/execution
             if ($this->permissions !== null) {
-                $action = $this->permissions->evaluate($toolCall->name, $toolCall->arguments());
+                $permResult = $this->permissions->evaluate($toolCall->name, $toolCall->arguments());
 
-                if ($action === PermissionAction::Deny) {
-                    $output = "Permission denied: '{$toolCall->name}' is blocked by policy. Try a different approach.";
-                    $this->log->info('Tool denied by policy', ['tool' => $toolCall->name]);
+                if ($permResult->action === PermissionAction::Deny) {
+                    $output = $permResult->reason
+                        ?? "Permission denied: '{$toolCall->name}' is blocked by policy.";
+                    $output .= ' Try a different approach.';
+                    $this->log->info('Tool denied by policy', ['tool' => $toolCall->name, 'reason' => $permResult->reason]);
                     $this->ui->showToolResult($toolCall->name, $output, false);
                     $results[] = new ToolResult(
                         toolCallId: $toolCall->id,
@@ -289,7 +300,11 @@ class AgentLoop
                     continue;
                 }
 
-                if ($action === PermissionAction::Ask) {
+                if ($permResult->autoApproved) {
+                    $this->ui->showAutoApproveIndicator($toolCall->name);
+                }
+
+                if ($permResult->action === PermissionAction::Ask) {
                     $decision = $this->ui->askToolPermission($toolCall->name, $toolCall->arguments());
 
                     if ($decision === 'deny') {
@@ -308,6 +323,16 @@ class AgentLoop
 
                     if ($decision === 'always') {
                         $this->permissions->grantSession($toolCall->name);
+                    }
+
+                    if ($decision === 'guardian') {
+                        $this->permissions->setPermissionMode(PermissionMode::Guardian);
+                        $this->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
+                    }
+
+                    if ($decision === 'prometheus') {
+                        $this->permissions->setPermissionMode(PermissionMode::Prometheus);
+                        $this->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color());
                     }
                 }
             }

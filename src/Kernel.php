@@ -30,8 +30,11 @@ use Kosmokrator\Session\MessageRepository;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionConfigParser;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Dotenv\Dotenv;
@@ -319,11 +322,19 @@ class Kernel
             $parser = new PermissionConfigParser();
             $parsed = $parser->parse($config);
 
-            return new PermissionEvaluator(
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+            $guardian = new GuardianEvaluator($projectRoot, $parsed['guardian_safe_commands']);
+            $defaultMode = PermissionMode::tryFrom($parsed['default_permission_mode']) ?? PermissionMode::Guardian;
+
+            $evaluator = new PermissionEvaluator(
                 $parsed['rules'],
                 $this->container->make(SessionGrants::class),
                 $parsed['blocked_paths'],
+                $guardian,
             );
+            $evaluator->setPermissionMode($defaultMode);
+
+            return $evaluator;
         });
     }
 

@@ -31,13 +31,23 @@ interface RendererInterface
     /**
      * Ask the user for permission to execute a tool.
      *
-     * @return string 'allow', 'deny', or 'always'
+     * @return string 'allow', 'deny', 'always', 'guardian', or 'prometheus'
      */
     public function askToolPermission(string $toolName, array $args): string;
+
+    /**
+     * Show a dimmed auto-approve indicator after a tool call line.
+     */
+    public function showAutoApproveIndicator(string $toolName): void;
 
     public function showNotice(string $message): void;
 
     public function showMode(string $label, string $color = ''): void;
+
+    /**
+     * Set the current permission mode display for the status bar.
+     */
+    public function setPermissionMode(string $label, string $color): void;
 
     /**
      * Consume a message queued during thinking.

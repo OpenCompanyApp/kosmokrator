@@ -16,6 +16,8 @@ class AnsiRenderer implements RendererInterface
     private ?Highlighter $highlighter = null;
     private array $lastToolArgs = [];
     private ?TaskStore $taskStore = null;
+    private string $currentModeLabel = 'Edit';
+    private string $currentPermissionLabel = 'Guardian ◈';
 
     public function __construct()
     {
@@ -200,7 +202,7 @@ class AnsiRenderer implements RendererInterface
         $dim = Theme::dim();
 
         while (true) {
-            $answer = readline("{$yellow}  ⟡ Allow?{$r} {$dim}[Y]es / [n]o / [a]lways ▸{$r} ");
+            $answer = readline("{$yellow}  ⟡ Allow?{$r} {$dim}[Y]es / [a]lways / [g]uardian / [p]rometheus / [n]o ▸{$r} ");
 
             if ($answer === false) {
                 return 'deny';
@@ -218,6 +220,14 @@ class AnsiRenderer implements RendererInterface
 
             if ($char === 'a') {
                 return 'always';
+            }
+
+            if ($char === 'g') {
+                return 'guardian';
+            }
+
+            if ($char === 'p') {
+                return 'prometheus';
             }
         }
     }
@@ -319,7 +329,19 @@ class AnsiRenderer implements RendererInterface
 
     public function showMode(string $label, string $color = ''): void
     {
-        // ANSI mode shows mode in the prompt prefix — no-op here
+        $this->currentModeLabel = $label;
+    }
+
+    public function setPermissionMode(string $label, string $color): void
+    {
+        $this->currentPermissionLabel = $label;
+    }
+
+    public function showAutoApproveIndicator(string $toolName): void
+    {
+        $dim = Theme::dim();
+        $r = Theme::reset();
+        echo "{$dim}  \u{2713} auto{$r}\n";
     }
 
     public function consumeQueuedMessage(): ?string
@@ -341,7 +363,10 @@ class AnsiRenderer implements RendererInterface
         $bar = Theme::contextBar($tokensIn, $maxContext);
         $costLabel = Theme::formatCost($cost);
 
-        echo "{$dim}  {$model} · {$bar} {$dim}· {$costLabel}{$r}\n\n";
+        $permPart = in_array($this->currentModeLabel, ['Plan', 'Ask'])
+            ? '' : " {$dim}{$this->currentPermissionLabel} ·";
+
+        echo "{$dim}  {$this->currentModeLabel} ·{$permPart} {$model} · {$bar} {$dim}· {$costLabel}{$r}\n\n";
     }
 
     public function showSettings(array $currentSettings): array
@@ -397,14 +422,62 @@ class AnsiRenderer implements RendererInterface
         $theogony->animate();
     }
 
+    public function playPrometheus(): void
+    {
+        $prometheus = new AnsiPrometheus();
+        $prometheus->animate();
+    }
+
     public function showWelcome(): void
     {
         $r = Theme::reset();
-        $dim = Theme::text();
+        $dim = Theme::dim();
+        $text = Theme::text();
         $white = Theme::white();
+        $gold = Theme::accent();
+        $border = Theme::primaryDim();
+        $orbit = Theme::rgb(60, 50, 70);
+        $sun = Theme::rgb(255, 220, 80);
+        $mercury = Theme::rgb(180, 180, 200);
+        $venus = Theme::rgb(255, 180, 100);
+        $earth = Theme::rgb(80, 160, 255);
+        $mars = Theme::rgb(255, 80, 60);
+        $jupiter = Theme::rgb(255, 200, 130);
+        $saturn = Theme::rgb(210, 180, 140);
+        $uranus = Theme::rgb(130, 210, 230);
+        $neptune = Theme::rgb(70, 100, 220);
+        $ring = Theme::rgb(80, 70, 90);
+        $ringDim = Theme::rgb(50, 45, 60);
 
+        // Orrery — concentric planetary orbits
         echo "\n";
-        echo $dim . '  Type a message to begin. Press ' . $white . 'Ctrl+C' . $dim . ' to exit.' . $r . "\n\n";
+        echo "                    {$ringDim}·  ·  ·  {$uranus}♅{$r}  {$ringDim}·  ·  ·{$r}\n";
+        echo "                {$orbit}·{$r}        {$ring}·{$r} {$earth}♁{$r} {$ring}·{$r}        {$orbit}·{$r}\n";
+        echo "             {$orbit}·{$r}     {$ring}·{$r}    {$ring}·{$mercury}☿{$ring}·{$r}    {$ring}·{$r}     {$orbit}·{$r}\n";
+        echo "           {$saturn}♄{$r}   {$ring}·{$r}         {$sun}☉{$r}         {$ring}·{$r}   {$jupiter}♃{$r}\n";
+        echo "             {$orbit}·{$r}     {$ring}·{$r}    {$ring}·{$venus}♀{$ring}·{$r}    {$ring}·{$r}     {$orbit}·{$r}\n";
+        echo "                {$orbit}·{$r}        {$ring}·{$r} {$mars}♂{$r} {$ring}·{$r}        {$orbit}·{$r}\n";
+        echo "                    {$ringDim}·  ·  ·  {$neptune}♆{$r}  {$ringDim}·  ·  ·{$r}\n";
+        echo "\n";
+
+        $green = Theme::rgb(80, 200, 120);
+        $purple = Theme::rgb(160, 120, 255);
+        $orange = Theme::rgb(255, 180, 60);
+        $silver = Theme::rgb(180, 180, 200);
+        $steel = Theme::rgb(100, 140, 200);
+        $cyan = Theme::rgb(100, 200, 200);
+
+        // Quick reference
+        echo "  {$gold}Quick Reference{$r}\n";
+        echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
+        echo "  {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}\n";
+        echo "  {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}\n";
+        echo "  {$cyan}/compact{$dim}  {$cyan}/reset{$dim}  {$cyan}/resume{$r}         {$dim}Context and session management{$r}\n";
+        $muted = Theme::rgb(160, 160, 170);
+        echo "  {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}\n";
+        echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
+        echo "\n";
+        echo "  {$text}Type a message to begin. Press {$white}Ctrl+C{$text} to exit.{$r}\n\n";
     }
 
     public function seedMockSession(): void

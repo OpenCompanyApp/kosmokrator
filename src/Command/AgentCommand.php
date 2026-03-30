@@ -19,6 +19,7 @@ use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
 use Psr\Log\LoggerInterface;
@@ -90,6 +91,10 @@ class AgentCommand extends Command
 
         // Load persisted settings
         $this->applyPersistedSettings($sessionManager, $llm, $permissions);
+
+        // Set initial permission mode on UI
+        $permMode = $permissions->getPermissionMode();
+        $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
 
         // Build system prompt: base + memories + instructions + environment
         $memoriesEnabled = ($sessionManager->getSetting('memories') ?? 'on') !== 'off';
@@ -184,7 +189,8 @@ class AgentCommand extends Command
                 $agentLoop->history()->clear();
                 $agentLoop->resetSessionCost();
                 $permissions->resetGrants();
-                $permissions->setAutoApprove(false);
+                $permissions->setPermissionMode(PermissionMode::Guardian);
+                $ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
                 $ui->clearConversation();
                 $modelName = $llm->getProvider() . '/' . $llm->getModel();
                 $sessionManager->createSession($modelName);
@@ -192,9 +198,28 @@ class AgentCommand extends Command
                 continue;
             }
 
+            if ($command === '/guardian') {
+                $permissions->setPermissionMode(PermissionMode::Guardian);
+                $ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
+                $sessionManager->setSetting('permission_mode', 'guardian');
+                $ui->showNotice('◈ Guardian mode — safe operations auto-approved.');
+                continue;
+            }
+
+            if ($command === '/argus') {
+                $permissions->setPermissionMode(PermissionMode::Argus);
+                $ui->setPermissionMode(PermissionMode::Argus->statusLabel(), PermissionMode::Argus->color());
+                $sessionManager->setSetting('permission_mode', 'argus');
+                $ui->showNotice('◉ Argus mode — all write operations require approval.');
+                continue;
+            }
+
             if ($command === '/prometheus') {
-                $permissions->setAutoApprove(true);
-                $ui->showNotice('⚡ Prometheus unbound — all tools auto-approved until next prompt.');
+                $ui->playPrometheus();
+                $permissions->setPermissionMode(PermissionMode::Prometheus);
+                $ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color());
+                $sessionManager->setSetting('permission_mode', 'prometheus');
+                $ui->showNotice('⚡ Prometheus unbound — all tools auto-approved.');
                 continue;
             }
 
@@ -212,7 +237,7 @@ class AgentCommand extends Command
 
                 $currentSettings = [
                     'mode' => $agentLoop->getMode()->value,
-                    'auto_approve' => $permissions->isAutoApprove() ? 'on' : 'off',
+                    'permission_mode' => $permissions->getPermissionMode()->value,
                     'memories' => $memoriesEnabled,
                     'auto_compact' => $autoCompact,
                     'compact_threshold' => (string) ($agentLoop->getCompactor()?->getCompactThresholdPercent() ?? 60),
@@ -235,9 +260,11 @@ class AgentCommand extends Command
                             $ui->showMode($mode->label(), $mode->color());
                             $sessionManager->setSetting('mode', $value);
                         })(),
-                        'auto_approve' => (function () use ($permissions, $value, $sessionManager) {
-                            $permissions->setAutoApprove($value === 'on');
-                            $sessionManager->setSetting('auto_approve', $value);
+                        'permission_mode' => (function () use ($permissions, $value, $sessionManager, $ui) {
+                            $mode = PermissionMode::from($value);
+                            $permissions->setPermissionMode($mode);
+                            $ui->setPermissionMode($mode->statusLabel(), $mode->color());
+                            $sessionManager->setSetting('permission_mode', $value);
                         })(),
                         'memories' => $sessionManager->setSetting('memories', $value),
                         'auto_compact' => $sessionManager->setSetting('auto_compact', $value),
@@ -398,7 +425,6 @@ class AgentCommand extends Command
             // Send to agent
             $ui->showUserMessage($input);
             $agentLoop->run($input);
-            $permissions->setAutoApprove(false);
 
             // Check for messages queued during thinking
             $nextInput = $ui->consumeQueuedMessage();
@@ -421,9 +447,18 @@ class AgentCommand extends Command
             $llm->setMaxTokens((int) $maxTokens);
         }
 
-        $autoApprove = $sm->getSetting('auto_approve');
-        if ($autoApprove === 'on') {
-            $permissions->setAutoApprove(true);
+        $permMode = $sm->getSetting('permission_mode');
+        if ($permMode !== null) {
+            $mode = PermissionMode::tryFrom($permMode);
+            if ($mode !== null) {
+                $permissions->setPermissionMode($mode);
+            }
+        } else {
+            // Backward compat: old auto_approve setting
+            $autoApprove = $sm->getSetting('auto_approve');
+            if ($autoApprove === 'on') {
+                $permissions->setPermissionMode(PermissionMode::Prometheus);
+            }
         }
     }
 

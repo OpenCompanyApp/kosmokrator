@@ -54,9 +54,11 @@ class UIManager implements RendererInterface
     public function showToolCall(string $name, array $args): void { $this->renderer->showToolCall($name, $args); }
     public function showToolResult(string $name, string $output, bool $success): void { $this->renderer->showToolResult($name, $output, $success); }
     public function askToolPermission(string $toolName, array $args): string { return $this->renderer->askToolPermission($toolName, $args); }
+    public function showAutoApproveIndicator(string $toolName): void { $this->renderer->showAutoApproveIndicator($toolName); }
     public function clearConversation(): void { $this->renderer->clearConversation(); }
     public function showNotice(string $message): void { $this->renderer->showNotice($message); }
     public function showMode(string $label, string $color = ''): void { $this->renderer->showMode($label, $color); }
+    public function setPermissionMode(string $label, string $color): void { $this->renderer->setPermissionMode($label, $color); }
     public function consumeQueuedMessage(): ?string { return $this->renderer->consumeQueuedMessage(); }
     public function showError(string $message): void { $this->renderer->showError($message); }
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void { $this->renderer->showStatus($model, $tokensIn, $tokensOut, $cost, $maxContext); }
@@ -86,6 +88,15 @@ class UIManager implements RendererInterface
             $this->renderer->playTheogony();
         } elseif ($this->renderer instanceof AnsiRenderer) {
             $this->renderer->playTheogony();
+        }
+    }
+
+    public function playPrometheus(): void
+    {
+        if ($this->renderer instanceof TuiRenderer) {
+            $this->renderer->playPrometheus();
+        } elseif ($this->renderer instanceof AnsiRenderer) {
+            $this->renderer->playPrometheus();
         }
     }
 

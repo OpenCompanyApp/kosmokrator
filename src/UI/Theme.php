@@ -130,4 +130,13 @@ class Theme
         return (string) $tokens;
     }
 
+    public static function formatCost(float $cost): string
+    {
+        if ($cost < 0.01) {
+            return '$' . number_format($cost, 4);
+        }
+
+        return '$' . number_format($cost, 2);
+    }
+
 }

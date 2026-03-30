@@ -30,6 +30,10 @@ class AgentLoop
 
     private AgentMode $mode = AgentMode::Edit;
 
+    private int $sessionTokensIn = 0;
+
+    private int $sessionTokensOut = 0;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -41,6 +45,8 @@ class AgentLoop
         private readonly ?TaskStore $taskStore = null,
         private readonly ?SessionManager $sessionManager = null,
         private readonly ?ContextCompactor $compactor = null,
+        private readonly ?OutputTruncator $truncator = null,
+        private readonly ?ContextPruner $pruner = null,
     ) {
         $this->history = new ConversationHistory();
         $this->maxToolRounds = $maxToolRounds;
@@ -52,6 +58,13 @@ class AgentLoop
     public function setHistory(ConversationHistory $history): void
     {
         $this->history = $history;
+
+        // Restore cumulative token totals from persisted messages
+        if ($this->sessionManager !== null) {
+            $totals = $this->sessionManager->getSessionTokenTotals();
+            $this->sessionTokensIn = $totals['tokens_in'];
+            $this->sessionTokensOut = $totals['tokens_out'];
+        }
     }
 
     /**
@@ -111,6 +124,10 @@ class AgentLoop
                 $tokensIn = $response->promptTokens;
                 $tokensOut = $response->completionTokens;
 
+                // Accumulate session-level token usage
+                $this->sessionTokensIn += $tokensIn;
+                $this->sessionTokensOut += $tokensOut;
+
                 if ($fullText !== '') {
                     $this->ui->streamChunk($fullText);
                 }
@@ -157,6 +174,14 @@ class AgentLoop
                 $this->history->addToolResults($toolResults);
                 $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
 
+                // Prune old tool results (cheap, no LLM call)
+                if ($this->pruner !== null) {
+                    $saved = $this->pruner->prune($this->history);
+                    if ($saved > 0) {
+                        $this->log->debug('Pruned old tool results', ['tokens_saved' => $saved]);
+                    }
+                }
+
                 continue;
             }
 
@@ -179,7 +204,7 @@ class AgentLoop
                 $modelName,
                 $tokensIn,
                 $tokensOut,
-                $this->estimateCost($modelName, $tokensIn, $tokensOut),
+                $this->getSessionCost(),
                 $this->getContextWindow($modelName),
             );
 
@@ -192,6 +217,35 @@ class AgentLoop
     public function history(): ConversationHistory
     {
         return $this->history;
+    }
+
+    public function getSessionCost(): float
+    {
+        return $this->estimateCost($this->getModelName(), $this->sessionTokensIn, $this->sessionTokensOut);
+    }
+
+    public function getSessionTokensIn(): int
+    {
+        return $this->sessionTokensIn;
+    }
+
+    public function getSessionTokensOut(): int
+    {
+        return $this->sessionTokensOut;
+    }
+
+    public function getPruner(): ?ContextPruner
+    {
+        return $this->pruner;
+    }
+
+    /**
+     * Reset cost accumulators (used by /reset when starting a new session).
+     */
+    public function resetSessionCost(): void
+    {
+        $this->sessionTokensIn = 0;
+        $this->sessionTokensOut = 0;
     }
 
     /**
@@ -269,6 +323,11 @@ class AgentLoop
             try {
                 $output = $tool->handle(...$toolCall->arguments());
                 $outputStr = is_string($output) ? $output : (string) $output;
+
+                if ($this->truncator !== null) {
+                    $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
+                }
+
                 $this->ui->showToolResult($toolCall->name, $outputStr, true);
                 $results[] = new ToolResult(
                     toolCallId: $toolCall->id,
@@ -366,7 +425,12 @@ class AgentLoop
         $this->ui->showNotice('Compacting context...');
 
         try {
-            $summary = $this->compactor->compact($this->history);
+            $result = $this->compactor->compact($this->history);
+            $summary = $result['summary'];
+
+            // Track compaction LLM call cost
+            $this->sessionTokensIn += $result['tokens_in'];
+            $this->sessionTokensOut += $result['tokens_out'];
 
             if ($summary === '') {
                 $this->ui->showNotice('Nothing to compact.');
@@ -387,15 +451,20 @@ class AgentLoop
             }
 
             // Extract durable memories from summary (best-effort)
-            $extracted = $this->compactor->extractMemories($summary);
+            $extraction = $this->compactor->extractMemories($summary);
+
+            // Track memory extraction LLM call cost
+            $this->sessionTokensIn += $extraction['tokens_in'];
+            $this->sessionTokensOut += $extraction['tokens_out'];
+
             if ($this->sessionManager !== null) {
-                foreach ($extracted as $item) {
+                foreach ($extraction['memories'] as $item) {
                     $this->sessionManager->addMemory($item['type'], $item['title'], $item['content']);
                 }
             }
 
             $this->ui->showNotice('Context compacted.');
-            $this->log->info('Compaction complete', ['memories_extracted' => count($extracted)]);
+            $this->log->info('Compaction complete', ['memories_extracted' => count($extraction['memories'])]);
         } catch (\Throwable $e) {
             $this->log->error('Compaction failed, falling back to trimOldest', ['error' => $e->getMessage()]);
             $this->history->trimOldest();

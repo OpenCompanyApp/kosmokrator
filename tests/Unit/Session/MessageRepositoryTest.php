@@ -159,4 +159,38 @@ class MessageRepositoryTest extends TestCase
         $this->assertSame(1500, (int) $raw[0]['tokens_in']);
         $this->assertSame(200, (int) $raw[0]['tokens_out']);
     }
+
+    public function test_sum_tokens_across_messages(): void
+    {
+        $this->messages->append($this->sessionId, 'user', 'Hello');
+        $this->messages->append($this->sessionId, 'assistant', 'Response 1', tokensIn: 1000, tokensOut: 200);
+        $this->messages->append($this->sessionId, 'user', 'Follow up');
+        $this->messages->append($this->sessionId, 'assistant', 'Response 2', tokensIn: 1500, tokensOut: 300);
+
+        $totals = $this->messages->sumTokens($this->sessionId);
+
+        $this->assertSame(2500, $totals['tokens_in']);
+        $this->assertSame(500, $totals['tokens_out']);
+    }
+
+    public function test_sum_tokens_includes_compacted(): void
+    {
+        $id1 = $this->messages->append($this->sessionId, 'assistant', 'Old', tokensIn: 800, tokensOut: 100);
+        $id2 = $this->messages->append($this->sessionId, 'assistant', 'New', tokensIn: 1200, tokensOut: 150);
+
+        $this->messages->markCompacted($this->sessionId, $id2);
+
+        $totals = $this->messages->sumTokens($this->sessionId);
+
+        $this->assertSame(2000, $totals['tokens_in']);
+        $this->assertSame(250, $totals['tokens_out']);
+    }
+
+    public function test_sum_tokens_empty_session(): void
+    {
+        $totals = $this->messages->sumTokens($this->sessionId);
+
+        $this->assertSame(0, $totals['tokens_in']);
+        $this->assertSame(0, $totals['tokens_out']);
+    }
 }

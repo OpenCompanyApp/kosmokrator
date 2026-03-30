@@ -61,7 +61,7 @@ class ContextCompactorTest extends TestCase
         $this->assertTrue($compactor->needsCompaction(108_000, 'test-model'));
     }
 
-    public function test_compact_returns_summary_string(): void
+    public function test_compact_returns_summary_and_tokens(): void
     {
         $compactor = $this->makeCompactor();
 
@@ -75,9 +75,11 @@ class ContextCompactorTest extends TestCase
         $history->addUser('Fourth question');
         $history->addAssistant('Fourth answer');
 
-        $summary = $compactor->compact($history, 2);
+        $result = $compactor->compact($history, 2);
 
-        $this->assertSame('Mocked summary', $summary);
+        $this->assertSame('Mocked summary', $result['summary']);
+        $this->assertSame(100, $result['tokens_in']);
+        $this->assertSame(50, $result['tokens_out']);
     }
 
     public function test_compact_returns_empty_when_too_few_messages(): void
@@ -87,9 +89,10 @@ class ContextCompactorTest extends TestCase
         $history = new ConversationHistory();
         $history->addUser('Only question');
 
-        $summary = $compactor->compact($history, 3);
+        $result = $compactor->compact($history, 3);
 
-        $this->assertSame('', $summary);
+        $this->assertSame('', $result['summary']);
+        $this->assertSame(0, $result['tokens_in']);
     }
 
     public function test_compact_calls_llm_with_formatted_messages(): void
@@ -127,7 +130,7 @@ class ContextCompactorTest extends TestCase
         $compactor->compact($history, 1);
     }
 
-    public function test_extract_memories_returns_valid_items(): void
+    public function test_extract_memories_returns_valid_items_and_tokens(): void
     {
         $json = json_encode([
             ['type' => 'project', 'title' => 'Uses JWT', 'content' => 'Auth uses JWT tokens'],
@@ -136,20 +139,22 @@ class ContextCompactorTest extends TestCase
 
         $compactor = $this->makeCompactor($this->createMockLlm($json));
 
-        $memories = $compactor->extractMemories('Some summary');
+        $result = $compactor->extractMemories('Some summary');
 
-        $this->assertCount(2, $memories);
-        $this->assertSame('project', $memories[0]['type']);
-        $this->assertSame('user', $memories[1]['type']);
+        $this->assertCount(2, $result['memories']);
+        $this->assertSame('project', $result['memories'][0]['type']);
+        $this->assertSame('user', $result['memories'][1]['type']);
+        $this->assertSame(100, $result['tokens_in']);
+        $this->assertSame(50, $result['tokens_out']);
     }
 
     public function test_extract_memories_returns_empty_on_invalid_json(): void
     {
         $compactor = $this->makeCompactor($this->createMockLlm('not valid json'));
 
-        $memories = $compactor->extractMemories('Some summary');
+        $result = $compactor->extractMemories('Some summary');
 
-        $this->assertSame([], $memories);
+        $this->assertSame([], $result['memories']);
     }
 
     public function test_extract_memories_filters_invalid_types(): void
@@ -162,10 +167,10 @@ class ContextCompactorTest extends TestCase
 
         $compactor = $this->makeCompactor($this->createMockLlm($json));
 
-        $memories = $compactor->extractMemories('Summary');
+        $result = $compactor->extractMemories('Summary');
 
-        $this->assertCount(1, $memories);
-        $this->assertSame('project', $memories[0]['type']);
+        $this->assertCount(1, $result['memories']);
+        $this->assertSame('project', $result['memories'][0]['type']);
     }
 
     public function test_extract_memories_returns_empty_on_exception(): void
@@ -176,8 +181,9 @@ class ContextCompactorTest extends TestCase
         $models = new ModelCatalog(['models' => [], 'default' => ['context' => 128_000, 'input_price' => 3.0, 'output_price' => 15.0]]);
         $compactor = new ContextCompactor($llm, $models, new NullLogger());
 
-        $memories = $compactor->extractMemories('Summary');
+        $result = $compactor->extractMemories('Summary');
 
-        $this->assertSame([], $memories);
+        $this->assertSame([], $result['memories']);
+        $this->assertSame(0, $result['tokens_in']);
     }
 }

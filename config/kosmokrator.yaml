@@ -34,6 +34,12 @@ tools:
     blocked_commands:
       - "rm -rf /"
 
+context:
+  max_output_lines: 2000
+  max_output_bytes: 50000
+  prune_protect: 40000
+  prune_min_savings: 20000
+
 session:
   auto_save: true
   history_dir: ~/.kosmokrator/sessions

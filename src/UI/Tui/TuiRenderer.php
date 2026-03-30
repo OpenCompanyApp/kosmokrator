@@ -25,6 +25,7 @@ use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Widget\EditorWidget;
+use Symfony\Component\Tui\Widget\InputWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
@@ -49,6 +50,8 @@ class TuiRenderer implements RendererInterface
     private EditorWidget $input;
 
     private ?CancellableLoaderWidget $loader = null;
+
+    private ?string $pendingEditorRestore = null;
 
     private ?DeferredCancellation $requestCancellation = null;
 
@@ -233,13 +236,14 @@ class TuiRenderer implements RendererInterface
                 return true;
             }
 
-            // Shift+Tab — cycle mode (submit as slash command)
+            // Shift+Tab — cycle mode (submit as slash command, preserve editor text)
             if ($kb->matches($data, 'cycle_mode') && $this->promptSuspension !== null) {
                 $nextMode = $this->cycleMode();
-                $this->input->setText('');
+                $savedText = $this->input->getText();
 
                 $suspension = $this->promptSuspension;
                 $this->promptSuspension = null;
+                $this->pendingEditorRestore = $savedText;
                 $suspension->resume("/{$nextMode}");
 
                 return true;
@@ -344,7 +348,14 @@ class TuiRenderer implements RendererInterface
 
     public function prompt(): string
     {
-        $this->input->setText('');
+        // Restore editor text if mode was cycled via Shift+Tab
+        if ($this->pendingEditorRestore !== null) {
+            $this->input->setText($this->pendingEditorRestore);
+            $this->pendingEditorRestore = null;
+        } else {
+            $this->input->setText('');
+        }
+
         $this->tui->setFocus($this->input);
         $this->promptSuspension = EventLoop::getSuspension();
 
@@ -722,9 +733,10 @@ class TuiRenderer implements RendererInterface
         $dimWhite = "\033[38;2;140;140;150m";
         $ctxColor = Theme::contextColor($ratio);
         $costColor = "\033[38;5;245m";
+        $costLabel = Theme::formatCost($cost);
 
         $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}\${$cost}{$r}"
+            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$red}KosmoKrator{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}"
         );
         $this->tui->processRender();
     }
@@ -732,6 +744,27 @@ class TuiRenderer implements RendererInterface
     public function showSettings(array $currentSettings): array
     {
         $items = [
+            new SettingItem(
+                id: 'provider',
+                label: 'Provider',
+                currentValue: $currentSettings['provider'] ?? '',
+                description: 'LLM provider — press Enter to select',
+                submenu: fn (string $current, callable $onDone) => $this->buildProviderSubmenu($current, $onDone),
+            ),
+            new SettingItem(
+                id: 'model',
+                label: 'Model',
+                currentValue: $currentSettings['model'] ?? '',
+                description: 'LLM model — press Enter to edit',
+                submenu: fn (string $current, callable $onDone) => $this->buildInputSubmenu($current, $onDone, 'Model: '),
+            ),
+            new SettingItem(
+                id: 'api_key',
+                label: 'API Key',
+                currentValue: $currentSettings['api_key'] ?? '(not set)',
+                description: 'API key for current provider — press Enter to change',
+                submenu: fn (string $current, callable $onDone) => $this->buildInputSubmenu('', $onDone, 'API Key: '),
+            ),
             new SettingItem(
                 id: 'mode',
                 label: 'Mode',
@@ -761,6 +794,20 @@ class TuiRenderer implements RendererInterface
                 values: ['on', 'off'],
             ),
             new SettingItem(
+                id: 'prune_protect',
+                label: 'Prune protect',
+                currentValue: $currentSettings['prune_protect'] ?? '40000',
+                description: 'Tokens of recent tool output to protect from pruning',
+                values: ['20000', '30000', '40000', '60000', '80000'],
+            ),
+            new SettingItem(
+                id: 'prune_min_savings',
+                label: 'Prune threshold',
+                currentValue: $currentSettings['prune_min_savings'] ?? '20000',
+                description: 'Minimum token savings required to trigger pruning',
+                values: ['10000', '20000', '30000', '50000'],
+            ),
+            new SettingItem(
                 id: 'temperature',
                 label: 'Temperature',
                 currentValue: $currentSettings['temperature'] ?? '0.0',
@@ -770,21 +817,9 @@ class TuiRenderer implements RendererInterface
             new SettingItem(
                 id: 'max_tokens',
                 label: 'Max Tokens',
-                currentValue: $currentSettings['max_tokens'] ?? '8192',
-                description: 'Maximum output tokens per LLM response',
-                values: ['2048', '4096', '8192', '16384', '32768'],
-            ),
-            new SettingItem(
-                id: 'provider',
-                label: 'Provider',
-                currentValue: $currentSettings['provider'] ?? '',
-                description: 'LLM provider (change in config)',
-            ),
-            new SettingItem(
-                id: 'model',
-                label: 'Model',
-                currentValue: $currentSettings['model'] ?? '',
-                description: 'LLM model (change in config)',
+                currentValue: $currentSettings['max_tokens'] ?? '',
+                description: 'Maximum output tokens per LLM response (empty = provider default)',
+                values: ['', '4096', '8192', '16384', '32768', '65536'],
             ),
         ];
 
@@ -974,6 +1009,42 @@ class TuiRenderer implements RendererInterface
         $bar .= "\n  {$border}└{$r}";
 
         $this->taskBar->setText($bar);
+    }
+
+    private function buildInputSubmenu(string $currentValue, callable $onDone, string $prompt): InputWidget
+    {
+        $input = new InputWidget();
+        $input->setValue($currentValue);
+        $input->setPrompt($prompt);
+
+        $input->onSubmit(function (SubmitEvent $e) use ($onDone) {
+            $onDone($e->getValue());
+        });
+        $input->onCancel(function () use ($onDone) {
+            $onDone(null);
+        });
+
+        return $input;
+    }
+
+    private function buildProviderSubmenu(string $current, callable $onDone): SelectListWidget
+    {
+        $providers = [
+            ['value' => 'anthropic', 'label' => 'anthropic', 'description' => 'Anthropic (Claude)'],
+            ['value' => 'openai', 'label' => 'openai', 'description' => 'OpenAI (GPT)'],
+            ['value' => 'gemini', 'label' => 'gemini', 'description' => 'Google Gemini'],
+            ['value' => 'deepseek', 'label' => 'deepseek', 'description' => 'DeepSeek'],
+            ['value' => 'groq', 'label' => 'groq', 'description' => 'Groq'],
+            ['value' => 'mistral', 'label' => 'mistral', 'description' => 'Mistral AI'],
+            ['value' => 'xai', 'label' => 'xai', 'description' => 'xAI (Grok)'],
+            ['value' => 'openrouter', 'label' => 'openrouter', 'description' => 'OpenRouter (multi-provider)'],
+            ['value' => 'perplexity', 'label' => 'perplexity', 'description' => 'Perplexity'],
+            ['value' => 'ollama', 'label' => 'ollama', 'description' => 'Ollama (local, no key needed)'],
+            ['value' => 'z', 'label' => 'z', 'description' => 'Z.AI coding plan'],
+            ['value' => 'z-api', 'label' => 'z-api', 'description' => 'Z.AI standard API'],
+        ];
+
+        return new SelectListWidget($providers);
     }
 
     private function isTaskTool(string $name): bool

@@ -328,8 +328,9 @@ class AnsiRenderer implements RendererInterface
         $r = Theme::reset();
         $dim = Theme::dim();
         $bar = Theme::contextBar($tokensIn, $maxContext);
+        $costLabel = Theme::formatCost($cost);
 
-        echo "{$dim}  {$model} · {$bar} {$dim}· \${$cost}{$r}\n\n";
+        echo "{$dim}  {$model} · {$bar} {$dim}· {$costLabel}{$r}\n\n";
     }
 
     public function showSettings(array $currentSettings): array

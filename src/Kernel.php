@@ -231,6 +231,15 @@ class Kernel
 
         $provider = new PrismServiceProvider($this->container);
         $provider->register();
+
+        // Register z-api as alias of z provider (same class, different config/URL)
+        $this->container->make(\Prism\Prism\PrismManager::class)->extend(
+            'z-api',
+            fn ($app, array $config) => new \Prism\Prism\Providers\Z\Z(
+                apiKey: $config['api_key'] ?? '',
+                url: $config['url'] ?? 'https://open.bigmodel.cn/api/paas/v4',
+            ),
+        );
     }
 
     private function registerFacades(): void

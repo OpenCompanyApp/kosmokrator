@@ -106,6 +106,27 @@ class MessageRepository
     }
 
     /**
+     * Sum all token usage for a session (including compacted messages).
+     *
+     * @return array{tokens_in: int, tokens_out: int}
+     */
+    public function sumTokens(string $sessionId): array
+    {
+        $stmt = $this->db->connection()->prepare(
+            'SELECT COALESCE(SUM(tokens_in), 0) AS tokens_in,
+                    COALESCE(SUM(tokens_out), 0) AS tokens_out
+             FROM messages WHERE session_id = :sid'
+        );
+        $stmt->execute(['sid' => $sessionId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        return [
+            'tokens_in' => (int) $row['tokens_in'],
+            'tokens_out' => (int) $row['tokens_out'],
+        ];
+    }
+
+    /**
      * @param ToolCall[] $toolCalls
      * @return array[]
      */

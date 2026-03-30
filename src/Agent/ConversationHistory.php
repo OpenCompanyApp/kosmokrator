@@ -91,6 +91,36 @@ class ConversationHistory
     }
 
     /**
+     * Replace specific tool results with a placeholder string.
+     *
+     * @param array<array{int, int, int}> $targets [[messageIndex, resultIndex, tokensSaved], ...]
+     */
+    public function pruneToolResults(array $targets, string $placeholder): void
+    {
+        foreach ($targets as [$msgIdx, $resultIdx, $_]) {
+            $msg = $this->messages[$msgIdx] ?? null;
+            if (! $msg instanceof ToolResultMessage) {
+                continue;
+            }
+
+            $results = $msg->toolResults;
+            if (! isset($results[$resultIdx])) {
+                continue;
+            }
+
+            $old = $results[$resultIdx];
+            $results[$resultIdx] = new ToolResult(
+                toolCallId: $old->toolCallId,
+                toolName: $old->toolName,
+                args: $old->args,
+                result: $placeholder,
+            );
+
+            $this->messages[$msgIdx] = new ToolResultMessage($results);
+        }
+    }
+
+    /**
      * Remove the oldest complete turn from history (user message + all
      * assistant/tool messages up to the next user message).
      * Returns false if there aren't enough messages to trim.

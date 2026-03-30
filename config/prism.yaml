@@ -11,6 +11,30 @@ providers:
   z:
     api_key: ${ZAI_API_KEY}
     url: https://api.z.ai/api/coding/paas/v4
+  z-api:
+    api_key: ${ZAI_API_KEY}
+    url: https://open.bigmodel.cn/api/paas/v4
+  gemini:
+    api_key: ${GEMINI_API_KEY}
+    url: https://generativelanguage.googleapis.com/v1beta
+  deepseek:
+    api_key: ${DEEPSEEK_API_KEY}
+    url: https://api.deepseek.com
+  groq:
+    api_key: ${GROQ_API_KEY}
+    url: https://api.groq.com/openai/v1
+  mistral:
+    api_key: ${MISTRAL_API_KEY}
+    url: https://api.mistral.ai/v1
+  xai:
+    api_key: ${XAI_API_KEY}
+    url: https://api.x.ai/v1
+  openrouter:
+    api_key: ${OPENROUTER_API_KEY}
+    url: https://openrouter.ai/api/v1
+  perplexity:
+    api_key: ${PERPLEXITY_API_KEY}
+    url: https://api.perplexity.ai
   ollama:
     url: http://localhost:11434/v1
 

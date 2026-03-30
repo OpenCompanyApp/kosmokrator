@@ -13,8 +13,8 @@ use Prism\Prism\Tool;
 class PrismService implements LlmClientInterface
 {
     public function __construct(
-        private readonly string $provider,
-        private readonly string $model,
+        private string $provider,
+        private string $model,
         private string $systemPrompt,
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
@@ -30,9 +30,19 @@ class PrismService implements LlmClientInterface
         return $this->provider;
     }
 
+    public function setProvider(string $provider): void
+    {
+        $this->provider = $provider;
+    }
+
     public function getModel(): string
     {
         return $this->model;
+    }
+
+    public function setModel(string $model): void
+    {
+        $this->model = $model;
     }
 
     public function getTemperature(): int|float|null

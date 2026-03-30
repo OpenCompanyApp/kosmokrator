@@ -21,13 +21,13 @@ class AsyncLlmClient implements LlmClientInterface
     private HttpClient $httpClient;
 
     public function __construct(
-        private readonly string $apiKey,
-        private readonly string $baseUrl,
-        private readonly string $model,
+        private string $apiKey,
+        private string $baseUrl,
+        private string $model,
         private string $systemPrompt,
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
-        private readonly string $provider = 'z',
+        private string $provider = 'z',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
     }
@@ -75,9 +75,29 @@ class AsyncLlmClient implements LlmClientInterface
         return $this->provider;
     }
 
+    public function setProvider(string $provider): void
+    {
+        $this->provider = $provider;
+    }
+
     public function getModel(): string
     {
         return $this->model;
+    }
+
+    public function setModel(string $model): void
+    {
+        $this->model = $model;
+    }
+
+    public function setApiKey(string $apiKey): void
+    {
+        $this->apiKey = $apiKey;
+    }
+
+    public function setBaseUrl(string $baseUrl): void
+    {
+        $this->baseUrl = $baseUrl;
     }
 
     public function getTemperature(): int|float|null

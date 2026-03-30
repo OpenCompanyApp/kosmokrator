@@ -8,13 +8,16 @@ use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\EnvironmentContext;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Agent\ContextCompactor;
+use Kosmokrator\Agent\ContextPruner;
 use Kosmokrator\Agent\MemoryInjector;
+use Kosmokrator\Agent\OutputTruncator;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
@@ -101,7 +104,17 @@ class AgentCommand extends Command
         $ui->setTaskStore($taskStore);
         $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
         $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log) : null;
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager, $compactor);
+
+        $truncator = new OutputTruncator(
+            maxLines: (int) $config->get('kosmokrator.context.max_output_lines', 2000),
+            maxBytes: (int) $config->get('kosmokrator.context.max_output_bytes', 50_000),
+        );
+
+        $pruneProtect = (int) ($sessionManager->getSetting('prune_protect') ?? $config->get('kosmokrator.context.prune_protect', 40_000));
+        $pruneMinSavings = (int) ($sessionManager->getSetting('prune_min_savings') ?? $config->get('kosmokrator.context.prune_min_savings', 20_000));
+        $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
+
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         // Session: resume or create new
@@ -161,6 +174,7 @@ class AgentCommand extends Command
 
             if ($command === '/reset') {
                 $agentLoop->history()->clear();
+                $agentLoop->resetSessionCost();
                 $permissions->resetGrants();
                 $permissions->setAutoApprove(false);
                 $modelName = $llm->getProvider() . '/' . $llm->getModel();
@@ -183,16 +197,22 @@ class AgentCommand extends Command
             if ($command === '/settings') {
                 $memoriesEnabled = $sessionManager->getSetting('memories') ?? 'on';
                 $autoCompact = $sessionManager->getSetting('auto_compact') ?? 'on';
+                $config = $this->container->make('config');
+                $settings = $this->container->make(SettingsRepository::class);
+                $currentProvider = $llm->getProvider();
 
                 $currentSettings = [
                     'mode' => $agentLoop->getMode()->value,
                     'auto_approve' => $permissions->isAutoApprove() ? 'on' : 'off',
                     'memories' => $memoriesEnabled,
                     'auto_compact' => $autoCompact,
+                    'prune_protect' => (string) ($agentLoop->getPruner()?->getProtectTokens() ?? 40000),
+                    'prune_min_savings' => (string) ($agentLoop->getPruner()?->getMinSavings() ?? 20000),
                     'temperature' => (string) ($llm->getTemperature() ?? 0.0),
-                    'max_tokens' => (string) ($llm->getMaxTokens() ?? 8192),
-                    'provider' => $llm->getProvider(),
+                    'max_tokens' => (string) ($llm->getMaxTokens() ?? ''),
+                    'provider' => $currentProvider,
                     'model' => $llm->getModel(),
+                    'api_key' => $this->maskKey($config->get("prism.providers.{$currentProvider}.api_key", '')),
                 ];
 
                 $changes = $ui->showSettings($currentSettings);
@@ -211,13 +231,49 @@ class AgentCommand extends Command
                         })(),
                         'memories' => $sessionManager->setSetting('memories', $value),
                         'auto_compact' => $sessionManager->setSetting('auto_compact', $value),
+                        'prune_protect' => (function () use ($agentLoop, $value, $sessionManager) {
+                            $agentLoop->getPruner()?->setProtectTokens((int) $value);
+                            $sessionManager->setSetting('prune_protect', $value);
+                        })(),
+                        'prune_min_savings' => (function () use ($agentLoop, $value, $sessionManager) {
+                            $agentLoop->getPruner()?->setMinSavings((int) $value);
+                            $sessionManager->setSetting('prune_min_savings', $value);
+                        })(),
                         'temperature' => (function () use ($llm, $value, $sessionManager) {
                             $llm->setTemperature((float) $value);
                             $sessionManager->setSetting('temperature', $value);
                         })(),
                         'max_tokens' => (function () use ($llm, $value, $sessionManager) {
-                            $llm->setMaxTokens((int) $value);
+                            $tokens = $value !== '' ? (int) $value : null;
+                            $llm->setMaxTokens($tokens);
                             $sessionManager->setSetting('max_tokens', $value);
+                        })(),
+                        'provider' => (function () use ($llm, $value, $config, $settings) {
+                            $llm->setProvider($value);
+                            if (method_exists($llm, 'setBaseUrl')) {
+                                $llm->setBaseUrl(rtrim($config->get("prism.providers.{$value}.url", ''), '/'));
+                            }
+                            // Load API key for new provider
+                            $key = $settings->get('global', "provider.{$value}.api_key")
+                                ?? $config->get("prism.providers.{$value}.api_key", '');
+                            if ($key !== '' && method_exists($llm, 'setApiKey')) {
+                                $llm->setApiKey($key);
+                            }
+                            $settings->set('global', 'agent.default_provider', $value);
+                        })(),
+                        'model' => (function () use ($llm, $value, $settings) {
+                            $llm->setModel($value);
+                            $settings->set('global', 'agent.default_model', $value);
+                        })(),
+                        'api_key' => (function () use ($llm, $value, $settings, $currentProvider, &$changes) {
+                            if ($value !== '') {
+                                // Use the provider from changes if it was also changed, otherwise current
+                                $provider = $changes['provider'] ?? $currentProvider;
+                                if (method_exists($llm, 'setApiKey')) {
+                                    $llm->setApiKey($value);
+                                }
+                                $settings->set('global', "provider.{$provider}.api_key", $value);
+                            }
                         })(),
                         default => null,
                     };
@@ -373,6 +429,18 @@ class AgentCommand extends Command
         }
 
         return "  {$id}  {$preview}  ({$msgCount} msgs, {$age}){$current}";
+    }
+
+    private function maskKey(string $key): string
+    {
+        if ($key === '') {
+            return '(not set)';
+        }
+        if (strlen($key) < 12) {
+            return '***';
+        }
+
+        return substr($key, 0, 8) . '...' . substr($key, -4);
     }
 
     private function formatAge(string $timestamp): string

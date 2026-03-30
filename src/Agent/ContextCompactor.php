@@ -72,15 +72,15 @@ PROMPT;
     /**
      * Summarize old messages in the conversation history.
      *
-     * @return string The summary text
+     * @return array{summary: string, tokens_in: int, tokens_out: int}
      */
-    public function compact(ConversationHistory $history, int $keepRecent = 3): string
+    public function compact(ConversationHistory $history, int $keepRecent = 3): array
     {
         $messages = $history->messages();
         $total = count($messages);
 
         if ($total <= $keepRecent) {
-            return '';
+            return ['summary' => '', 'tokens_in' => 0, 'tokens_out' => 0];
         }
 
         // Find the boundary: keep N recent user turns
@@ -97,7 +97,7 @@ PROMPT;
         }
 
         if ($keepFrom <= 0) {
-            return '';
+            return ['summary' => '', 'tokens_in' => 0, 'tokens_out' => 0];
         }
 
         // Format old messages for summarization
@@ -115,13 +115,17 @@ PROMPT;
             new UserMessage(sprintf(self::COMPACTION_USER_PROMPT, $formatted)),
         ]);
 
-        return trim($response->text);
+        return [
+            'summary' => trim($response->text),
+            'tokens_in' => $response->promptTokens,
+            'tokens_out' => $response->completionTokens,
+        ];
     }
 
     /**
      * Extract durable memories from a compaction summary.
      *
-     * @return array<array{type: string, title: string, content: string}>
+     * @return array{memories: array<array{type: string, title: string, content: string}>, tokens_in: int, tokens_out: int}
      */
     public function extractMemories(string $summary): array
     {
@@ -132,18 +136,22 @@ PROMPT;
             ]);
 
             $data = json_decode($response->text, true);
-            if (! is_array($data)) {
-                return [];
+            $memories = [];
+            if (is_array($data)) {
+                $memories = array_values(array_filter($data, fn ($item) => isset($item['type'], $item['title'], $item['content'])
+                    && in_array($item['type'], ['project', 'user', 'decision'], true)
+                ));
             }
 
-            // Validate structure
-            return array_filter($data, fn ($item) => isset($item['type'], $item['title'], $item['content'])
-                && in_array($item['type'], ['project', 'user', 'decision'], true)
-            );
+            return [
+                'memories' => $memories,
+                'tokens_in' => $response->promptTokens,
+                'tokens_out' => $response->completionTokens,
+            ];
         } catch (\Throwable $e) {
             $this->log->warning('Memory extraction failed', ['error' => $e->getMessage()]);
 
-            return [];
+            return ['memories' => [], 'tokens_in' => 0, 'tokens_out' => 0];
         }
     }
 

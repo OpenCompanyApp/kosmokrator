@@ -32,7 +32,20 @@ class SetupCommand extends Command
         echo "\n{$accent}  ⚡ KosmoKrator Setup{$r}\n\n";
 
         // Provider selection
-        $providers = ['z' => 'Z.AI (GLM-5.1)', 'anthropic' => 'Anthropic (Claude)', 'openai' => 'OpenAI (GPT)'];
+        $providers = [
+            'anthropic' => 'Anthropic (Claude)',
+            'openai' => 'OpenAI (GPT)',
+            'gemini' => 'Google Gemini',
+            'deepseek' => 'DeepSeek',
+            'groq' => 'Groq',
+            'mistral' => 'Mistral AI',
+            'xai' => 'xAI (Grok)',
+            'openrouter' => 'OpenRouter',
+            'perplexity' => 'Perplexity',
+            'ollama' => 'Ollama (local)',
+            'z' => 'Z.AI coding plan',
+            'z-api' => 'Z.AI standard API',
+        ];
         $currentProvider = $settings->get('global', 'agent.default_provider') ?? 'z';
 
         echo "{$dim}  Available providers:{$r}\n";
@@ -46,7 +59,20 @@ class SetupCommand extends Command
         $provider = trim($provider);
 
         // Model selection
-        $defaultModels = ['z' => 'GLM-5.1', 'anthropic' => 'claude-sonnet-4-20250514', 'openai' => 'gpt-4o'];
+        $defaultModels = [
+            'anthropic' => 'claude-sonnet-4-20250514',
+            'openai' => 'gpt-4o',
+            'gemini' => 'gemini-2.5-pro',
+            'deepseek' => 'deepseek-chat',
+            'groq' => 'llama-3.3-70b-versatile',
+            'mistral' => 'mistral-large-latest',
+            'xai' => 'grok-3',
+            'openrouter' => 'anthropic/claude-sonnet-4',
+            'perplexity' => 'sonar-pro',
+            'ollama' => 'llama3.1',
+            'z' => 'GLM-5.1',
+            'z-api' => 'GLM-5.1',
+        ];
         $currentModel = $settings->get('global', 'agent.default_model') ?? ($defaultModels[$provider] ?? 'GLM-5.1');
         $model = readline("{$dim}  Model [{$currentModel}]: {$r}") ?: $currentModel;
         $model = trim($model);

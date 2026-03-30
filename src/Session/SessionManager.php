@@ -188,6 +188,22 @@ class SessionManager
         $this->memories->delete($id);
     }
 
+    // --- Token totals ---
+
+    /**
+     * Get cumulative token usage for the current session.
+     *
+     * @return array{tokens_in: int, tokens_out: int}
+     */
+    public function getSessionTokenTotals(): array
+    {
+        if ($this->currentSessionId === null) {
+            return ['tokens_in' => 0, 'tokens_out' => 0];
+        }
+
+        return $this->messages->sumTokens($this->currentSessionId);
+    }
+
     // --- Compaction ---
 
     /**

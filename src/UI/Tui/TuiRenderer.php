@@ -57,6 +57,9 @@ class TuiRenderer implements RendererInterface
 
     private float $thinkingStartTime = 0.0;
     private ?string $thinkingTimerId = null;
+    private int $breathTick = 0;
+    /** @var string[] */
+    private array $activeSpinnerFrames = [];
 
     /** @var string[] */
     private array $messageQueue = [];
@@ -324,15 +327,20 @@ class TuiRenderer implements RendererInterface
         // Run the full ANSI animated intro first (before TUI takes over the screen)
         $intro = new AnsiIntro();
         if ($animated) {
-            $intro->animate();
-            // Pause to admire, then clear for TUI
-            usleep(800000);
+            $skipped = $intro->animate();
+            if (!$skipped) {
+                // Pause to admire the full animation
+                usleep(800000);
+            }
             echo "\033[2J\033[H";
         } else {
             $intro->renderStatic();
             sleep(1);
             echo "\033[2J\033[H";
         }
+
+        // Force full re-render so ScreenWriter doesn't diff against stale state
+        $this->tui->requestRender(force: true);
 
         // Now add a compact header inside the TUI conversation
         $header = new TextWidget('⚡ KosmoKrator — Ruler of the Cosmos ⚡');
@@ -384,12 +392,18 @@ class TuiRenderer implements RendererInterface
 
         $this->requestCancellation = new DeferredCancellation();
         $this->thinkingStartTime = microtime(true);
+        $this->breathTick = 0;
+
+        // Pick spinner and store its frames for trail effect
+        $spinnerNames = array_keys(self::SPINNERS);
+        $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
+        $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
+        $this->spinnerIndex++;
 
         $this->loader = new CancellableLoaderWidget($phrase);
         $this->loader->setId('loader');
-        $spinnerNames = array_keys(self::SPINNERS);
-        $this->loader->setSpinner($spinnerNames[$this->spinnerIndex % count($spinnerNames)]);
-        $this->spinnerIndex++;
+        $this->loader->setSpinner($spinnerName);
+        $this->loader->setIntervalMs(120);
         $this->loader->start();
 
         $this->loader->onCancel(function () {
@@ -398,13 +412,24 @@ class TuiRenderer implements RendererInterface
             }
         });
 
-        // Elapsed timer — update every second
-        $this->thinkingTimerId = EventLoop::repeat(1.0, function () use ($phrase) {
+        // Breathing pulse at 30fps — smooth color animation on the phrase text
+        $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
+            $this->breathTick++;
+            $r = "\033[0m";
+
+            // Slow sin wave (~3s full cycle) modulating blue tones
+            $t = sin($this->breathTick * 0.07);
+            $br = (int) (112 + 40 * $t);
+            $bg = (int) (160 + 40 * $t);
+            $bb = (int) (208 + 47 * $t);
+            $breathColor = "\033[38;2;{$br};{$bg};{$bb}m";
+
+            // Elapsed time
             $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
             $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
             $dim = "\033[38;5;245m";
-            $r = "\033[0m";
-            $this->loader?->setMessage("{$phrase} {$dim}({$formatted}){$r}");
+
+            $this->loader?->setMessage("{$breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
             $this->tui->processRender();
         });
 
@@ -715,6 +740,14 @@ class TuiRenderer implements RendererInterface
         return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
     }
 
+    public function clearConversation(): void
+    {
+        $this->conversation->clear();
+        $this->activeResponse = null;
+        $this->activeResponseIsAnsi = false;
+        $this->tui->processRender();
+    }
+
     public function showNotice(string $message): void
     {
         $widget = new TextWidget($message);
@@ -828,6 +861,13 @@ class TuiRenderer implements RendererInterface
                 values: ['on', 'off'],
             ),
             new SettingItem(
+                id: 'compact_threshold',
+                label: 'Compact threshold',
+                currentValue: $currentSettings['compact_threshold'] ?? '60',
+                description: 'Context usage % at which compaction triggers (lower = more aggressive)',
+                values: ['40', '50', '60', '70', '80'],
+            ),
+            new SettingItem(
                 id: 'prune_protect',
                 label: 'Prune protect',
                 currentValue: $currentSettings['prune_protect'] ?? '40000',
@@ -936,6 +976,7 @@ class TuiRenderer implements RendererInterface
         usleep(800000);
         echo "\033[2J\033[H";
         $this->tui->start();
+        $this->tui->requestRender(force: true);
         $this->tui->processRender();
     }
 

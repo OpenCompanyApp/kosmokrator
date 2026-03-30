@@ -68,12 +68,17 @@ tools:
     timeout: 120
     blocked_commands:
       - "rm -rf /"
+  blocked_paths:
+    - "*.env"
+    - ".git/*"
 
 context:
   max_output_lines: 2000
   max_output_bytes: 50000
   prune_protect: 40000
   prune_min_savings: 20000
+  compact_threshold: 60
+  memory_warning_mb: 50
 
 session:
   auto_save: true

@@ -14,7 +14,7 @@ use Psr\Log\LoggerInterface;
 
 class ContextCompactor
 {
-    private const BUFFER_TOKENS = 20_000;
+    private const DEFAULT_COMPACT_THRESHOLD_PERCENT = 60;
 
     private const COMPACTION_SYSTEM_PROMPT = 'You are a conversation summarizer. Summarize the conversation below for a continuation agent. Do not respond to questions in the conversation — only output the summary.';
 
@@ -58,15 +58,30 @@ PROMPT;
         private readonly LlmClientInterface $llm,
         private readonly ModelCatalog $models,
         private readonly LoggerInterface $log,
-        private int $bufferTokens = self::BUFFER_TOKENS,
+        private int $compactThresholdPercent = self::DEFAULT_COMPACT_THRESHOLD_PERCENT,
     ) {
     }
 
     public function needsCompaction(int $promptTokens, string $model): bool
     {
+        return $promptTokens >= $this->getThresholdTokens($model);
+    }
+
+    public function getThresholdTokens(string $model): int
+    {
         $contextWindow = $this->models->contextWindow($model);
 
-        return $promptTokens >= ($contextWindow - $this->bufferTokens);
+        return (int) ($contextWindow * $this->compactThresholdPercent / 100);
+    }
+
+    public function getCompactThresholdPercent(): int
+    {
+        return $this->compactThresholdPercent;
+    }
+
+    public function setCompactThresholdPercent(int $percent): void
+    {
+        $this->compactThresholdPercent = $percent;
     }
 
     /**

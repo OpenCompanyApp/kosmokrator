@@ -47,6 +47,7 @@ class AgentLoop
         private readonly ?ContextCompactor $compactor = null,
         private readonly ?OutputTruncator $truncator = null,
         private readonly ?ContextPruner $pruner = null,
+        private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
     ) {
         $this->history = new ConversationHistory();
         $this->maxToolRounds = $maxToolRounds;
@@ -109,6 +110,7 @@ class AgentLoop
         while (true) {
             $round++;
 
+            $this->preFlightContextCheck();
             $this->refreshSystemPrompt();
             $this->ui->showThinking();
 
@@ -182,6 +184,8 @@ class AgentLoop
                     }
                 }
 
+                $this->logMemoryUsage();
+
                 continue;
             }
 
@@ -198,6 +202,8 @@ class AgentLoop
             if ($this->compactor !== null && $this->compactor->needsCompaction($tokensIn, $this->getModelName())) {
                 $this->performCompaction();
             }
+
+            $this->logMemoryUsage();
 
             $modelName = $this->getModelName();
             $this->ui->showStatus(
@@ -237,6 +243,11 @@ class AgentLoop
     public function getPruner(): ?ContextPruner
     {
         return $this->pruner;
+    }
+
+    public function getCompactor(): ?ContextCompactor
+    {
+        return $this->compactor;
     }
 
     /**
@@ -406,6 +417,53 @@ class AgentLoop
             || str_contains($message, 'context length')
             || str_contains($message, 'too long')
             || str_contains($message, 'token limit');
+    }
+
+    private function preFlightContextCheck(): void
+    {
+        if ($this->compactor === null && $this->pruner === null) {
+            return;
+        }
+
+        $estimated = TokenEstimator::estimateMessages($this->history->messages());
+        $modelName = $this->getModelName();
+
+        // Use compactor's configurable threshold; fall back to 80% for pruner-only mode
+        if ($this->compactor !== null) {
+            $threshold = $this->compactor->getThresholdTokens($modelName);
+        } else {
+            $threshold = (int) ($this->getContextWindow($modelName) * 0.8);
+        }
+
+        if ($estimated < $threshold) {
+            return;
+        }
+
+        $this->log->info('Pre-flight context check: estimated tokens exceed threshold', [
+            'estimated' => $estimated,
+            'threshold' => $threshold,
+        ]);
+
+        if ($this->compactor !== null) {
+            $this->performCompaction();
+        } else {
+            $this->history->trimOldest();
+        }
+    }
+
+    private function logMemoryUsage(): void
+    {
+        $usage = memory_get_usage(true);
+        $usageMB = round($usage / 1024 / 1024, 1);
+
+        $this->log->debug('Memory usage', ['mb' => $usageMB]);
+
+        if ($usage > $this->memoryWarningThreshold) {
+            $this->log->warning('High memory usage', [
+                'usage_mb' => $usageMB,
+                'threshold_mb' => round($this->memoryWarningThreshold / 1024 / 1024, 1),
+            ]);
+        }
     }
 
     private function persistMessage(\Prism\Prism\Contracts\Message $message, int $tokensIn = 0, int $tokensOut = 0): void

@@ -45,6 +45,8 @@ interface RendererInterface
      */
     public function consumeQueuedMessage(): ?string;
 
+    public function clearConversation(): void;
+
     public function showError(string $message): void;
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void;

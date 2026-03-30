@@ -103,7 +103,9 @@ class AgentCommand extends Command
         $taskStore = $this->container->make(TaskStore::class);
         $ui->setTaskStore($taskStore);
         $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
-        $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log) : null;
+        $compactThreshold = (int) ($sessionManager->getSetting('compact_threshold')
+            ?? $config->get('kosmokrator.context.compact_threshold', 60));
+        $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log, $compactThreshold) : null;
 
         $truncator = new OutputTruncator(
             maxLines: (int) $config->get('kosmokrator.context.max_output_lines', 2000),
@@ -114,7 +116,8 @@ class AgentCommand extends Command
         $pruneMinSavings = (int) ($sessionManager->getSetting('prune_min_savings') ?? $config->get('kosmokrator.context.prune_min_savings', 20_000));
         $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
 
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner);
+        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $maxRounds, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $memoryWarningThreshold);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         // Session: resume or create new
@@ -182,6 +185,7 @@ class AgentCommand extends Command
                 $agentLoop->resetSessionCost();
                 $permissions->resetGrants();
                 $permissions->setAutoApprove(false);
+                $ui->clearConversation();
                 $modelName = $llm->getProvider() . '/' . $llm->getModel();
                 $sessionManager->createSession($modelName);
                 $ui->showNotice('Conversation cleared. New session started.');
@@ -211,6 +215,7 @@ class AgentCommand extends Command
                     'auto_approve' => $permissions->isAutoApprove() ? 'on' : 'off',
                     'memories' => $memoriesEnabled,
                     'auto_compact' => $autoCompact,
+                    'compact_threshold' => (string) ($agentLoop->getCompactor()?->getCompactThresholdPercent() ?? 60),
                     'prune_protect' => (string) ($agentLoop->getPruner()?->getProtectTokens() ?? 40000),
                     'prune_min_savings' => (string) ($agentLoop->getPruner()?->getMinSavings() ?? 20000),
                     'temperature' => (string) ($llm->getTemperature() ?? 0.0),
@@ -236,6 +241,10 @@ class AgentCommand extends Command
                         })(),
                         'memories' => $sessionManager->setSetting('memories', $value),
                         'auto_compact' => $sessionManager->setSetting('auto_compact', $value),
+                        'compact_threshold' => (function () use ($agentLoop, $value, $sessionManager) {
+                            $agentLoop->getCompactor()?->setCompactThresholdPercent((int) $value);
+                            $sessionManager->setSetting('compact_threshold', $value);
+                        })(),
                         'prune_protect' => (function () use ($agentLoop, $value, $sessionManager) {
                             $agentLoop->getPruner()?->setProtectTokens((int) $value);
                             $sessionManager->setSetting('prune_protect', $value);

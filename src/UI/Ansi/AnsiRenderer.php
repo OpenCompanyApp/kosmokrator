@@ -305,6 +305,11 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    public function clearConversation(): void
+    {
+        // ANSI renderer prints directly to stdout, no widget tree to clear
+    }
+
     public function showNotice(string $message): void
     {
         $r = Theme::reset();

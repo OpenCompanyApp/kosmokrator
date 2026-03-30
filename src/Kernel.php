@@ -317,9 +317,13 @@ class Kernel
         $this->container->singleton(SessionGrants::class);
         $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
             $parser = new PermissionConfigParser();
-            $rules = $parser->parse($config);
+            $parsed = $parser->parse($config);
 
-            return new PermissionEvaluator($rules, $this->container->make(SessionGrants::class));
+            return new PermissionEvaluator(
+                $parsed['rules'],
+                $this->container->make(SessionGrants::class),
+                $parsed['blocked_paths'],
+            );
         });
     }
 

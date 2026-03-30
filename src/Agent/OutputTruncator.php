@@ -19,6 +19,31 @@ class OutputTruncator
             $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
             $this->storagePath = $home . '/.kosmokrator/data/truncations';
         }
+
+        $this->cleanupOldFiles();
+    }
+
+    /**
+     * Delete truncation files older than the given age.
+     */
+    public function cleanupOldFiles(int $maxAgeSeconds = 86400): void
+    {
+        if (! is_dir($this->storagePath)) {
+            return;
+        }
+
+        $cutoff = time() - $maxAgeSeconds;
+        $files = glob($this->storagePath . '/tool_*.txt');
+
+        if ($files === false) {
+            return;
+        }
+
+        foreach ($files as $file) {
+            if (filemtime($file) < $cutoff) {
+                @unlink($file);
+            }
+        }
     }
 
     /**

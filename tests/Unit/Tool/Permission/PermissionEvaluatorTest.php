@@ -147,4 +147,70 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('bash', ['command' => 'rm -rf .']));
         $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'rm file.txt']));
     }
+
+    // --- Blocked paths ---
+
+    public function test_blocked_path_denies_file_read(): void
+    {
+        $evaluator = new PermissionEvaluator([], $this->grants, ['*.env', '.git/*']);
+
+        $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_read', ['path' => '/app/.env']));
+    }
+
+    public function test_blocked_path_denies_file_write(): void
+    {
+        $rules = [new PermissionRule('file_write', PermissionAction::Ask)];
+        $evaluator = new PermissionEvaluator($rules, $this->grants, ['*.env']);
+
+        $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_write', ['path' => '.env', 'content' => 'SECRET=x']));
+    }
+
+    public function test_blocked_path_denies_file_edit(): void
+    {
+        $rules = [new PermissionRule('file_edit', PermissionAction::Ask)];
+        $evaluator = new PermissionEvaluator($rules, $this->grants, ['.git/*']);
+
+        $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_edit', ['path' => '.git/config', 'old_string' => 'a', 'new_string' => 'b']));
+    }
+
+    public function test_blocked_path_matches_basename(): void
+    {
+        $evaluator = new PermissionEvaluator([], $this->grants, ['*.env']);
+
+        $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_read', ['path' => '/deeply/nested/.env']));
+    }
+
+    public function test_blocked_path_does_not_match_safe_paths(): void
+    {
+        $evaluator = new PermissionEvaluator([], $this->grants, ['*.env', '.git/*']);
+
+        $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('file_read', ['path' => 'src/App.php']));
+        $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('grep', ['pattern' => 'foo', 'path' => 'src/']));
+    }
+
+    public function test_blocked_path_overrides_session_grant(): void
+    {
+        $rules = [new PermissionRule('file_read', PermissionAction::Ask)];
+        $evaluator = new PermissionEvaluator($rules, $this->grants, ['*.env']);
+        $evaluator->grantSession('file_read');
+
+        $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_read', ['path' => '.env']));
+    }
+
+    public function test_blocked_path_overrides_auto_approve(): void
+    {
+        $evaluator = new PermissionEvaluator([], $this->grants, ['*.env']);
+        $evaluator->setAutoApprove(true);
+
+        $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_read', ['path' => '.env']));
+    }
+
+    public function test_tool_without_path_arg_unaffected_by_blocked_paths(): void
+    {
+        $rules = [new PermissionRule('bash', PermissionAction::Ask)];
+        $evaluator = new PermissionEvaluator($rules, $this->grants, ['*.env']);
+
+        // bash has 'command' not 'path', so blocked_paths should not affect it
+        $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'cat .env']));
+    }
 }

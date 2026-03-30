@@ -21,7 +21,8 @@ class PermissionConfigParserTest extends TestCase
         ]);
 
         $parser = new PermissionConfigParser();
-        $rules = $parser->parse($config);
+        $result = $parser->parse($config);
+        $rules = $result['rules'];
 
         $this->assertCount(3, $rules);
         $this->assertSame('file_write', $rules[0]->toolName);
@@ -48,7 +49,8 @@ class PermissionConfigParserTest extends TestCase
         ]);
 
         $parser = new PermissionConfigParser();
-        $rules = $parser->parse($config);
+        $result = $parser->parse($config);
+        $rules = $result['rules'];
 
         $this->assertCount(1, $rules);
         $this->assertSame('bash', $rules[0]->toolName);
@@ -60,8 +62,42 @@ class PermissionConfigParserTest extends TestCase
         $config = new Repository([]);
 
         $parser = new PermissionConfigParser();
-        $rules = $parser->parse($config);
+        $result = $parser->parse($config);
 
-        $this->assertSame([], $rules);
+        $this->assertSame([], $result['rules']);
+        $this->assertSame([], $result['blocked_paths']);
+    }
+
+    public function test_parses_blocked_paths(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'approval_required' => ['bash'],
+                    'blocked_paths' => ['*.env', '.git/*', '/etc/*'],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser();
+        $result = $parser->parse($config);
+
+        $this->assertSame(['*.env', '.git/*', '/etc/*'], $result['blocked_paths']);
+    }
+
+    public function test_missing_blocked_paths_defaults_to_empty(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'approval_required' => ['bash'],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser();
+        $result = $parser->parse($config);
+
+        $this->assertSame([], $result['blocked_paths']);
     }
 }

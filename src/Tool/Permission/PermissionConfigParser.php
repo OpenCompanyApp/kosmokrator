@@ -7,7 +7,7 @@ use Illuminate\Config\Repository;
 class PermissionConfigParser
 {
     /**
-     * @return PermissionRule[]
+     * @return array{rules: PermissionRule[], blocked_paths: string[]}
      */
     public function parse(Repository $config): array
     {
@@ -15,6 +15,7 @@ class PermissionConfigParser
 
         $approvalRequired = $config->get('kosmokrator.tools.approval_required', []);
         $blockedCommands = $config->get('kosmokrator.tools.bash.blocked_commands', []);
+        $blockedPaths = $config->get('kosmokrator.tools.blocked_paths', []);
 
         foreach ($approvalRequired as $toolName) {
             $denyPatterns = ($toolName === 'bash') ? $blockedCommands : [];
@@ -26,6 +27,6 @@ class PermissionConfigParser
             );
         }
 
-        return $rules;
+        return ['rules' => $rules, 'blocked_paths' => $blockedPaths];
     }
 }

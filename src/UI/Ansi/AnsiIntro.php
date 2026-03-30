@@ -17,7 +17,10 @@ class AnsiIntro
 
     private ?string $originalTtyMode = null;
 
-    public function animate(): void
+    /**
+     * @return bool true if the animation was skipped by a keypress
+     */
+    public function animate(): bool
     {
         $this->termWidth = (int) exec('tput cols') ?: 120;
         $this->termHeight = (int) exec('tput lines') ?: 30;
@@ -68,6 +71,8 @@ class AnsiIntro
 
         echo Theme::moveTo($this->termHeight, 1);
         echo Theme::showCursor();
+
+        return $this->skipped;
     }
 
     /**

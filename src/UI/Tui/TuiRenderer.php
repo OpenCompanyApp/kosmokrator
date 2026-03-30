@@ -850,25 +850,128 @@ HELP;
         $r = Theme::reset();
         $dim = Theme::dim();
         $white = Theme::white();
+        $text = Theme::text();
 
+        // Index tool results by toolCallId for pairing with tool calls
+        $resultsByCallId = [];
         foreach ($messages as $msg) {
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
-                $text = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
-                $widget = new TextWidget("{$white}⟡ {$text}{$r}");
-                $widget->addStyleClass('user-message');
-                $this->conversation->add($widget);
-            } elseif ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
-                if ($msg->content !== '') {
-                    $preview = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
-                    if (mb_strlen($msg->content) > 120) {
-                        $preview .= '…';
-                    }
-                    $widget = new TextWidget("{$dim}{$preview}{$r}");
-                    $widget->addStyleClass('response');
-                    $this->conversation->add($widget);
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+                foreach ($msg->toolResults as $toolResult) {
+                    $resultsByCallId[$toolResult->toolCallId] = $toolResult;
                 }
             }
-            // Skip tool result messages — too noisy for replay
+        }
+
+        foreach ($messages as $msg) {
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\SystemMessage
+                || $msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+                continue; // Results are rendered inline with their tool calls
+            }
+
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
+                $widget = new TextWidget('⟡ ' . $msg->content);
+                $widget->addStyleClass('user-message');
+                $this->conversation->add($widget);
+                continue;
+            }
+
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+                // Text content
+                if ($msg->content !== '') {
+                    if ($this->containsAnsiEscapes($msg->content)) {
+                        $widget = new AnsiArtWidget($msg->content);
+                        $widget->addStyleClass('ansi-art');
+                    } else {
+                        $widget = new MarkdownWidget($msg->content);
+                        $widget->addStyleClass('response');
+                    }
+                    $this->conversation->add($widget);
+                }
+
+                // Tool calls — each paired with its result
+                foreach ($msg->toolCalls as $toolCall) {
+                    $name = $toolCall->name;
+                    $args = $toolCall->arguments();
+
+                    if ($this->isTaskTool($name)) {
+                        if ($name === 'task_create') {
+                            $icon = Theme::toolIcon($name);
+                            $friendly = Theme::toolLabel($name);
+                            $label = $this->formatTaskToolCall($name, $args, $icon, $friendly, $white, $dim, $r);
+                            if ($label !== null) {
+                                $w = new TextWidget($label);
+                                $w->addStyleClass('task-call');
+                                $this->conversation->add($w);
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Render tool call line
+                    $icon = Theme::toolIcon($name);
+                    $friendly = Theme::toolLabel($name);
+
+                    if (in_array($name, ['file_read', 'file_write', 'file_edit']) && isset($args['path'])) {
+                        $path = Theme::relativePath($args['path']);
+                        $label = "{$icon} {$friendly}  {$path}";
+                        if (isset($args['offset'])) {
+                            $label .= ":{$args['offset']}";
+                        }
+                    } else {
+                        $skipKeys = ['content', 'old_string', 'new_string'];
+                        $parts = [];
+                        foreach ($args as $key => $value) {
+                            if (in_array($key, $skipKeys, true)) {
+                                continue;
+                            }
+                            $display = is_string($value) ? $value : json_encode($value);
+                            $parts[] = "{$key}: {$display}";
+                        }
+                        $label = "{$icon} {$friendly}  " . implode('  ', $parts);
+                    }
+
+                    $maxWidth = 120;
+                    if (mb_strlen($label) > $maxWidth) {
+                        $header = "{$icon} {$friendly}";
+                        $argsStr = mb_substr($label, mb_strlen($header) + 2);
+                        $w = new CollapsibleWidget($header, $argsStr, 1, $maxWidth);
+                        $w->addStyleClass('tool-call');
+                    } else {
+                        $w = new TextWidget($label);
+                        $w->addStyleClass('tool-call');
+                    }
+                    $this->conversation->add($w);
+
+                    // Render paired result immediately after the call
+                    $toolResult = $resultsByCallId[$toolCall->id] ?? null;
+                    if ($toolResult !== null) {
+                        $this->lastToolArgs = $toolResult->args;
+                        $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
+                        $statusColor = Theme::success();
+                        $resultHeader = "{$statusColor}✓{$r}";
+
+                        if ($name === 'file_edit' && isset($toolResult->args['old_string'])) {
+                            $content = $this->buildDiffView(
+                                $toolResult->args['old_string'],
+                                $toolResult->args['new_string'] ?? '',
+                                $toolResult->args['path'] ?? '',
+                            );
+                            $lineCount = count(explode("\n", $content));
+                        } elseif ($name === 'file_read') {
+                            $content = $this->highlightFileOutput($output);
+                            $lineCount = count(explode("\n", $output));
+                        } else {
+                            $content = implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $output)));
+                            $lineCount = count(explode("\n", $output));
+                        }
+
+                        $rw = new CollapsibleWidget($resultHeader, $content, $lineCount);
+                        $rw->addStyleClass('tool-result');
+                        $this->conversation->add($rw);
+                    }
+                }
+                continue;
+            }
         }
 
         $this->tui->requestRender();

@@ -326,20 +326,68 @@ class AnsiRenderer implements RendererInterface
         $r = Theme::reset();
         $dim = Theme::dim();
         $white = Theme::white();
+        $gold = Theme::accent();
         $border = Theme::rgb(128, 100, 40);
 
+        // Index tool results by toolCallId for pairing
+        $resultsByCallId = [];
         foreach ($messages as $msg) {
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
-                $text = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
-                echo "\n  {$white}⟡ {$text}{$r}\n";
-            } elseif ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
-                if ($msg->content !== '') {
-                    $preview = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
-                    if (mb_strlen($msg->content) > 120) {
-                        $preview .= '…';
-                    }
-                    echo "  {$dim}{$preview}{$r}\n";
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+                foreach ($msg->toolResults as $toolResult) {
+                    $resultsByCallId[$toolResult->toolCallId] = $toolResult;
                 }
+            }
+        }
+
+        foreach ($messages as $msg) {
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\SystemMessage
+                || $msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+                continue;
+            }
+
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
+                echo "\n  {$white}⟡ {$msg->content}{$r}\n";
+                continue;
+            }
+
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+                if ($msg->content !== '') {
+                    if (str_contains($msg->content, "\x1b[")) {
+                        echo "\n" . $msg->content . $r . "\n";
+                    } else {
+                        echo $this->getMarkdownRenderer()->render($msg->content);
+                    }
+                }
+
+                foreach ($msg->toolCalls as $toolCall) {
+                    $name = $toolCall->name;
+                    $args = $toolCall->arguments();
+
+                    if ($this->isTaskTool($name)) {
+                        if ($name === 'task_create') {
+                            $icon = Theme::toolIcon($name);
+                            $friendly = Theme::toolLabel($name);
+                            $label = $this->formatTaskToolCallLabel($name, $args, $icon, $friendly, $dim, $r);
+                            if ($label !== null) {
+                                echo "{$border}  ┃ {$gold}{$label}{$r}\n";
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Render tool call
+                    $this->lastToolArgs = $args;
+                    $this->showToolCall($name, $args);
+
+                    // Render paired result immediately after
+                    $toolResult = $resultsByCallId[$toolCall->id] ?? null;
+                    if ($toolResult !== null) {
+                        $this->lastToolArgs = $toolResult->args;
+                        $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
+                        $this->showToolResult($name, $output, true);
+                    }
+                }
+                continue;
             }
         }
         echo "\n";

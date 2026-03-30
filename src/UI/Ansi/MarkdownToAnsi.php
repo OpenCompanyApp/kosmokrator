@@ -223,9 +223,20 @@ class MarkdownToAnsi
         $label = $language !== '' ? $dim . '── ' . $language . ' ' : $dim;
         $this->output .= $indent . $label . str_repeat('─', 20) . $r . "\n";
 
-        // Code lines
+        // Code lines — wrap long lines to prevent terminal clipping
+        $indentWidth = AnsiTableRenderer::visibleWidth($indent);
+        $prefixWidth = 2; // "│ "
+        $available = max(40, $this->termWidth - $indentWidth - $prefixWidth);
+
         foreach ($lines as $line) {
-            $this->output .= $indent . $dim . '│' . $r . ' ' . $line . $r . "\n";
+            if (AnsiTableRenderer::visibleWidth($line) > $available) {
+                $wrapped = $this->wrapCodeLine($line, $available);
+                foreach ($wrapped as $wl) {
+                    $this->output .= $indent . $dim . '│' . $r . ' ' . $wl . $r . "\n";
+                }
+            } else {
+                $this->output .= $indent . $dim . '│' . $r . ' ' . $line . $r . "\n";
+            }
         }
 
         // Bottom border
@@ -529,6 +540,61 @@ class MarkdownToAnsi
 
         if ($currentLine !== '') {
             $lines[] = rtrim($currentLine);
+        }
+
+        return $lines ?: [''];
+    }
+
+    /**
+     * Wrap a single code line at a character boundary, preserving ANSI codes.
+     *
+     * @return list<string>
+     */
+    private function wrapCodeLine(string $line, int $width): array
+    {
+        $stripped = preg_replace('/\033\[[0-9;]*m/', '', $line);
+        $visibleLen = mb_strwidth($stripped);
+
+        if ($visibleLen <= $width) {
+            return [$line];
+        }
+
+        // Walk through the string, tracking visible width and collecting ANSI codes
+        $lines = [];
+        $current = '';
+        $currentWidth = 0;
+        $i = 0;
+        $len = strlen($line);
+
+        while ($i < $len) {
+            // Check for ANSI escape sequence
+            if ($line[$i] === "\033" && $i + 1 < $len && $line[$i + 1] === '[') {
+                $end = strpos($line, 'm', $i);
+                if ($end !== false) {
+                    $current .= substr($line, $i, $end - $i + 1);
+                    $i = $end + 1;
+                    continue;
+                }
+            }
+
+            $char = mb_substr(substr($line, $i), 0, 1);
+            $charWidth = mb_strwidth($char);
+            $charBytes = strlen($char);
+
+            if ($currentWidth + $charWidth > $width) {
+                $lines[] = $current;
+                $current = $char;
+                $currentWidth = $charWidth;
+            } else {
+                $current .= $char;
+                $currentWidth += $charWidth;
+            }
+
+            $i += $charBytes;
+        }
+
+        if ($current !== '') {
+            $lines[] = $current;
         }
 
         return $lines ?: [''];

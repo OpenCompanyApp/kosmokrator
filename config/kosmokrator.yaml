@@ -35,6 +35,7 @@ agent:
     - **Search before assuming** — use `grep` and `glob` to find existing implementations, utilities, and patterns before creating new ones. Never assume a library is available — check first.
     - **bash for commands only** — use bash for shell commands (git, tests, builds). Never use it for file operations that have dedicated tools.
     - **Don't create unnecessary files** — prefer editing existing files to creating new ones. This prevents file bloat and builds on existing work.
+    - **Batch independent calls** — when you need multiple reads, searches, or commands that don't depend on each other, make them all in one response. They execute concurrently.
 
     # Safety
 

@@ -3,6 +3,8 @@
 namespace Kosmokrator\Agent;
 
 use Amp\CancelledException;
+
+use function Amp\async;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
@@ -45,6 +47,7 @@ class AgentLoop
         private readonly ?ContextCompactor $compactor = null,
         private readonly ?OutputTruncator $truncator = null,
         private readonly ?ContextPruner $pruner = null,
+        private readonly ?ToolResultDeduplicator $deduplicator = null,
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
     ) {
         $this->history = new ConversationHistory();
@@ -173,6 +176,14 @@ class AgentLoop
                 $this->history->addToolResults($toolResults);
                 $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
 
+                // Deduplicate superseded tool results (cheap, no LLM call)
+                if ($this->deduplicator !== null) {
+                    $deduped = $this->deduplicator->deduplicate($this->history);
+                    if ($deduped > 0) {
+                        $this->log->debug('Deduplicated tool results', ['superseded' => $deduped]);
+                    }
+                }
+
                 // Prune old tool results (cheap, no LLM call)
                 if ($this->pruner !== null) {
                     $saved = $this->pruner->prune($this->history);
@@ -262,117 +273,213 @@ class AgentLoop
      */
     private function executeToolCalls(array $toolCalls): array
     {
-        $results = [];
+        // Phase 1: Permission checks + tool lookup (sequential — may prompt user)
+        $approved = [];     // [[ToolCall, Tool], ...]
+        $autoApproved = []; // id → bool
+        $denied = [];       // id → ToolResult
 
         foreach ($toolCalls as $toolCall) {
             $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $toolCall->arguments()]);
-            $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
 
-            // Permission check — before tool lookup/execution
-            if ($this->permissions !== null) {
-                $permResult = $this->permissions->evaluate($toolCall->name, $toolCall->arguments());
-
-                if ($permResult->action === PermissionAction::Deny) {
-                    $output = $permResult->reason
-                        ?? "Permission denied: '{$toolCall->name}' is blocked by policy.";
-                    $output .= ' Try a different approach.';
-                    $this->log->info('Tool denied by policy', ['tool' => $toolCall->name, 'reason' => $permResult->reason]);
-                    $this->ui->showToolResult($toolCall->name, $output, false);
-                    $results[] = new ToolResult(
-                        toolCallId: $toolCall->id,
-                        toolName: $toolCall->name,
-                        args: $toolCall->arguments(),
-                        result: $output,
-                    );
-
-                    continue;
-                }
-
-                if ($permResult->autoApproved) {
-                    $this->ui->showAutoApproveIndicator($toolCall->name);
-                }
-
-                if ($permResult->action === PermissionAction::Ask) {
-                    $decision = $this->ui->askToolPermission($toolCall->name, $toolCall->arguments());
-
-                    if ($decision === 'deny') {
-                        $output = "User denied permission for '{$toolCall->name}'. Try a different approach.";
-                        $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
-                        $this->ui->showToolResult($toolCall->name, $output, false);
-                        $results[] = new ToolResult(
-                            toolCallId: $toolCall->id,
-                            toolName: $toolCall->name,
-                            args: $toolCall->arguments(),
-                            result: $output,
-                        );
-
-                        continue;
-                    }
-
-                    if ($decision === 'always') {
-                        $this->permissions->grantSession($toolCall->name);
-                    }
-
-                    if ($decision === 'guardian') {
-                        $this->permissions->setPermissionMode(PermissionMode::Guardian);
-                        $this->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
-                    }
-
-                    if ($decision === 'prometheus') {
-                        $this->permissions->setPermissionMode(PermissionMode::Prometheus);
-                        $this->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color());
-                    }
-                }
-            }
-
-            $tool = $this->findTool($toolCall->name);
-
-            if ($tool === null) {
-                // Check if the tool exists but is blocked by mode
-                $existsInAll = null !== $this->findToolInAll($toolCall->name);
-                $output = $existsInAll
-                    ? "Tool '{$toolCall->name}' is not available in {$this->mode->label()} mode. Switch to Edit mode to use write tools."
-                    : "Tool '{$toolCall->name}' not found.";
-                $this->ui->showToolResult($toolCall->name, $output, false);
-                $results[] = new ToolResult(
-                    toolCallId: $toolCall->id,
-                    toolName: $toolCall->name,
-                    args: $toolCall->arguments(),
-                    result: $output,
-                );
-
+            // checkPermission shows tool call header + handles user prompts for denied/asked
+            [$permDenied, $wasAutoApproved] = $this->checkPermission($toolCall);
+            if ($permDenied !== null) {
+                $denied[$toolCall->id] = $permDenied;
                 continue;
             }
 
-            try {
-                $output = $tool->handle(...$toolCall->arguments());
-                $outputStr = is_string($output) ? $output : (string) $output;
+            $tool = $this->findTool($toolCall->name);
+            if ($tool === null) {
+                $existsInAll = $this->findToolInAll($toolCall->name) !== null;
+                $output = $existsInAll
+                    ? "Tool '{$toolCall->name}' is not available in {$this->mode->label()} mode. Switch to Edit mode to use write tools."
+                    : "Tool '{$toolCall->name}' not found.";
+                $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+                $this->ui->showToolResult($toolCall->name, $output, false);
+                $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                continue;
+            }
 
-                if ($this->truncator !== null) {
-                    $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
+            $approved[] = [$toolCall, $tool];
+            $autoApproved[$toolCall->id] = $wasAutoApproved;
+        }
+
+        // Phase 2: Execute approved calls (concurrent within safe groups, sequential across)
+        $outcomes = [];
+        $groups = $this->partitionConcurrentGroups($approved);
+
+        foreach ($groups as $group) {
+            if (count($group) === 1) {
+                [$toolCall, $tool] = $group[0];
+                $outcomes[$toolCall->id] = $this->executeSingleTool($toolCall, $tool);
+            } else {
+                $futures = [];
+                foreach ($group as [$toolCall, $tool]) {
+                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $tool));
                 }
+                // Await all futures — executeSingleTool has try/catch so these won't throw
+                foreach ($futures as $id => $future) {
+                    $outcomes[$id] = $future->await();
+                }
+            }
+        }
 
-                $this->ui->showToolResult($toolCall->name, $outputStr, true);
-                $results[] = new ToolResult(
-                    toolCallId: $toolCall->id,
-                    toolName: $toolCall->name,
-                    args: $toolCall->arguments(),
-                    result: $outputStr,
-                );
-            } catch (\Throwable $e) {
-                $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
-                $error = "Error: {$e->getMessage()}";
-                $this->ui->showToolResult($toolCall->name, $error, false);
-                $results[] = new ToolResult(
-                    toolCallId: $toolCall->id,
-                    toolName: $toolCall->name,
-                    args: $toolCall->arguments(),
-                    result: $error,
-                );
+        // Phase 3: Collect results in original order + UI display
+        // Denied/not-found calls already displayed header+result in phase 1.
+        // Approved calls: show header + auto-approve indicator + result together.
+        $results = [];
+        foreach ($toolCalls as $toolCall) {
+            if (isset($denied[$toolCall->id])) {
+                $results[] = $denied[$toolCall->id];
+                continue;
+            }
+            if (isset($outcomes[$toolCall->id])) {
+                $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+                if ($autoApproved[$toolCall->id] ?? false) {
+                    $this->ui->showAutoApproveIndicator($toolCall->name);
+                }
+                $result = $outcomes[$toolCall->id];
+                $success = ! str_starts_with($result->result, 'Error:');
+                $this->ui->showToolResult($toolCall->name, $result->result, $success);
+                $results[] = $result;
             }
         }
 
         return $results;
+    }
+
+    /**
+     * @return array{?ToolResult, bool} [denied result or null, was auto-approved]
+     */
+    private function checkPermission(ToolCall $toolCall): array
+    {
+        if ($this->permissions === null) {
+            return [null, false];
+        }
+
+        $permResult = $this->permissions->evaluate($toolCall->name, $toolCall->arguments());
+
+        if ($permResult->action === PermissionAction::Deny) {
+            $output = ($permResult->reason ?? "Permission denied: '{$toolCall->name}' is blocked by policy.")
+                . ' Try a different approach.';
+            $this->log->info('Tool denied by policy', ['tool' => $toolCall->name, 'reason' => $permResult->reason]);
+            $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+            $this->ui->showToolResult($toolCall->name, $output, false);
+
+            return [new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
+        }
+
+        if ($permResult->action === PermissionAction::Ask) {
+            $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+            $decision = $this->ui->askToolPermission($toolCall->name, $toolCall->arguments());
+
+            if ($decision === 'deny') {
+                $output = "User denied permission for '{$toolCall->name}'. Try a different approach.";
+                $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
+                $this->ui->showToolResult($toolCall->name, $output, false);
+
+                return [new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
+            }
+
+            if ($decision === 'always') {
+                $this->permissions->grantSession($toolCall->name);
+            }
+            if ($decision === 'guardian') {
+                $this->permissions->setPermissionMode(PermissionMode::Guardian);
+                $this->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
+            }
+            if ($decision === 'prometheus') {
+                $this->permissions->setPermissionMode(PermissionMode::Prometheus);
+                $this->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color());
+            }
+
+            return [null, false];
+        }
+
+        return [null, $permResult->autoApproved];
+    }
+
+    private function executeSingleTool(ToolCall $toolCall, Tool $tool): ToolResult
+    {
+        try {
+            $output = $tool->handle(...$toolCall->arguments());
+            $outputStr = is_string($output) ? $output : (string) $output;
+
+            if ($this->truncator !== null) {
+                $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
+            }
+
+            return new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $outputStr);
+        } catch (\Throwable $e) {
+            $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
+
+            return new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), "Error: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Partition approved tool calls into groups that can execute concurrently.
+     * Calls within a group have no file-path conflicts. Groups run sequentially.
+     *
+     * Conservative: if any write conflict or bash+write mix exists, falls back to fully sequential.
+     *
+     * @param array<array{ToolCall, Tool}> $approved
+     * @return array<array<array{ToolCall, Tool}>>
+     */
+    private function partitionConcurrentGroups(array $approved): array
+    {
+        if (count($approved) <= 1) {
+            return [$approved];
+        }
+
+        $writeTools = ['file_write', 'file_edit'];
+        $writePaths = [];
+        $hasBash = false;
+        $hasWrites = false;
+
+        foreach ($approved as $i => [$toolCall, $tool]) {
+            $name = $toolCall->name;
+            $path = $toolCall->arguments()['path'] ?? null;
+
+            if ($path !== null && in_array($name, $writeTools, true)) {
+                $resolved = realpath($path) ?: $path;
+                $writePaths[$resolved][] = $i;
+                $hasWrites = true;
+            }
+            if ($name === 'bash') {
+                $hasBash = true;
+            }
+        }
+
+        // Conservative: bash + write tools can't run concurrently
+        if ($hasBash && $hasWrites) {
+            return array_map(fn ($item) => [$item], $approved);
+        }
+
+        // Check for write-write or read-write conflicts on same path
+        foreach ($writePaths as $writePath => $writeIndices) {
+            // Multiple writes to same file
+            if (count($writeIndices) > 1) {
+                return array_map(fn ($item) => [$item], $approved);
+            }
+
+            // Any other call touching the same path
+            foreach ($approved as $j => [$tc, $_]) {
+                if (in_array($j, $writeIndices, true)) {
+                    continue;
+                }
+                $readPath = $tc->arguments()['path'] ?? null;
+                if ($readPath !== null) {
+                    $resolvedRead = realpath($readPath) ?: $readPath;
+                    if ($resolvedRead === $writePath) {
+                        return array_map(fn ($item) => [$item], $approved);
+                    }
+                }
+            }
+        }
+
+        // No conflicts — everything in one concurrent group
+        return [$approved];
     }
 
     private function findTool(string $name): ?Tool
@@ -493,7 +600,7 @@ class AgentLoop
         }
 
         $this->log->info('Starting context compaction');
-        $this->ui->showNotice('Compacting context...');
+        $this->ui->showCompacting();
 
         try {
             $result = $this->compactor->compact($this->history);
@@ -504,6 +611,7 @@ class AgentLoop
             $this->sessionTokensOut += $result['tokens_out'];
 
             if ($summary === '') {
+                $this->ui->clearCompacting();
                 $this->ui->showNotice('Nothing to compact.');
 
                 return;
@@ -534,9 +642,11 @@ class AgentLoop
                 }
             }
 
+            $this->ui->clearCompacting();
             $this->ui->showNotice('Context compacted.');
             $this->log->info('Compaction complete', ['memories_extracted' => count($extraction['memories'])]);
         } catch (\Throwable $e) {
+            $this->ui->clearCompacting();
             $this->log->error('Compaction failed, falling back to trimOldest', ['error' => $e->getMessage()]);
             $this->history->trimOldest();
         }

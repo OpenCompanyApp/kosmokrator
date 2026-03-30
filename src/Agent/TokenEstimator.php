@@ -66,7 +66,8 @@ class TokenEstimator
     {
         $total = 0;
         foreach ($toolResults as $tr) {
-            $total += self::estimate($tr->result);
+            $result = is_string($tr->result) ? $tr->result : json_encode($tr->result);
+            $total += self::estimate($result);
         }
 
         return $total;

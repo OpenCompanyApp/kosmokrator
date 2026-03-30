@@ -31,6 +31,10 @@ class FileEditTool implements ToolInterface
         $oldString = $args['old_string'] ?? '';
         $newString = $args['new_string'] ?? '';
 
+        if ($oldString === '') {
+            return ToolResult::error('old_string cannot be empty.');
+        }
+
         if (! file_exists($path)) {
             return ToolResult::error("File not found: {$path}");
         }
@@ -51,7 +55,9 @@ class FileEditTool implements ToolInterface
         }
 
         $newContent = str_replace($oldString, $newString, $content);
-        file_put_contents($path, $newContent);
+        if (file_put_contents($path, $newContent) === false) {
+            return ToolResult::error("Failed to write file: {$path}");
+        }
 
         $removedLines = substr_count($oldString, "\n");
         $addedLines = substr_count($newString, "\n");

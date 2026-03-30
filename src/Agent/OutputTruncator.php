@@ -78,7 +78,8 @@ class OutputTruncator
             mkdir($this->storagePath, 0755, true);
         }
 
-        $path = $this->storagePath . '/tool_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $toolCallId) . '.txt';
+        $safeId = $toolCallId !== '' ? $toolCallId : uniqid('anon_');
+        $path = $this->storagePath . '/tool_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $safeId) . '.txt';
         file_put_contents($path, $output);
 
         return $path;

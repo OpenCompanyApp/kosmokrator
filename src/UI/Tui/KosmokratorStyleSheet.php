@@ -145,6 +145,22 @@ class KosmokratorStyleSheet
                 padding: new Padding(1, 2, 0, 2),
             ),
 
+            // Compacting loader (animated spinner, red)
+            '.compacting' => new Style(
+                color: Color::hex('#d04040'),
+                italic: true,
+                padding: new Padding(1, 2, 0, 2),
+            ),
+
+            '.compacting::spinner' => new Style(
+                color: Color::hex('#d04040'),
+            ),
+
+            '.compacting::message' => new Style(
+                color: Color::hex('#d04040'),
+                italic: true,
+            ),
+
             // Thinking loader (animated spinner)
             CancellableLoaderWidget::class => new Style(
                 color: Color::hex('#70a0d0'),

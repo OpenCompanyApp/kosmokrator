@@ -103,8 +103,10 @@ class MemoryRepository
         }
 
         if ($query !== null && $query !== '') {
-            $sql .= ' AND (title LIKE :query OR content LIKE :query)';
-            $params['query'] = "%{$query}%";
+            $sql .= " AND (title LIKE :query ESCAPE '\\' OR content LIKE :query2 ESCAPE '\\')";
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query);
+            $params['query'] = "%{$escaped}%";
+            $params['query2'] = "%{$escaped}%";
         }
 
         $sql .= ' ORDER BY type, created_at DESC LIMIT :limit';

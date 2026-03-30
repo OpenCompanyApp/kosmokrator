@@ -9,6 +9,7 @@ use Kosmokrator\Agent\EnvironmentContext;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\ContextPruner;
+use Kosmokrator\Agent\ToolResultDeduplicator;
 use Kosmokrator\Agent\MemoryInjector;
 use Kosmokrator\Agent\OutputTruncator;
 use Kosmokrator\Command\Slash;
@@ -20,6 +21,7 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -84,6 +86,15 @@ class AgentCommand extends Command
         $llm = ($ui->getActiveRenderer() === 'tui')
             ? $this->container->make(AsyncLlmClient::class)
             : $this->container->make(PrismService::class);
+
+        // Wire retry notification so the user sees feedback during backoff
+        if ($llm instanceof RetryableLlmClient) {
+            $llm->setOnRetry(function (int $attempt, int $max, float $delay, string $reason) use ($ui) {
+                $delaySec = (int) ceil($delay);
+                $ui->showNotice("⟳ Rate limited — retrying in {$delaySec}s (attempt {$attempt}/{$max})");
+            });
+        }
+
         $toolRegistry = $this->container->make(ToolRegistry::class);
         $toolRegistry->register(new \Kosmokrator\Tool\AskUserTool($ui));
         $toolRegistry->register(new \Kosmokrator\Tool\AskChoiceTool($ui));
@@ -125,9 +136,10 @@ class AgentCommand extends Command
         $pruneProtect = (int) ($sessionManager->getSetting('prune_protect') ?? $config->get('kosmokrator.context.prune_protect', 40_000));
         $pruneMinSavings = (int) ($sessionManager->getSetting('prune_min_savings') ?? $config->get('kosmokrator.context.prune_min_savings', 20_000));
         $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
+        $deduplicator = new ToolResultDeduplicator();
 
         $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $memoryWarningThreshold);
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $deduplicator, $memoryWarningThreshold);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         // Session: resume or create new

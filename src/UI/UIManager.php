@@ -48,6 +48,8 @@ class UIManager implements RendererInterface
     public function showUserMessage(string $text): void { $this->renderer->showUserMessage($text); }
     public function showThinking(): void { $this->renderer->showThinking(); }
     public function clearThinking(): void { $this->renderer->clearThinking(); }
+    public function showCompacting(): void { $this->renderer->showCompacting(); }
+    public function clearCompacting(): void { $this->renderer->clearCompacting(); }
     public function getCancellation(): ?Cancellation { return $this->renderer->getCancellation(); }
     public function streamChunk(string $text): void { $this->renderer->streamChunk($text); }
     public function streamComplete(): void { $this->renderer->streamComplete(); }

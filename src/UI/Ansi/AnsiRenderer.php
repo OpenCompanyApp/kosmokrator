@@ -78,6 +78,18 @@ class AnsiRenderer implements RendererInterface
         // No-op for ANSI — thinking indicator is static text
     }
 
+    public function showCompacting(): void
+    {
+        $r = Theme::reset();
+        $red = Theme::rgb(208, 64, 64);
+        echo "\n{$red}  ⧫ Compacting context...{$r}\n";
+    }
+
+    public function clearCompacting(): void
+    {
+        // No-op for ANSI — static text
+    }
+
     public function getCancellation(): ?Cancellation
     {
         return null;

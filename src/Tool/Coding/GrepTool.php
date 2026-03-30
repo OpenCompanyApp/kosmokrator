@@ -57,13 +57,22 @@ class GrepTool implements ToolInterface
         $process->setTimeout($this->timeout);
         $process->run();
 
-        $output = trim($process->getOutput() . $process->getErrorOutput());
+        $exitCode = $process->getExitCode();
+        $stdout = trim($process->getOutput());
+        $stderr = trim($process->getErrorOutput());
 
-        if ($process->getExitCode() !== 0 && $output === '') {
+        // Exit code 1 = no matches (normal), 2+ = error
+        if ($exitCode === 1 || ($exitCode === 0 && $stdout === '')) {
             return ToolResult::success("No matches found for '{$pattern}'");
         }
 
-        $lines = explode("\n", $output);
+        if ($exitCode >= 2) {
+            $error = $stderr !== '' ? $stderr : 'Search failed';
+
+            return ToolResult::error("grep error: {$error}");
+        }
+
+        $lines = explode("\n", $stdout);
         $result = implode("\n", array_slice($lines, 0, 100));
 
         return ToolResult::success($result ?: "No matches found for '{$pattern}'");

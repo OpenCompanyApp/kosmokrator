@@ -33,7 +33,7 @@ class BashTool implements ToolInterface
 
     public function execute(array $args): ToolResult
     {
-        $command = $args['command'] ?? '';
+        $command = trim($args['command'] ?? '');
 
         if ($command === '') {
             return ToolResult::error('No command provided');

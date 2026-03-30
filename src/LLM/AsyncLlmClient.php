@@ -129,6 +129,14 @@ class AsyncLlmClient implements LlmClientInterface
             $error = json_decode($body, true);
             $message = $error['error']['message'] ?? $body;
 
+            if ($status === 429 || $status >= 500) {
+                throw new RetryableHttpException(
+                    $status,
+                    "API error ({$status}): {$message}",
+                    $this->parseRetryAfter($response),
+                );
+            }
+
             throw new \RuntimeException("API error ({$status}): {$message}");
         }
 
@@ -157,6 +165,33 @@ class AsyncLlmClient implements LlmClientInterface
             promptTokens: $usage['prompt_tokens'] ?? 0,
             completionTokens: $usage['completion_tokens'] ?? 0,
         );
+    }
+
+    private function parseRetryAfter(Response $response): ?float
+    {
+        // Millisecond header (used by Anthropic, OpenAI)
+        $ms = $response->getHeader('retry-after-ms');
+        if ($ms !== null) {
+            $parsed = (float) $ms;
+            if ($parsed > 0) {
+                return min($parsed / 1000.0, 300.0);
+            }
+        }
+
+        // Standard retry-after: seconds or HTTP-date
+        $header = $response->getHeader('retry-after');
+        if ($header !== null) {
+            if (is_numeric($header)) {
+                return min(max((float) $header, 0.0), 300.0);
+            }
+
+            $timestamp = strtotime($header);
+            if ($timestamp !== false) {
+                return min(max((float) ($timestamp - time()), 0.0), 300.0);
+            }
+        }
+
+        return null;
     }
 
     /**

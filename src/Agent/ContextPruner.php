@@ -78,7 +78,10 @@ class ContextPruner
             }
 
             foreach ($messages[$i]->toolResults as $rIdx => $result) {
-                if ($result->result === self::PLACEHOLDER) {
+                if (! is_string($result->result)) {
+                    continue;
+                }
+                if ($result->result === self::PLACEHOLDER || str_starts_with($result->result, '[Superseded')) {
                     continue;
                 }
 

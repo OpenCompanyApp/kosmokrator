@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\LLM;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\RetryableLlmClient;
+use Kosmokrator\LLM\RetryableHttpException;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
@@ -214,6 +215,128 @@ class RetryableLlmClientTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $client->chat([]);
+    }
+
+    public function test_retries_on_retryable_http_exception(): void
+    {
+        $response = $this->makeResponse();
+
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function () use ($response): LlmResponse {
+                static $call = 0;
+                $call++;
+
+                if ($call === 1) {
+                    throw new RetryableHttpException(429, 'API error (429): rate limited', 2.0);
+                }
+
+                return $response;
+            });
+
+        $client = $this->makeClient($inner, maxAttempts: 2);
+
+        $this->assertSame($response, $client->chat([]));
+    }
+
+    public function test_retries_on_retryable_http_exception_5xx(): void
+    {
+        $response = $this->makeResponse();
+
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function () use ($response): LlmResponse {
+                static $call = 0;
+                $call++;
+
+                if ($call === 1) {
+                    throw new RetryableHttpException(503, 'API error (503): overloaded');
+                }
+
+                return $response;
+            });
+
+        $client = $this->makeClient($inner, maxAttempts: 2);
+
+        $this->assertSame($response, $client->chat([]));
+    }
+
+    public function test_on_retry_callback_is_called(): void
+    {
+        $response = $this->makeResponse();
+        $callbackArgs = [];
+
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function () use ($response): LlmResponse {
+                static $call = 0;
+                $call++;
+
+                if ($call === 1) {
+                    throw new RetryableHttpException(429, 'API error (429): rate limited', 3.0);
+                }
+
+                return $response;
+            });
+
+        $client = $this->makeClient($inner, maxAttempts: 2);
+        $client->setOnRetry(function (int $attempt, int $max, float $delay, string $reason) use (&$callbackArgs) {
+            $callbackArgs = compact('attempt', 'max', 'delay', 'reason');
+        });
+
+        $client->chat([]);
+
+        $this->assertSame(1, $callbackArgs['attempt']);
+        $this->assertSame(2, $callbackArgs['max']);
+        $this->assertSame(3.0, $callbackArgs['delay']);
+        $this->assertStringContainsString('429', $callbackArgs['reason']);
+    }
+
+    public function test_on_retry_callback_exception_does_not_break_retry(): void
+    {
+        $response = $this->makeResponse();
+
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function () use ($response): LlmResponse {
+                static $call = 0;
+                $call++;
+
+                if ($call === 1) {
+                    throw new PrismServerException('Server error');
+                }
+
+                return $response;
+            });
+
+        $client = $this->makeClient($inner, maxAttempts: 2);
+        $client->setOnRetry(function () {
+            throw new \RuntimeException('UI crashed');
+        });
+
+        // Should still succeed despite callback throwing
+        $this->assertSame($response, $client->chat([]));
+    }
+
+    public function test_cancellation_checked_during_blocking_delay(): void
+    {
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->once())
+            ->method('chat')
+            ->willThrowException(new PrismServerException('Server error'));
+
+        $client = $this->makeClient($inner, maxAttempts: 3);
+
+        // Create a pre-cancelled cancellation token
+        $deferred = new \Amp\DeferredCancellation();
+        $deferred->cancel();
+
+        $this->expectException(\Amp\CancelledException::class);
+        $client->chat([], [], $deferred->getCancellation());
     }
 
     public function test_delegates_interface_methods(): void

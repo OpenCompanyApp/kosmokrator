@@ -18,6 +18,10 @@ interface RendererInterface
 
     public function clearThinking(): void;
 
+    public function showCompacting(): void;
+
+    public function clearCompacting(): void;
+
     public function getCancellation(): ?Cancellation;
 
     public function streamChunk(string $text): void;

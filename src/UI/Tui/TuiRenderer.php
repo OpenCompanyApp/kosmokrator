@@ -120,6 +120,18 @@ class TuiRenderer implements RendererInterface
     private bool $spinnersRegistered = false;
     private int $spinnerIndex = 0;
 
+    private ?CancellableLoaderWidget $compactingLoader = null;
+    private ?string $compactingTimerId = null;
+    private float $compactingStartTime = 0.0;
+    private int $compactingBreathTick = 0;
+
+    private const COMPACTION_PHRASES = [
+        '⧫ Condensing the cosmic record...',
+        '⧫ Distilling the essence of memory...',
+        '⧫ Weaving threads of context...',
+        '⧫ Forging a compact chronicle...',
+    ];
+
     private ?Suspension $promptSuspension = null;
 
     private ?Suspension $askSuspension = null;
@@ -587,6 +599,78 @@ HELP;
         $this->refreshTaskBar();
 
         $this->requestCancellation = null;
+        $this->tui->requestRender(force: true);
+        $this->tui->processRender();
+    }
+
+    public function showCompacting(): void
+    {
+        $phrase = self::COMPACTION_PHRASES[array_rand(self::COMPACTION_PHRASES)];
+
+        // Register custom spinners if not done yet
+        if (!$this->spinnersRegistered) {
+            foreach (self::SPINNERS as $name => $frames) {
+                CancellableLoaderWidget::addSpinner($name, $frames);
+            }
+            $this->spinnersRegistered = true;
+        }
+
+        $spinnerNames = array_keys(self::SPINNERS);
+        $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
+        $this->spinnerIndex++;
+
+        $this->compactingLoader = new CancellableLoaderWidget($phrase);
+        $this->compactingLoader->setId('compacting-loader');
+        $this->compactingLoader->addStyleClass('compacting');
+        $this->compactingLoader->setSpinner($spinnerName);
+        $this->compactingLoader->setIntervalMs(120);
+        $this->compactingLoader->start();
+
+        $this->thinkingBar->add($this->compactingLoader);
+
+        $this->compactingStartTime = microtime(true);
+        $this->compactingBreathTick = 0;
+
+        // Breathing pulse at 30fps — red color modulation
+        $this->compactingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
+            $this->compactingBreathTick++;
+            $r = "\033[0m";
+
+            // Slow sin wave (~3s full cycle) modulating red tones
+            $t = sin($this->compactingBreathTick * 0.07);
+            $rr = (int) (208 + 40 * $t);
+            $rg = (int) (48 + 16 * $t);
+            $rb = (int) (48 + 16 * $t);
+            $color = "\033[38;2;{$rr};{$rg};{$rb}m";
+
+            if ($this->compactingLoader !== null) {
+                $elapsed = (int) (microtime(true) - $this->compactingStartTime);
+                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                $dim = "\033[38;5;245m";
+                $this->compactingLoader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
+            }
+
+            $this->tui->requestRender();
+            $this->tui->processRender();
+        });
+
+        $this->tui->processRender();
+    }
+
+    public function clearCompacting(): void
+    {
+        if ($this->compactingTimerId !== null) {
+            EventLoop::cancel($this->compactingTimerId);
+            $this->compactingTimerId = null;
+        }
+
+        if ($this->compactingLoader !== null) {
+            $this->compactingLoader->setFinishedIndicator('✓');
+            $this->compactingLoader->stop();
+            $this->thinkingBar->remove($this->compactingLoader);
+            $this->compactingLoader = null;
+        }
+
         $this->tui->requestRender(force: true);
         $this->tui->processRender();
     }

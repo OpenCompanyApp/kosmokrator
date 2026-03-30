@@ -173,31 +173,50 @@ PROMPT;
     /**
      * @param \Prism\Prism\Contracts\Message[] $messages
      */
+    /**
+     * Cap formatted output at ~100K chars (~25K tokens) to prevent memory blowup
+     * on very long conversations. Older messages are dropped first.
+     */
+    private const MAX_FORMAT_CHARS = 100_000;
+
     private function formatMessages(array $messages): string
     {
         $lines = [];
+        $totalChars = 0;
 
         foreach ($messages as $message) {
+            $newLines = [];
+
             if ($message instanceof UserMessage) {
-                $lines[] = '[user]: ' . $this->truncate($message->content, 2000);
+                $newLines[] = '[user]: ' . $this->truncate($message->content, 2000);
             } elseif ($message instanceof AssistantMessage) {
                 if ($message->toolCalls !== []) {
                     foreach ($message->toolCalls as $tc) {
                         $args = $tc->arguments();
                         $argStr = $this->formatToolArgs($args);
-                        $lines[] = "[assistant → tool_call]: {$tc->name}({$argStr})";
+                        $newLines[] = "[assistant → tool_call]: {$tc->name}({$argStr})";
                     }
                 }
                 if ($message->content !== '') {
-                    $lines[] = '[assistant]: ' . $this->truncate($message->content, 2000);
+                    $newLines[] = '[assistant]: ' . $this->truncate($message->content, 2000);
                 }
             } elseif ($message instanceof ToolResultMessage) {
                 foreach ($message->toolResults as $tr) {
                     $result = is_string($tr->result) ? $tr->result : json_encode($tr->result);
-                    $lines[] = '[tool_result]: ' . $this->truncate($result, 200);
+                    $newLines[] = '[tool_result]: ' . $this->truncate($result, 200);
                 }
             } elseif ($message instanceof SystemMessage) {
-                $lines[] = '[system]: ' . $this->truncate($message->content, 500);
+                $newLines[] = '[system]: ' . $this->truncate($message->content, 500);
+            }
+
+            foreach ($newLines as $line) {
+                $totalChars += strlen($line) + 1;
+                if ($totalChars > self::MAX_FORMAT_CHARS) {
+                    $lines[] = '[... older messages truncated for compaction]';
+
+                    return implode("\n", $lines);
+                }
+                $lines[] = $line;
             }
         }
 

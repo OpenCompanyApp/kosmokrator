@@ -100,7 +100,7 @@ class ConversationHistory
             }
         }
 
-        if ($keepFrom <= 0) {
+        if ($keepFrom <= 0 || $keepFrom >= $total) {
             return;
         }
 
@@ -139,6 +139,32 @@ class ConversationHistory
     }
 
     /**
+     * Replace a single tool result with a custom placeholder string.
+     */
+    public function supersedeToolResult(int $messageIndex, int $resultIndex, string $placeholder): void
+    {
+        $msg = $this->messages[$messageIndex] ?? null;
+        if (! $msg instanceof ToolResultMessage) {
+            return;
+        }
+
+        $results = $msg->toolResults;
+        if (! isset($results[$resultIndex])) {
+            return;
+        }
+
+        $old = $results[$resultIndex];
+        $results[$resultIndex] = new ToolResult(
+            toolCallId: $old->toolCallId,
+            toolName: $old->toolName,
+            args: $old->args,
+            result: $placeholder,
+        );
+
+        $this->messages[$messageIndex] = new ToolResultMessage($results);
+    }
+
+    /**
      * Remove the oldest complete turn from history (user message + all
      * assistant/tool messages up to the next user message).
      * Returns false if there aren't enough messages to trim.
@@ -150,13 +176,23 @@ class ConversationHistory
             return false;
         }
 
-        // Drop the first message (should be a UserMessage)
-        array_shift($this->messages);
-        $removed = 1;
+        // Skip leading SystemMessages (compaction summaries) — preserve them
+        $startIdx = 0;
+        while ($startIdx < count($this->messages) && $this->messages[$startIdx] instanceof SystemMessage) {
+            $startIdx++;
+        }
 
-        // Keep dropping until we hit the next UserMessage (turn boundary)
-        while (count($this->messages) > 1 && ! ($this->messages[0] instanceof UserMessage)) {
-            array_shift($this->messages);
+        if ($startIdx >= count($this->messages) - 1) {
+            return false;
+        }
+
+        // Drop from the first non-system message until the next UserMessage (turn boundary)
+        $removed = 0;
+        array_splice($this->messages, $startIdx, 1);
+        $removed++;
+
+        while ($startIdx < count($this->messages) - 1 && ! ($this->messages[$startIdx] instanceof UserMessage)) {
+            array_splice($this->messages, $startIdx, 1);
             $removed++;
         }
 

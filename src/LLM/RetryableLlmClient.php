@@ -16,7 +16,13 @@ class RetryableLlmClient implements LlmClientInterface
         private readonly LlmClientInterface $inner,
         private readonly LoggerInterface $log,
         private readonly int $maxAttempts = 3,
+        private ?\Closure $onRetry = null,
     ) {}
+
+    public function setOnRetry(?\Closure $onRetry): void
+    {
+        $this->onRetry = $onRetry;
+    }
 
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
@@ -38,7 +44,14 @@ class RetryableLlmClient implements LlmClientInterface
                     'exception' => get_class($e),
                 ]);
 
-                sleep($delay);
+                if ($this->onRetry !== null) {
+                    try {
+                        ($this->onRetry)($attempt, $this->maxAttempts, $delay, $e->getMessage());
+                    } catch (\Throwable) {
+                    }
+                }
+
+                $this->smartDelay($delay, $cancellation);
             }
         }
     }
@@ -51,12 +64,16 @@ class RetryableLlmClient implements LlmClientInterface
             return true;
         }
 
+        if ($e instanceof RetryableHttpException) {
+            return true;
+        }
+
         // Amp network errors
         if ($e instanceof \Amp\Http\Client\HttpException) {
             return true;
         }
 
-        // AsyncLlmClient HTTP errors with retryable status codes
+        // Legacy: AsyncLlmClient HTTP errors with retryable status codes
         if ($e instanceof \RuntimeException && preg_match('/API error \((429|5\d{2})\)/', $e->getMessage())) {
             return true;
         }
@@ -64,17 +81,37 @@ class RetryableLlmClient implements LlmClientInterface
         return false;
     }
 
-    private function calculateDelay(\Throwable $e, int $attempt): int
+    private function calculateDelay(\Throwable $e, int $attempt): float
     {
         // Honor rate limit hint from Prism
         if ($e instanceof PrismRateLimitedException && $e->retryAfter !== null) {
-            return min($e->retryAfter, 60);
+            return min((float) $e->retryAfter, 60.0);
+        }
+
+        // Honor retry-after from HTTP response headers
+        if ($e instanceof RetryableHttpException && $e->retryAfterSeconds !== null) {
+            return min($e->retryAfterSeconds, 60.0);
         }
 
         // Exponential backoff with jitter: ~1s, ~2s, ~4s (capped at 30s)
         $base = min((int) pow(2, $attempt - 1), 30);
 
-        return $base + random_int(0, max(1, (int) ($base * 0.5)));
+        return (float) ($base + random_int(0, max(1, (int) ($base * 0.5))));
+    }
+
+    /**
+     * Non-blocking delay when inside a Revolt fiber (TUI mode),
+     * blocking sleep as fallback (ANSI mode).
+     */
+    private function smartDelay(float $seconds, ?Cancellation $cancellation): void
+    {
+        if (\Fiber::getCurrent() !== null) {
+            \Amp\delay($seconds, cancellation: $cancellation);
+        } else {
+            $cancellation?->throwIfRequested();
+            sleep((int) ceil($seconds));
+            $cancellation?->throwIfRequested();
+        }
     }
 
     public function setSystemPrompt(string $prompt): void

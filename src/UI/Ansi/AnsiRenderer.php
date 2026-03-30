@@ -113,11 +113,12 @@ class AnsiRenderer implements RendererInterface
         $friendly = Theme::toolLabel($name);
         $border = Theme::rgb(128, 100, 40);
 
-        // Task tools: clean formatted display (no leading blank line)
+        // Task tools: compact display, suppress noise
         if ($this->isTaskTool($name)) {
-            echo "{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
-            $this->echoTaskToolCallArgs($name, $args, $border, $dim, $r);
-            echo "\n";
+            $label = $this->formatTaskToolCallLabel($name, $args, $icon, $friendly, $dim, $r);
+            if ($label !== null) {
+                echo "{$border}  ┃ {$gold}{$label}{$r}\n";
+            }
 
             return;
         }
@@ -320,6 +321,30 @@ class AnsiRenderer implements RendererInterface
         // ANSI renderer prints directly to stdout, no widget tree to clear
     }
 
+    public function replayHistory(array $messages): void
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $white = Theme::white();
+        $border = Theme::rgb(128, 100, 40);
+
+        foreach ($messages as $msg) {
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
+                $text = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
+                echo "\n  {$white}⟡ {$text}{$r}\n";
+            } elseif ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+                if ($msg->content !== '') {
+                    $preview = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
+                    if (mb_strlen($msg->content) > 120) {
+                        $preview .= '…';
+                    }
+                    echo "  {$dim}{$preview}{$r}\n";
+                }
+            }
+        }
+        echo "\n";
+    }
+
     public function showNotice(string $message): void
     {
         $r = Theme::reset();
@@ -472,7 +497,7 @@ class AnsiRenderer implements RendererInterface
         echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
         echo "  {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}\n";
         echo "  {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}\n";
-        echo "  {$cyan}/compact{$dim}  {$cyan}/reset{$dim}  {$cyan}/resume{$r}         {$dim}Context and session management{$r}\n";
+        echo "  {$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$r}           {$dim}Context and session management{$r}\n";
         $muted = Theme::rgb(160, 160, 170);
         echo "  {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}\n";
         echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
@@ -644,52 +669,44 @@ class AnsiRenderer implements RendererInterface
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
     }
 
-    private function echoTaskToolCallArgs(string $name, array $args, string $border, string $dim, string $r): void
+    /**
+     * Format task tool call label. Returns null to suppress output entirely.
+     */
+    private function formatTaskToolCallLabel(string $name, array $args, string $icon, string $friendly, string $dim, string $r): ?string
     {
         $white = Theme::white();
 
         if ($name === 'task_create') {
             if (isset($args['tasks']) && $args['tasks'] !== '') {
-                // Batch mode — parse and show count + subjects
                 $items = json_decode($args['tasks'], true);
                 if (is_array($items)) {
-                    $count = count($items);
-                    echo " {$dim}({$count} tasks){$r}";
-                    foreach ($items as $item) {
-                        $subject = $item['subject'] ?? '(untitled)';
-                        echo "\n{$border}  ┃{$r}    {$dim}+{$r} {$white}{$subject}{$r}";
-                    }
-                }
-            } else {
-                // Single mode
-                $subject = $args['subject'] ?? '';
-                echo " {$white}{$subject}{$r}";
-                if (isset($args['parent_id']) && $args['parent_id'] !== '') {
-                    echo " {$dim}(child of {$args['parent_id']}){$r}";
+                    return "{$icon} {$friendly} {$dim}created " . count($items) . " tasks{$r}";
                 }
             }
-        } elseif ($name === 'task_update') {
-            $id = $args['id'] ?? '';
-            $task = $this->taskStore?->get($id);
-            $subject = $task?->subject ?? $id;
-            echo " {$white}{$subject}{$r}";
+            $subject = $args['subject'] ?? '';
 
-            if (isset($args['status']) && $args['status'] !== '') {
-                $statusLabel = match ($args['status']) {
-                    'in_progress' => "\033[38;2;255;200;80min progress{$r}",
-                    'completed' => "\033[38;2;80;220;100mcompleted{$r}",
-                    'cancelled' => "\033[38;2;255;80;60mcancelled{$r}",
-                    default => $dim . $args['status'] . $r,
-                };
-                echo " {$dim}\u{2192}{$r} {$statusLabel}";
+            return "{$icon} {$friendly} {$white}{$subject}{$r}";
+        }
+
+        if ($name === 'task_update') {
+            $status = $args['status'] ?? '';
+            if ($status === 'in_progress') {
+                return null;
             }
-        } elseif ($name === 'task_get') {
             $id = $args['id'] ?? '';
             $task = $this->taskStore?->get($id);
             $subject = $task?->subject ?? $id;
-            echo " {$white}{$subject}{$r}";
+            $statusIcon = match ($status) {
+                'completed' => "\033[38;2;80;220;100m\u{25CF}{$r}",
+                'cancelled' => "\033[38;2;255;80;60m\u{2717}{$r}",
+                default => '',
+            };
+
+            return "{$icon} {$friendly} {$statusIcon} {$white}{$subject}{$r}";
         }
-        // task_list: no args to display
+
+        // task_get, task_list: silent
+        return null;
     }
 
     private function echoTaskBar(): void

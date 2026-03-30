@@ -57,6 +57,13 @@ interface RendererInterface
 
     public function clearConversation(): void;
 
+    /**
+     * Replay resumed conversation history as a condensed visual summary.
+     *
+     * @param array<int, \Prism\Prism\Contracts\Message> $messages
+     */
+    public function replayHistory(array $messages): void;
+
     public function showError(string $message): void;
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void;

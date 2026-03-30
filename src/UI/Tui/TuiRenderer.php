@@ -125,7 +125,7 @@ class TuiRenderer implements RendererInterface
         ['value' => '/argus', 'label' => '/argus', 'description' => 'Argus mode — ask before every write and command'],
         ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Prometheus mode — auto-approve all tool calls'],
         ['value' => '/compact', 'label' => '/compact', 'description' => 'Compact conversation context'],
-        ['value' => '/reset', 'label' => '/reset', 'description' => 'Clear conversation history'],
+        ['value' => '/new', 'label' => '/new', 'description' => 'Start a new session (clear history)'],
         ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
         ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
         ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
@@ -291,11 +291,11 @@ class TuiRenderer implements RendererInterface
             }
         });
 
-        // Assemble layout (bottom-up: input, taskBar, statusBar, overlay, conversation)
+        // Assemble layout: conversation → overlay → taskBar → statusBar → input
         $this->session->add($this->conversation);
         $this->session->add($this->overlay);
-        $this->session->add($this->statusBar);
         $this->session->add($this->taskBar);
+        $this->session->add($this->statusBar);
         $this->session->add($this->input);
 
         // Submit handler on editor (Ctrl+Enter)
@@ -392,7 +392,7 @@ ART;
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}
 {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}
-{$cyan}/compact{$dim}  {$cyan}/reset{$dim}  {$cyan}/resume{$r}         {$dim}Context and session management{$r}
+{$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$r}           {$dim}Context and session management{$r}
 {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 HELP;
@@ -488,6 +488,13 @@ HELP;
             $dim = "\033[38;5;245m";
 
             $this->loader?->setMessage("{$breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
+
+            // Refresh task bar timers once per second (~30 ticks)
+            if ($this->breathTick % 30 === 0) {
+                $this->refreshTaskBar();
+            }
+
+            $this->tui->requestRender();
             $this->tui->processRender();
         });
 
@@ -567,12 +574,16 @@ HELP;
         $dim = Theme::dim();
         $white = Theme::white();
 
-        // Task tools: clean human-readable display
+        // Task tools: compact display, null = suppress entirely
         if ($this->isTaskTool($name)) {
             $label = $this->formatTaskToolCall($name, $args, $icon, $friendly, $white, $dim, $r);
-            $widget = new TextWidget($label);
-            $widget->addStyleClass('task-call');
-            $this->conversation->add($widget);
+            if ($label !== null) {
+                $widget = new TextWidget($label);
+                $widget->addStyleClass('task-call');
+                $this->conversation->add($widget);
+            }
+            $this->refreshTaskBar();
+            $this->tui->requestRender();
             $this->tui->processRender();
 
             return;
@@ -627,6 +638,7 @@ HELP;
         // Task tools: silent result — the call line + sticky task bar are enough
         if ($this->isTaskTool($name)) {
             $this->refreshTaskBar();
+            $this->tui->requestRender();
             $this->tui->processRender();
 
             return;
@@ -727,6 +739,15 @@ HELP;
     {
         $this->currentPermissionLabel = $label;
         $this->currentPermissionColor = $color;
+
+        // Refresh status bar to reflect the new permission mode
+        $r = "\033[0m";
+        $sep = "\033[38;5;240m·{$r}";
+        $permPart = in_array($this->currentModeLabel, ['Plan', 'Ask'])
+            ? '' : "  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}";
+        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}{$permPart}  {$sep}  Ready");
+        $this->tui->requestRender();
+        $this->tui->processRender();
     }
 
     private function highlightFileOutput(string $output): string
@@ -824,6 +845,36 @@ HELP;
         $this->tui->processRender();
     }
 
+    public function replayHistory(array $messages): void
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $white = Theme::white();
+
+        foreach ($messages as $msg) {
+            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
+                $text = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
+                $widget = new TextWidget("{$white}⟡ {$text}{$r}");
+                $widget->addStyleClass('user-message');
+                $this->conversation->add($widget);
+            } elseif ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+                if ($msg->content !== '') {
+                    $preview = mb_substr(trim(str_replace("\n", ' ', $msg->content)), 0, 120);
+                    if (mb_strlen($msg->content) > 120) {
+                        $preview .= '…';
+                    }
+                    $widget = new TextWidget("{$dim}{$preview}{$r}");
+                    $widget->addStyleClass('response');
+                    $this->conversation->add($widget);
+                }
+            }
+            // Skip tool result messages — too noisy for replay
+        }
+
+        $this->tui->requestRender();
+        $this->tui->processRender();
+    }
+
     public function showNotice(string $message): void
     {
         $widget = new TextWidget($message);
@@ -857,11 +908,6 @@ HELP;
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
-        // Separator after complete turn
-        $separator = new TextWidget(str_repeat('─', 80));
-        $separator->addStyleClass('separator');
-        $this->conversation->add($separator);
-
         // Update progress bar max if model changed
         if ($this->statusBar->getMaxSteps() !== $maxContext) {
             $this->statusBar->start($maxContext, $tokensIn);
@@ -1222,60 +1268,42 @@ HELP;
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
     }
 
-    private function formatTaskToolCall(string $name, array $args, string $icon, string $friendly, string $white, string $dim, string $r): string
+    /**
+     * Format task tool call for display. Returns null to suppress output entirely.
+     */
+    private function formatTaskToolCall(string $name, array $args, string $icon, string $friendly, string $white, string $dim, string $r): ?string
     {
         if ($name === 'task_create') {
             if (isset($args['tasks']) && $args['tasks'] !== '') {
                 $items = json_decode($args['tasks'], true);
                 if (is_array($items)) {
-                    $lines = "{$icon} {$friendly} {$dim}" . count($items) . " tasks{$r}";
-                    foreach ($items as $item) {
-                        $subject = $item['subject'] ?? '(untitled)';
-                        $lines .= "\n    {$dim}+{$r} {$white}{$subject}{$r}";
-                    }
-
-                    return $lines;
+                    return "{$icon} {$friendly} {$dim}created " . count($items) . " tasks{$r}";
                 }
             }
             $subject = $args['subject'] ?? '';
-            $suffix = '';
-            if (isset($args['parent_id']) && $args['parent_id'] !== '') {
-                $parent = $this->taskStore?->get($args['parent_id']);
-                $parentLabel = $parent?->subject ?? $args['parent_id'];
-                $suffix = " {$dim}(under {$parentLabel}){$r}";
-            }
-
-            return "{$icon} {$friendly} {$white}{$subject}{$r}{$suffix}";
-        }
-
-        if ($name === 'task_update') {
-            $id = $args['id'] ?? '';
-            $task = $this->taskStore?->get($id);
-            $subject = $task?->subject ?? $id;
-            $statusPart = '';
-            if (isset($args['status']) && $args['status'] !== '') {
-                $statusColor = match ($args['status']) {
-                    'in_progress' => "\033[38;2;255;200;80m",
-                    'completed' => "\033[38;2;80;220;100m",
-                    'cancelled' => "\033[38;2;255;80;60m",
-                    default => $dim,
-                };
-                $label = str_replace('_', ' ', $args['status']);
-                $statusPart = " {$dim}\u{2192}{$r} {$statusColor}{$label}{$r}";
-            }
-
-            return "{$icon} {$friendly} {$white}{$subject}{$r}{$statusPart}";
-        }
-
-        if ($name === 'task_get') {
-            $id = $args['id'] ?? '';
-            $task = $this->taskStore?->get($id);
-            $subject = $task?->subject ?? $id;
 
             return "{$icon} {$friendly} {$white}{$subject}{$r}";
         }
 
-        // task_list
-        return "{$icon} {$friendly}";
+        if ($name === 'task_update') {
+            $status = $args['status'] ?? '';
+            // Starting a task is noise — the task bar already shows it
+            if ($status === 'in_progress') {
+                return null;
+            }
+            $id = $args['id'] ?? '';
+            $task = $this->taskStore?->get($id);
+            $subject = $task?->subject ?? $id;
+            $statusIcon = match ($status) {
+                'completed' => "\033[38;2;80;220;100m\u{25CF}{$r}",  // ● green
+                'cancelled' => "\033[38;2;255;80;60m\u{2717}{$r}",   // ✗ red
+                default => '',
+            };
+
+            return "{$icon} {$friendly} {$statusIcon} {$white}{$subject}{$r}";
+        }
+
+        // task_get, task_list: silent — task bar is sufficient
+        return null;
     }
 }

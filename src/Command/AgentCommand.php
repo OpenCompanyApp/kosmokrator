@@ -136,6 +136,7 @@ class AgentCommand extends Command
             $history = $sessionManager->loadHistory($resumeId);
             if ($history->count() > 0) {
                 $agentLoop->setHistory($history);
+                $ui->replayHistory($history->messages());
                 $ui->showNotice("Resumed session ({$resumeId})");
             }
         } else {
@@ -185,7 +186,7 @@ class AgentCommand extends Command
                 continue;
             }
 
-            if ($command === '/reset') {
+            if ($command === '/new') {
                 $agentLoop->history()->clear();
                 $agentLoop->resetSessionCost();
                 $permissions->resetGrants();
@@ -367,6 +368,8 @@ class AgentCommand extends Command
                     $history = $sessionManager->resumeSession($sessionId);
                     $agentLoop->setHistory($history);
                     $permissions->resetGrants();
+                    $ui->clearConversation();
+                    $ui->replayHistory($history->messages());
                     $session = $sessionManager->findSession($sessionId);
                     $title = $session['title'] ?? '(untitled)';
                     $ui->showNotice("Resumed: {$title} ({$history->count()} messages)");

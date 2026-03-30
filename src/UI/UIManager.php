@@ -56,6 +56,7 @@ class UIManager implements RendererInterface
     public function askToolPermission(string $toolName, array $args): string { return $this->renderer->askToolPermission($toolName, $args); }
     public function showAutoApproveIndicator(string $toolName): void { $this->renderer->showAutoApproveIndicator($toolName); }
     public function clearConversation(): void { $this->renderer->clearConversation(); }
+    public function replayHistory(array $messages): void { $this->renderer->replayHistory($messages); }
     public function showNotice(string $message): void { $this->renderer->showNotice($message); }
     public function showMode(string $label, string $color = ''): void { $this->renderer->showMode($label, $color); }
     public function setPermissionMode(string $label, string $color): void { $this->renderer->setPermissionMode($label, $color); }

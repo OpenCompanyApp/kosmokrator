@@ -13,6 +13,7 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
@@ -256,23 +257,31 @@ class Kernel
     {
         $config = $this->container->make('config');
 
-        $this->container->singleton(PrismService::class, fn () => new PrismService(
-            provider: $config->get('kosmokrator.agent.default_provider', 'anthropic'),
-            model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
-            systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-            maxTokens: $config->get('kosmokrator.agent.max_tokens'),
-            temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+        $log = $this->container->make(LoggerInterface::class);
+
+        $this->container->singleton(PrismService::class, fn () => new RetryableLlmClient(
+            new PrismService(
+                provider: $config->get('kosmokrator.agent.default_provider', 'anthropic'),
+                model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
+                systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+                maxTokens: $config->get('kosmokrator.agent.max_tokens'),
+                temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+            ),
+            $log,
         ));
 
         $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        $this->container->singleton(AsyncLlmClient::class, fn () => new AsyncLlmClient(
-            apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
-            baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
-            model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
-            systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-            maxTokens: $config->get('kosmokrator.agent.max_tokens'),
-            temperature: $config->get('kosmokrator.agent.temperature', 0.0),
-            provider: $provider,
+        $this->container->singleton(AsyncLlmClient::class, fn () => new RetryableLlmClient(
+            new AsyncLlmClient(
+                apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
+                baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
+                model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
+                systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+                maxTokens: $config->get('kosmokrator.agent.max_tokens'),
+                temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+                provider: $provider,
+            ),
+            $log,
         ));
 
         $this->container->singleton(ModelCatalog::class, fn () => new ModelCatalog(

@@ -12,8 +12,10 @@ use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
+use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
+use Kosmokrator\UI\Tui\Widget\QuestionWidget;
 use Tempest\Highlight\Highlighter;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
@@ -287,6 +289,15 @@ class TuiRenderer implements RendererInterface
 
         // Ctrl+C / Escape on input — context-aware
         $this->input->onCancel(function (CancelEvent $event) {
+            // During ask_user tool: return empty (dismiss)
+            if ($this->askSuspension !== null) {
+                $suspension = $this->askSuspension;
+                $this->askSuspension = null;
+                $suspension->resume('');
+
+                return;
+            }
+
             // During thinking: cancel the LLM request
             if ($this->requestCancellation !== null) {
                 $this->requestCancellation->cancel();
@@ -843,14 +854,8 @@ HELP;
     {
         $r = Theme::reset();
         $accent = Theme::accent();
-        $white = Theme::white();
-        $border = Theme::borderAccent();
 
-        $widget = new TextWidget(
-            "{$border}┌─{$accent} Question {$border}─────────────────────────────────────────────────┐{$r}\n"
-            . "{$border}│{$r} {$white}{$question}{$r}\n"
-            . "{$border}└────────────────────────────────────────────────────────────┘{$r}"
-        );
+        $widget = new QuestionWidget($question);
         $this->overlay->add($widget);
 
         $this->tui->setFocus($this->input);
@@ -876,8 +881,6 @@ HELP;
         $r = Theme::reset();
         $accent = Theme::accent();
         $dim = Theme::dim();
-        $white = Theme::white();
-        $border = Theme::borderAccent();
 
         $widgets = [];
 
@@ -900,11 +903,8 @@ HELP;
             $detailWidget->setText($firstDetail);
         }
 
-        // Bordered header
-        $header = new TextWidget(
-            "{$border}┌─{$accent} Choose {$border}──────────────────────────────────────────────────┐{$r}\n"
-            . "{$border}│{$r} {$white}{$question}{$r}"
-        );
+        // Bordered header (no bottom border — select list sits between)
+        $header = new QuestionWidget($question, 'Choose', Theme::borderAccent(), Theme::accent(), showBottom: false);
         $this->overlay->add($header);
         $widgets[] = $header;
 
@@ -921,7 +921,7 @@ HELP;
         $widgets[] = $selectList;
 
         // Bottom border
-        $footer = new TextWidget("{$border}└────────────────────────────────────────────────────────────┘{$r}");
+        $footer = new BorderFooterWidget(Theme::borderAccent());
         $this->overlay->add($footer);
         $widgets[] = $footer;
 

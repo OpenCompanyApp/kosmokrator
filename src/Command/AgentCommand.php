@@ -173,13 +173,16 @@ class AgentCommand extends Command
         $registry = $this->buildSlashCommandRegistry();
         $ctx = new SlashCommandContext($ui, $agentLoop, $permissions, $sessionManager, $llm, $taskStore, $config, $settings);
         $nextInput = null;
+        $nextInputShown = false;
 
         while (true) {
             $taskStore->clearTerminal();
             $ui->refreshTaskBar();
 
             $input = $nextInput ?? $ui->prompt();
+            $alreadyShown = $nextInputShown;
             $nextInput = null;
+            $nextInputShown = false;
 
             if ($input === '') {
                 continue;
@@ -201,7 +204,9 @@ class AgentCommand extends Command
             }
 
             // Send to agent
-            $ui->showUserMessage($input);
+            if (! $alreadyShown) {
+                $ui->showUserMessage($input);
+            }
             $agentLoop->run($input);
 
             // Plan mode: show approval dialog after run completes
@@ -231,6 +236,7 @@ class AgentCommand extends Command
             }
 
             $nextInput = $ui->consumeQueuedMessage();
+            $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
         }
 
         $ui->teardown();

@@ -23,7 +23,7 @@ class TasksClearCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->command = new TasksClearCommand();
+        $this->command = new TasksClearCommand;
     }
 
     private function makeContext(?TaskStore $taskStore = null): SlashCommandContext

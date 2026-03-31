@@ -7,8 +7,8 @@ class PermissionEvaluator
     private PermissionMode $permissionMode = PermissionMode::Guardian;
 
     /**
-     * @param PermissionRule[] $rules
-     * @param string[] $blockedPaths Glob patterns for paths that should be denied
+     * @param  PermissionRule[]  $rules
+     * @param  string[]  $blockedPaths  Glob patterns for paths that should be denied
      */
     public function __construct(
         private readonly array $rules,
@@ -88,7 +88,7 @@ class PermissionEvaluator
             // File doesn't exist yet — resolve parent directory
             $parentResolved = realpath(dirname($path));
             if ($parentResolved !== false) {
-                $resolved = $parentResolved . '/' . basename($path);
+                $resolved = $parentResolved.'/'.basename($path);
             }
         }
         if ($resolved !== false && $resolved !== $path) {
@@ -126,5 +126,10 @@ class PermissionEvaluator
     public function resetGrants(): void
     {
         $this->grants->reset();
+    }
+
+    public function isMutativeCommand(string $command): bool
+    {
+        return $this->guardian?->isMutativeCommand($command) ?? false;
     }
 }

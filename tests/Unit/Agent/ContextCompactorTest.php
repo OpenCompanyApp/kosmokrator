@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
-use Amp\Cancellation;
 use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
@@ -21,7 +20,7 @@ class ContextCompactorTest extends TestCase
         $llm ??= $this->createMockLlm('Mocked summary');
         $models = new ModelCatalog(['models' => [], 'default' => ['context' => 128_000, 'input_price' => 3.0, 'output_price' => 15.0]]);
 
-        return new ContextCompactor($llm, $models, new NullLogger(), $thresholdPercent);
+        return new ContextCompactor($llm, $models, new NullLogger, $thresholdPercent);
     }
 
     private function createMockLlm(string $responseText): LlmClientInterface
@@ -94,7 +93,7 @@ class ContextCompactorTest extends TestCase
     {
         $compactor = $this->makeCompactor();
 
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('First question');
         $history->addAssistant('First answer');
         $history->addUser('Second question');
@@ -115,7 +114,7 @@ class ContextCompactorTest extends TestCase
     {
         $compactor = $this->makeCompactor();
 
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('Only question');
 
         $result = $compactor->compact($history, 3);
@@ -148,9 +147,9 @@ class ContextCompactorTest extends TestCase
             ));
 
         $models = new ModelCatalog(['models' => [], 'default' => ['context' => 128_000, 'input_price' => 3.0, 'output_price' => 15.0]]);
-        $compactor = new ContextCompactor($llm, $models, new NullLogger());
+        $compactor = new ContextCompactor($llm, $models, new NullLogger);
 
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('Hello');
         $history->addAssistant('World');
         $history->addUser('Recent');
@@ -208,7 +207,7 @@ class ContextCompactorTest extends TestCase
         $llm->method('chat')->willThrowException(new \RuntimeException('API error'));
 
         $models = new ModelCatalog(['models' => [], 'default' => ['context' => 128_000, 'input_price' => 3.0, 'output_price' => 15.0]]);
-        $compactor = new ContextCompactor($llm, $models, new NullLogger());
+        $compactor = new ContextCompactor($llm, $models, new NullLogger);
 
         $result = $compactor->extractMemories('Summary');
 

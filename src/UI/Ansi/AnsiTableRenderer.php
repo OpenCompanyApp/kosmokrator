@@ -7,7 +7,7 @@ use Kosmokrator\UI\Theme;
 class AnsiTableRenderer
 {
     /**
-     * @param array{alignments: list<string|null>, head: list<list<string>>, body: list<list<string>>} $table
+     * @param  array{alignments: list<string|null>, head: list<list<string>>, body: list<list<string>>}  $table
      */
     public function render(array $table, string $prefix = '  '): string
     {
@@ -42,15 +42,15 @@ class AnsiTableRenderer
         $output = '';
 
         // Top border
-        $output .= $prefix . $dim . '┌' . implode('┬', array_map(fn (int $w) => str_repeat('─', $w), $colWidths)) . '┐' . $r . "\n";
+        $output .= $prefix.$dim.'┌'.implode('┬', array_map(fn (int $w) => str_repeat('─', $w), $colWidths)).'┐'.$r."\n";
 
         // Header rows
         foreach ($headRows as $row) {
-            $output .= $prefix . $dim . '│' . $r;
+            $output .= $prefix.$dim.'│'.$r;
             foreach ($row as $i => $cell) {
                 if ($i < $colCount) {
                     $padded = self::alignCell($cell, $colWidths[$i] - 2, $alignments[$i]);
-                    $output .= ' ' . $bold . $white . $padded . $r . ' ' . $dim . '│' . $r;
+                    $output .= ' '.$bold.$white.$padded.$r.' '.$dim.'│'.$r;
                 }
             }
             $output .= "\n";
@@ -58,23 +58,23 @@ class AnsiTableRenderer
 
         // Header separator
         if ($headRows !== []) {
-            $output .= $prefix . $dim . '├' . implode('┼', array_map(fn (int $w) => str_repeat('─', $w), $colWidths)) . '┤' . $r . "\n";
+            $output .= $prefix.$dim.'├'.implode('┼', array_map(fn (int $w) => str_repeat('─', $w), $colWidths)).'┤'.$r."\n";
         }
 
         // Body rows
         foreach ($bodyRows as $row) {
-            $output .= $prefix . $dim . '│' . $r;
+            $output .= $prefix.$dim.'│'.$r;
             foreach ($row as $i => $cell) {
                 if ($i < $colCount) {
                     $padded = self::alignCell($cell, $colWidths[$i] - 2, $alignments[$i]);
-                    $output .= ' ' . $text . $padded . $r . ' ' . $dim . '│' . $r;
+                    $output .= ' '.$text.$padded.$r.' '.$dim.'│'.$r;
                 }
             }
             $output .= "\n";
         }
 
         // Bottom border
-        $output .= $prefix . $dim . '└' . implode('┴', array_map(fn (int $w) => str_repeat('─', $w), $colWidths)) . '┘' . $r . "\n";
+        $output .= $prefix.$dim.'└'.implode('┴', array_map(fn (int $w) => str_repeat('─', $w), $colWidths)).'┘'.$r."\n";
 
         return $output;
     }
@@ -85,9 +85,9 @@ class AnsiTableRenderer
         $pad = max(0, $width - $visible);
 
         return match ($align) {
-            'right' => str_repeat(' ', $pad) . $text,
-            'center' => str_repeat(' ', (int) floor($pad / 2)) . $text . str_repeat(' ', (int) ceil($pad / 2)),
-            default => $text . str_repeat(' ', $pad),
+            'right' => str_repeat(' ', $pad).$text,
+            'center' => str_repeat(' ', (int) floor($pad / 2)).$text.str_repeat(' ', (int) ceil($pad / 2)),
+            default => $text.str_repeat(' ', $pad),
         };
     }
 

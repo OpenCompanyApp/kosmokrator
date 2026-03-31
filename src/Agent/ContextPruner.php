@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
@@ -19,8 +20,7 @@ class ContextPruner
     public function __construct(
         private int $protectTokens = self::DEFAULT_PROTECT_TOKENS,
         private int $minSavings = self::DEFAULT_MIN_SAVINGS,
-    ) {
-    }
+    ) {}
 
     public function setProtectTokens(int $tokens): void
     {
@@ -109,7 +109,7 @@ class ContextPruner
     /**
      * Find the message index where protection starts (the 2nd user turn from the end).
      *
-     * @param array<int, \Prism\Prism\Contracts\Message> $messages
+     * @param  array<int, Message>  $messages
      */
     private function findProtectBoundary(array $messages): int
     {

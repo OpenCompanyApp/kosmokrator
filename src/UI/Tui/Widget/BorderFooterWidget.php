@@ -20,6 +20,6 @@ class BorderFooterWidget extends AbstractWidget
         $border = $this->borderColor ?: Theme::borderAccent();
         $inner = $context->getColumns() - 4;
 
-        return ["{$border}└" . str_repeat('─', $inner + 2) . "┘{$r}"];
+        return ["{$border}└".str_repeat('─', $inner + 2)."┘{$r}"];
     }
 }

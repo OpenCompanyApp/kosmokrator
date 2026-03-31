@@ -333,3 +333,191 @@ Sub-subagents nest inside their parent's status line. Stats (tool count, tokens)
 | Modify | Both renderers                         | Implement subagent status UI                     |
 | New    | `tests/Unit/Agent/SubagentTest.php`    | Integration tests for spawn + permission rules   |
 | New    | `tests/Unit/Tool/SubagentToolTest.php` | Validation, type inheritance, depth limits       |
+
+## Swarm Resilience Roadmap
+
+Improvements needed to make the subagent system viable for large-scale swarm operations (hundreds to thousands of agents). Ordered by priority.
+
+### 1. Global Concurrency Semaphore (Critical)
+
+**Problem:** No cap on simultaneous LLM API calls. With 153 agents in testing, 30 rate-limit errors. A swarm of thousands would be annihilated by 429s.
+
+**Solution:** A `LocalSemaphore` in `SubagentOrchestrator` that every agent must acquire before running.
+
+- Default: **10** concurrent agents
+- Configurable via `/settings` as `subagent_concurrency` and in `config/kosmokrator.yaml` as `agent.subagent_concurrency`
+- Wraps the `$agentFactory()` call inside `spawnAgent()` — acquired before the agent runs, released in `finally`
+- Separate from group semaphores (which serialize within a named group). The global semaphore limits total parallel API load across all groups.
+
+```
+  Without concurrency cap:               With cap (max 3):
+
+  ├──▶ Agent 1  ████████                  ├──▶ Agent 1  ████████
+  ├──▶ Agent 2  ████████                  ├──▶ Agent 2  ████████
+  ├──▶ Agent 3  ████████                  ├──▶ Agent 3  ████████
+  ├──▶ Agent 4  ████████   ← 429!        │    Agent 4  ░░░░████████  (queued)
+  ├──▶ Agent 5  ████████   ← 429!        │    Agent 5  ░░░░░░░░████████
+  ├──▶ Agent 6  ████████   ← 429!        │    Agent 6  ░░░░░░░░░░░░████████
+  ...50 more...            ← carnage     ...runs 3 at a time, no 429s
+```
+
+**Stats integration:** Track `'queued_global'` status while waiting for concurrency slot, visible in UI.
+
+**Files:**
+- `SubagentOrchestrator` — new `$concurrency` constructor param, `LocalSemaphore` field, acquire/release around `$agentFactory()`
+- `AgentCommand` — read setting, pass to orchestrator
+- `config/kosmokrator.yaml` — add `subagent_concurrency: 10`
+- `SubagentStats` — track queued-for-concurrency status
+
+### 2. Automatic Retry for Failed Subagents (High)
+
+**Problem:** A 429 or 500 kills the agent permanently — its work is lost. The parent gets `"Error: ..."` and cannot retry. With large swarms, agent attrition is significant.
+
+**Solution:** Wrap the `$agentFactory()` call in `SubagentOrchestrator::spawnAgent()` with retry logic.
+
+- Max **2 retries** (configurable via `subagent_max_retries` setting, default 2)
+- Only retry on retryable errors: rate limit (429), server errors (5xx), network timeouts
+- Exponential backoff: 5s, 15s
+- Stats track `$retries` count
+- Log each retry attempt
+
+This is distinct from `RetryableLlmClient` retry (which retries individual HTTP requests). Agent-level retry restarts the entire agent from scratch if it dies partway through its tool loop.
+
+```
+  Agent "treaty-DE-NL":
+    attempt 1 → runs 4 tools → 429 on LLM call → dies
+    (wait 5s)
+    attempt 2 → runs 7 tools → completes → result returned
+```
+
+**Files:**
+- `SubagentOrchestrator::spawnAgent()` — retry loop around `$agentFactory()`
+- `SubagentStats` — add `$retries` field
+- `config/kosmokrator.yaml` — add `subagent_max_retries: 2`
+
+### 3. Decoupled Background Agent Cancellation (High)
+
+**Problem:** Background agents share the parent's cancellation token via `NullRenderer`. Phase transitions in the parent (Thinking→Tools→Thinking) can orphan or cancel background agents. Partially fixed by keeping `requestCancellation` alive across phase transitions, but the architecture is fragile.
+
+**Solution:** Dedicated `DeferredCancellation` per background agent, decoupled from the parent's per-request token.
+
+- `SubagentOrchestrator` creates a new `DeferredCancellation` for each background-mode agent
+- `SubagentFactory` passes the dedicated token to `NullRenderer`
+- Only top-level Ctrl+C cancels background agents (via `cancelAll()` on orchestrator)
+- Parent phase transitions have zero effect on background agents
+
+```
+  Current (fragile):                     Proposed (decoupled):
+
+  Parent DeferredCancellation            Parent DeferredCancellation
+    │                                      │
+    ├──▶ NullRenderer (bg agent A)         │  (parent phases don't affect bg agents)
+    ├──▶ NullRenderer (bg agent B)         │
+    │                                      │
+    │  enterThinking() creates new token   Orchestrator owns bg tokens:
+    │  → old token orphaned!               ├──▶ DeferredCancellation (agent A)
+    │  → bg agents lose cancellation       ├──▶ DeferredCancellation (agent B)
+                                           │
+                                           Ctrl+C → orchestrator.cancelAll()
+                                             → cancels all bg tokens
+```
+
+**Files:**
+- `SubagentOrchestrator` — track background `DeferredCancellation` tokens, add `cancelAll()` method
+- `SubagentFactory` — create per-agent cancellation for background mode
+- `NullRenderer` — accept the dedicated token
+
+### 4. Swarm Progress Dashboard (Medium)
+
+**Problem:** No aggregated view of swarm status. With thousands of agents you're flying blind — no completion count, no cost estimate, no ETA.
+
+**Solution:** A `/agents` slash command and live task bar integration.
+
+```
+  /agents output:
+
+  ⟡ Agents: 1247/3000 done │ 89 failed │ 12 running │ 1652 queued
+  ⟡ Tokens: 2.4M in / 890K out │ Cost: ~$47.12
+  ⟡ Elapsed: 14m 32s │ Avg: 0.7s/agent │ ETA: ~22m
+
+  Active:
+    ├─ ● explore "treaty DE-NL"    12 tools  34s
+    ├─ ● explore "treaty DE-US"     8 tools  21s
+    └─ ● general "scrape products"  3 tools   9s
+
+  Recent failures:
+    ├─ ✗ explore "treaty DE-JP"  — 429 rate limit (retrying)
+    └─ ✗ explore "treaty DE-FR"  — context overflow
+```
+
+**Live task bar integration:** When >5 agents are active, show a compact counter in the TUI task bar:
+
+```
+  ⟡ 1247/3000 agents │ 12 running │ ~$47 │ ETA 22m
+```
+
+**Files:**
+- New `Slash/AgentsCommand.php` — queries `SubagentOrchestrator::allStats()`, renders table
+- `SlashCommandRegistry` — register it
+- `SubagentOrchestrator` — add `summary()` method returning aggregated counts/tokens/cost
+- Optional: TUI task bar widget for live swarm counter
+
+### 5. Result Persistence / Checkpointing (Medium)
+
+**Problem:** Kill the process at agent #1847 and you lose everything. No resume capability. Each agent's result is an in-memory string — crash = total loss.
+
+**Solution:** Stream completed agent results to a JSONL file alongside the session.
+
+- Path: `~/.kosmokrator/sessions/{session_id}/agents.jsonl`
+- Each line written on agent completion:
+  ```json
+  {"id":"treaty-DE-NL","task":"...","result":"...","status":"done","elapsed":12.3,"tokens_in":8400,"tokens_out":2100,"timestamp":"2026-03-31T14:22:00+00:00"}
+  ```
+- Written in `SubagentOrchestrator` in the `finally` block after agent completes
+- On resume, parent agent receives: "1,247 agents already completed. Their results are available. Continue from where you left off."
+
+```
+  Session crash at agent #1847:
+
+  ~/.kosmokrator/sessions/abc123/agents.jsonl
+    line 1:    {"id":"treaty-1", "status":"done", "result":"..."}
+    line 2:    {"id":"treaty-2", "status":"done", "result":"..."}
+    ...
+    line 1847: {"id":"treaty-1847", "status":"done", "result":"..."}
+    ── crash ──
+
+  Resume:
+    parent reads agents.jsonl → knows 1847 are done
+    skips completed agents → continues from #1848
+```
+
+**Files:**
+- New `SubagentResultStore` class — JSONL append + read + filter by status
+- `SubagentOrchestrator` — write to store on completion
+- `AgentCommand` — pass session path to orchestrator
+- Resume logic in `AgentCommand` or `SubagentOrchestrator`
+
+### 6. Cost Tracking per Agent (Low)
+
+**Problem:** No per-agent cost breakdown. `SubagentStats` tracks tokens but doesn't calculate cost. Hard to budget large swarm runs.
+
+**Solution:**
+- `SubagentStats` or `SubagentOrchestrator::summary()` calculates cost using `ModelCatalog` pricing
+- Surfaced in `/agents` dashboard and in batch result display
+- Optionally: cost budget limit setting (`subagent_cost_limit`) that pauses spawning when exceeded
+
+### Configuration Summary
+
+New settings (all via `/settings` and `config/kosmokrator.yaml`):
+
+| Setting | Default | Description |
+|---|---|---|
+| `subagent_concurrency` | `10` | Max concurrent subagents hitting the API |
+| `subagent_max_retries` | `2` | Auto-retry count for failed subagents |
+
+Existing settings that interact:
+
+| Setting | Default | Description |
+|---|---|---|
+| `subagent_max_depth` | `3` | Max nesting depth (root → sub → subsub) |
+| `max_retries` | `0` | Per-request retry for the main LLM client |

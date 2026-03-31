@@ -26,7 +26,7 @@ class GuardianEvaluator
     private const SHELL_META_PATTERN = '/[;&|`$><\n]/';
 
     /**
-     * @param string[] $safeCommandPatterns Glob patterns for bash commands to auto-approve
+     * @param  string[]  $safeCommandPatterns  Glob patterns for bash commands to auto-approve
      */
     public function __construct(
         private readonly string $projectRoot,
@@ -69,10 +69,10 @@ class GuardianEvaluator
             if ($parent === false) {
                 return false;
             }
-            $resolved = $parent . '/' . basename($path);
+            $resolved = $parent.'/'.basename($path);
         }
 
-        return str_starts_with($resolved, $this->projectRoot . '/');
+        return str_starts_with($resolved, $this->projectRoot.'/');
     }
 
     private function isSafeCommand(string $command): bool
@@ -88,6 +88,56 @@ class GuardianEvaluator
 
         foreach ($this->safeCommandPatterns as $pattern) {
             if (PermissionRule::matchesGlob($command, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Mutative command prefixes — commands that modify files, packages, or system state.
+     * Used to block write operations in Ask mode.
+     */
+    private const MUTATIVE_PATTERNS = [
+        'rm ', 'rm	', 'rmdir ',
+        'mv ', 'cp ',
+        'chmod ', 'chown ', 'chgrp ',
+        'mkdir ', 'mkfifo ',
+        'touch ',
+        'ln ',
+        'git commit', 'git push', 'git merge', 'git rebase', 'git reset', 'git checkout',
+        'git stash', 'git cherry-pick', 'git revert', 'git tag', 'git branch -d',
+        'git branch -D', 'git branch -m', 'git clean', 'git am', 'git apply',
+        'npm install', 'npm ci', 'npm uninstall', 'npm update', 'npm publish',
+        'npx ',
+        'composer require', 'composer remove', 'composer update', 'composer install',
+        'pip install', 'pip uninstall',
+        'cargo install', 'cargo add', 'cargo remove',
+        'apt ', 'apt-get ', 'brew ', 'yum ', 'dnf ', 'pacman ',
+        'docker ', 'kubectl ',
+        'kill ', 'killall ', 'pkill ',
+        'dd ',
+        'truncate ',
+        'shred ',
+        'tee ',
+    ];
+
+    /**
+     * Check if a command is mutative (modifies files, packages, or system state).
+     * Used to enforce read-only bash in Ask mode.
+     */
+    public function isMutativeCommand(string $command): bool
+    {
+        $command = trim($command);
+
+        if ($this->containsShellOperators($command)) {
+            return true;
+        }
+
+        $lower = strtolower($command);
+        foreach (self::MUTATIVE_PATTERNS as $pattern) {
+            if (str_starts_with($lower, $pattern) || $lower === rtrim($pattern)) {
                 return true;
             }
         }

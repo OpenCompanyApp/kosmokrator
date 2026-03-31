@@ -8,12 +8,13 @@ use PHPUnit\Framework\TestCase;
 class GlobToolTest extends TestCase
 {
     private GlobTool $tool;
+
     private string $tempDir;
 
     protected function setUp(): void
     {
-        $this->tool = new GlobTool();
-        $this->tempDir = sys_get_temp_dir() . '/kosmokrator_test_' . uniqid();
+        $this->tool = new GlobTool;
+        $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
     }
 
@@ -82,10 +83,10 @@ class GlobToolTest extends TestCase
 
     public function test_nested_directory_pattern(): void
     {
-        mkdir($this->tempDir . '/src/sub', 0755, true);
+        mkdir($this->tempDir.'/src/sub', 0755, true);
         $this->createFile('root.php');
-        file_put_contents($this->tempDir . '/src/foo.php', 'content');
-        file_put_contents($this->tempDir . '/src/sub/bar.php', 'content');
+        file_put_contents($this->tempDir.'/src/foo.php', 'content');
+        file_put_contents($this->tempDir.'/src/sub/bar.php', 'content');
 
         $result = $this->tool->execute(['pattern' => 'src/**/*.php', 'path' => $this->tempDir]);
 
@@ -96,8 +97,8 @@ class GlobToolTest extends TestCase
 
     public function test_returns_relative_paths(): void
     {
-        mkdir($this->tempDir . '/subdir', 0755, true);
-        file_put_contents($this->tempDir . '/subdir/file.txt', 'content');
+        mkdir($this->tempDir.'/subdir', 0755, true);
+        file_put_contents($this->tempDir.'/subdir/file.txt', 'content');
 
         $result = $this->tool->execute(['pattern' => '**/*.txt', 'path' => $this->tempDir]);
 
@@ -119,7 +120,7 @@ class GlobToolTest extends TestCase
 
     private function createFile(string $name, string $content = 'content'): string
     {
-        $path = $this->tempDir . '/' . $name;
+        $path = $this->tempDir.'/'.$name;
         file_put_contents($path, $content);
 
         return $path;

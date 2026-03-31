@@ -31,14 +31,14 @@ class SlashCommandRegistry
 
         // Try exact match or prefix match (for commands with args like "/resume <id>")
         foreach ($this->commands as $name => $command) {
-            if ($lower === $name || str_starts_with($lower, $name . ' ')) {
+            if ($lower === $name || str_starts_with($lower, $name.' ')) {
                 return $command;
             }
         }
 
         // Try aliases
         foreach ($this->aliases as $alias => $name) {
-            if ($lower === $alias || str_starts_with($lower, $alias . ' ')) {
+            if ($lower === $alias || str_starts_with($lower, $alias.' ')) {
                 return $this->commands[$name];
             }
         }
@@ -58,7 +58,7 @@ class SlashCommandRegistry
         if ($lower === $name) {
             return '';
         }
-        if (str_starts_with($lower, $name . ' ')) {
+        if (str_starts_with($lower, $name.' ')) {
             return trim(substr($input, strlen($name)));
         }
 
@@ -67,7 +67,7 @@ class SlashCommandRegistry
             if ($lower === $alias) {
                 return '';
             }
-            if (str_starts_with($lower, $alias . ' ')) {
+            if (str_starts_with($lower, $alias.' ')) {
                 return trim(substr($input, strlen($alias)));
             }
         }

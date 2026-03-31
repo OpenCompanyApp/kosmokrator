@@ -37,7 +37,7 @@ class MemoriesCommand implements SlashCommand
             foreach ($memories as $m) {
                 $lines[] = "  [{$m['id']}] ({$m['type']}) {$m['title']}";
             }
-            $ctx->ui->showNotice("Memories:\n" . implode("\n", $lines));
+            $ctx->ui->showNotice("Memories:\n".implode("\n", $lines));
         }
 
         return SlashCommandResult::continue();

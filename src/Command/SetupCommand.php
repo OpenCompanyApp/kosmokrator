@@ -79,7 +79,7 @@ class SetupCommand extends Command
 
         // API key
         $currentKey = $settings->get('global', "provider.{$provider}.api_key") ?? '';
-        $maskedKey = $currentKey !== '' ? substr($currentKey, 0, 8) . '...' . substr($currentKey, -4) : '';
+        $maskedKey = $currentKey !== '' ? substr($currentKey, 0, 8).'...'.substr($currentKey, -4) : '';
         $keyPrompt = $maskedKey !== '' ? " [{$maskedKey}]" : '';
 
         $apiKey = readline("{$dim}  API key{$keyPrompt}: {$r}") ?: $currentKey;

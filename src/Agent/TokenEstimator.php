@@ -34,7 +34,7 @@ class TokenEstimator
     }
 
     /**
-     * @param Message[] $messages
+     * @param  Message[]  $messages
      */
     public static function estimateMessages(array $messages): int
     {
@@ -47,20 +47,20 @@ class TokenEstimator
     }
 
     /**
-     * @param ToolCall[] $toolCalls
+     * @param  ToolCall[]  $toolCalls
      */
     private static function estimateToolCalls(array $toolCalls): int
     {
         $total = 0;
         foreach ($toolCalls as $tc) {
-            $total += self::estimate($tc->name . json_encode($tc->arguments()));
+            $total += self::estimate($tc->name.json_encode($tc->arguments()));
         }
 
         return $total;
     }
 
     /**
-     * @param ToolResult[] $toolResults
+     * @param  ToolResult[]  $toolResults
      */
     private static function estimateToolResults(array $toolResults): int
     {

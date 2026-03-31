@@ -49,7 +49,7 @@ class ResumeCommand implements SlashCommand
 
                 $items[] = [
                     'value' => $s['id'],
-                    'label' => $preview . $current,
+                    'label' => $preview.$current,
                     'description' => "{$msgCount} msgs, {$age}",
                 ];
             }
@@ -87,10 +87,16 @@ class ResumeCommand implements SlashCommand
 
         $seconds = time() - (int) ((float) $timestamp);
 
-        if ($seconds < 60) { return 'just now'; }
-        if ($seconds < 3600) { return (int) ($seconds / 60) . 'm ago'; }
-        if ($seconds < 86400) { return (int) ($seconds / 3600) . 'h ago'; }
+        if ($seconds < 60) {
+            return 'just now';
+        }
+        if ($seconds < 3600) {
+            return (int) ($seconds / 60).'m ago';
+        }
+        if ($seconds < 86400) {
+            return (int) ($seconds / 3600).'h ago';
+        }
 
-        return (int) ($seconds / 86400) . 'd ago';
+        return (int) ($seconds / 86400).'d ago';
     }
 }

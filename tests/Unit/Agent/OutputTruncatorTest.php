@@ -13,14 +13,14 @@ class OutputTruncatorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/kosmokrator_truncator_test_' . uniqid();
+        $this->tmpDir = sys_get_temp_dir().'/kosmokrator_truncator_test_'.uniqid();
         mkdir($this->tmpDir, 0755, true);
     }
 
     protected function tearDown(): void
     {
         // Clean up temp files
-        $files = glob($this->tmpDir . '/*');
+        $files = glob($this->tmpDir.'/*');
         foreach ($files as $file) {
             unlink($file);
         }
@@ -37,7 +37,7 @@ class OutputTruncatorTest extends TestCase
         $result = $truncator->truncate($output, 'tc1');
 
         $this->assertSame($output, $result);
-        $this->assertEmpty(glob($this->tmpDir . '/*'));
+        $this->assertEmpty(glob($this->tmpDir.'/*'));
     }
 
     public function test_truncate_by_lines(): void
@@ -72,7 +72,7 @@ class OutputTruncatorTest extends TestCase
 
         $truncator->truncate($output, 'tc3');
 
-        $files = glob($this->tmpDir . '/tool_tc3.txt');
+        $files = glob($this->tmpDir.'/tool_tc3.txt');
         $this->assertCount(1, $files);
         $this->assertSame($output, file_get_contents($files[0]));
     }

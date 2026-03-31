@@ -15,7 +15,7 @@ class TaskListToolTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->store = new TaskStore();
+        $this->store = new TaskStore;
         $this->tool = new TaskListTool($this->store);
     }
 

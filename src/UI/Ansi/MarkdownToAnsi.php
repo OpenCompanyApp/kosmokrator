@@ -36,12 +36,17 @@ class MarkdownToAnsi
     private const MARGIN = '  ';
 
     private MarkdownParser $parser;
+
     private Highlighter $highlighter;
+
     private AnsiTableRenderer $tableRenderer;
 
     private string $output = '';
+
     private string $inlineBuffer = '';
+
     private int $blockquoteDepth = 0;
+
     private int $termWidth;
 
     /** @var list<array{type: string, counter: int, start: int}> */
@@ -49,35 +54,45 @@ class MarkdownToAnsi
 
     // Table collection state
     private bool $collectingTable = false;
+
     /** @var list<string|null> */
     private array $tableAlignments = [];
+
     /** @var list<list<string>> */
     private array $tableHead = [];
+
     /** @var list<list<string>> */
     private array $tableBody = [];
+
     private bool $tableInHead = false;
+
     /** @var list<string> */
     private array $tableCurrentRow = [];
+
     private string $tableCellBuffer = '';
+
     private bool $collectingCell = false;
 
     // Link collection state
     private bool $collectingLink = false;
+
     private string $linkUrl = '';
+
     private string $linkBuffer = '';
 
     private bool $insideListItem = false;
+
     private bool $listItemNeedsBullet = false;
 
     public function __construct()
     {
-        $environment = new Environment();
-        $environment->addExtension(new CommonMarkCoreExtension());
-        $environment->addExtension(new GithubFlavoredMarkdownExtension());
+        $environment = new Environment;
+        $environment->addExtension(new CommonMarkCoreExtension);
+        $environment->addExtension(new GithubFlavoredMarkdownExtension);
 
         $this->parser = new MarkdownParser($environment);
-        $this->highlighter = new Highlighter(new KosmokratorTerminalTheme());
-        $this->tableRenderer = new AnsiTableRenderer();
+        $this->highlighter = new Highlighter(new KosmokratorTerminalTheme);
+        $this->tableRenderer = new AnsiTableRenderer;
         $this->termWidth = self::detectTermWidth();
     }
 
@@ -103,8 +118,9 @@ class MarkdownToAnsi
             }
 
             // When collecting table data, handle table nodes specially
-            if ($this->collectingTable && !($node instanceof Table && !$entering)) {
+            if ($this->collectingTable && ! ($node instanceof Table && ! $entering)) {
                 $this->handleTableNode($node, $entering);
+
                 continue;
             }
 
@@ -145,9 +161,9 @@ class MarkdownToAnsi
             $indent = $this->indent();
 
             if ($level <= 2) {
-                $this->output .= $indent . Theme::white() . Theme::bold() . $prefix . ' ' . $this->inlineBuffer . $r . "\n";
+                $this->output .= $indent.Theme::white().Theme::bold().$prefix.' '.$this->inlineBuffer.$r."\n";
             } else {
-                $this->output .= $indent . Theme::info() . $prefix . ' ' . $this->inlineBuffer . $r . "\n";
+                $this->output .= $indent.Theme::info().$prefix.' '.$this->inlineBuffer.$r."\n";
             }
 
             $this->inlineBuffer = '';
@@ -179,7 +195,7 @@ class MarkdownToAnsi
         $lines = $this->wrapAnsiText($this->inlineBuffer, $availableWidth);
 
         foreach ($lines as $line) {
-            $this->output .= $indent . $line . Theme::reset() . "\n";
+            $this->output .= $indent.$line.Theme::reset()."\n";
         }
         $this->output .= "\n";
         $this->inlineBuffer = '';
@@ -220,8 +236,8 @@ class MarkdownToAnsi
         $lines = explode("\n", $highlighted);
 
         // Top border with language label
-        $label = $language !== '' ? $dim . '── ' . $language . ' ' : $dim;
-        $this->output .= $indent . $label . str_repeat('─', 20) . $r . "\n";
+        $label = $language !== '' ? $dim.'── '.$language.' ' : $dim;
+        $this->output .= $indent.$label.str_repeat('─', 20).$r."\n";
 
         // Code lines — wrap long lines to prevent terminal clipping
         $indentWidth = AnsiTableRenderer::visibleWidth($indent);
@@ -232,15 +248,15 @@ class MarkdownToAnsi
             if (AnsiTableRenderer::visibleWidth($line) > $available) {
                 $wrapped = $this->wrapCodeLine($line, $available);
                 foreach ($wrapped as $wl) {
-                    $this->output .= $indent . $dim . '│' . $r . ' ' . $wl . $r . "\n";
+                    $this->output .= $indent.$dim.'│'.$r.' '.$wl.$r."\n";
                 }
             } else {
-                $this->output .= $indent . $dim . '│' . $r . ' ' . $line . $r . "\n";
+                $this->output .= $indent.$dim.'│'.$r.' '.$line.$r."\n";
             }
         }
 
         // Bottom border
-        $this->output .= $indent . $dim . '──' . str_repeat('─', 20) . $r . "\n\n";
+        $this->output .= $indent.$dim.'──'.str_repeat('─', 20).$r."\n\n";
     }
 
     private function handleBlockQuote(bool $entering): void
@@ -294,7 +310,7 @@ class MarkdownToAnsi
         if ($this->listItemNeedsBullet) {
             if ($listCtx !== false) {
                 if ($listCtx['type'] === ListBlock::TYPE_ORDERED) {
-                    $bullet = $listCtx['counter'] . '. ';
+                    $bullet = $listCtx['counter'].'. ';
                     $this->listStack[array_key_last($this->listStack)]['counter']++;
                 } else {
                     $bullet = $depth > 1 ? '◦ ' : '• ';
@@ -303,26 +319,26 @@ class MarkdownToAnsi
                 $bullet = '• ';
             }
 
-            $continuationIndent = $indent . $bulletIndent . str_repeat(' ', mb_strlen($bullet));
+            $continuationIndent = $indent.$bulletIndent.str_repeat(' ', mb_strlen($bullet));
             $contWidth = AnsiTableRenderer::visibleWidth($continuationIndent);
             $availableWidth = max(40, $this->termWidth - $contWidth - 2);
             $lines = $this->wrapAnsiText($this->inlineBuffer, $availableWidth);
 
-            $this->output .= $indent . $bulletIndent . Theme::dim() . $bullet . Theme::reset() . array_shift($lines) . Theme::reset() . "\n";
+            $this->output .= $indent.$bulletIndent.Theme::dim().$bullet.Theme::reset().array_shift($lines).Theme::reset()."\n";
             foreach ($lines as $line) {
-                $this->output .= $continuationIndent . $line . Theme::reset() . "\n";
+                $this->output .= $continuationIndent.$line.Theme::reset()."\n";
             }
 
             $this->listItemNeedsBullet = false;
         } else {
             // Continuation paragraph in same list item (loose list)
-            $continuationIndent = $indent . $bulletIndent . '  ';
+            $continuationIndent = $indent.$bulletIndent.'  ';
             $contWidth = AnsiTableRenderer::visibleWidth($continuationIndent);
             $availableWidth = max(40, $this->termWidth - $contWidth - 2);
             $lines = $this->wrapAnsiText($this->inlineBuffer, $availableWidth);
 
             foreach ($lines as $line) {
-                $this->output .= $continuationIndent . $line . Theme::reset() . "\n";
+                $this->output .= $continuationIndent.$line.Theme::reset()."\n";
             }
         }
 
@@ -334,7 +350,7 @@ class MarkdownToAnsi
         $indent = $this->indent();
         $indentWidth = AnsiTableRenderer::visibleWidth($indent);
         $width = max(20, $this->termWidth - $indentWidth - 4);
-        $this->output .= "\n" . $indent . Theme::dim() . str_repeat('━', $width) . Theme::reset() . "\n\n";
+        $this->output .= "\n".$indent.Theme::dim().str_repeat('━', $width).Theme::reset()."\n\n";
     }
 
     // ── Table handling ──────────────────────────────────────────────────
@@ -357,7 +373,7 @@ class MarkdownToAnsi
                 'body' => $this->tableBody,
             ], $this->indent());
 
-            $this->output .= $rendered . "\n";
+            $this->output .= $rendered."\n";
         }
     }
 
@@ -368,7 +384,7 @@ class MarkdownToAnsi
             $node instanceof TableRow => $this->handleTableRow($entering),
             $node instanceof TableCell => $this->handleTableCell($node, $entering),
             $node instanceof Text => $entering && $this->collectingCell ? $this->tableCellBuffer .= $node->getLiteral() : null,
-            $node instanceof Code => $entering && $this->collectingCell ? $this->tableCellBuffer .= Theme::code() . '`' . $node->getLiteral() . '`' . Theme::reset() : null,
+            $node instanceof Code => $entering && $this->collectingCell ? $this->tableCellBuffer .= Theme::code().'`'.$node->getLiteral().'`'.Theme::reset() : null,
             $node instanceof Strong => $this->collectingCell ? ($entering ? $this->tableCellBuffer .= Theme::bold() : $this->tableCellBuffer .= Theme::reset()) : null,
             $node instanceof Emphasis => $this->collectingCell ? ($entering ? $this->tableCellBuffer .= "\033[3m" : $this->tableCellBuffer .= "\033[23m") : null,
             default => null,
@@ -414,7 +430,7 @@ class MarkdownToAnsi
     private function handleStrong(bool $entering): void
     {
         if ($entering) {
-            $this->appendInline(Theme::bold() . Theme::white());
+            $this->appendInline(Theme::bold().Theme::white());
         } else {
             $this->appendInline(Theme::reset());
         }
@@ -431,7 +447,7 @@ class MarkdownToAnsi
 
     private function handleInlineCode(Code $node): void
     {
-        $this->appendInline(Theme::code() . '`' . $node->getLiteral() . '`' . Theme::reset());
+        $this->appendInline(Theme::code().'`'.$node->getLiteral().'`'.Theme::reset());
     }
 
     private function handleLink(Link $node, bool $entering): void
@@ -442,7 +458,7 @@ class MarkdownToAnsi
             $this->linkBuffer = '';
         } else {
             $this->collectingLink = false;
-            $this->appendInline(Theme::link() . $this->linkBuffer . Theme::reset() . Theme::dim() . ' (' . $this->linkUrl . ')' . Theme::reset());
+            $this->appendInline(Theme::link().$this->linkBuffer.Theme::reset().Theme::dim().' ('.$this->linkUrl.')'.Theme::reset());
         }
     }
 
@@ -454,7 +470,7 @@ class MarkdownToAnsi
             $this->linkBuffer = '';
         } else {
             $this->collectingLink = false;
-            $this->appendInline(Theme::dim() . '[' . Theme::link() . $this->linkBuffer . Theme::dim() . '](' . $this->linkUrl . ')' . Theme::reset());
+            $this->appendInline(Theme::dim().'['.Theme::link().$this->linkBuffer.Theme::dim().']('.$this->linkUrl.')'.Theme::reset());
         }
     }
 
@@ -470,9 +486,9 @@ class MarkdownToAnsi
     private function handleTaskListMarker(TaskListItemMarker $node): void
     {
         if ($node->isChecked()) {
-            $this->appendInline(Theme::success() . '☑ ' . Theme::reset());
+            $this->appendInline(Theme::success().'☑ '.Theme::reset());
         } else {
-            $this->appendInline(Theme::dim() . '☐ ' . Theme::reset());
+            $this->appendInline(Theme::dim().'☐ '.Theme::reset());
         }
     }
 
@@ -505,7 +521,7 @@ class MarkdownToAnsi
     {
         $indent = self::MARGIN;
         for ($i = 0; $i < $this->blockquoteDepth; $i++) {
-            $indent .= Theme::info() . '│' . Theme::reset() . ' ';
+            $indent .= Theme::info().'│'.Theme::reset().' ';
         }
 
         return $indent;
@@ -573,6 +589,7 @@ class MarkdownToAnsi
                 if ($end !== false) {
                     $current .= substr($line, $i, $end - $i + 1);
                     $i = $end + 1;
+
                     continue;
                 }
             }

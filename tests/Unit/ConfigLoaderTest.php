@@ -8,14 +8,17 @@ use PHPUnit\Framework\TestCase;
 class ConfigLoaderTest extends TestCase
 {
     private string $tempDir;
+
     private string $configDir;
+
     private string $originalHome;
+
     private string $originalCwd;
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/kosmokrator_config_test_' . uniqid();
-        $this->configDir = $this->tempDir . '/config';
+        $this->tempDir = sys_get_temp_dir().'/kosmokrator_config_test_'.uniqid();
+        $this->configDir = $this->tempDir.'/config';
         mkdir($this->configDir, 0755, true);
 
         $this->originalHome = getenv('HOME') ?: '';
@@ -36,7 +39,7 @@ class ConfigLoaderTest extends TestCase
 
     public function test_loads_yaml_files_from_config_path(): void
     {
-        file_put_contents($this->configDir . '/app.yaml', "name: KosmoKrator\nversion: '1.0'");
+        file_put_contents($this->configDir.'/app.yaml', "name: KosmoKrator\nversion: '1.0'");
 
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
@@ -47,8 +50,8 @@ class ConfigLoaderTest extends TestCase
 
     public function test_multiple_yaml_files_each_becomes_top_level_key(): void
     {
-        file_put_contents($this->configDir . '/app.yaml', 'name: Test');
-        file_put_contents($this->configDir . '/db.yaml', 'host: localhost');
+        file_put_contents($this->configDir.'/app.yaml', 'name: Test');
+        file_put_contents($this->configDir.'/db.yaml', 'host: localhost');
 
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
@@ -62,7 +65,7 @@ class ConfigLoaderTest extends TestCase
         $_ENV['KOSMO_TEST_VAR'] = 'resolved_value';
         putenv('KOSMO_TEST_VAR=resolved_value');
 
-        file_put_contents($this->configDir . '/app.yaml', 'key: ${KOSMO_TEST_VAR}');
+        file_put_contents($this->configDir.'/app.yaml', 'key: ${KOSMO_TEST_VAR}');
 
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
@@ -75,7 +78,7 @@ class ConfigLoaderTest extends TestCase
 
     public function test_env_var_fallback_to_empty_string(): void
     {
-        file_put_contents($this->configDir . '/app.yaml', 'key: "${KOSMO_NONEXISTENT_VAR_XYZ}"');
+        file_put_contents($this->configDir.'/app.yaml', 'key: "${KOSMO_NONEXISTENT_VAR_XYZ}"');
 
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
@@ -86,12 +89,12 @@ class ConfigLoaderTest extends TestCase
 
     public function test_user_config_merged(): void
     {
-        file_put_contents($this->configDir . '/kosmokrator.yaml', "agent:\n  max_tokens: 1000");
+        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  max_tokens: 1000");
 
         // Set up fake user config
-        $fakeHome = $this->tempDir . '/home';
-        mkdir($fakeHome . '/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome . '/.kosmokrator/config.yaml', "agent:\n  max_tokens: 5000");
+        $fakeHome = $this->tempDir.'/home';
+        mkdir($fakeHome.'/.kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "agent:\n  max_tokens: 5000");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -104,16 +107,16 @@ class ConfigLoaderTest extends TestCase
 
     public function test_project_config_merged(): void
     {
-        file_put_contents($this->configDir . '/kosmokrator.yaml', "agent:\n  temperature: 0.0");
+        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  temperature: 0.0");
 
         // Set up project config in cwd
-        $projectDir = $this->tempDir . '/project';
+        $projectDir = $this->tempDir.'/project';
         mkdir($projectDir, 0755, true);
-        file_put_contents($projectDir . '/.kosmokrator.yaml', "agent:\n  temperature: 0.5");
+        file_put_contents($projectDir.'/.kosmokrator.yaml', "agent:\n  temperature: 0.5");
         chdir($projectDir);
 
         // Prevent user config from interfering
-        $fakeHome = $this->tempDir . '/empty_home';
+        $fakeHome = $this->tempDir.'/empty_home';
         mkdir($fakeHome, 0755, true);
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
@@ -126,19 +129,19 @@ class ConfigLoaderTest extends TestCase
 
     public function test_merge_priority_project_over_user_over_base(): void
     {
-        file_put_contents($this->configDir . '/kosmokrator.yaml', "agent:\n  model: base-model");
+        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  model: base-model");
 
         // User config
-        $fakeHome = $this->tempDir . '/home';
-        mkdir($fakeHome . '/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome . '/.kosmokrator/config.yaml', "agent:\n  model: user-model");
+        $fakeHome = $this->tempDir.'/home';
+        mkdir($fakeHome.'/.kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "agent:\n  model: user-model");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
         // Project config
-        $projectDir = $this->tempDir . '/project';
+        $projectDir = $this->tempDir.'/project';
         mkdir($projectDir, 0755, true);
-        file_put_contents($projectDir . '/.kosmokrator.yaml', "agent:\n  model: project-model");
+        file_put_contents($projectDir.'/.kosmokrator.yaml', "agent:\n  model: project-model");
         chdir($projectDir);
 
         $loader = new ConfigLoader($this->configDir);
@@ -149,11 +152,11 @@ class ConfigLoaderTest extends TestCase
 
     public function test_deep_merge_preserves_non_overlapping_keys(): void
     {
-        file_put_contents($this->configDir . '/kosmokrator.yaml', "agent:\n  model: base\n  max_tokens: 1000");
+        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  model: base\n  max_tokens: 1000");
 
-        $fakeHome = $this->tempDir . '/home';
-        mkdir($fakeHome . '/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome . '/.kosmokrator/config.yaml', "agent:\n  model: override");
+        $fakeHome = $this->tempDir.'/home';
+        mkdir($fakeHome.'/.kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "agent:\n  model: override");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -167,11 +170,11 @@ class ConfigLoaderTest extends TestCase
 
     public function test_user_config_providers_mapped_to_prism_providers(): void
     {
-        file_put_contents($this->configDir . '/prism.yaml', "providers:\n  anthropic:\n    api_key: base");
+        file_put_contents($this->configDir.'/prism.yaml', "providers:\n  anthropic:\n    api_key: base");
 
-        $fakeHome = $this->tempDir . '/home';
-        mkdir($fakeHome . '/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome . '/.kosmokrator/config.yaml', "providers:\n  anthropic:\n    api_key: user-key");
+        $fakeHome = $this->tempDir.'/home';
+        mkdir($fakeHome.'/.kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "providers:\n  anthropic:\n    api_key: user-key");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -183,9 +186,9 @@ class ConfigLoaderTest extends TestCase
 
     public function test_no_user_config_file(): void
     {
-        file_put_contents($this->configDir . '/app.yaml', 'name: Test');
+        file_put_contents($this->configDir.'/app.yaml', 'name: Test');
 
-        $fakeHome = $this->tempDir . '/empty_home';
+        $fakeHome = $this->tempDir.'/empty_home';
         mkdir($fakeHome, 0755, true);
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
@@ -199,13 +202,13 @@ class ConfigLoaderTest extends TestCase
 
     public function test_no_project_config_file(): void
     {
-        file_put_contents($this->configDir . '/app.yaml', 'name: Test');
+        file_put_contents($this->configDir.'/app.yaml', 'name: Test');
 
-        $projectDir = $this->tempDir . '/no_project_config';
+        $projectDir = $this->tempDir.'/no_project_config';
         mkdir($projectDir, 0755, true);
         chdir($projectDir);
 
-        $fakeHome = $this->tempDir . '/empty_home2';
+        $fakeHome = $this->tempDir.'/empty_home2';
         mkdir($fakeHome, 0755, true);
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
@@ -218,9 +221,9 @@ class ConfigLoaderTest extends TestCase
 
     public function test_empty_yaml_file(): void
     {
-        file_put_contents($this->configDir . '/empty.yaml', '');
+        file_put_contents($this->configDir.'/empty.yaml', '');
 
-        $fakeHome = $this->tempDir . '/empty_home3';
+        $fakeHome = $this->tempDir.'/empty_home3';
         mkdir($fakeHome, 0755, true);
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;

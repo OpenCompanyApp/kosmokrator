@@ -11,7 +11,7 @@ class AnsiTableRendererTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->renderer = new AnsiTableRenderer();
+        $this->renderer = new AnsiTableRenderer;
     }
 
     public function test_empty_table_returns_empty_string(): void

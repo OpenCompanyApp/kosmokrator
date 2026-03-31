@@ -14,7 +14,10 @@ class TaskUpdateTool implements ToolInterface
         private readonly TaskStore $store,
     ) {}
 
-    public function name(): string { return 'task_update'; }
+    public function name(): string
+    {
+        return 'task_update';
+    }
 
     public function description(): string
     {
@@ -34,7 +37,10 @@ class TaskUpdateTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['id']; }
+    public function requiredParameters(): array
+    {
+        return ['id'];
+    }
 
     public function execute(array $args): ToolResult
     {
@@ -53,7 +59,7 @@ class TaskUpdateTool implements ToolInterface
         if (isset($args['status']) && $args['status'] !== '') {
             $valid = ['pending', 'in_progress', 'completed', 'cancelled'];
             if (! in_array($args['status'], $valid, true)) {
-                return ToolResult::error("Invalid status '{$args['status']}'. Valid: " . implode(', ', $valid));
+                return ToolResult::error("Invalid status '{$args['status']}'. Valid: ".implode(', ', $valid));
             }
             $changes['status'] = $args['status'];
         }
@@ -90,6 +96,6 @@ class TaskUpdateTool implements ToolInterface
 
         $updated = $this->store->update($id, $changes);
 
-        return ToolResult::success($updated->toDetail() . "\n\n" . $this->store->renderTree());
+        return ToolResult::success($updated->toDetail()."\n\n".$this->store->renderTree());
     }
 }

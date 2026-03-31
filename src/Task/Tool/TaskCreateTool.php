@@ -15,7 +15,10 @@ class TaskCreateTool implements ToolInterface
         private readonly TaskStore $store,
     ) {}
 
-    public function name(): string { return 'task_create'; }
+    public function name(): string
+    {
+        return 'task_create';
+    }
 
     public function description(): string
     {
@@ -33,7 +36,10 @@ class TaskCreateTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return []; }
+    public function requiredParameters(): array
+    {
+        return [];
+    }
 
     public function execute(array $args): ToolResult
     {
@@ -70,7 +76,7 @@ class TaskCreateTool implements ToolInterface
         );
         $this->store->add($task);
 
-        return ToolResult::success("Created task {$task->id}: {$task->subject}\n\n" . $this->store->renderTree());
+        return ToolResult::success("Created task {$task->id}: {$task->subject}\n\n".$this->store->renderTree());
     }
 
     private function createBatch(string $json): ToolResult
@@ -114,6 +120,6 @@ class TaskCreateTool implements ToolInterface
 
         $ids = implode(', ', array_map(fn (Task $t) => $t->id, $created));
 
-        return ToolResult::success("Created " . count($created) . " tasks ({$ids})\n\n" . $this->store->renderTree());
+        return ToolResult::success('Created '.count($created)." tasks ({$ids})\n\n".$this->store->renderTree());
     }
 }

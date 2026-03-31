@@ -6,6 +6,7 @@ namespace Kosmokrator\Agent;
 
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
@@ -59,8 +60,7 @@ PROMPT;
         private readonly ModelCatalog $models,
         private readonly LoggerInterface $log,
         private int $compactThresholdPercent = self::DEFAULT_COMPACT_THRESHOLD_PERCENT,
-    ) {
-    }
+    ) {}
 
     public function needsCompaction(int $promptTokens, string $model): bool
     {
@@ -171,7 +171,7 @@ PROMPT;
     }
 
     /**
-     * @param \Prism\Prism\Contracts\Message[] $messages
+     * @param  Message[]  $messages
      */
     /**
      * Cap formatted output at ~100K chars (~25K tokens) to prevent memory blowup
@@ -188,7 +188,7 @@ PROMPT;
             $newLines = [];
 
             if ($message instanceof UserMessage) {
-                $newLines[] = '[user]: ' . $this->truncate($message->content, 2000);
+                $newLines[] = '[user]: '.$this->truncate($message->content, 2000);
             } elseif ($message instanceof AssistantMessage) {
                 if ($message->toolCalls !== []) {
                     foreach ($message->toolCalls as $tc) {
@@ -198,15 +198,15 @@ PROMPT;
                     }
                 }
                 if ($message->content !== '') {
-                    $newLines[] = '[assistant]: ' . $this->truncate($message->content, 2000);
+                    $newLines[] = '[assistant]: '.$this->truncate($message->content, 2000);
                 }
             } elseif ($message instanceof ToolResultMessage) {
                 foreach ($message->toolResults as $tr) {
                     $result = is_string($tr->result) ? $tr->result : json_encode($tr->result);
-                    $newLines[] = '[tool_result]: ' . $this->truncate($result, 200);
+                    $newLines[] = '[tool_result]: '.$this->truncate($result, 200);
                 }
             } elseif ($message instanceof SystemMessage) {
-                $newLines[] = '[system]: ' . $this->truncate($message->content, 500);
+                $newLines[] = '[system]: '.$this->truncate($message->content, 500);
             }
 
             foreach ($newLines as $line) {
@@ -229,6 +229,7 @@ PROMPT;
         foreach ($args as $key => $value) {
             if (in_array($key, ['content', 'old_string', 'new_string'], true)) {
                 $parts[] = "{$key}: [...]";
+
                 continue;
             }
             $display = is_string($value) ? $value : json_encode($value);
@@ -244,6 +245,6 @@ PROMPT;
             return $text;
         }
 
-        return mb_substr($text, 0, $maxLength) . " [truncated — " . mb_strlen($text) . " chars]";
+        return mb_substr($text, 0, $maxLength).' [truncated — '.mb_strlen($text).' chars]';
     }
 }

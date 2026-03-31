@@ -14,7 +14,10 @@ class TaskGetTool implements ToolInterface
         private readonly TaskStore $store,
     ) {}
 
-    public function name(): string { return 'task_get'; }
+    public function name(): string
+    {
+        return 'task_get';
+    }
 
     public function description(): string
     {
@@ -28,7 +31,10 @@ class TaskGetTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['id']; }
+    public function requiredParameters(): array
+    {
+        return ['id'];
+    }
 
     public function execute(array $args): ToolResult
     {
@@ -48,7 +54,7 @@ class TaskGetTool implements ToolInterface
         if ($children !== []) {
             $output .= "\n\nChildren:";
             foreach ($children as $child) {
-                $output .= "\n  " . $child->toSummary();
+                $output .= "\n  ".$child->toSummary();
             }
         }
 

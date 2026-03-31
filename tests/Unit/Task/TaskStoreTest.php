@@ -13,7 +13,7 @@ class TaskStoreTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->store = new TaskStore();
+        $this->store = new TaskStore;
     }
 
     public function test_add_and_get(): void

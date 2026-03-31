@@ -9,7 +9,10 @@ class FileReadTool implements ToolInterface
 {
     private const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
 
-    public function name(): string { return 'file_read'; }
+    public function name(): string
+    {
+        return 'file_read';
+    }
 
     public function description(): string
     {
@@ -25,7 +28,10 @@ class FileReadTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['path']; }
+    public function requiredParameters(): array
+    {
+        return ['path'];
+    }
 
     public function execute(array $args): ToolResult
     {

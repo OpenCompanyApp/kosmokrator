@@ -6,9 +6,7 @@ namespace Kosmokrator\Session;
 
 class MemoryRepository
 {
-    public function __construct(private Database $db)
-    {
-    }
+    public function __construct(private Database $db) {}
 
     public function add(
         string $type,

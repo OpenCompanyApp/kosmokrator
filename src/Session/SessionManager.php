@@ -26,8 +26,7 @@ class SessionManager
         private readonly SettingsRepository $settings,
         private readonly MemoryRepository $memories,
         private readonly LoggerInterface $log,
-    ) {
-    }
+    ) {}
 
     public function setProject(string $project): void
     {
@@ -97,7 +96,7 @@ class SessionManager
     public function loadHistory(string $sessionId): ConversationHistory
     {
         $messages = $this->messages->loadActive($sessionId);
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         foreach ($messages as $message) {
             $history->addMessage($message);

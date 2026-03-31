@@ -7,12 +7,11 @@ use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 
 class ConversationHistory
 {
-    /** @var array<int, \Prism\Prism\Contracts\Message> */
+    /** @var array<int, Message> */
     private array $messages = [];
 
     public function addUser(string $content): void
@@ -26,7 +25,7 @@ class ConversationHistory
     }
 
     /**
-     * @param ToolResult[] $results
+     * @param  ToolResult[]  $results
      */
     public function addToolResults(array $results): void
     {
@@ -42,7 +41,7 @@ class ConversationHistory
     }
 
     /**
-     * @return array<int, \Prism\Prism\Contracts\Message>
+     * @return array<int, Message>
      */
     public function messages(): array
     {
@@ -111,7 +110,7 @@ class ConversationHistory
     /**
      * Replace specific tool results with a placeholder string.
      *
-     * @param array<array{int, int, int}> $targets [[messageIndex, resultIndex, tokensSaved], ...]
+     * @param  array<array{int, int, int}>  $targets  [[messageIndex, resultIndex, tokensSaved], ...]
      */
     public function pruneToolResults(array $targets, string $placeholder): void
     {
@@ -196,8 +195,6 @@ class ConversationHistory
             $removed++;
         }
 
-        $this->messages = array_values($this->messages);
-
-        return $removed > 0;
+        return $removed !== 0;
     }
 }

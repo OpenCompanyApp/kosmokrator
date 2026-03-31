@@ -19,7 +19,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_does_nothing_with_few_messages(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('hello');
         $history->addAssistant('hi');
 
@@ -31,7 +31,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_protects_last_two_user_turns(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         // Turn 1 (old)
         $history->addUser('read old');
@@ -64,7 +64,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_clears_old_tool_results(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         // 3 old turns with large tool results
         for ($i = 0; $i < 3; $i++) {
@@ -93,7 +93,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_skips_already_pruned(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         $history->addUser('old');
         $history->addAssistant('');
@@ -115,7 +115,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_respects_protect_token_budget(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         // Old turn with 200 chars = ~50 tokens
         $history->addUser('old');
@@ -139,7 +139,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_skips_below_min_savings(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         // Old turn with small output
         $history->addUser('old');
@@ -161,7 +161,7 @@ class ContextPrunerTest extends TestCase
 
     public function test_prune_stops_at_system_message(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
 
         // Compaction summary
         $history->addMessage(new SystemMessage('Previous conversation summary'));

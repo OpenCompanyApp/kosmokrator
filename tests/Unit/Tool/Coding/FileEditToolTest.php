@@ -8,12 +8,13 @@ use PHPUnit\Framework\TestCase;
 class FileEditToolTest extends TestCase
 {
     private FileEditTool $tool;
+
     private string $tempDir;
 
     protected function setUp(): void
     {
-        $this->tool = new FileEditTool();
-        $this->tempDir = sys_get_temp_dir() . '/kosmokrator_test_' . uniqid();
+        $this->tool = new FileEditTool;
+        $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
     }
 
@@ -34,7 +35,7 @@ class FileEditToolTest extends TestCase
 
     public function test_replaces_unique_string(): void
     {
-        $path = $this->createFile("Hello foo world");
+        $path = $this->createFile('Hello foo world');
         $result = $this->tool->execute([
             'path' => $path,
             'old_string' => 'foo',
@@ -48,7 +49,7 @@ class FileEditToolTest extends TestCase
     public function test_error_when_file_not_found(): void
     {
         $result = $this->tool->execute([
-            'path' => $this->tempDir . '/nope.txt',
+            'path' => $this->tempDir.'/nope.txt',
             'old_string' => 'a',
             'new_string' => 'b',
         ]);
@@ -141,7 +142,7 @@ class FileEditToolTest extends TestCase
 
     public function test_whitespace_sensitive_matching(): void
     {
-        $path = $this->createFile("    indented line");
+        $path = $this->createFile('    indented line');
         $result = $this->tool->execute([
             'path' => $path,
             'old_string' => 'indented line',  // without leading spaces
@@ -154,7 +155,7 @@ class FileEditToolTest extends TestCase
 
     private function createFile(string $content, string $name = 'test.txt'): string
     {
-        $path = $this->tempDir . '/' . $name;
+        $path = $this->tempDir.'/'.$name;
         file_put_contents($path, $content);
 
         return $path;

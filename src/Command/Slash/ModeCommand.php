@@ -17,7 +17,7 @@ class ModeCommand implements SlashCommand
 
     public function name(): string
     {
-        return '/' . $this->mode->value;
+        return '/'.$this->mode->value;
     }
 
     /** @return string[] */

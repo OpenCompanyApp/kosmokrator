@@ -118,7 +118,7 @@ class SettingsCommand implements SlashCommand
         }
 
         if ($changes !== []) {
-            $ctx->ui->showNotice('Settings updated: ' . implode(', ', array_keys($changes)));
+            $ctx->ui->showNotice('Settings updated: '.implode(', ', array_keys($changes)));
         }
 
         return SlashCommandResult::continue();
@@ -126,9 +126,13 @@ class SettingsCommand implements SlashCommand
 
     private static function maskKey(string $key): string
     {
-        if ($key === '') { return '(not set)'; }
-        if (strlen($key) < 12) { return '***'; }
+        if ($key === '') {
+            return '(not set)';
+        }
+        if (strlen($key) < 12) {
+            return '***';
+        }
 
-        return substr($key, 0, 8) . '...' . substr($key, -4);
+        return substr($key, 0, 8).'...'.substr($key, -4);
     }
 }

@@ -13,7 +13,7 @@ class ConversationHistoryCompactTest extends TestCase
 {
     public function test_compact_replaces_old_with_summary(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('First question');
         $history->addAssistant('First answer');
         $history->addUser('Second question');
@@ -34,7 +34,7 @@ class ConversationHistoryCompactTest extends TestCase
 
     public function test_compact_noop_when_too_few_messages(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('Only message');
 
         $history->compact('Summary', keepRecent: 2);
@@ -46,7 +46,7 @@ class ConversationHistoryCompactTest extends TestCase
 
     public function test_add_message_adds_arbitrary_message(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new SystemMessage('Restored summary'));
         $history->addMessage(new UserMessage('Continued question'));
 
@@ -58,7 +58,7 @@ class ConversationHistoryCompactTest extends TestCase
 
     public function test_count(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $this->assertSame(0, $history->count());
 
         $history->addUser('Hello');

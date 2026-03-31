@@ -17,7 +17,7 @@ class OutputTruncator
     ) {
         if ($this->storagePath === null) {
             $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
-            $this->storagePath = $home . '/.kosmokrator/data/truncations';
+            $this->storagePath = $home.'/.kosmokrator/data/truncations';
         }
 
         $this->cleanupOldFiles();
@@ -33,7 +33,7 @@ class OutputTruncator
         }
 
         $cutoff = time() - $maxAgeSeconds;
-        $files = glob($this->storagePath . '/tool_*.txt');
+        $files = glob($this->storagePath.'/tool_*.txt');
 
         if ($files === false) {
             return;
@@ -69,7 +69,7 @@ class OutputTruncator
             $output = substr($output, 0, $this->maxBytes);
         }
 
-        return $output . "\n[truncated — full output at {$fullPath}]";
+        return $output."\n[truncated — full output at {$fullPath}]";
     }
 
     private function saveFull(string $output, string $toolCallId): string
@@ -79,7 +79,7 @@ class OutputTruncator
         }
 
         $safeId = $toolCallId !== '' ? $toolCallId : uniqid('anon_');
-        $path = $this->storagePath . '/tool_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $safeId) . '.txt';
+        $path = $this->storagePath.'/tool_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $safeId).'.txt';
         file_put_contents($path, $output);
 
         return $path;

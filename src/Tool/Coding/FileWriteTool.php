@@ -7,7 +7,10 @@ use Kosmokrator\Tool\ToolResult;
 
 class FileWriteTool implements ToolInterface
 {
-    public function name(): string { return 'file_write'; }
+    public function name(): string
+    {
+        return 'file_write';
+    }
 
     public function description(): string
     {
@@ -22,7 +25,10 @@ class FileWriteTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['path', 'content']; }
+    public function requiredParameters(): array
+    {
+        return ['path', 'content'];
+    }
 
     public function execute(array $args): ToolResult
     {

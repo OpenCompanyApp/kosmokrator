@@ -12,7 +12,7 @@ class MarkdownToAnsiTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->renderer = new MarkdownToAnsi();
+        $this->renderer = new MarkdownToAnsi;
     }
 
     public function test_plain_paragraph(): void
@@ -191,7 +191,7 @@ class MarkdownToAnsiTest extends TestCase
 
     public function test_task_list_checked(): void
     {
-        $md = "- [x] done task";
+        $md = '- [x] done task';
         $output = $this->renderer->render($md);
 
         $this->assertStringContainsString('☑', $output);
@@ -200,7 +200,7 @@ class MarkdownToAnsiTest extends TestCase
 
     public function test_task_list_unchecked(): void
     {
-        $md = "- [ ] todo task";
+        $md = '- [ ] todo task';
         $output = $this->renderer->render($md);
 
         $this->assertStringContainsString('☐', $output);

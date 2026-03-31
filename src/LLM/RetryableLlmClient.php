@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
+use Amp\Http\Client\HttpException;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
 use Prism\Prism\Exceptions\PrismRateLimitedException;
 use Prism\Prism\Exceptions\PrismServerException;
@@ -15,13 +16,18 @@ class RetryableLlmClient implements LlmClientInterface
     public function __construct(
         private readonly LlmClientInterface $inner,
         private readonly LoggerInterface $log,
-        private readonly int $maxAttempts = 3,
+        private int $maxAttempts = 0,
         private ?\Closure $onRetry = null,
     ) {}
 
     public function setOnRetry(?\Closure $onRetry): void
     {
         $this->onRetry = $onRetry;
+    }
+
+    public function setMaxAttempts(int $maxAttempts): void
+    {
+        $this->maxAttempts = $maxAttempts;
     }
 
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
@@ -34,19 +40,19 @@ class RetryableLlmClient implements LlmClientInterface
             } catch (\Throwable $e) {
                 $attempt++;
 
-                if (! $this->isRetryable($e) || $attempt >= $this->maxAttempts) {
+                if (! $this->isRetryable($e) || ($this->maxAttempts > 0 && $attempt >= $this->maxAttempts)) {
                     throw $e;
                 }
 
                 $delay = $this->calculateDelay($e, $attempt);
-                $this->log->warning("LLM request failed (attempt {$attempt}/{$this->maxAttempts}), retrying in {$delay}s", [
+                $this->log->warning("LLM request failed (attempt {$attempt}), retrying in {$delay}s", [
                     'error' => $e->getMessage(),
                     'exception' => get_class($e),
                 ]);
 
                 if ($this->onRetry !== null) {
                     try {
-                        ($this->onRetry)($attempt, $this->maxAttempts, $delay, $e->getMessage());
+                        ($this->onRetry)($attempt, $delay, $e->getMessage());
                     } catch (\Throwable) {
                     }
                 }
@@ -69,7 +75,7 @@ class RetryableLlmClient implements LlmClientInterface
         }
 
         // Amp network errors
-        if ($e instanceof \Amp\Http\Client\HttpException) {
+        if ($e instanceof HttpException) {
             return true;
         }
 
@@ -93,10 +99,10 @@ class RetryableLlmClient implements LlmClientInterface
             return min($e->retryAfterSeconds, 60.0);
         }
 
-        // Exponential backoff with jitter: ~1s, ~2s, ~4s (capped at 30s)
-        $base = min((int) pow(2, $attempt - 1), 30);
+        // Exponential backoff with jitter: ~2s, ~4s, ~8s, ~16s, ~32s, ~60s, ~60s, ...
+        $base = min((int) pow(2, $attempt), 60);
 
-        return (float) ($base + random_int(0, max(1, (int) ($base * 0.5))));
+        return (float) ($base + random_int(0, max(1, (int) ($base * 0.3))));
     }
 
     /**

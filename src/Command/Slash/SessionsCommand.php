@@ -37,7 +37,7 @@ class SessionsCommand implements SlashCommand
             foreach ($sessions as $s) {
                 $lines[] = self::formatSessionLine($s, $ctx->sessionManager->currentSessionId());
             }
-            $ctx->ui->showNotice("Recent sessions:\n" . implode("\n", $lines));
+            $ctx->ui->showNotice("Recent sessions:\n".implode("\n", $lines));
         }
 
         return SlashCommandResult::continue();
@@ -68,10 +68,16 @@ class SessionsCommand implements SlashCommand
 
         $seconds = time() - (int) ((float) $timestamp);
 
-        if ($seconds < 60) { return 'just now'; }
-        if ($seconds < 3600) { return (int) ($seconds / 60) . 'm ago'; }
-        if ($seconds < 86400) { return (int) ($seconds / 3600) . 'h ago'; }
+        if ($seconds < 60) {
+            return 'just now';
+        }
+        if ($seconds < 3600) {
+            return (int) ($seconds / 60).'m ago';
+        }
+        if ($seconds < 86400) {
+            return (int) ($seconds / 3600).'h ago';
+        }
 
-        return (int) ($seconds / 86400) . 'd ago';
+        return (int) ($seconds / 86400).'d ago';
     }
 }

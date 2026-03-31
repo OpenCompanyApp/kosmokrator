@@ -16,7 +16,7 @@ class PermissionEvaluatorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->grants = new SessionGrants();
+        $this->grants = new SessionGrants;
     }
 
     // --- Basic evaluation ---
@@ -305,10 +305,10 @@ class PermissionEvaluatorTest extends TestCase
 
     public function test_blocked_path_catches_symlink_to_blocked_file(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/guardian_test_' . uniqid();
+        $tmpDir = sys_get_temp_dir().'/guardian_test_'.uniqid();
         mkdir($tmpDir);
-        $envFile = $tmpDir . '/.env';
-        $linkPath = $tmpDir . '/config_link';
+        $envFile = $tmpDir.'/.env';
+        $linkPath = $tmpDir.'/config_link';
 
         try {
             file_put_contents($envFile, 'SECRET=x');
@@ -328,24 +328,24 @@ class PermissionEvaluatorTest extends TestCase
 
     public function test_blocked_path_catches_symlink_via_parent_directory(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/guardian_test_' . uniqid();
-        $targetDir = $tmpDir . '/real';
-        $linkDir = $tmpDir . '/link';
+        $tmpDir = sys_get_temp_dir().'/guardian_test_'.uniqid();
+        $targetDir = $tmpDir.'/real';
+        $linkDir = $tmpDir.'/link';
 
         try {
             mkdir($tmpDir);
             mkdir($targetDir);
-            file_put_contents($targetDir . '/.env', 'SECRET=x');
+            file_put_contents($targetDir.'/.env', 'SECRET=x');
             symlink($targetDir, $linkDir);
 
             $evaluator = new PermissionEvaluator([], $this->grants, ['*.env']);
 
             // Path through symlinked directory — basename is .env so it matches directly
-            $result = $evaluator->evaluate('file_read', ['path' => $linkDir . '/.env']);
+            $result = $evaluator->evaluate('file_read', ['path' => $linkDir.'/.env']);
             $this->assertSame(PermissionAction::Deny, $result->action);
         } finally {
             @unlink($linkDir);
-            @unlink($targetDir . '/.env');
+            @unlink($targetDir.'/.env');
             @rmdir($targetDir);
             @rmdir($tmpDir);
         }

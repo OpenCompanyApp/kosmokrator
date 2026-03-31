@@ -147,7 +147,7 @@ class ToolResultDeduplicator
         ksort($args);
         $resultStr = is_string($result->result) ? $result->result : json_encode($result->result);
 
-        return $result->toolName . ':' . json_encode($args, JSON_THROW_ON_ERROR) . ':' . md5($resultStr);
+        return $result->toolName.':'.json_encode($args, JSON_THROW_ON_ERROR).':'.md5($resultStr);
     }
 
     private function normalizePath(string $path): string
@@ -164,7 +164,7 @@ class ToolResultDeduplicator
     /**
      * Check if any write (file_edit/file_write) to the given path occurred between two message indexes.
      *
-     * @param int[] $writePositions Message indexes where writes occurred for this path
+     * @param  int[]  $writePositions  Message indexes where writes occurred for this path
      */
     private function hasWriteBetween(array $writePositions, int $afterIdx, int $beforeIdx): bool
     {

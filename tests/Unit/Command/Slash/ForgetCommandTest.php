@@ -23,7 +23,7 @@ class ForgetCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->command = new ForgetCommand();
+        $this->command = new ForgetCommand;
     }
 
     private function makeContext(

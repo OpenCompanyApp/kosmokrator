@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
-use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\ContextPruner;
+use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\ToolResultDeduplicator;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
@@ -18,12 +18,12 @@ class ToolResultDeduplicatorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->dedup = new ToolResultDeduplicator();
+        $this->dedup = new ToolResultDeduplicator;
     }
 
     public function test_exact_duplicate_superseded(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('first'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/test.php'], 'content A'),
@@ -45,7 +45,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_exact_duplicate_keeps_latest(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('go'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'glob', ['pattern' => '**/*.php'], 'file1.php\nfile2.php'),
@@ -64,7 +64,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_same_file_reread_without_edit_not_superseded(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('read'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/foo.php', 'offset' => 1, 'limit' => 100], 'old content'),
@@ -85,7 +85,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_same_file_reread_with_edit_between_superseded(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('read'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/foo.php'], 'old content'),
@@ -114,7 +114,7 @@ class ToolResultDeduplicatorTest extends TestCase
         $tmpFile = tempnam(sys_get_temp_dir(), 'dedup_test_');
 
         try {
-            $history = new ConversationHistory();
+            $history = new ConversationHistory;
             $history->addMessage(new UserMessage('search'));
             $history->addMessage(new ToolResultMessage([
                 new ToolResult('call_1', 'grep', ['pattern' => 'class Foo', 'path' => $tmpFile], 'line 10: class Foo'),
@@ -138,14 +138,14 @@ class ToolResultDeduplicatorTest extends TestCase
     {
         $tmpDir = sys_get_temp_dir();
 
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('search'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'grep', ['pattern' => 'class', 'path' => $tmpDir], 'many matches'),
         ]));
         $history->addMessage(new UserMessage('read'));
         $history->addMessage(new ToolResultMessage([
-            new ToolResult('call_2', 'file_read', ['path' => $tmpDir . '/Foo.php'], 'file content'),
+            new ToolResult('call_2', 'file_read', ['path' => $tmpDir.'/Foo.php'], 'file content'),
         ]));
 
         $count = $this->dedup->deduplicate($history);
@@ -157,7 +157,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_different_files_not_deduplicated(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('read both'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/a.php'], 'content A'),
@@ -171,7 +171,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_bash_not_deduplicated(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('run'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'bash', ['command' => 'date'], '2026-03-30'),
@@ -188,7 +188,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_already_pruned_skipped(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('read'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/test.php'], ContextPruner::PLACEHOLDER),
@@ -206,7 +206,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_already_superseded_skipped(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('read'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/test.php'], '[Superseded — identical result returned by later call]'),
@@ -223,7 +223,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_file_edit_confirmations_never_superseded(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('edit'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_edit', ['path' => '/tmp/foo.php', 'old_string' => 'a', 'new_string' => 'b'], 'Edit applied'),
@@ -244,7 +244,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_file_read_different_content_not_tier1_superseded(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('read'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/test.php'], 'version 1 content'),
@@ -266,7 +266,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_no_duplicates_returns_zero(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('do things'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_1', 'file_read', ['path' => '/tmp/a.php'], 'content A'),
@@ -280,7 +280,7 @@ class ToolResultDeduplicatorTest extends TestCase
 
     public function test_preserves_tool_call_metadata(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addMessage(new UserMessage('first'));
         $history->addMessage(new ToolResultMessage([
             new ToolResult('call_original', 'file_read', ['path' => '/tmp/test.php'], 'content'),

@@ -20,7 +20,7 @@ class PermissionConfigParserTest extends TestCase
             ],
         ]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
         $rules = $result['rules'];
 
@@ -48,7 +48,7 @@ class PermissionConfigParserTest extends TestCase
             ],
         ]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
         $rules = $result['rules'];
 
@@ -61,7 +61,7 @@ class PermissionConfigParserTest extends TestCase
     {
         $config = new Repository([]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
         $this->assertSame([], $result['rules']);
@@ -79,7 +79,7 @@ class PermissionConfigParserTest extends TestCase
             ],
         ]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
         $this->assertSame(['*.env', '.git/*', '/etc/*'], $result['blocked_paths']);
@@ -95,7 +95,7 @@ class PermissionConfigParserTest extends TestCase
             ],
         ]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
         $this->assertSame([], $result['blocked_paths']);
@@ -112,7 +112,7 @@ class PermissionConfigParserTest extends TestCase
             ],
         ]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
         $this->assertSame(['git *', 'ls *', 'pwd'], $result['guardian_safe_commands']);
@@ -129,7 +129,7 @@ class PermissionConfigParserTest extends TestCase
             ],
         ]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
         $this->assertSame('argus', $result['default_permission_mode']);
@@ -139,7 +139,7 @@ class PermissionConfigParserTest extends TestCase
     {
         $config = new Repository([]);
 
-        $parser = new PermissionConfigParser();
+        $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
         $this->assertSame([], $result['guardian_safe_commands']);

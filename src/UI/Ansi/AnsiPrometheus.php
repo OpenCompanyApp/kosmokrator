@@ -44,9 +44,9 @@ class AnsiPrometheus
         $this->cx = (int) ($this->termWidth / 2);
         $this->cy = (int) ($this->termHeight / 2);
 
-        echo Theme::hideCursor() . Theme::clearScreen();
+        echo Theme::hideCursor().Theme::clearScreen();
 
-        register_shutdown_function(fn () => print(Theme::showCursor()));
+        register_shutdown_function(fn () => print (Theme::showCursor()));
 
         $this->phaseFireball();
         $this->phaseImpactFlash();
@@ -78,7 +78,7 @@ class AnsiPrometheus
             // Erase ALL cells from previous frame
             foreach ($this->prevCells as ['row' => $pr, 'col' => $pc]) {
                 if ($pr >= 1 && $pr <= $this->termHeight && $pc >= 1 && $pc < $this->termWidth) {
-                    echo Theme::moveTo($pr, $pc) . ' ';
+                    echo Theme::moveTo($pr, $pc).' ';
                 }
             }
             $this->prevCells = [];
@@ -116,9 +116,9 @@ class AnsiPrometheus
                             $red = max(15, (int) (220 * $intensity * (1.0 - $center * 0.7)));
                             $green = max(0, (int) (70 * $intensity * (1.0 - $center)));
                             echo Theme::moveTo($streakRow, $sc)
-                                . Theme::rgb($red, $green, 0)
-                                . self::STREAK_CHARS[array_rand(self::STREAK_CHARS)]
-                                . $r;
+                                .Theme::rgb($red, $green, 0)
+                                .self::STREAK_CHARS[array_rand(self::STREAK_CHARS)]
+                                .$r;
                             $this->prevCells[] = ['row' => $streakRow, 'col' => $sc];
                         }
                     }
@@ -145,9 +145,9 @@ class AnsiPrometheus
                         $red = (int) (120 * $glowIntensity + rand(0, 60));
                         $green = (int) (30 * $glowIntensity);
                         echo Theme::moveTo($gr, $gc)
-                            . Theme::rgb(min(255, $red), $green, 0)
-                            . self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
-                            . $r;
+                            .Theme::rgb(min(255, $red), $green, 0)
+                            .self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
+                            .$r;
                         $this->prevCells[] = ['row' => $gr, 'col' => $gc];
                     }
                 }
@@ -168,9 +168,9 @@ class AnsiPrometheus
                     $red = max(30, (int) (255 * $intensity * (1.0 - $distRatio * 0.55)));
                     $green = max(0, (int) (180 * $intensity * (1.0 - $distRatio * 0.85)));
                     echo Theme::moveTo($row, $col)
-                        . Theme::rgb($red, $green, 0)
-                        . self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
-                        . $r;
+                        .Theme::rgb($red, $green, 0)
+                        .self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
+                        .$r;
                     $this->prevCells[] = ['row' => $row, 'col' => $col];
                 }
             }
@@ -191,9 +191,9 @@ class AnsiPrometheus
                         $green = (int) (max(140, 255 - $innerRatio * 115) * $intensity);
                         $blue = (int) (max(0, 220 - $innerRatio * 220) * $intensity);
                         echo Theme::moveTo($row, $col)
-                            . Theme::rgb($red, $green, $blue)
-                            . self::CORE_CHARS[array_rand(self::CORE_CHARS)]
-                            . $r;
+                            .Theme::rgb($red, $green, $blue)
+                            .self::CORE_CHARS[array_rand(self::CORE_CHARS)]
+                            .$r;
                         $this->prevCells[] = ['row' => $row, 'col' => $col];
                     }
                 }
@@ -214,9 +214,9 @@ class AnsiPrometheus
                         $red = max(20, (int) (255 * $intensity * (1.0 - $fadeRatio * 0.7)));
                         $green = max(0, (int) (110 * $intensity * (1.0 - $fadeRatio * 0.9)));
                         echo Theme::moveTo($trailRow, $trailCol)
-                            . Theme::rgb($red, $green, 0)
-                            . self::TRAIL_CHARS[array_rand(self::TRAIL_CHARS)]
-                            . $r;
+                            .Theme::rgb($red, $green, 0)
+                            .self::TRAIL_CHARS[array_rand(self::TRAIL_CHARS)]
+                            .$r;
                         $this->prevCells[] = ['row' => $trailRow, 'col' => $trailCol];
                     }
                 }
@@ -234,9 +234,9 @@ class AnsiPrometheus
                         $heat = rand(80, 255);
                         $green = (int) ($heat * (0.3 + rand(0, 25) / 100));
                         echo Theme::moveTo($debrisRow, $debrisCol)
-                            . Theme::rgb($heat, $green, 0)
-                            . self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
-                            . $r;
+                            .Theme::rgb($heat, $green, 0)
+                            .self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
+                            .$r;
                         $this->prevCells[] = ['row' => $debrisRow, 'col' => $debrisCol];
                     }
                 }
@@ -249,7 +249,7 @@ class AnsiPrometheus
         // Final erase
         foreach ($this->prevCells as ['row' => $pr, 'col' => $pc]) {
             if ($pr >= 1 && $pr <= $this->termHeight && $pc >= 1 && $pc < $this->termWidth) {
-                echo Theme::moveTo($pr, $pc) . ' ';
+                echo Theme::moveTo($pr, $pc).' ';
             }
         }
         $this->prevCells = [];
@@ -281,8 +281,8 @@ class AnsiPrometheus
                         $brightness = (int) (255 * (1.0 - $edgeFade * 0.3));
                         $gb = (int) ($brightness * (1.0 - $edgeFade * 0.5));
                         echo Theme::moveTo($row, $col)
-                            . Theme::rgb($brightness, $gb, max(0, $gb - 40))
-                            . '█' . $r;
+                            .Theme::rgb($brightness, $gb, max(0, $gb - 40))
+                            .'█'.$r;
                     }
                 }
             }
@@ -309,8 +309,8 @@ class AnsiPrometheus
                     $col = $this->cx + $dx;
                     if ($row >= 1 && $row <= $this->termHeight && $col >= 1 && $col < $this->termWidth) {
                         echo Theme::moveTo($row, $col)
-                            . Theme::rgb($rv, $gv, $bv)
-                            . '█' . $r;
+                            .Theme::rgb($rv, $gv, $bv)
+                            .'█'.$r;
                     }
                 }
             }
@@ -336,7 +336,7 @@ class AnsiPrometheus
             if ($row >= 1 && $row <= $this->termHeight && $col >= 1 && $col < $this->termWidth) {
                 $chainPositions[] = [$row, $col];
                 $chainColor = Theme::rgb(100 + rand(0, 40), 80 + rand(0, 30), 60 + rand(0, 20));
-                echo Theme::moveTo($row, $col) . $chainColor . self::CHAIN_CHARS[array_rand(self::CHAIN_CHARS)] . $r;
+                echo Theme::moveTo($row, $col).$chainColor.self::CHAIN_CHARS[array_rand(self::CHAIN_CHARS)].$r;
             }
         }
         usleep(250000);
@@ -361,9 +361,9 @@ class AnsiPrometheus
                     $heat = max(40, (int) (255 - $wave * 20 - $jitter * 15));
                     $green = max(0, (int) ($heat * 0.55) - $wave * 18);
                     echo Theme::moveTo($row, $col)
-                        . Theme::rgb($heat, $green, 0)
-                        . self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
-                        . $r;
+                        .Theme::rgb($heat, $green, 0)
+                        .self::FIRE_CHARS[array_rand(self::FIRE_CHARS)]
+                        .$r;
                     $firePositions[] = [$row, $col];
                 }
             }
@@ -371,7 +371,7 @@ class AnsiPrometheus
             // Erase chain fragments progressively
             foreach ($chainPositions as $key => [$cr, $cc]) {
                 if (rand(0, 3) === 0) {
-                    echo Theme::moveTo($cr, $cc) . ' ';
+                    echo Theme::moveTo($cr, $cc).' ';
                     unset($chainPositions[$key]);
                 }
             }
@@ -385,7 +385,7 @@ class AnsiPrometheus
         for ($fade = 0; $fade < 3; $fade++) {
             foreach ($firePositions as [$fr, $fc]) {
                 if (rand(0, 2) <= $fade) {
-                    echo Theme::moveTo($fr, $fc) . ' ';
+                    echo Theme::moveTo($fr, $fc).' ';
                 }
             }
             usleep(80000);
@@ -415,7 +415,7 @@ class AnsiPrometheus
 
         foreach ($fireGradient as [$rv, $g, $b]) {
             echo Theme::moveTo($this->cy - 1, $titleCol)
-                . Theme::rgb($rv, $g, $b) . $title . $r;
+                .Theme::rgb($rv, $g, $b).$title.$r;
             usleep(55000);
         }
 
@@ -424,7 +424,7 @@ class AnsiPrometheus
         $gold = Theme::rgb(255, 200, 80);
         echo Theme::moveTo($this->cy + 1, $subCol);
         foreach (mb_str_split($subtitle) as $char) {
-            echo $gold . $char . $r;
+            echo $gold.$char.$r;
             usleep(22000);
         }
 

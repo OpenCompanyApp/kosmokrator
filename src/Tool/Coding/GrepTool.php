@@ -12,7 +12,10 @@ class GrepTool implements ToolInterface
         private readonly int $timeout = 30,
     ) {}
 
-    public function name(): string { return 'grep'; }
+    public function name(): string
+    {
+        return 'grep';
+    }
 
     public function description(): string
     {
@@ -28,7 +31,10 @@ class GrepTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['pattern']; }
+    public function requiredParameters(): array
+    {
+        return ['pattern'];
+    }
 
     public function execute(array $args): ToolResult
     {
@@ -44,12 +50,12 @@ class GrepTool implements ToolInterface
         if ($this->hasRipgrep()) {
             $fullCmd = "rg -n --max-count=50 {$escaped} {$escapedPath}";
             if ($glob !== '') {
-                $fullCmd .= ' --glob ' . escapeshellarg($glob);
+                $fullCmd .= ' --glob '.escapeshellarg($glob);
             }
         } else {
             $fullCmd = "grep -rn --max-count=50 {$escaped} {$escapedPath}";
             if ($glob !== '') {
-                $fullCmd .= ' --include=' . escapeshellarg($glob);
+                $fullCmd .= ' --include='.escapeshellarg($glob);
             }
         }
 

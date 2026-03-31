@@ -14,7 +14,6 @@ use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
-use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\SettingsListWidget;
 
 class KosmokratorStyleSheet
@@ -114,11 +113,11 @@ class KosmokratorStyleSheet
                 color: Color::hex('#dcdcdc'),
             ),
 
-            EditorWidget::class . '::frame' => new Style(
+            EditorWidget::class.'::frame' => new Style(
                 color: Color::hex('#a02018'),
             ),
 
-            EditorWidget::class . ':focus::frame' => new Style(
+            EditorWidget::class.':focus::frame' => new Style(
                 color: Color::hex('#ff5040'),
             ),
 
@@ -128,15 +127,15 @@ class KosmokratorStyleSheet
                 padding: new Padding(0, 1, 0, 1),
             ),
 
-            ProgressBarWidget::class . '::bar-fill' => new Style(
+            ProgressBarWidget::class.'::bar-fill' => new Style(
                 color: Color::hex('#50c878'),
             ),
 
-            ProgressBarWidget::class . '::bar-progress' => new Style(
+            ProgressBarWidget::class.'::bar-progress' => new Style(
                 color: Color::hex('#50c878'),
             ),
 
-            ProgressBarWidget::class . '::bar-empty' => new Style(
+            ProgressBarWidget::class.'::bar-empty' => new Style(
                 color: Color::hex('#404040'),
             ),
 
@@ -168,11 +167,11 @@ class KosmokratorStyleSheet
                 padding: new Padding(1, 2, 0, 2),
             ),
 
-            CancellableLoaderWidget::class . '::spinner' => new Style(
+            CancellableLoaderWidget::class.'::spinner' => new Style(
                 color: Color::hex('#70a0d0'),
             ),
 
-            CancellableLoaderWidget::class . '::message' => new Style(
+            CancellableLoaderWidget::class.'::message' => new Style(
                 color: Color::hex('#70a0d0'),
                 italic: true,
             ),
@@ -203,26 +202,26 @@ class KosmokratorStyleSheet
                 color: Color::hex('#dcdcdc'),
             ),
 
-            SettingsListWidget::class . '::label-selected' => new Style(
+            SettingsListWidget::class.'::label-selected' => new Style(
                 color: Color::hex('#ffffff'),
                 bold: true,
             ),
 
-            SettingsListWidget::class . '::value' => new Style(
+            SettingsListWidget::class.'::value' => new Style(
                 color: Color::hex('#70a0d0'),
             ),
 
-            SettingsListWidget::class . '::value-selected' => new Style(
+            SettingsListWidget::class.'::value-selected' => new Style(
                 color: Color::hex('#50c878'),
                 bold: true,
             ),
 
-            SettingsListWidget::class . '::description' => new Style(
+            SettingsListWidget::class.'::description' => new Style(
                 color: Color::hex('#808080'),
                 italic: true,
             ),
 
-            SettingsListWidget::class . '::hint' => new Style(
+            SettingsListWidget::class.'::hint' => new Style(
                 color: Color::hex('#606060'),
             ),
         ]);

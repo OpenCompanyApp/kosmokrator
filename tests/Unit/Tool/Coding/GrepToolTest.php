@@ -8,12 +8,13 @@ use PHPUnit\Framework\TestCase;
 class GrepToolTest extends TestCase
 {
     private GrepTool $tool;
+
     private string $tempDir;
 
     protected function setUp(): void
     {
-        $this->tool = new GrepTool();
-        $this->tempDir = sys_get_temp_dir() . '/kosmokrator_test_' . uniqid();
+        $this->tool = new GrepTool;
+        $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
     }
 
@@ -99,9 +100,9 @@ class GrepToolTest extends TestCase
 
     public function test_searches_directory_recursively(): void
     {
-        mkdir($this->tempDir . '/sub', 0755, true);
+        mkdir($this->tempDir.'/sub', 0755, true);
         $this->createFile('root.txt', 'match_root');
-        file_put_contents($this->tempDir . '/sub/deep.txt', 'match_deep');
+        file_put_contents($this->tempDir.'/sub/deep.txt', 'match_deep');
 
         $result = $this->tool->execute(['pattern' => 'match_', 'path' => $this->tempDir]);
 
@@ -112,7 +113,7 @@ class GrepToolTest extends TestCase
 
     private function createFile(string $name, string $content = ''): string
     {
-        $path = $this->tempDir . '/' . $name;
+        $path = $this->tempDir.'/'.$name;
         file_put_contents($path, $content);
 
         return $path;

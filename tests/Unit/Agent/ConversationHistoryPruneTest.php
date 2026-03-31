@@ -13,7 +13,7 @@ class ConversationHistoryPruneTest extends TestCase
 {
     public function test_prune_tool_results_replaces_content(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('read file');
         $history->addAssistant('', []);
         $history->addToolResults([
@@ -29,7 +29,7 @@ class ConversationHistoryPruneTest extends TestCase
 
     public function test_prune_tool_results_preserves_metadata(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('run bash');
         $history->addAssistant('', []);
         $history->addToolResults([
@@ -52,7 +52,7 @@ class ConversationHistoryPruneTest extends TestCase
 
     public function test_prune_invalid_index_ignored(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('hello');
 
         // Index 5 doesn't exist, index 0 is a UserMessage not ToolResultMessage
@@ -64,7 +64,7 @@ class ConversationHistoryPruneTest extends TestCase
 
     public function test_prune_multiple_results_in_same_message(): void
     {
-        $history = new ConversationHistory();
+        $history = new ConversationHistory;
         $history->addUser('multi tool');
         $history->addAssistant('', []);
         $history->addToolResults([

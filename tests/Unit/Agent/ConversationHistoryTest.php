@@ -16,7 +16,7 @@ class ConversationHistoryTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->history = new ConversationHistory();
+        $this->history = new ConversationHistory;
     }
 
     public function test_starts_empty(): void

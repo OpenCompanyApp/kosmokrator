@@ -8,7 +8,7 @@ use Prism\Prism\ValueObjects\ToolCall;
 readonly class LlmResponse
 {
     /**
-     * @param ToolCall[] $toolCalls
+     * @param  ToolCall[]  $toolCalls
      */
     public function __construct(
         public string $text,

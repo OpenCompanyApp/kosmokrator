@@ -7,6 +7,7 @@ use Generator;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Prism;
 use Prism\Prism\Streaming\Events\StreamEvent;
+use Prism\Prism\Text\PendingRequest;
 use Prism\Prism\Text\Response;
 use Prism\Prism\Tool;
 
@@ -79,8 +80,8 @@ class PrismService implements LlmClientInterface
     }
 
     /**
-     * @param Message[] $messages
-     * @param Tool[] $tools
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
      * @return Generator<StreamEvent>
      */
     public function stream(array $messages, array $tools = []): Generator
@@ -91,8 +92,8 @@ class PrismService implements LlmClientInterface
     /**
      * Non-streaming fallback for providers that don't support streaming.
      *
-     * @param Message[] $messages
-     * @param Tool[] $tools
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
      */
     public function text(array $messages, array $tools = []): Response
     {
@@ -107,7 +108,7 @@ class PrismService implements LlmClientInterface
         return ! in_array($this->provider, $nonStreamingProviders);
     }
 
-    private function buildRequest(array $messages, array $tools = []): \Prism\Prism\Text\PendingRequest
+    private function buildRequest(array $messages, array $tools = []): PendingRequest
     {
         $request = (new Prism)->text()
             ->using($this->provider, $this->model)

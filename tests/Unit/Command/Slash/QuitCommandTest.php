@@ -23,7 +23,7 @@ class QuitCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->command = new QuitCommand();
+        $this->command = new QuitCommand;
     }
 
     public function test_name(): void

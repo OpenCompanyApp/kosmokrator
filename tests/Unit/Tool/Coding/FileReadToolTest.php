@@ -8,12 +8,13 @@ use PHPUnit\Framework\TestCase;
 class FileReadToolTest extends TestCase
 {
     private FileReadTool $tool;
+
     private string $tempDir;
 
     protected function setUp(): void
     {
-        $this->tool = new FileReadTool();
-        $this->tempDir = sys_get_temp_dir() . '/kosmokrator_test_' . uniqid();
+        $this->tool = new FileReadTool;
+        $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
     }
 
@@ -107,7 +108,7 @@ class FileReadToolTest extends TestCase
 
     public function test_limit_clamped_to_max_5000(): void
     {
-        $path = $this->createFile("short file");
+        $path = $this->createFile('short file');
         $result = $this->tool->execute(['path' => $path, 'limit' => 10000]);
 
         $this->assertTrue($result->success);
@@ -129,7 +130,7 @@ class FileReadToolTest extends TestCase
 
     public function test_file_not_found_returns_error(): void
     {
-        $result = $this->tool->execute(['path' => $this->tempDir . '/nonexistent.txt']);
+        $result = $this->tool->execute(['path' => $this->tempDir.'/nonexistent.txt']);
 
         $this->assertFalse($result->success);
         $this->assertStringContainsString('File not found', $result->output);
@@ -182,7 +183,7 @@ class FileReadToolTest extends TestCase
 
     private function createFile(string $content, string $name = 'test.txt'): string
     {
-        $path = $this->tempDir . '/' . $name;
+        $path = $this->tempDir.'/'.$name;
         file_put_contents($path, $content);
 
         return $path;

@@ -6,9 +6,7 @@ namespace Kosmokrator\Session;
 
 class SettingsRepository
 {
-    public function __construct(private Database $db)
-    {
-    }
+    public function __construct(private Database $db) {}
 
     public function get(string $scope, string $key): ?string
     {

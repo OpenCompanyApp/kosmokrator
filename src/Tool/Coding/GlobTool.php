@@ -7,7 +7,10 @@ use Kosmokrator\Tool\ToolResult;
 
 class GlobTool implements ToolInterface
 {
-    public function name(): string { return 'glob'; }
+    public function name(): string
+    {
+        return 'glob';
+    }
 
     public function description(): string
     {
@@ -22,7 +25,10 @@ class GlobTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['pattern']; }
+    public function requiredParameters(): array
+    {
+        return ['pattern'];
+    }
 
     public function execute(array $args): ToolResult
     {
@@ -33,7 +39,7 @@ class GlobTool implements ToolInterface
             return ToolResult::error("Directory not found: {$basePath}");
         }
 
-        $fullPattern = $basePath . '/' . ltrim($pattern, '/');
+        $fullPattern = $basePath.'/'.ltrim($pattern, '/');
         $files = $this->recursiveGlob($fullPattern);
 
         // Make paths relative to basePath
@@ -84,11 +90,11 @@ class GlobTool implements ToolInterface
 
         // Match in the base directory itself
         if ($rest !== '') {
-            $results = array_merge($results, glob($base . '/' . $rest) ?: []);
+            $results = array_merge($results, glob($base.'/'.$rest) ?: []);
         }
 
         // Recurse into subdirectories
-        $dirs = glob($base . '/*', GLOB_ONLYDIR | GLOB_NOSORT) ?: [];
+        $dirs = glob($base.'/*', GLOB_ONLYDIR | GLOB_NOSORT) ?: [];
         foreach ($dirs as $dir) {
             $basename = basename($dir);
             // Skip hidden directories and common excludes
@@ -97,10 +103,10 @@ class GlobTool implements ToolInterface
             }
 
             if ($rest !== '') {
-                $results = array_merge($results, glob($dir . '/' . $rest) ?: []);
+                $results = array_merge($results, glob($dir.'/'.$rest) ?: []);
             }
             // Continue recursing with **
-            $results = array_merge($results, $this->globStar($dir . '/**' . ($rest !== '' ? '/' . $rest : '')));
+            $results = array_merge($results, $this->globStar($dir.'/**'.($rest !== '' ? '/'.$rest : '')));
         }
 
         return array_filter($results, 'is_file');

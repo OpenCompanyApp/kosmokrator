@@ -13,7 +13,7 @@ class InstructionLoaderTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/kosmokrator_test_' . uniqid();
+        $this->tmpDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tmpDir, 0755, true);
     }
 
@@ -40,7 +40,7 @@ class InstructionLoaderTest extends TestCase
     {
         // Create a git repo with a KOSMOKRATOR.md
         $this->initGitRepo($this->tmpDir);
-        file_put_contents($this->tmpDir . '/KOSMOKRATOR.md', 'Use strict types everywhere.');
+        file_put_contents($this->tmpDir.'/KOSMOKRATOR.md', 'Use strict types everywhere.');
 
         $original = getcwd();
         chdir($this->tmpDir);
@@ -57,7 +57,7 @@ class InstructionLoaderTest extends TestCase
     public function test_gather_loads_agents_md(): void
     {
         $this->initGitRepo($this->tmpDir);
-        file_put_contents($this->tmpDir . '/AGENTS.md', 'Prefer functional style.');
+        file_put_contents($this->tmpDir.'/AGENTS.md', 'Prefer functional style.');
 
         $original = getcwd();
         chdir($this->tmpDir);
@@ -74,8 +74,8 @@ class InstructionLoaderTest extends TestCase
     public function test_gather_loads_dotfolder_instructions(): void
     {
         $this->initGitRepo($this->tmpDir);
-        mkdir($this->tmpDir . '/.kosmokrator', 0755);
-        file_put_contents($this->tmpDir . '/.kosmokrator/instructions.md', 'Private project notes.');
+        mkdir($this->tmpDir.'/.kosmokrator', 0755);
+        file_put_contents($this->tmpDir.'/.kosmokrator/instructions.md', 'Private project notes.');
 
         $original = getcwd();
         chdir($this->tmpDir);
@@ -92,11 +92,11 @@ class InstructionLoaderTest extends TestCase
     public function test_gather_loads_subdirectory_override(): void
     {
         $this->initGitRepo($this->tmpDir);
-        file_put_contents($this->tmpDir . '/KOSMOKRATOR.md', 'Root instructions.');
+        file_put_contents($this->tmpDir.'/KOSMOKRATOR.md', 'Root instructions.');
 
-        $subDir = $this->tmpDir . '/packages/api';
+        $subDir = $this->tmpDir.'/packages/api';
         mkdir($subDir, 0755, true);
-        file_put_contents($subDir . '/KOSMOKRATOR.md', 'API package instructions.');
+        file_put_contents($subDir.'/KOSMOKRATOR.md', 'API package instructions.');
 
         $original = getcwd();
         chdir($subDir);
@@ -114,7 +114,7 @@ class InstructionLoaderTest extends TestCase
     public function test_gather_skips_empty_files(): void
     {
         $this->initGitRepo($this->tmpDir);
-        file_put_contents($this->tmpDir . '/KOSMOKRATOR.md', '   ');
+        file_put_contents($this->tmpDir.'/KOSMOKRATOR.md', '   ');
 
         $original = getcwd();
         chdir($this->tmpDir);
@@ -130,8 +130,8 @@ class InstructionLoaderTest extends TestCase
     public function test_gather_preserves_priority_order(): void
     {
         $this->initGitRepo($this->tmpDir);
-        file_put_contents($this->tmpDir . '/KOSMOKRATOR.md', 'Project first.');
-        file_put_contents($this->tmpDir . '/AGENTS.md', 'Agents second.');
+        file_put_contents($this->tmpDir.'/KOSMOKRATOR.md', 'Project first.');
+        file_put_contents($this->tmpDir.'/AGENTS.md', 'Agents second.');
 
         $original = getcwd();
         chdir($this->tmpDir);

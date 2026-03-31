@@ -12,12 +12,13 @@ class CollapsibleWidget extends AbstractWidget
     private const PREVIEW_LINES = 3;
 
     private bool $expanded = false;
+
     private string $content;
 
     /**
-     * @param string $header     Status line (e.g. "✓")
-     * @param string $content    Full content to show when expanded
-     * @param int    $lineCount  Total line count for the badge
+     * @param  string  $header  Status line (e.g. "✓")
+     * @param  string  $content  Full content to show when expanded
+     * @param  int  $lineCount  Total line count for the badge
      */
     public function __construct(
         private string $header,
@@ -31,7 +32,7 @@ class CollapsibleWidget extends AbstractWidget
 
     public function toggle(): void
     {
-        $this->expanded = !$this->expanded;
+        $this->expanded = ! $this->expanded;
         $this->invalidate();
     }
 
@@ -55,7 +56,7 @@ class CollapsibleWidget extends AbstractWidget
         // Character-level truncation for single-line content when collapsed
         if (! $this->expanded && $this->previewWidth !== null && count($contentLines) <= self::PREVIEW_LINES) {
             if (isset($showLines[0]) && mb_strlen($showLines[0]) > $this->previewWidth) {
-                $showLines[0] = mb_substr($showLines[0], 0, $this->previewWidth) . '…';
+                $showLines[0] = mb_substr($showLines[0], 0, $this->previewWidth).'…';
                 $charTruncated = true;
             }
         }
@@ -65,7 +66,7 @@ class CollapsibleWidget extends AbstractWidget
             if ($i === 0) {
                 $indented = "{$this->header} {$border}⏋{$r} {$line}";
             } else {
-                $indented = '    ' . $line;
+                $indented = '    '.$line;
             }
             $result[] = AnsiUtils::visibleWidth($indented) > $cols
                 ? AnsiUtils::truncateToWidth($indented, $cols, '')

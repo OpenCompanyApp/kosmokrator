@@ -9,8 +9,8 @@ use Prism\Prism\Tool;
 interface LlmClientInterface
 {
     /**
-     * @param Message[] $messages
-     * @param Tool[] $tools
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse;
 

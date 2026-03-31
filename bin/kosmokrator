@@ -10,6 +10,11 @@ $autoloader = require file_exists(__DIR__ . '/../vendor/autoload.php')
     ? __DIR__ . '/../vendor/autoload.php'
     : __DIR__ . '/../../../autoload.php';
 
+// Pretty error rendering (dev)
+if (class_exists(\NunoMaduro\Collision\Provider::class)) {
+    (new \NunoMaduro\Collision\Provider())->register();
+}
+
 // Boot the kernel
 $kernel = new Kosmokrator\Kernel(dirname(__DIR__));
 $kernel->boot();

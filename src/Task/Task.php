@@ -115,13 +115,13 @@ class Task
         }
 
         if ($this->blockedBy !== []) {
-            $lines[] = 'Blocked by: ' . implode(', ', $this->blockedBy);
+            $lines[] = 'Blocked by: '.implode(', ', $this->blockedBy);
         }
         if ($this->blocks !== []) {
-            $lines[] = 'Blocks: ' . implode(', ', $this->blocks);
+            $lines[] = 'Blocks: '.implode(', ', $this->blocks);
         }
         if ($this->metadata !== []) {
-            $lines[] = 'Metadata: ' . json_encode($this->metadata, JSON_UNESCAPED_SLASHES);
+            $lines[] = 'Metadata: '.json_encode($this->metadata, JSON_UNESCAPED_SLASHES);
         }
 
         return implode("\n", $lines);

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\LLM;
 
+use Amp\CancelledException;
+use Amp\DeferredCancellation;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
-use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\LLM\RetryableHttpException;
+use Kosmokrator\LLM\RetryableLlmClient;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
@@ -283,14 +285,13 @@ class RetryableLlmClientTest extends TestCase
             });
 
         $client = $this->makeClient($inner, maxAttempts: 2);
-        $client->setOnRetry(function (int $attempt, int $max, float $delay, string $reason) use (&$callbackArgs) {
-            $callbackArgs = compact('attempt', 'max', 'delay', 'reason');
+        $client->setOnRetry(function (int $attempt, float $delay, string $reason) use (&$callbackArgs) {
+            $callbackArgs = compact('attempt', 'delay', 'reason');
         });
 
         $client->chat([]);
 
         $this->assertSame(1, $callbackArgs['attempt']);
-        $this->assertSame(2, $callbackArgs['max']);
         $this->assertSame(3.0, $callbackArgs['delay']);
         $this->assertStringContainsString('429', $callbackArgs['reason']);
     }
@@ -332,10 +333,10 @@ class RetryableLlmClientTest extends TestCase
         $client = $this->makeClient($inner, maxAttempts: 3);
 
         // Create a pre-cancelled cancellation token
-        $deferred = new \Amp\DeferredCancellation();
+        $deferred = new DeferredCancellation;
         $deferred->cancel();
 
-        $this->expectException(\Amp\CancelledException::class);
+        $this->expectException(CancelledException::class);
         $client->chat([], [], $deferred->getCancellation());
     }
 

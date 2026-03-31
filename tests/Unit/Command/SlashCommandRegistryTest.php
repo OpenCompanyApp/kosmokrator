@@ -18,9 +18,10 @@ class SlashCommandRegistryTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->registry = new SlashCommandRegistry();
+        $this->registry = new SlashCommandRegistry;
 
-        $this->command = new class implements SlashCommand {
+        $this->command = new class implements SlashCommand
+        {
             public function name(): string
             {
                 return '/test';
@@ -75,7 +76,8 @@ class SlashCommandRegistryTest extends TestCase
 
     public function test_extract_args(): void
     {
-        $forgetCommand = new class implements SlashCommand {
+        $forgetCommand = new class implements SlashCommand
+        {
             public function name(): string
             {
                 return '/forget';
@@ -106,7 +108,8 @@ class SlashCommandRegistryTest extends TestCase
 
     public function test_extract_args_no_args(): void
     {
-        $forgetCommand = new class implements SlashCommand {
+        $forgetCommand = new class implements SlashCommand
+        {
             public function name(): string
             {
                 return '/forget';

@@ -41,7 +41,7 @@ class ConfigLoader
     {
         $files = [];
 
-        foreach (glob($path . '/*.yaml') as $file) {
+        foreach (glob($path.'/*.yaml') as $file) {
             $key = pathinfo($file, PATHINFO_FILENAME);
             $files[$key] = $file;
         }
@@ -66,7 +66,7 @@ class ConfigLoader
     private function loadUserConfig(): ?array
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-        $path = $home . '/.kosmokrator/config.yaml';
+        $path = $home.'/.kosmokrator/config.yaml';
 
         if (! file_exists($path)) {
             return null;
@@ -92,7 +92,7 @@ class ConfigLoader
 
     private function loadProjectConfig(): ?array
     {
-        $path = getcwd() . '/.kosmokrator.yaml';
+        $path = getcwd().'/.kosmokrator.yaml';
 
         if (! file_exists($path)) {
             return null;

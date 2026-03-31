@@ -6,9 +6,7 @@ namespace Kosmokrator\Session;
 
 class SessionRepository
 {
-    public function __construct(private Database $db)
-    {
-    }
+    public function __construct(private Database $db) {}
 
     public function create(string $project, string $model): string
     {
@@ -45,7 +43,7 @@ class SessionRepository
         $stmt = $this->db->connection()->prepare(
             'SELECT * FROM sessions WHERE id LIKE :prefix LIMIT 2'
         );
-        $stmt->execute(['prefix' => $prefix . '%']);
+        $stmt->execute(['prefix' => $prefix.'%']);
         $rows = $stmt->fetchAll();
 
         // Only return if exactly one match (ambiguous prefix → null)
@@ -106,8 +104,8 @@ class SessionRepository
     private function uuid(): string
     {
         $data = random_bytes(16);
-        $data[6] = chr(ord($data[6]) & 0x0f | 0x40); // version 4
-        $data[8] = chr(ord($data[8]) & 0x3f | 0x80); // variant
+        $data[6] = chr(ord($data[6]) & 0x0F | 0x40); // version 4
+        $data[8] = chr(ord($data[8]) & 0x3F | 0x80); // variant
 
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }

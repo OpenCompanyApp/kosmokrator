@@ -57,8 +57,8 @@ class AsyncLlmClient implements LlmClientInterface
             $payload['temperature'] = $this->temperature;
         }
 
-        $request = new Request($this->baseUrl . '/chat/completions', 'POST');
-        $request->setHeader('Authorization', 'Bearer ' . $this->apiKey);
+        $request = new Request($this->baseUrl.'/chat/completions', 'POST');
+        $request->setHeader('Authorization', 'Bearer '.$this->apiKey);
         $request->setHeader('Content-Type', 'application/json');
         $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR));
         $request->setTransferTimeout(600);
@@ -195,7 +195,7 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
-     * @param Message[] $messages
+     * @param  Message[]  $messages
      * @return array<int, array<string, mixed>>
      */
     private function mapMessages(array $messages): array
@@ -219,7 +219,7 @@ class AsyncLlmClient implements LlmClientInterface
                 ],
                 AssistantMessage::class => $this->mapAssistantMessage($message, $mapped),
                 ToolResultMessage::class => $this->mapToolResultMessage($message, $mapped),
-                default => throw new \InvalidArgumentException('Unsupported message type: ' . $message::class),
+                default => throw new \InvalidArgumentException('Unsupported message type: '.$message::class),
             };
         }
 
@@ -260,7 +260,7 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
-     * @param Tool[] $tools
+     * @param  Tool[]  $tools
      * @return array<int, array<string, mixed>>
      */
     private function mapTools(array $tools): array

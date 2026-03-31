@@ -14,16 +14,25 @@ class TaskListTool implements ToolInterface
         private readonly TaskStore $store,
     ) {}
 
-    public function name(): string { return 'task_list'; }
+    public function name(): string
+    {
+        return 'task_list';
+    }
 
     public function description(): string
     {
         return 'List all tasks as a tree with status icons and elapsed time.';
     }
 
-    public function parameters(): array { return []; }
+    public function parameters(): array
+    {
+        return [];
+    }
 
-    public function requiredParameters(): array { return []; }
+    public function requiredParameters(): array
+    {
+        return [];
+    }
 
     public function execute(array $args): ToolResult
     {

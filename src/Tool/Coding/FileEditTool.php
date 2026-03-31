@@ -7,7 +7,10 @@ use Kosmokrator\Tool\ToolResult;
 
 class FileEditTool implements ToolInterface
 {
-    public function name(): string { return 'file_edit'; }
+    public function name(): string
+    {
+        return 'file_edit';
+    }
 
     public function description(): string
     {
@@ -23,7 +26,10 @@ class FileEditTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array { return ['path', 'old_string', 'new_string']; }
+    public function requiredParameters(): array
+    {
+        return ['path', 'old_string', 'new_string'];
+    }
 
     public function execute(array $args): ToolResult
     {

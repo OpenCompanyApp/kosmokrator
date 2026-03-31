@@ -9,7 +9,7 @@ class BashToolHelloWorldTest extends TestCase
 {
     public function test_echo_hello_world(): void
     {
-        $tool = new BashTool();
+        $tool = new BashTool;
         $result = $tool->execute(['command' => 'echo "Hello World"']);
 
         $this->assertTrue($result->success, 'Command should succeed');

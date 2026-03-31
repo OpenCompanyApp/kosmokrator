@@ -4,6 +4,7 @@ namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\AsyncLlmClient;
 use PHPUnit\Framework\TestCase;
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
@@ -114,8 +115,12 @@ class AsyncLlmClientMessageMappingTest extends TestCase
         $this->expectExceptionMessage('Unsupported message type');
 
         // Create an anonymous class implementing Message
-        $fake = new class implements \Prism\Prism\Contracts\Message {
-            public function toArray(): array { return []; }
+        $fake = new class implements Message
+        {
+            public function toArray(): array
+            {
+                return [];
+            }
         };
 
         $this->invokeMapMessages([$fake]);
@@ -123,7 +128,7 @@ class AsyncLlmClientMessageMappingTest extends TestCase
 
     public function test_map_tools(): void
     {
-        $tool = (new Tool())
+        $tool = (new Tool)
             ->as('my_tool')
             ->for('Does something')
             ->withStringParameter('path', 'File path', true)

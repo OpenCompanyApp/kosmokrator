@@ -7,3 +7,4 @@
 .DS_Store
 .env
 /tmp
+/docs/confidential

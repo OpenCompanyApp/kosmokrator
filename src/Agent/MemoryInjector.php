@@ -11,7 +11,7 @@ class MemoryInjector
     /**
      * Load and format memories for injection into the system prompt.
      *
-     * @param array[] $memories Raw memory rows from MemoryRepository
+     * @param  array[]  $memories  Raw memory rows from MemoryRepository
      */
     public static function format(array $memories): string
     {
@@ -32,7 +32,7 @@ class MemoryInjector
             $lines = ['## Project Knowledge'];
             foreach ($grouped['project'] as $m) {
                 $date = isset($m['created_at']) ? substr($m['created_at'], 0, 10) : '';
-                $lines[] = "- {$m['title']}: {$m['content']}" . ($date ? " ({$date})" : '');
+                $lines[] = "- {$m['title']}: {$m['content']}".($date ? " ({$date})" : '');
             }
             $sections[] = implode("\n", $lines);
         }
@@ -51,7 +51,7 @@ class MemoryInjector
             $lines = ['## Key Decisions'];
             foreach ($grouped['decision'] as $m) {
                 $date = isset($m['created_at']) ? substr($m['created_at'], 0, 10) : '';
-                $lines[] = "- {$m['title']}: {$m['content']}" . ($date ? " ({$date})" : '');
+                $lines[] = "- {$m['title']}: {$m['content']}".($date ? " ({$date})" : '');
             }
             $sections[] = implode("\n", $lines);
         }
@@ -71,6 +71,6 @@ class MemoryInjector
             return '';
         }
 
-        return "\n\n# Memories\n\n" . implode("\n\n", $sections);
+        return "\n\n# Memories\n\n".implode("\n\n", $sections);
     }
 }

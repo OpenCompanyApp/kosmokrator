@@ -20,7 +20,7 @@ class TaskStore
     }
 
     /**
-     * @param array<string, mixed> $changes
+     * @param  array<string, mixed>  $changes
      */
     public function update(string $id, array $changes): ?Task
     {
@@ -112,6 +112,17 @@ class TaskStore
         return $this->tasks === [];
     }
 
+    public function hasInProgress(): bool
+    {
+        foreach ($this->tasks as $task) {
+            if ($task->status === TaskStatus::InProgress) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isBlocked(string $id): bool
     {
         $task = $this->tasks[$id] ?? null;
@@ -144,7 +155,7 @@ class TaskStore
     }
 
     /**
-     * @param string[] $lines
+     * @param  string[]  $lines
      */
     private function renderNode(Task $task, int $depth, array &$lines): void
     {
@@ -153,7 +164,7 @@ class TaskStore
         }
 
         $indent = str_repeat('  ', $depth);
-        $line = $indent . $task->toSummary();
+        $line = $indent.$task->toSummary();
 
         if ($this->isBlocked($task->id)) {
             $line .= ' [blocked]';
@@ -184,7 +195,7 @@ class TaskStore
     }
 
     /**
-     * @param string[] $lines
+     * @param  string[]  $lines
      */
     private function renderAnsiNode(Task $task, int $depth, array &$lines, ?string $inProgressColor = null): void
     {
@@ -206,14 +217,14 @@ class TaskStore
         $indent = str_repeat('  ', $depth);
         $icon = $task->status->icon();
         $subjectText = mb_strlen($task->subject) > 50
-            ? mb_substr($task->subject, 0, 47) . '...'
+            ? mb_substr($task->subject, 0, 47).'...'
             : $task->subject;
         $subjectColor = match (true) {
             $task->status->isTerminal() => $dim,
             $task->status === TaskStatus::InProgress && $inProgressColor !== null => $inProgressColor,
             default => $white,
         };
-        $subject = $subjectColor . $subjectText;
+        $subject = $subjectColor.$subjectText;
 
         $line = "{$indent}{$statusColor}{$icon}{$r} {$subject}{$r}";
 

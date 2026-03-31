@@ -25,7 +25,7 @@ class NewCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->command = new NewCommand();
+        $this->command = new NewCommand;
     }
 
     private function makeContext(

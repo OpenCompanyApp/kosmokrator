@@ -25,47 +25,47 @@ class InstructionLoader
 
         // 1. Global user instructions
         if ($home !== null) {
-            $global = $home . '/.kosmokrator/instructions.md';
+            $global = $home.'/.kosmokrator/instructions.md';
             $content = self::readFile($global);
             if ($content !== null) {
-                $sections[] = "# User Instructions\n" . $content;
+                $sections[] = "# User Instructions\n".$content;
             }
         }
 
         // 2. Project KOSMOKRATOR.md at git root
         $projectRootFile = null;
         if ($gitRoot !== null) {
-            $projectRootFile = $gitRoot . '/KOSMOKRATOR.md';
+            $projectRootFile = $gitRoot.'/KOSMOKRATOR.md';
             $content = self::readFile($projectRootFile);
             if ($content !== null) {
-                $sections[] = "# Project Instructions\n" . $content;
+                $sections[] = "# Project Instructions\n".$content;
             }
         }
 
         // 3. Project .kosmokrator/instructions.md at git root
         if ($gitRoot !== null) {
-            $content = self::readFile($gitRoot . '/.kosmokrator/instructions.md');
+            $content = self::readFile($gitRoot.'/.kosmokrator/instructions.md');
             if ($content !== null) {
-                $sections[] = "# Project Instructions\n" . $content;
+                $sections[] = "# Project Instructions\n".$content;
             }
         }
 
         // 4. AGENTS.md at git root
         if ($gitRoot !== null) {
-            $content = self::readFile($gitRoot . '/AGENTS.md');
+            $content = self::readFile($gitRoot.'/AGENTS.md');
             if ($content !== null) {
-                $sections[] = "# Agent Instructions\n" . $content;
+                $sections[] = "# Agent Instructions\n".$content;
             }
         }
 
         // 5. Subdirectory KOSMOKRATOR.md (only if cwd differs from git root)
         if ($cwd !== $gitRoot) {
-            $cwdFile = $cwd . '/KOSMOKRATOR.md';
+            $cwdFile = $cwd.'/KOSMOKRATOR.md';
             // Avoid loading the same file twice if git root detection failed
             if ($cwdFile !== $projectRootFile) {
                 $content = self::readFile($cwdFile);
                 if ($content !== null) {
-                    $sections[] = "# Directory Instructions\n" . $content;
+                    $sections[] = "# Directory Instructions\n".$content;
                 }
             }
         }
@@ -74,7 +74,7 @@ class InstructionLoader
             return '';
         }
 
-        return "\n\n" . implode("\n\n", $sections);
+        return "\n\n".implode("\n\n", $sections);
     }
 
     private static function readFile(string $path): ?string

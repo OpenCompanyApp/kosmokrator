@@ -14,7 +14,7 @@ class ToolRegistryTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->registry = new ToolRegistry();
+        $this->registry = new ToolRegistry;
     }
 
     public function test_register_and_get(): void
@@ -197,7 +197,8 @@ class ToolRegistryTest extends TestCase
 
     private function makeToolWithParams(string $name, array $params, array $required = [], string $description = 'Test tool'): ToolInterface
     {
-        return new class($name, $description, $params, $required) implements ToolInterface {
+        return new class($name, $description, $params, $required) implements ToolInterface
+        {
             public function __construct(
                 private readonly string $toolName,
                 private readonly string $desc,
@@ -205,11 +206,30 @@ class ToolRegistryTest extends TestCase
                 private readonly array $required,
             ) {}
 
-            public function name(): string { return $this->toolName; }
-            public function description(): string { return $this->desc; }
-            public function parameters(): array { return $this->params; }
-            public function requiredParameters(): array { return $this->required; }
-            public function execute(array $args): ToolResult { return ToolResult::success('ok'); }
+            public function name(): string
+            {
+                return $this->toolName;
+            }
+
+            public function description(): string
+            {
+                return $this->desc;
+            }
+
+            public function parameters(): array
+            {
+                return $this->params;
+            }
+
+            public function requiredParameters(): array
+            {
+                return $this->required;
+            }
+
+            public function execute(array $args): ToolResult
+            {
+                return ToolResult::success('ok');
+            }
         };
     }
 }

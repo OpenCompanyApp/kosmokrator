@@ -51,7 +51,7 @@ class GuardianEvaluatorTest extends TestCase
         // Path must exist for realpath() — use the project dir itself
         $guardian = new GuardianEvaluator(getcwd(), ['git *']);
 
-        $this->assertTrue($guardian->shouldAutoApprove('file_write', ['path' => getcwd() . '/src/NewFile.php']));
+        $this->assertTrue($guardian->shouldAutoApprove('file_write', ['path' => getcwd().'/src/NewFile.php']));
     }
 
     public function test_file_write_outside_project_not_auto_approved(): void
@@ -171,5 +171,64 @@ class GuardianEvaluatorTest extends TestCase
     public function test_unknown_tool_not_auto_approved(): void
     {
         $this->assertFalse($this->guardian->shouldAutoApprove('unknown_tool', []));
+    }
+
+    #[DataProvider('mutativeCommandProvider')]
+    public function test_mutative_commands_detected(string $command): void
+    {
+        $this->assertTrue(
+            $this->guardian->isMutativeCommand($command),
+            "Expected '{$command}' to be detected as mutative",
+        );
+    }
+
+    public static function mutativeCommandProvider(): iterable
+    {
+        yield 'rm file' => ['rm file.txt'];
+        yield 'rm -rf' => ['rm -rf /tmp/junk'];
+        yield 'rmdir' => ['rmdir old_dir'];
+        yield 'mv' => ['mv a.txt b.txt'];
+        yield 'cp' => ['cp a.txt b.txt'];
+        yield 'mkdir' => ['mkdir new_dir'];
+        yield 'touch' => ['touch new_file'];
+        yield 'chmod' => ['chmod 755 script.sh'];
+        yield 'git commit' => ['git commit -m "msg"'];
+        yield 'git push' => ['git push origin main'];
+        yield 'git reset' => ['git reset --hard HEAD~1'];
+        yield 'git checkout' => ['git checkout -- file.txt'];
+        yield 'npm install' => ['npm install express'];
+        yield 'composer require' => ['composer require symfony/console'];
+        yield 'pip install' => ['pip install requests'];
+        yield 'kill' => ['kill -9 1234'];
+        yield 'dd' => ['dd if=/dev/zero of=file bs=1M count=1'];
+        yield 'shell redirect' => ['echo foo > file.txt'];
+        yield 'pipe' => ['cat file | tee output'];
+        yield 'command chain' => ['ls && rm file'];
+    }
+
+    #[DataProvider('nonMutativeCommandProvider')]
+    public function test_non_mutative_commands_allowed(string $command): void
+    {
+        $this->assertFalse(
+            $this->guardian->isMutativeCommand($command),
+            "Expected '{$command}' to NOT be detected as mutative",
+        );
+    }
+
+    public static function nonMutativeCommandProvider(): iterable
+    {
+        yield 'git status' => ['git status'];
+        yield 'git log' => ['git log --oneline -10'];
+        yield 'git diff' => ['git diff --cached'];
+        yield 'git branch list' => ['git branch -a'];
+        yield 'ls' => ['ls -la'];
+        yield 'cat' => ['cat src/Kernel.php'];
+        yield 'head' => ['head -20 file.txt'];
+        yield 'php version' => ['php -v'];
+        yield 'composer show' => ['composer show --latest'];
+        yield 'find' => ['find src -name "*.php"'];
+        yield 'wc' => ['wc -l src/Kernel.php'];
+        yield 'which' => ['which php'];
+        yield 'pwd' => ['pwd'];
     }
 }

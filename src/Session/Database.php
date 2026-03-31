@@ -14,11 +14,11 @@ class Database
     {
         if ($path === null) {
             $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
-            $dir = $home . '/.kosmokrator/data';
+            $dir = $home.'/.kosmokrator/data';
             if (! is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
-            $path = $dir . '/kosmokrator.db';
+            $path = $dir.'/kosmokrator.db';
         }
 
         $isMemory = $path === ':memory:';
@@ -49,10 +49,10 @@ class Database
 
         if ($currentVersion === 0) {
             $this->createInitialSchema();
-            $this->pdo->exec('INSERT INTO schema_version (version) VALUES (' . self::SCHEMA_VERSION . ')');
+            $this->pdo->exec('INSERT INTO schema_version (version) VALUES ('.self::SCHEMA_VERSION.')');
         } elseif ($currentVersion < self::SCHEMA_VERSION) {
             $this->migrate($currentVersion);
-            $this->pdo->exec('UPDATE schema_version SET version = ' . self::SCHEMA_VERSION);
+            $this->pdo->exec('UPDATE schema_version SET version = '.self::SCHEMA_VERSION);
         }
     }
 

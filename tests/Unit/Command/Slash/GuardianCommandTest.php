@@ -24,7 +24,7 @@ class GuardianCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->command = new GuardianCommand();
+        $this->command = new GuardianCommand;
     }
 
     private function makeContext(

@@ -5,7 +5,7 @@ namespace Kosmokrator\Tool\Permission;
 class PermissionRule
 {
     /**
-     * @param string[] $denyPatterns Glob patterns for args that always deny (e.g. blocked bash commands)
+     * @param  string[]  $denyPatterns  Glob patterns for args that always deny (e.g. blocked bash commands)
      */
     public function __construct(
         public readonly string $toolName,
@@ -44,11 +44,11 @@ class PermissionRule
      */
     public static function matchesGlob(string $value, string $pattern): bool
     {
-        $regex = '/^' . str_replace(
+        $regex = '/^'.str_replace(
             ['\*', '\?'],
             ['.*', '.'],
             preg_quote($pattern, '/'),
-        ) . '$/i';
+        ).'$/i';
 
         return (bool) preg_match($regex, $value);
     }

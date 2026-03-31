@@ -49,7 +49,7 @@ class MemorySaveTool implements ToolInterface
         $id = $args['id'] ?? null;
 
         if (! in_array($type, self::VALID_TYPES, true)) {
-            return ToolResult::error("Invalid memory type '{$type}'. Must be one of: " . implode(', ', self::VALID_TYPES));
+            return ToolResult::error("Invalid memory type '{$type}'. Must be one of: ".implode(', ', self::VALID_TYPES));
         }
 
         if ($id !== null && $id !== '') {

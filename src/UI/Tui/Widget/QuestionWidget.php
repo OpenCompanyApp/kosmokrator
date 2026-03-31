@@ -34,14 +34,14 @@ class QuestionWidget extends AbstractWidget
 
         $lines = [];
         $lines[] = AnsiUtils::truncateToWidth(
-            "{$border}┌─{$accent}{$titleLabel}{$border}" . str_repeat('─', $topFill) . "┐{$r}",
+            "{$border}┌─{$accent}{$titleLabel}{$border}".str_repeat('─', $topFill)."┐{$r}",
             $columns
         );
 
         // Wrap question text to fit inside the box
         $maxTextWidth = max(10, $inner - 1);
         foreach ($this->wrapText($this->question, $maxTextWidth) as $line) {
-            $padded = $line . str_repeat(' ', max(0, $inner - mb_strwidth($line)));
+            $padded = $line.str_repeat(' ', max(0, $inner - mb_strwidth($line)));
             $lines[] = AnsiUtils::truncateToWidth(
                 "{$border}│{$r} {$white}{$padded}{$r} {$border}│{$r}",
                 $columns
@@ -50,7 +50,7 @@ class QuestionWidget extends AbstractWidget
 
         if ($this->showBottom) {
             $lines[] = AnsiUtils::truncateToWidth(
-                "{$border}└" . str_repeat('─', $inner + 2) . "┘{$r}",
+                "{$border}└".str_repeat('─', $inner + 2)."┘{$r}",
                 $columns
             );
         }

@@ -35,7 +35,7 @@ class NewCommand implements SlashCommand
         $ctx->permissions->setPermissionMode(PermissionMode::Guardian);
         $ctx->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
         $ctx->ui->clearConversation();
-        $modelName = $ctx->llm->getProvider() . '/' . $ctx->llm->getModel();
+        $modelName = $ctx->llm->getProvider().'/'.$ctx->llm->getModel();
         $ctx->sessionManager->createSession($modelName);
         $ctx->ui->showNotice('Conversation cleared. New session started.');
 

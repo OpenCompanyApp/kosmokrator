@@ -2,18 +2,27 @@
 
 namespace Kosmokrator;
 
+use Dotenv\Dotenv;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
-use Illuminate\Foundation\Application as LaravelApp;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Foundation\Application as LaravelApp;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Facade;
-use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\RetryableLlmClient;
+use Kosmokrator\Session\Database as SessionDatabase;
+use Kosmokrator\Session\MemoryRepository;
+use Kosmokrator\Session\MessageRepository;
+use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\SessionRepository;
+use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\Tool\MemorySaveTool;
+use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
@@ -25,27 +34,20 @@ use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
-use Kosmokrator\Session\Database as SessionDatabase;
-use Kosmokrator\Session\MemoryRepository;
-use Kosmokrator\Session\MessageRepository;
-use Kosmokrator\Session\SessionManager;
-use Kosmokrator\Session\SessionRepository;
-use Kosmokrator\Session\SettingsRepository;
-use Kosmokrator\Session\Tool\MemorySaveTool;
-use Kosmokrator\Session\Tool\MemorySearchTool;
-use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionConfigParser;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
-use Dotenv\Dotenv;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Logger;
+use Prism\Prism\PrismManager;
 use Prism\Prism\PrismServiceProvider;
+use Prism\Prism\Providers\Z\Z;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Application;
+use Symfony\Component\Yaml\Yaml;
 
 class Kernel
 {
@@ -86,7 +88,7 @@ class Kernel
 
     private function loadEnv(): void
     {
-        if (file_exists($this->basePath . '/.env')) {
+        if (file_exists($this->basePath.'/.env')) {
             Dotenv::createImmutable($this->basePath)->safeLoad();
         }
     }
@@ -94,14 +96,14 @@ class Kernel
     private function registerLogger(): void
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
-        $logDir = $home . '/.kosmokrator/logs';
+        $logDir = $home.'/.kosmokrator/logs';
 
         if (! is_dir($logDir)) {
             mkdir($logDir, 0700, true);
         }
 
         $logger = new Logger('kosmokrator');
-        $logger->pushHandler(new RotatingFileHandler($logDir . '/kosmokrator.log', 7, Logger::DEBUG));
+        $logger->pushHandler(new RotatingFileHandler($logDir.'/kosmokrator.log', 7, Logger::DEBUG));
 
         $this->container->instance('log', $logger);
         $this->container->alias('log', LoggerInterface::class);
@@ -110,7 +112,7 @@ class Kernel
 
     private function registerConfig(): void
     {
-        $loader = new ConfigLoader($this->basePath . '/config');
+        $loader = new ConfigLoader($this->basePath.'/config');
         $config = $loader->load();
 
         $this->container->instance('config', $config);
@@ -122,7 +124,7 @@ class Kernel
 
     private function registerDatabase(): void
     {
-        $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase());
+        $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase);
         $this->container->singleton(SettingsRepository::class, fn () => new SettingsRepository(
             $this->container->make(SessionDatabase::class),
         ));
@@ -161,13 +163,13 @@ class Kernel
     private function migrateYamlKeys(Repository $config, SettingsRepository $settings): void
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-        $yamlPath = $home . '/.kosmokrator/config.yaml';
+        $yamlPath = $home.'/.kosmokrator/config.yaml';
 
         if (! file_exists($yamlPath)) {
             return;
         }
 
-        $yaml = \Symfony\Component\Yaml\Yaml::parseFile($yamlPath) ?? [];
+        $yaml = Yaml::parseFile($yamlPath) ?? [];
         $providers = $yaml['providers'] ?? [];
         $migrated = false;
 
@@ -208,7 +210,7 @@ class Kernel
             if (empty($yaml)) {
                 @unlink($yamlPath);
             } else {
-                file_put_contents($yamlPath, \Symfony\Component\Yaml\Yaml::dump($yaml, 4, 2));
+                file_put_contents($yamlPath, Yaml::dump($yaml, 4, 2));
             }
         }
     }
@@ -217,17 +219,17 @@ class Kernel
     {
         // App instance bindings that Prism/Laravel expects
         $this->container->instance('path.base', $this->basePath);
-        $this->container->instance('path.config', $this->basePath . '/config');
+        $this->container->instance('path.config', $this->basePath.'/config');
 
         // Events dispatcher (needed by Laravel internals)
         $this->container->singleton('events', fn () => new Dispatcher($this->container));
         $this->container->alias('events', \Illuminate\Contracts\Events\Dispatcher::class);
 
         // Filesystem
-        $this->container->singleton('files', fn () => new Filesystem());
+        $this->container->singleton('files', fn () => new Filesystem);
 
         // HTTP client factory (used by Prism via Http facade)
-        $this->container->singleton('http', fn () => new HttpFactory());
+        $this->container->singleton('http', fn () => new HttpFactory);
     }
 
     private function registerPrism(): void
@@ -235,13 +237,15 @@ class Kernel
         // Simulate Laravel's Application interface just enough for PrismServiceProvider
         $this->container->instance('app', $this->container);
 
-        $provider = new PrismServiceProvider($this->container);
+        /** @var \Illuminate\Contracts\Foundation\Application $app */
+        $app = $this->container;
+        $provider = new PrismServiceProvider($app);
         $provider->register();
 
         // Register z-api as alias of z provider (same class, different config/URL)
-        $this->container->make(\Prism\Prism\PrismManager::class)->extend(
+        $this->container->make(PrismManager::class)->extend(
             'z-api',
-            fn ($app, array $config) => new \Prism\Prism\Providers\Z\Z(
+            fn ($app, array $config) => new Z(
                 apiKey: $config['api_key'] ?? '',
                 url: $config['url'] ?? 'https://open.bigmodel.cn/api/paas/v4',
             ),
@@ -250,7 +254,9 @@ class Kernel
 
     private function registerFacades(): void
     {
-        Facade::setFacadeApplication($this->container);
+        /** @var \Illuminate\Contracts\Foundation\Application $app */
+        $app = $this->container;
+        Facade::setFacadeApplication($app);
     }
 
     private function registerAgentServices(): void
@@ -293,12 +299,12 @@ class Kernel
         $this->container->singleton(TaskStore::class);
 
         $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout) {
-            $registry = new ToolRegistry();
-            $registry->register(new FileReadTool());
-            $registry->register(new FileWriteTool());
-            $registry->register(new FileEditTool());
-            $registry->register(new GlobTool());
-            $registry->register(new GrepTool());
+            $registry = new ToolRegistry;
+            $registry->register(new FileReadTool);
+            $registry->register(new FileWriteTool);
+            $registry->register(new FileEditTool);
+            $registry->register(new GlobTool);
+            $registry->register(new GrepTool);
             $registry->register(new BashTool($bashTimeout));
 
             $taskStore = $this->container->make(TaskStore::class);
@@ -334,7 +340,7 @@ class Kernel
 
         $this->container->singleton(SessionGrants::class);
         $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
-            $parser = new PermissionConfigParser();
+            $parser = new PermissionConfigParser;
             $parsed = $parser->parse($config);
 
             $projectRoot = InstructionLoader::gitRoot() ?? getcwd();

@@ -14,7 +14,7 @@ class KosmokratorTerminalThemeTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->theme = new KosmokratorTerminalTheme();
+        $this->theme = new KosmokratorTerminalTheme;
     }
 
     public function test_detect_language_php(): void

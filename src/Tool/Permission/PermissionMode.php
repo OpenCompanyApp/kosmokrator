@@ -39,6 +39,6 @@ enum PermissionMode: string
 
     public function statusLabel(): string
     {
-        return $this->label() . ' ' . $this->symbol();
+        return $this->label().' '.$this->symbol();
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
@@ -13,9 +14,7 @@ use Prism\Prism\ValueObjects\ToolResult;
 
 class MessageRepository
 {
-    public function __construct(private Database $db)
-    {
-    }
+    public function __construct(private Database $db) {}
 
     public function append(
         string $sessionId,
@@ -47,7 +46,7 @@ class MessageRepository
     /**
      * Load active (non-compacted) messages as Prism Message objects.
      *
-     * @return \Prism\Prism\Contracts\Message[]
+     * @return Message[]
      */
     public function loadActive(string $sessionId): array
     {
@@ -127,7 +126,7 @@ class MessageRepository
     }
 
     /**
-     * @param ToolCall[] $toolCalls
+     * @param  ToolCall[]  $toolCalls
      * @return array[]
      */
     private function serializeToolCalls(array $toolCalls): array
@@ -140,7 +139,7 @@ class MessageRepository
     }
 
     /**
-     * @param ToolResult[] $toolResults
+     * @param  ToolResult[]  $toolResults
      * @return array[]
      */
     private function serializeToolResults(array $toolResults): array
@@ -153,7 +152,7 @@ class MessageRepository
         ], $toolResults);
     }
 
-    private function deserializeMessage(array $row): ?\Prism\Prism\Contracts\Message
+    private function deserializeMessage(array $row): ?Message
     {
         return match ($row['role']) {
             'user' => new UserMessage($row['content'] ?? ''),

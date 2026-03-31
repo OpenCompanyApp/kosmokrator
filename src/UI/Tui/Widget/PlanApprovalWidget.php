@@ -7,7 +7,6 @@ namespace Kosmokrator\UI\Tui\Widget;
 use Kosmokrator\UI\Theme;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Input\Key;
-use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\FocusableInterface;
@@ -176,13 +175,13 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
 
         // Build bordered box — full terminal width
         $lines = [];
-        $lines[] = AnsiUtils::truncateToWidth("{$border}┌─{$plan} Plan complete {$border}" . str_repeat('─', max(0, $innerW - 16)) . "┐{$r}", $columns);
+        $lines[] = AnsiUtils::truncateToWidth("{$border}┌─{$plan} Plan complete {$border}".str_repeat('─', max(0, $innerW - 16))."┐{$r}", $columns);
         $lines[] = AnsiUtils::truncateToWidth("{$border}│{$r} {$padLine($row0)} {$border}│{$r}", $columns);
         $lines[] = AnsiUtils::truncateToWidth("{$border}│{$r} {$padLine($row1)} {$border}│{$r}", $columns);
         $lines[] = AnsiUtils::truncateToWidth("{$border}│{$r} {$padLine($row2)} {$border}│{$r}", $columns);
         $lines[] = AnsiUtils::truncateToWidth("{$border}│{$r} {$padLine('')}  {$border}│{$r}", $columns);
         $lines[] = AnsiUtils::truncateToWidth("{$border}│{$r} {$padLine($row3)} {$border}│{$r}", $columns);
-        $lines[] = AnsiUtils::truncateToWidth("{$border}└" . str_repeat('─', $innerW + 2) . "┘{$r}", $columns);
+        $lines[] = AnsiUtils::truncateToWidth("{$border}└".str_repeat('─', $innerW + 2)."┘{$r}", $columns);
 
         return $lines;
     }
@@ -197,7 +196,7 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
             return $text;
         }
 
-        return $text . str_repeat(' ', $width - $visible);
+        return $text.str_repeat(' ', $width - $visible);
     }
 
     protected static function getDefaultKeybindings(): array

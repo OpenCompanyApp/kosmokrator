@@ -25,9 +25,9 @@ class AnsiIntro
         $this->termWidth = (int) exec('tput cols') ?: 120;
         $this->termHeight = (int) exec('tput lines') ?: 30;
 
-        echo Theme::hideCursor() . Theme::clearScreen();
+        echo Theme::hideCursor().Theme::clearScreen();
 
-        register_shutdown_function(fn () => print(Theme::showCursor()));
+        register_shutdown_function(fn () => print (Theme::showCursor()));
 
         $this->enableNonBlockingInput();
 
@@ -89,7 +89,7 @@ class AnsiIntro
             $remaining -= $chunk;
 
             if ($this->keyPressed()) {
-                throw new IntroSkippedException();
+                throw new IntroSkippedException;
             }
         }
     }
@@ -131,7 +131,7 @@ class AnsiIntro
     private function restoreInput(): void
     {
         if ($this->originalTtyMode !== null) {
-            shell_exec('stty ' . escapeshellarg($this->originalTtyMode) . ' 2>/dev/null');
+            shell_exec('stty '.escapeshellarg($this->originalTtyMode).' 2>/dev/null');
             $this->originalTtyMode = null;
         }
 
@@ -149,9 +149,9 @@ class AnsiIntro
         $dim = Theme::text();
         $white = Theme::white();
 
-        $border = $dimRed . '  ⟡ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⟡' . $r;
-        $side = $dimRed . '  ┃' . $r;
-        $sideR = $dimRed . '┃' . $r;
+        $border = $dimRed.'  ⟡ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⟡'.$r;
+        $side = $dimRed.'  ┃'.$r;
+        $sideR = $dimRed.'┃'.$r;
 
         $lines = [
             '██╗  ██╗ ██████╗ ███████╗███╗   ███╗ ██████╗ ██╗  ██╗██████╗  █████╗ ████████╗ ██████╗ ██████╗ ',
@@ -167,18 +167,18 @@ class AnsiIntro
             [255, 80, 50], [220, 40, 30], [160, 20, 20],
         ];
 
-        echo "\n" . $border . "\n";
-        echo $side . str_repeat(' ', 95) . $sideR . "\n";
+        echo "\n".$border."\n";
+        echo $side.str_repeat(' ', 95).$sideR."\n";
         foreach ($lines as $i => $line) {
             [$rv, $g, $b] = $gradients[$i];
             $color = Theme::rgb($rv, $g, $b);
-            echo $side . '  ' . $color . $line . $r . str_repeat(' ', max(0, 93 - mb_strwidth($line))) . $sideR . "\n";
+            echo $side.'  '.$color.$line.$r.str_repeat(' ', max(0, 93 - mb_strwidth($line))).$sideR."\n";
         }
-        echo $side . str_repeat(' ', 95) . $sideR . "\n";
-        echo $border . "\n\n";
-        echo '                      ' . $gold . '⚡ Κοσμοκράτωρ — Ruler of the Cosmos ⚡' . $r . "\n\n";
-        echo '                 ☿  ♀  ♁  ♂  ♃  ♄  ♅  ♆  ✦  ☽  ☉  ★  ✧  ⊛  ◈' . "\n\n";
-        echo '                        ' . $dim . 'Your AI coding agent by ' . $white . 'OpenCompany' . $r . "\n\n";
+        echo $side.str_repeat(' ', 95).$sideR."\n";
+        echo $border."\n\n";
+        echo '                      '.$gold.'⚡ Κοσμοκράτωρ — Ruler of the Cosmos ⚡'.$r."\n\n";
+        echo '                 ☿  ♀  ♁  ♂  ♃  ♄  ♅  ♆  ✦  ☽  ☉  ★  ✧  ⊛  ◈'."\n\n";
+        echo '                        '.$dim.'Your AI coding agent by '.$white.'OpenCompany'.$r."\n\n";
 
         // Zodiac arc
         $signs = ['♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓'];
@@ -191,9 +191,9 @@ class AnsiIntro
         $zodiac = '                 ';
         foreach ($signs as $i => $sign) {
             $color = Theme::rgb(...$elementColors[$i]);
-            $zodiac .= $color . $sign . $r . '  ';
+            $zodiac .= $color.$sign.$r.'  ';
         }
-        echo $zodiac . "\n\n";
+        echo $zodiac."\n\n";
 
         // Simple orrery
         $sun = Theme::rgb(255, 220, 80);
@@ -218,7 +218,7 @@ class AnsiIntro
         ];
 
         foreach ($orreryLines as $line) {
-            echo $line . "\n";
+            echo $line."\n";
         }
         echo "\n";
     }
@@ -251,7 +251,7 @@ class AnsiIntro
                 $color = Theme::rgb($v, $v, $v + rand(0, 20));
             }
 
-            echo Theme::moveTo($row, $col) . $color . $stars[array_rand($stars)] . $r;
+            echo Theme::moveTo($row, $col).$color.$stars[array_rand($stars)].$r;
             $this->wait(4000);
         }
     }
@@ -265,28 +265,28 @@ class AnsiIntro
         $bar = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
         $innerWidth = 95;
 
-        echo Theme::moveTo(3, 5) . $bright . '⟡' . $r;
+        echo Theme::moveTo(3, 5).$bright.'⟡'.$r;
         $this->wait(30000);
         for ($i = 0; $i < mb_strlen($bar); $i++) {
-            echo $color . mb_substr($bar, $i, 1) . $r;
+            echo $color.mb_substr($bar, $i, 1).$r;
             $this->wait(3000);
         }
-        echo $bright . ' ⟡' . $r;
+        echo $bright.' ⟡'.$r;
         $this->wait(30000);
 
         $emptyInner = str_repeat(' ', $innerWidth);
         for ($row = 4; $row <= 11; $row++) {
-            echo Theme::moveTo($row, 5) . $color . '┃' . $emptyInner . '┃' . $r;
+            echo Theme::moveTo($row, 5).$color.'┃'.$emptyInner.'┃'.$r;
             $this->wait(20000);
         }
 
-        echo Theme::moveTo(12, 5) . $bright . '⟡' . $r;
+        echo Theme::moveTo(12, 5).$bright.'⟡'.$r;
         $this->wait(30000);
         for ($i = 0; $i < mb_strlen($bar); $i++) {
-            echo $color . mb_substr($bar, $i, 1) . $r;
+            echo $color.mb_substr($bar, $i, 1).$r;
             $this->wait(3000);
         }
-        echo $bright . ' ⟡' . $r;
+        echo $bright.' ⟡'.$r;
         $this->wait(50000);
     }
 
@@ -318,7 +318,7 @@ class AnsiIntro
             $chars = mb_str_split($line);
             $chunks = array_chunk($chars, 8);
             foreach ($chunks as $chunk) {
-                echo $color . implode('', $chunk) . $r;
+                echo $color.implode('', $chunk).$r;
                 $this->wait(8000);
             }
             $this->wait(30000);
@@ -341,7 +341,7 @@ class AnsiIntro
             [$rv, $g, $b] = $step;
             $color = Theme::rgb($rv, $g, $b);
             $bolt = Theme::accent();
-            echo Theme::moveTo(14, 27) . $bolt . '⚡ ' . $color . $title . $bolt . ' ⚡' . $r;
+            echo Theme::moveTo(14, 27).$bolt.'⚡ '.$color.$title.$bolt.' ⚡'.$r;
             $this->wait(80000);
         }
     }
@@ -365,7 +365,7 @@ class AnsiIntro
             [$rv, $g, $b] = $colors[$i];
             $color = Theme::rgb($rv, $g, $b);
             $col = $startCol + ($i * 4);
-            echo Theme::moveTo(16, $col) . $color . $symbol . $r;
+            echo Theme::moveTo(16, $col).$color.$symbol.$r;
             $this->wait(60000);
         }
     }
@@ -385,12 +385,12 @@ class AnsiIntro
 
         echo Theme::moveTo(18, 30);
         foreach (mb_str_split($text) as $char) {
-            echo $dim . $char . $r;
+            echo $dim.$char.$r;
             $this->wait(25000);
         }
-        echo $dim . $by . $r;
+        echo $dim.$by.$r;
         $this->wait(100000);
-        echo $bold . $white . $company . $r;
+        echo $bold.$white.$company.$r;
     }
 
     private function phaseColumns(): void
@@ -405,8 +405,8 @@ class AnsiIntro
 
         // Ornamental caps at top
         $capColor = Theme::rgb(180, 80, 60);
-        echo Theme::moveTo($startRow - 1, 3) . $capColor . '◆' . $r;
-        echo Theme::moveTo($startRow - 1, $this->termWidth - 3) . $capColor . '◆' . $r;
+        echo Theme::moveTo($startRow - 1, 3).$capColor.'◆'.$r;
+        echo Theme::moveTo($startRow - 1, $this->termWidth - 3).$capColor.'◆'.$r;
         $this->wait(30000);
 
         for ($row = $startRow; $row <= $endRow; $row++) {
@@ -418,15 +418,15 @@ class AnsiIntro
             $b = (int) (40 + $progress * 80);
             $color = Theme::rgb($rv, $g, $b);
 
-            echo Theme::moveTo($row, 3) . $color . '│' . $r;
-            echo Theme::moveTo($row, $this->termWidth - 3) . $color . '│' . $r;
+            echo Theme::moveTo($row, 3).$color.'│'.$r;
+            echo Theme::moveTo($row, $this->termWidth - 3).$color.'│'.$r;
             $this->wait(8000);
         }
 
         // Ornamental caps at bottom
         $capColorBot = Theme::rgb(40, 50, 120);
-        echo Theme::moveTo($endRow + 1, 3) . $capColorBot . '◆' . $r;
-        echo Theme::moveTo($endRow + 1, $this->termWidth - 3) . $capColorBot . '◆' . $r;
+        echo Theme::moveTo($endRow + 1, 3).$capColorBot.'◆'.$r;
+        echo Theme::moveTo($endRow + 1, $this->termWidth - 3).$capColorBot.'◆'.$r;
     }
 
     private function phaseOrrery(): void
@@ -462,7 +462,7 @@ class AnsiIntro
                 $col = $cx + (int) round($radius * cos($rad) * 2);
                 $row = $cy - (int) round($radius * sin($rad));
                 if ($this->inBounds($row, $col)) {
-                    echo Theme::moveTo($row, $col) . $color . $dot . $r;
+                    echo Theme::moveTo($row, $col).$color.$dot.$r;
                 }
                 $this->wait(2500);
             }
@@ -475,7 +475,7 @@ class AnsiIntro
             [255, 230, 100], [255, 220, 80],
         ];
         foreach ($sunPulse as $rgb) {
-            echo Theme::moveTo($cy, $cx) . Theme::rgb(...$rgb) . '☉' . $r;
+            echo Theme::moveTo($cy, $cx).Theme::rgb(...$rgb).'☉'.$r;
             $this->wait(50000);
         }
 
@@ -501,9 +501,9 @@ class AnsiIntro
             $row = $cy - (int) round($orbit * sin($rad));
             if ($this->inBounds($row, $col)) {
                 // Brief flash before settling
-                echo Theme::moveTo($row, $col) . Theme::rgb(255, 255, 255) . $symbol . $r;
+                echo Theme::moveTo($row, $col).Theme::rgb(255, 255, 255).$symbol.$r;
                 $this->wait(30000);
-                echo Theme::moveTo($row, $col) . Theme::rgb(...$rgb) . $symbol . $r;
+                echo Theme::moveTo($row, $col).Theme::rgb(...$rgb).$symbol.$r;
             }
             $this->wait(50000);
         }
@@ -546,9 +546,9 @@ class AnsiIntro
             if ($this->inBounds($row, $col)) {
                 // Fade in: dim → color
                 $dimColor = Theme::rgb(50, 50, 60);
-                echo Theme::moveTo($row, $col) . $dimColor . $sign . $r;
+                echo Theme::moveTo($row, $col).$dimColor.$sign.$r;
                 $this->wait(40000);
-                echo Theme::moveTo($row, $col) . Theme::rgb(...$colors[$i]) . $sign . $r;
+                echo Theme::moveTo($row, $col).Theme::rgb(...$colors[$i]).$sign.$r;
             }
             $this->wait(40000);
         }
@@ -564,7 +564,7 @@ class AnsiIntro
             $col = $cx + (int) round($radius * cos($rad) * 2);
             $row = $cy - (int) round($radius * sin($rad));
             if ($this->inBounds($row, $col)) {
-                echo Theme::moveTo($row, $col) . $arcColor . '·' . $r;
+                echo Theme::moveTo($row, $col).$arcColor.'·'.$r;
             }
             $this->wait(2000);
         }
@@ -585,7 +585,7 @@ class AnsiIntro
         foreach ($glowColors as [$rv, $g, $b]) {
             $color = Theme::rgb($rv, $g, $b);
             foreach ($positions as [$row, $col]) {
-                echo Theme::moveTo($row, $col) . $color . '⟡' . $r;
+                echo Theme::moveTo($row, $col).$color.'⟡'.$r;
             }
             $this->wait(60000);
         }

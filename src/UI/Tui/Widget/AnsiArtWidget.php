@@ -31,7 +31,7 @@ class AnsiArtWidget extends AbstractWidget
      */
     public function render(RenderContext $context): array
     {
-        if ('' === $this->text) {
+        if ($this->text === '') {
             return [];
         }
 

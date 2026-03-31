@@ -4,6 +4,7 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
+use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiIntro;
 use Kosmokrator\UI\Ansi\AnsiPrometheus;
@@ -16,19 +17,23 @@ use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
-use Tempest\Highlight\Highlighter;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
+use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
+use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Event\SelectionChangeEvent;
 use Symfony\Component\Tui\Event\SettingChangeEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
+use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
-use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\InputWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
@@ -37,6 +42,7 @@ use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\SettingItem;
 use Symfony\Component\Tui\Widget\SettingsListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
+use Tempest\Highlight\Highlighter;
 
 class TuiRenderer implements RendererInterface
 {
@@ -58,14 +64,28 @@ class TuiRenderer implements RendererInterface
 
     private ?CancellableLoaderWidget $loader = null;
 
+    private ?CancellableLoaderWidget $subagentLoader = null;
+
+    private float $subagentStartTime = 0.0;
+
+    private ?string $subagentTimerId = null;
+
     private ?string $pendingEditorRestore = null;
 
     private ?DeferredCancellation $requestCancellation = null;
 
+    private AgentPhase $currentPhase = AgentPhase::Idle;
+
     private float $thinkingStartTime = 0.0;
+
+    private ?string $thinkingPhrase = null;
+
     private ?string $thinkingTimerId = null;
+
     private int $breathTick = 0;
+
     private ?string $breathColor = null;
+
     /** @var string[] */
     private array $activeSpinnerFrames = [];
 
@@ -73,9 +93,13 @@ class TuiRenderer implements RendererInterface
     private array $messageQueue = [];
 
     private string $currentModeLabel = 'Edit';
+
     private string $currentModeColor = "\033[38;2;80;200;120m";
 
+    private string $statusDetail = 'Ready';
+
     private string $currentPermissionLabel = 'Guardian ◈';
+
     private string $currentPermissionColor = "\033[38;2;180;180;200m";
 
     private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
@@ -101,28 +125,32 @@ class TuiRenderer implements RendererInterface
     ];
 
     private const SPINNERS = [
-        'cosmos'    => ['✦', '✧', '⊛', '◈', '⊛', '✧'],                       // Pulsing cosmic gem
-        'planets'   => ['☿', '♀', '♁', '♂', '♃', '♄', '♅', '♆'],            // Planetary orbit
-        'elements'  => ['🜁', '🜂', '🜃', '🜄'],                               // Alchemical elements
-        'stars'     => ['⋆', '✧', '★', '✦', '★', '✧'],                       // Twinkling stars
-        'ouroboros'  => ['◴', '◷', '◶', '◵'],                                 // Serpent cycle
-        'oracle'    => ['◉', '◎', '◉', '○', '◎', '○'],                       // All-seeing eye
-        'runes'     => ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ'],         // Elder Futhark runes
-        'fate'      => ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'],                     // Dice of fate
-        'sigil'     => ['᛭', '⊹', '✳', '✴', '✳', '⊹'],                      // Arcane sigil pulse
-        'serpent'   => ['∿', '≀', '∾', '≀'],                                  // Cosmic serpent wave
-        'eclipse'   => ['◐', '◓', '◑', '◒'],                                  // Solar eclipse
+        'cosmos' => ['✦', '✧', '⊛', '◈', '⊛', '✧'],                       // Pulsing cosmic gem
+        'planets' => ['☿', '♀', '♁', '♂', '♃', '♄', '♅', '♆'],            // Planetary orbit
+        'elements' => ['🜁', '🜂', '🜃', '🜄'],                               // Alchemical elements
+        'stars' => ['⋆', '✧', '★', '✦', '★', '✧'],                       // Twinkling stars
+        'ouroboros' => ['◴', '◷', '◶', '◵'],                                 // Serpent cycle
+        'oracle' => ['◉', '◎', '◉', '○', '◎', '○'],                       // All-seeing eye
+        'runes' => ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ'],         // Elder Futhark runes
+        'fate' => ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'],                     // Dice of fate
+        'sigil' => ['᛭', '⊹', '✳', '✴', '✳', '⊹'],                      // Arcane sigil pulse
+        'serpent' => ['∿', '≀', '∾', '≀'],                                  // Cosmic serpent wave
+        'eclipse' => ['◐', '◓', '◑', '◒'],                                  // Solar eclipse
         'hourglass' => ['⧗', '⧖', '⧗', '⧖'],                                 // Sands of Chronos
-        'trident'   => ['ψ', 'Ψ', 'ψ', '⊥'],                                 // Poseidon's trident
-        'aether'    => ['·', '∘', '○', '◌', '○', '∘'],                        // Aetheric ripple
+        'trident' => ['ψ', 'Ψ', 'ψ', '⊥'],                                 // Poseidon's trident
+        'aether' => ['·', '∘', '○', '◌', '○', '∘'],                        // Aetheric ripple
     ];
 
     private bool $spinnersRegistered = false;
+
     private int $spinnerIndex = 0;
 
     private ?CancellableLoaderWidget $compactingLoader = null;
+
     private ?string $compactingTimerId = null;
+
     private float $compactingStartTime = 0.0;
+
     private int $compactingBreathTick = 0;
 
     private const COMPACTION_PHRASES = [
@@ -174,13 +202,13 @@ class TuiRenderer implements RendererInterface
         $this->tui = new Tui(KosmokratorStyleSheet::create());
 
         // Root layout: conversation + status bar + input (vertical)
-        $this->session = new ContainerWidget();
+        $this->session = new ContainerWidget;
         $this->session->setId('session');
         $this->session->addStyleClass('session');
         $this->session->expandVertically(true);
 
         // Scrollable conversation
-        $this->conversation = new ContainerWidget();
+        $this->conversation = new ContainerWidget;
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
 
@@ -191,14 +219,11 @@ class TuiRenderer implements RendererInterface
         $this->statusBar->setEmptyBarCharacter('─');
         $this->statusBar->setProgressCharacter('━');
         $this->statusBar->setBarWidth(20);
-        $red = "\033[38;2;255;60;40m";
-        $r = "\033[0m";
-        $sep = "\033[38;5;240m·{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  Ready");
+        $this->refreshStatusBar();
         $this->statusBar->start(200_000, 0);
 
         // Overlay container — pinned between status bar and input, zero-height when empty
-        $this->overlay = new ContainerWidget();
+        $this->overlay = new ContainerWidget;
         $this->overlay->setId('overlay');
 
         // Task bar — persistent task tree above the input, empty when no tasks
@@ -206,11 +231,11 @@ class TuiRenderer implements RendererInterface
         $this->taskBar->setId('task-bar');
 
         // Thinking bar — loader sits between task bar and status bar
-        $this->thinkingBar = new ContainerWidget();
+        $this->thinkingBar = new ContainerWidget;
         $this->thinkingBar->setId('thinking-bar');
 
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
-        $this->input = new EditorWidget();
+        $this->input = new EditorWidget;
         $this->input->setId('prompt');
         $this->input->setMinVisibleLines(1);
         $this->input->setMaxVisibleLines(2);
@@ -395,10 +420,10 @@ class TuiRenderer implements RendererInterface
     public function renderIntro(bool $animated): void
     {
         // Run the full ANSI animated intro first (before TUI takes over the screen)
-        $intro = new AnsiIntro();
+        $intro = new AnsiIntro;
         if ($animated) {
             $skipped = $intro->animate();
-            if (!$skipped) {
+            if (! $skipped) {
                 // Pause to admire the full animation
                 usleep(800000);
             }
@@ -499,88 +524,126 @@ HELP;
         $white = Theme::white();
         $content = "⟡ {$text}";
         $cols = $this->tui->getTerminal()->getColumns();
-        $visible = \Symfony\Component\Tui\Ansi\AnsiUtils::visibleWidth($content);
+        $visible = AnsiUtils::visibleWidth($content);
         $pad = max(0, $cols - $visible - 4);
-        $widget = new TextWidget("{$bg}{$white}{$content}" . str_repeat(' ', $pad) . "{$r}");
+        $widget = new TextWidget("{$bg}{$white}{$content}".str_repeat(' ', $pad)."{$r}");
         $widget->addStyleClass('user-message');
         $this->conversation->add($widget);
         $this->tui->processRender();
     }
 
-    public function showThinking(): void
+    public function setPhase(AgentPhase $phase): void
     {
-        $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
-        $hasTasks = $this->taskStore !== null && !$this->taskStore->isEmpty();
-
-        $this->requestCancellation = new DeferredCancellation();
-        $this->thinkingStartTime = microtime(true);
-        $this->breathTick = 0;
-
-        // Only show the standalone loader when there are no tasks
-        if (!$hasTasks) {
-            // Register custom spinners on first use
-            if (!$this->spinnersRegistered) {
-                foreach (self::SPINNERS as $name => $frames) {
-                    CancellableLoaderWidget::addSpinner($name, $frames);
-                }
-                $this->spinnersRegistered = true;
-            }
-
-            $spinnerNames = array_keys(self::SPINNERS);
-            $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
-            $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
-            $this->spinnerIndex++;
-
-            $this->loader = new CancellableLoaderWidget($phrase);
-            $this->loader->setId('loader');
-            $this->loader->setSpinner($spinnerName);
-            $this->loader->setIntervalMs(120);
-            $this->loader->start();
-
-            $this->loader->onCancel(function () {
-                if ($this->requestCancellation !== null) {
-                    $this->requestCancellation->cancel();
-                }
-            });
-
-            $this->thinkingBar->add($this->loader);
+        if ($phase === $this->currentPhase) {
+            return;
         }
 
-        // Breathing pulse at 30fps — animates loader text OR in-progress task color
-        $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
-            $this->breathTick++;
-            $r = "\033[0m";
+        $previous = $this->currentPhase;
+        $this->currentPhase = $phase;
 
-            // Slow sin wave (~3s full cycle) modulating blue tones
-            $t = sin($this->breathTick * 0.07);
-            $br = (int) (112 + 40 * $t);
-            $bg = (int) (160 + 40 * $t);
-            $bb = (int) (208 + 47 * $t);
-            $this->breathColor = "\033[38;2;{$br};{$bg};{$bb}m";
+        match ($phase) {
+            AgentPhase::Thinking => $this->enterThinking(),
+            AgentPhase::Tools => $this->enterTools($previous),
+            AgentPhase::Idle => $this->enterIdle(),
+        };
+    }
 
-            if ($this->loader !== null) {
-                // Animate the standalone loader text
-                $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
-                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                $dim = "\033[38;5;245m";
-                $this->loader->setMessage("{$this->breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
-            }
-
-            // Refresh task bar — every tick when breathing (animates in-progress color),
-            // or every ~1s just for timers
-            if ($this->taskStore !== null && !$this->taskStore->isEmpty()) {
-                $this->refreshTaskBar();
-            }
-
-            $this->tui->requestRender();
-            $this->tui->processRender();
-        });
-
-        // Keep focus on input so user can type while thinking
-        $this->tui->processRender();
+    public function showThinking(): void
+    {
+        $this->setPhase(AgentPhase::Thinking);
     }
 
     public function clearThinking(): void
+    {
+        $this->setPhase(AgentPhase::Idle);
+    }
+
+    private function enterThinking(): void
+    {
+        $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
+
+        // Reuse existing cancellation token if one is active — creating a new one
+        // would orphan the old token that background subagents may be reading.
+        if ($this->requestCancellation === null) {
+            $this->requestCancellation = new DeferredCancellation;
+        }
+        $this->thinkingStartTime = microtime(true);
+        $this->breathTick = 0;
+        $this->thinkingPhrase = $phrase;
+
+        // Register custom spinners on first use
+        if (! $this->spinnersRegistered) {
+            foreach (self::SPINNERS as $name => $frames) {
+                CancellableLoaderWidget::addSpinner($name, $frames);
+            }
+            $this->spinnersRegistered = true;
+        }
+
+        $spinnerNames = array_keys(self::SPINNERS);
+        $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
+        $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
+        $this->spinnerIndex++;
+
+        $this->loader = new CancellableLoaderWidget($phrase);
+        $this->loader->setId('loader');
+        $this->loader->setSpinner($spinnerName);
+        $this->loader->setIntervalMs(120);
+        $this->loader->start();
+
+        $this->loader->onCancel(function () {
+            if ($this->requestCancellation !== null) {
+                $this->requestCancellation->cancel();
+            }
+        });
+
+        $this->thinkingBar->add($this->loader);
+
+        // Update status detail
+        $dim = "\033[38;5;245m";
+        $r = "\033[0m";
+        $this->statusDetail = "{$dim}Thinking...{$r}";
+        $this->refreshStatusBar();
+
+        // Breathing pulse at 30fps — animates loader text OR in-progress task color
+        $this->startBreathingAnimation($phrase, 'blue');
+
+        $this->tui->processRender();
+    }
+
+    private function enterTools(AgentPhase $previous): void
+    {
+        // Remove the standalone loader (LLM response arrived)
+        if ($this->loader !== null) {
+            $this->loader->setFinishedIndicator('✓');
+            $this->loader->stop();
+            $this->thinkingBar->remove($this->loader);
+            $this->loader = null;
+        }
+
+        // Clear thinking phrase so it doesn't get embedded in the task bar during Tools phase.
+        // It gets set fresh in enterThinking() for the next round.
+        $this->thinkingPhrase = null;
+
+        // Keep requestCancellation alive — background subagents read it via lazy closure.
+        // Nulling it here caused background agents to lose their cancellation token.
+
+        // Update status detail
+        $dim = "\033[38;5;245m";
+        $r = "\033[0m";
+        $this->statusDetail = "{$dim}Running tools...{$r}";
+        $this->refreshStatusBar();
+
+        // Keep breathing animation but switch to amber palette
+        if ($this->thinkingTimerId !== null) {
+            EventLoop::cancel($this->thinkingTimerId);
+            $this->thinkingTimerId = null;
+        }
+        $this->startBreathingAnimation('', 'amber');
+
+        $this->tui->processRender();
+    }
+
+    private function enterIdle(): void
     {
         if ($this->thinkingTimerId !== null) {
             EventLoop::cancel($this->thinkingTimerId);
@@ -594,7 +657,7 @@ HELP;
             $this->loader = null;
         }
 
-        // Reset breath color so task bar returns to static colors
+        $this->thinkingPhrase = null;
         $this->breathColor = null;
         $this->refreshTaskBar();
 
@@ -603,12 +666,59 @@ HELP;
         $this->tui->processRender();
     }
 
+    /**
+     * Start a 30fps breathing animation timer with the given color palette.
+     *
+     * @param  string  $phrase  Loader message text (empty for tools phase)
+     * @param  string  $palette  'blue' for thinking, 'amber' for tools
+     */
+    private function startBreathingAnimation(string $phrase, string $palette): void
+    {
+        if ($this->thinkingTimerId !== null) {
+            EventLoop::cancel($this->thinkingTimerId);
+        }
+
+        $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase, $palette) {
+            $this->breathTick++;
+            $r = "\033[0m";
+
+            $t = sin($this->breathTick * 0.07);
+
+            if ($palette === 'amber') {
+                // Warm amber tones for tool execution
+                $cr = (int) (200 + 40 * $t);
+                $cg = (int) (150 + 30 * $t);
+                $cb = (int) (60 + 20 * $t);
+            } else {
+                // Blue tones for thinking
+                $cr = (int) (112 + 40 * $t);
+                $cg = (int) (160 + 40 * $t);
+                $cb = (int) (208 + 47 * $t);
+            }
+            $this->breathColor = "\033[38;2;{$cr};{$cg};{$cb}m";
+
+            if ($this->loader !== null && $phrase !== '') {
+                $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                $dim = "\033[38;5;245m";
+                $this->loader->setMessage("{$this->breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
+            }
+
+            if ($this->taskStore !== null && ! $this->taskStore->isEmpty()) {
+                $this->refreshTaskBar();
+            }
+
+            $this->tui->requestRender();
+            $this->tui->processRender();
+        });
+    }
+
     public function showCompacting(): void
     {
         $phrase = self::COMPACTION_PHRASES[array_rand(self::COMPACTION_PHRASES)];
 
         // Register custom spinners if not done yet
-        if (!$this->spinnersRegistered) {
+        if (! $this->spinnersRegistered) {
             foreach (self::SPINNERS as $name => $frames) {
                 CancellableLoaderWidget::addSpinner($name, $frames);
             }
@@ -708,7 +818,7 @@ HELP;
         }
 
         $current = $this->activeResponse->getText();
-        $this->activeResponse->setText($current . $text);
+        $this->activeResponse->setText($current.$text);
         $this->tui->processRender();
     }
 
@@ -742,6 +852,11 @@ HELP;
             return;
         }
 
+        // Subagent: handled by showSubagentSpawn/showSubagentBatch
+        if ($name === 'subagent') {
+            return;
+        }
+
         // Compact single-line display for file tools
         if (in_array($name, ['file_read', 'file_write', 'file_edit']) && isset($args['path'])) {
             $path = Theme::relativePath($args['path']);
@@ -760,7 +875,7 @@ HELP;
                 $display = is_string($value) ? $value : json_encode($value);
                 $parts[] = "{$key}: {$display}";
             }
-            $label = "{$icon} {$friendly}  " . implode('  ', $parts);
+            $label = "{$icon} {$friendly}  ".implode('  ', $parts);
         }
 
         $maxToolCallWidth = 120;
@@ -802,6 +917,11 @@ HELP;
             return;
         }
 
+        // Subagent: handled by showSubagentBatch
+        if ($name === 'subagent') {
+            return;
+        }
+
         // Diff view for file_edit
         if ($name === 'file_edit' && $success && isset($this->lastToolArgs['old_string'])) {
             $content = $this->buildDiffView(
@@ -838,11 +958,11 @@ HELP;
         $summary = "{$gold}{$icon} {$friendly}{$r}";
         if ($toolName === 'bash' && isset($args['command'])) {
             $cmd = mb_strlen($args['command']) > 80
-                ? mb_substr($args['command'], 0, 77) . '...'
+                ? mb_substr($args['command'], 0, 77).'...'
                 : $args['command'];
             $summary .= " {$dim}{$cmd}{$r}";
         } elseif (isset($args['path'])) {
-            $summary .= " {$dim}" . Theme::relativePath($args['path']) . "{$r}";
+            $summary .= " {$dim}".Theme::relativePath($args['path'])."{$r}";
         }
 
         $header = new TextWidget("{$gold}Allow?{$r}  {$summary}");
@@ -893,11 +1013,7 @@ HELP;
     {
         $this->currentPermissionLabel = $label;
         $this->currentPermissionColor = $color;
-
-        // Refresh status bar to reflect the new permission mode
-        $r = "\033[0m";
-        $sep = "\033[38;5;240m·{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  Ready");
+        $this->refreshStatusBar();
         $this->tui->requestRender();
         $this->tui->processRender();
     }
@@ -1132,7 +1248,7 @@ HELP;
 
     private function getHighlighter(): Highlighter
     {
-        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
+        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme);
     }
 
     public function clearConversation(): void
@@ -1153,7 +1269,7 @@ HELP;
         // Index tool results by toolCallId for pairing with tool calls
         $resultsByCallId = [];
         foreach ($messages as $msg) {
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+            if ($msg instanceof ToolResultMessage) {
                 foreach ($msg->toolResults as $toolResult) {
                     $resultsByCallId[$toolResult->toolCallId] = $toolResult;
                 }
@@ -1161,19 +1277,20 @@ HELP;
         }
 
         foreach ($messages as $msg) {
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\SystemMessage
-                || $msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+            if ($msg instanceof SystemMessage
+                || $msg instanceof ToolResultMessage) {
                 continue; // Results are rendered inline with their tool calls
             }
 
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
-                $widget = new TextWidget('⟡ ' . $msg->content);
+            if ($msg instanceof UserMessage) {
+                $widget = new TextWidget('⟡ '.$msg->content);
                 $widget->addStyleClass('user-message');
                 $this->conversation->add($widget);
+
                 continue;
             }
 
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+            if ($msg instanceof AssistantMessage) {
                 // Text content
                 if ($msg->content !== '') {
                     if ($this->containsAnsiEscapes($msg->content)) {
@@ -1216,7 +1333,7 @@ HELP;
                             $display = is_string($value) ? $value : json_encode($value);
                             $parts[] = "{$key}: {$display}";
                         }
-                        $label = "{$icon} {$friendly}  " . implode('  ', $parts);
+                        $label = "{$icon} {$friendly}  ".implode('  ', $parts);
                     }
 
                     $maxWidth = 120;
@@ -1259,6 +1376,7 @@ HELP;
                         $this->conversation->add($rw);
                     }
                 }
+
                 continue;
             }
         }
@@ -1281,10 +1399,7 @@ HELP;
         if ($color !== '') {
             $this->currentModeColor = $color;
         }
-        $r = "\033[0m";
-        $red = "\033[38;2;255;60;40m";
-        $sep = "\033[38;5;240m·{$r}";
-        $this->statusBar->setMessage("{$this->currentModeColor}{$label}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  Ready");
+        $this->refreshStatusBar();
         $this->tui->processRender();
     }
 
@@ -1309,17 +1424,26 @@ HELP;
         $maxLabel = Theme::formatTokenCount($maxContext);
         $ratio = min(1.0, $tokensIn / max(1, $maxContext));
         $r = "\033[0m";
-        $red = "\033[38;2;255;60;40m";
         $sep = "\033[38;5;240m·{$r}";
         $dimWhite = "\033[38;2;140;140;150m";
         $ctxColor = Theme::contextColor($ratio);
         $costColor = "\033[38;5;245m";
         $costLabel = Theme::formatCost($cost);
 
-        $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  {$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  {$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}"
-        );
+        $this->statusDetail = "{$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}";
+        $this->refreshStatusBar();
         $this->tui->processRender();
+    }
+
+    private function refreshStatusBar(): void
+    {
+        $r = "\033[0m";
+        $sep = "\033[38;5;240m·{$r}";
+        $this->statusBar->setMessage(
+            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  "
+            ."{$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  "
+            .$this->statusDetail
+        );
     }
 
     public function showSettings(array $currentSettings): array
@@ -1485,7 +1609,7 @@ HELP;
         echo "\033[2J\033[H";
 
         // Play raw ANSI animation
-        $theogony = new AnsiTheogony();
+        $theogony = new AnsiTheogony;
         $theogony->animate();
 
         // Pause to admire, then restore TUI
@@ -1501,7 +1625,7 @@ HELP;
         $this->tui->stop();
         echo "\033[2J\033[H";
 
-        $prometheus = new AnsiPrometheus();
+        $prometheus = new AnsiPrometheus;
         $prometheus->animate();
 
         echo "\033[2J\033[H";
@@ -1523,6 +1647,313 @@ HELP;
     {
         $this->messageQueue[] = $message;
         $this->showUserMessage($message);
+    }
+
+    public function showSubagentStatus(array $stats): void
+    {
+        if (empty($stats)) {
+            return;
+        }
+
+        $running = count(array_filter($stats, fn ($s) => $s->status === 'running'));
+        $done = count(array_filter($stats, fn ($s) => $s->status === 'done'));
+        $total = count($stats);
+
+        $lines = ["{$running} running, {$done}/{$total} finished"];
+
+        foreach ($stats as $s) {
+            $icon = match ($s->status) {
+                'done' => '✓',
+                'running' => '●',
+                'failed' => '✗',
+                'waiting' => '◌',
+                default => '○',
+            };
+            $task = mb_substr($s->task, 0, 50);
+            $type = ucfirst($s->agentType);
+            $lines[] = "  {$icon} {$type} \"{$task}\" · {$s->toolCalls} tools";
+        }
+
+        $this->addToConversation(new \Symfony\Component\Console\TUI\Widget\TextWidget(implode("\n", $lines)));
+    }
+
+    public function clearSubagentStatus(): void
+    {
+        // TUI: status is part of conversation flow, nothing to actively clear
+    }
+
+    public function showSubagentRunning(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        // Stop the tools-phase breathing animation — subagent loader takes over
+        if ($this->thinkingTimerId !== null) {
+            EventLoop::cancel($this->thinkingTimerId);
+            $this->thinkingTimerId = null;
+        }
+
+        $this->stopSubagentLoader();
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $blue = "\033[38;2;112;160;208m";
+
+        $count = count($entries);
+        $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
+
+        // Register spinner if not done
+        static $registered = false;
+        if (! $registered) {
+            CancellableLoaderWidget::addSpinner('cosmos', ['✦', '✧', '⊛', '◈', '⊛', '✧']);
+            $registered = true;
+        }
+
+        $this->subagentLoader = new CancellableLoaderWidget("{$blue}{$label}{$r}");
+        $this->subagentLoader->setSpinner('cosmos', 120);
+        $this->subagentStartTime = microtime(true);
+
+        $this->conversation->add($this->subagentLoader);
+
+        // Elapsed timer — update every second with color escalation
+        $this->subagentTimerId = EventLoop::repeat(1.0, function () use ($dim, $r, $count) {
+            if ($this->subagentLoader === null) {
+                return;
+            }
+            $elapsed = (int) (microtime(true) - $this->subagentStartTime);
+            $minutes = (int) ($elapsed / 60);
+            $seconds = $elapsed % 60;
+            $time = sprintf('%d:%02d', $minutes, $seconds);
+            $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
+
+            $color = match (true) {
+                $elapsed >= 120 => Theme::error(),
+                $elapsed >= 60 => Theme::warning(),
+                default => "\033[38;2;112;160;208m",
+            };
+
+            $this->subagentLoader->setMessage("{$color}{$label}  {$dim}{$time}{$r}");
+            $this->tui->requestRender();
+            $this->tui->processRender();
+        });
+
+        $this->tui->processRender();
+    }
+
+    private function stopSubagentLoader(): void
+    {
+        if ($this->subagentTimerId !== null) {
+            EventLoop::cancel($this->subagentTimerId);
+            $this->subagentTimerId = null;
+        }
+        if ($this->subagentLoader !== null) {
+            $this->subagentLoader->setFinishedIndicator('✓');
+            $this->subagentLoader->stop();
+            $this->conversation->remove($this->subagentLoader);
+            $this->subagentLoader = null;
+        }
+    }
+
+    public function showSubagentSpawn(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $cyan = "\033[38;2;100;200;220m";
+
+        $count = count($entries);
+
+        // Single agent: compact one-liner
+        if ($count === 1) {
+            $label = $this->formatAgentLabelTui($entries[0]['args']);
+            $widget = new TextWidget("{$cyan}⏺{$r} {$label}");
+            $widget->addStyleClass('tool-call');
+            $this->conversation->add($widget);
+            $this->tui->processRender();
+
+            return;
+        }
+
+        // Multiple: header + list
+        $types = $this->summarizeAgentTypesTui($entries);
+        $lines = ["{$cyan}⏺ {$types}{$r}"];
+        foreach ($entries as $entry) {
+            $label = $this->formatAgentLabelTui($entry['args']);
+            $lines[] = "  {$cyan}●{$r} {$label}";
+        }
+
+        $widget = new TextWidget(implode("\n", $lines));
+        $widget->addStyleClass('tool-call');
+        $this->conversation->add($widget);
+        $this->tui->processRender();
+    }
+
+    public function showSubagentBatch(array $entries): void
+    {
+        $this->stopSubagentLoader();
+
+        if (empty($entries)) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+
+        // Skip for background acks
+        if (! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')))) {
+            return;
+        }
+
+        $count = count($entries);
+
+        // Single agent: compact result with optional child tree
+        if ($count === 1) {
+            $e = $entries[0];
+            $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            $label = $e['success'] ? 'Done' : 'Failed';
+            $children = $e['children'] ?? [];
+
+            if ($children !== []) {
+                $tree = $this->renderChildTreeTui($children, '   ');
+                $treeWidget = new TextWidget(rtrim($tree));
+                $treeWidget->addStyleClass('tool-result');
+                $this->conversation->add($treeWidget);
+            }
+
+            $widget = new CollapsibleWidget("{$icon} {$label}", $e['result'], 1, 120);
+            $widget->addStyleClass('tool-result');
+            $this->conversation->add($widget);
+            $this->tui->processRender();
+
+            return;
+        }
+
+        // Multiple: summary as TextWidget with child trees, full details as CollapsibleWidget
+        $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
+        $types = $this->summarizeAgentTypesTui($entries);
+
+        $lines = ["{$green}✓{$r} {$succeeded}/{$count} {$types} finished"];
+        foreach ($entries as $entry) {
+            $args = $entry['args'];
+            $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
+            $type = ucfirst((string) ($args['type'] ?? 'explore'));
+            $primary = $id !== null ? $id : $type;
+            $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+
+            $preview = $this->extractResultPreviewTui($entry['result']);
+            $previewSuffix = $preview !== '' ? " {$dim}· {$preview}{$r}" : '';
+            $lines[] = "  {$icon} {$primary}{$previewSuffix}";
+
+            $children = $entry['children'] ?? [];
+            if ($children !== []) {
+                $lines[] = rtrim($this->renderChildTreeTui($children, '     '));
+            }
+        }
+
+        $summary = new TextWidget(implode("\n", $lines));
+        $summary->addStyleClass('tool-result');
+        $this->conversation->add($summary);
+
+        $details = implode("\n---\n", array_map(fn ($e) => $e['result'], $entries));
+        $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
+        $expand->addStyleClass('tool-result');
+        $this->conversation->add($expand);
+        $this->tui->processRender();
+    }
+
+    /**
+     * Render a nested child agent tree for TUI display.
+     */
+    private function renderChildTreeTui(array $children, string $indent): string
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+        $output = '';
+
+        $last = count($children) - 1;
+        foreach ($children as $i => $child) {
+            $connector = $i === $last ? '└─' : '├─';
+            $continuation = $i === $last ? '   ' : '│  ';
+            $icon = $child['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            $type = ucfirst($child['type']);
+            $task = mb_strlen($child['task']) > 40 ? mb_substr($child['task'], 0, 40).'…' : $child['task'];
+            $elapsed = $child['elapsed'] > 0 ? " {$dim}({$child['elapsed']}s){$r}" : '';
+
+            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$task}{$elapsed}\n";
+
+            if (($child['children'] ?? []) !== []) {
+                $output .= $this->renderChildTreeTui($child['children'], "{$indent}{$continuation}");
+            }
+        }
+
+        return $output;
+    }
+
+    /**
+     * Extract a short preview from subagent output.
+     */
+    private function extractResultPreviewTui(string $output): string
+    {
+        foreach (explode("\n", trim($output)) as $line) {
+            $stripped = trim($line);
+            if ($stripped === '' || str_starts_with($stripped, '#') || str_starts_with($stripped, '---')) {
+                continue;
+            }
+            $stripped = preg_replace('/^[-*]\s+/', '', $stripped);
+            if (mb_strlen($stripped) > 80) {
+                return mb_substr($stripped, 0, 80).'...';
+            }
+
+            return $stripped;
+        }
+
+        return '';
+    }
+
+    /**
+     * Format a compact agent label for TUI widgets: "Type id · task preview"
+     */
+    private function formatAgentLabelTui(array $args): string
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $type = ucfirst((string) ($args['type'] ?? 'explore'));
+        $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
+        $task = (string) ($args['task'] ?? '');
+        $taskPreview = mb_strlen($task) > 50 ? mb_substr($task, 0, 50).'...' : $task;
+        $primary = $id !== null ? "{$type} {$id}" : $type;
+
+        return "{$primary} {$dim}· {$taskPreview}{$r}";
+    }
+
+    private function summarizeAgentTypesTui(array $entries): string
+    {
+        $types = [];
+        foreach ($entries as $entry) {
+            $type = ucfirst((string) ($entry['args']['type'] ?? 'explore'));
+            $types[$type] = ($types[$type] ?? 0) + 1;
+        }
+
+        if (count($types) === 1) {
+            $type = array_key_first($types);
+
+            return $type.(count($entries) === 1 ? ' agent' : ' agents');
+        }
+
+        $parts = [];
+        foreach ($types as $type => $count) {
+            $parts[] = "{$count} {$type}";
+        }
+
+        return implode(' + ', $parts).' agents';
     }
 
     public function teardown(): void
@@ -1611,6 +2042,17 @@ HELP;
         foreach ($lines as $line) {
             $bar .= "\n  {$border}│{$r} {$line}";
         }
+
+        // Embed thinking spinner in task bar only when there's no standalone loader
+        // (the standalone loader in thinkingBar already shows the phrase)
+        if ($this->thinkingPhrase !== null && ! $this->taskStore->hasInProgress() && $this->loader === null) {
+            $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+            $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+            $color = $this->breathColor ?? "\033[38;2;112;160;208m";
+            $bar .= "\n  {$border}│{$r}";
+            $bar .= "\n  {$border}│{$r} {$color}{$this->thinkingPhrase}{$r} {$dim}({$formatted}){$r}";
+        }
+
         $bar .= "\n  {$border}└{$r}";
 
         $this->taskBar->setText($bar);
@@ -1618,7 +2060,7 @@ HELP;
 
     private function buildInputSubmenu(string $currentValue, callable $onDone, string $prompt): InputWidget
     {
-        $input = new InputWidget();
+        $input = new InputWidget;
         $input->setValue($currentValue);
         $input->setPrompt($prompt);
 
@@ -1656,5 +2098,4 @@ HELP;
     {
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
     }
-
 }

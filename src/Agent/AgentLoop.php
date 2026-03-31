@@ -3,8 +3,6 @@
 namespace Kosmokrator\Agent;
 
 use Amp\CancelledException;
-
-use function Amp\async;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
@@ -13,11 +11,17 @@ use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\UI\RendererInterface;
-use Psr\Log\LoggerInterface;
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\ToolCall;
+use Prism\Prism\ValueObjects\ToolError;
+use Prism\Prism\ValueObjects\ToolOutput;
 use Prism\Prism\ValueObjects\ToolResult;
+use Psr\Log\LoggerInterface;
+
+use function Amp\async;
 
 class AgentLoop
 {
@@ -35,6 +39,17 @@ class AgentLoop
 
     private int $sessionTokensOut = 0;
 
+    private ?AgentContext $agentContext = null;
+
+    private ?SubagentStats $stats = null;
+
+    /** @var string[] Rolling window of tool call signatures for stuck detection */
+    private array $toolCallWindow = [];
+
+    private int $stuckEscalation = 0;
+
+    private int $turnsSinceEscalation = 0;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -50,7 +65,7 @@ class AgentLoop
         private readonly ?ToolResultDeduplicator $deduplicator = null,
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
     ) {
-        $this->history = new ConversationHistory();
+        $this->history = new ConversationHistory;
     }
 
     /**
@@ -68,8 +83,18 @@ class AgentLoop
         }
     }
 
+    public function setAgentContext(?AgentContext $context): void
+    {
+        $this->agentContext = $context;
+    }
+
+    public function setStats(?SubagentStats $stats): void
+    {
+        $this->stats = $stats;
+    }
+
     /**
-     * @param Tool[] $tools
+     * @param  Tool[]  $tools
      */
     public function setTools(array $tools): void
     {
@@ -81,7 +106,7 @@ class AgentLoop
     {
         $this->mode = $mode;
         $this->applyModeFilter();
-        $this->llm->setSystemPrompt($this->baseSystemPrompt . $mode->systemPromptSuffix());
+        $this->llm->setSystemPrompt($this->baseSystemPrompt.$mode->systemPromptSuffix());
     }
 
     public function getMode(): AgentMode
@@ -112,12 +137,13 @@ class AgentLoop
 
             $this->preFlightContextCheck();
             $this->refreshSystemPrompt();
-            $this->ui->showThinking();
+            $this->injectPendingBackgroundResults();
+            $this->ui->setPhase(AgentPhase::Thinking);
 
             try {
                 $cancellation = $this->ui->getCancellation();
                 $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
-                $this->ui->clearThinking();
+                $this->ui->setPhase(AgentPhase::Tools);
                 $trimAttempts = 0;
 
                 $fullText = $response->text;
@@ -134,17 +160,18 @@ class AgentLoop
                     $this->ui->streamChunk($fullText);
                 }
             } catch (CancelledException $e) {
-                $this->ui->clearThinking();
+                $this->ui->setPhase(AgentPhase::Idle);
                 $this->log->info('LLM request cancelled by user', ['round' => $round]);
 
                 return;
             } catch (\Throwable $e) {
-                $this->ui->clearThinking();
+                $this->ui->setPhase(AgentPhase::Idle);
 
                 // Context window overflow — compact or trim and retry
                 if ($this->isContextOverflow($e) && $trimAttempts < 3) {
                     $trimAttempts++;
                     $round--;
+                    $messagesBefore = count($this->history->messages());
 
                     if ($this->compactor !== null && $trimAttempts === 1) {
                         $this->performCompaction();
@@ -152,14 +179,18 @@ class AgentLoop
                         $this->history->trimOldest();
                     }
 
-                    $this->log->warning('Context overflow, compacted/trimmed', ['attempt' => $trimAttempts]);
+                    $this->log->warning('Context overflow, compacted/trimmed', [
+                        'attempt' => $trimAttempts,
+                        'messages_before' => $messagesBefore,
+                        'messages_after' => count($this->history->messages()),
+                    ]);
 
                     continue;
                 }
 
                 $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
                 $this->ui->showError($e->getMessage());
-                $this->history->addAssistant('Error: ' . $e->getMessage());
+                $this->history->addAssistant('Error: '.$e->getMessage());
 
                 return;
             }
@@ -175,6 +206,8 @@ class AgentLoop
                 $toolResults = $this->executeToolCalls($toolCalls);
                 $this->history->addToolResults($toolResults);
                 $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
+
+                $this->injectPendingBackgroundResults();
 
                 // Deduplicate superseded tool results (cheap, no LLM call)
                 if ($this->deduplicator !== null) {
@@ -213,6 +246,8 @@ class AgentLoop
 
             $this->logMemoryUsage();
 
+            $this->ui->setPhase(AgentPhase::Idle);
+
             $modelName = $this->getModelName();
             $this->ui->showStatus(
                 $modelName,
@@ -228,6 +263,214 @@ class AgentLoop
         // Unreachable — loop exits via return
     }
 
+    /**
+     * Run the agent headlessly on a single task until completion.
+     * Returns the final assistant response text.
+     *
+     * Used by subagents — no interactive UI, no session persistence,
+     * no compaction, no dynamic system prompt refresh.
+     */
+    public function runHeadless(string $task): string
+    {
+        $this->log->debug('Headless agent started', ['task' => mb_substr($task, 0, 100), 'depth' => $this->agentContext?->depth]);
+        $this->history->addUser($task);
+
+        $this->toolCallWindow = [];
+        $this->stuckEscalation = 0;
+        $this->turnsSinceEscalation = 0;
+
+        $round = 0;
+        $trimAttempts = 0;
+
+        while (true) {
+            $round++;
+
+            $this->log->debug('Headless round start', [
+                'round' => $round,
+                'tokens_in' => $this->sessionTokensIn,
+                'tokens_out' => $this->sessionTokensOut,
+                'history_messages' => count($this->history->messages()),
+            ]);
+
+            $this->headlessPreFlightCheck();
+            $this->injectPendingBackgroundResults();
+
+            try {
+                $cancellation = $this->ui->getCancellation();
+                $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+                $trimAttempts = 0;
+
+                $fullText = $response->text;
+                $toolCalls = $response->toolCalls;
+                $finishReason = $response->finishReason;
+
+                $this->sessionTokensIn += $response->promptTokens;
+                $this->sessionTokensOut += $response->completionTokens;
+                $this->stats?->addTokens($response->promptTokens, $response->completionTokens);
+
+                $this->log->debug('Headless LLM response', [
+                    'round' => $round,
+                    'finish_reason' => $finishReason->value,
+                    'tool_calls' => count($toolCalls),
+                    'text_length' => strlen($fullText),
+                    'prompt_tokens' => $response->promptTokens,
+                    'completion_tokens' => $response->completionTokens,
+                ]);
+            } catch (CancelledException) {
+                $this->log->info('Headless agent cancelled', ['round' => $round]);
+
+                return '(cancelled)';
+            } catch (\Throwable $e) {
+                if ($this->isContextOverflow($e) && $trimAttempts < 3) {
+                    $trimAttempts++;
+                    $round--;
+                    $messagesBefore = count($this->history->messages());
+                    $this->history->trimOldest();
+                    $this->log->warning('Headless context overflow, trimmed', [
+                        'attempt' => $trimAttempts,
+                        'messages_before' => $messagesBefore,
+                        'messages_after' => count($this->history->messages()),
+                    ]);
+
+                    continue;
+                }
+
+                $this->log->error('Headless agent error', ['error' => $e->getMessage(), 'round' => $round]);
+
+                return 'Error: '.$e->getMessage();
+            }
+
+            if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
+                $this->history->addAssistant($fullText, $toolCalls);
+                $toolResults = $this->executeToolCalls($toolCalls);
+                $this->history->addToolResults($toolResults);
+
+                $this->injectPendingBackgroundResults();
+
+                if ($this->deduplicator !== null) {
+                    $this->deduplicator->deduplicate($this->history);
+                }
+                if ($this->pruner !== null) {
+                    $this->pruner->prune($this->history);
+                }
+
+                // Stuck detection: check for repetitive tool call patterns
+                $stuckState = $this->checkStuckState($toolCalls);
+
+                if ($stuckState === 'force_return') {
+                    $this->log->warning('Headless agent force-returned', [
+                        'round' => $round,
+                        'escalation' => $this->stuckEscalation,
+                        'window' => $this->toolCallWindow,
+                    ]);
+                    if ($this->stats !== null) {
+                        $this->stats->error = 'forced return: agent did not converge';
+                    }
+                    $lastText = $fullText !== '' ? $fullText : $this->extractLastAssistantText();
+
+                    return $lastText."\n\n(forced return: agent did not converge after repeated nudges)";
+                }
+                if ($stuckState === 'nudge') {
+                    $this->history->addUser('[SYSTEM] You appear to be repeating the same actions. Consolidate your findings and return a final response.');
+                    $this->log->info('Stuck nudge injected', [
+                        'round' => $round,
+                        'window' => $this->toolCallWindow,
+                        'escalation' => $this->stuckEscalation,
+                    ]);
+                }
+                if ($stuckState === 'final_notice') {
+                    $this->history->addUser('[SYSTEM] FINAL NOTICE: You are still looping. Return your findings NOW. Do NOT make any more tool calls.');
+                    $this->log->warning('Stuck final notice injected', [
+                        'round' => $round,
+                        'window' => $this->toolCallWindow,
+                        'escalation' => $this->stuckEscalation,
+                    ]);
+                }
+
+                continue;
+            }
+
+            // Final response
+            $this->log->info('Headless agent complete', [
+                'rounds' => $round,
+                'total_tokens_in' => $this->sessionTokensIn,
+                'total_tokens_out' => $this->sessionTokensOut,
+                'response_length' => strlen($fullText),
+            ]);
+            $this->history->addAssistant($fullText);
+
+            return $fullText;
+        }
+    }
+
+    /**
+     * Check if the agent is stuck in a repetitive tool call loop.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @return string 'ok'|'nudge'|'final_notice'|'force_return'
+     */
+    private function checkStuckState(array $toolCalls): string
+    {
+        // Build signatures and add to rolling window
+        foreach ($toolCalls as $tc) {
+            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode($tc->arguments()));
+        }
+        $this->toolCallWindow = array_slice($this->toolCallWindow, -8);
+
+        // Check if the latest call's signature appears 3+ times in the window
+        // This focuses on active repetition — old repeats the agent has moved past don't trigger
+        $latestSig = end($this->toolCallWindow);
+        $latestCount = count(array_filter($this->toolCallWindow, fn ($s) => $s === $latestSig));
+        $isStuck = $latestCount >= 3;
+
+        if (! $isStuck) {
+            if ($this->stuckEscalation > 0) {
+                $this->stuckEscalation = 0;
+                $this->turnsSinceEscalation = 0;
+            }
+
+            return 'ok';
+        }
+
+        // First detection → nudge
+        if ($this->stuckEscalation === 0) {
+            $this->stuckEscalation = 1;
+            $this->turnsSinceEscalation = 0;
+
+            return 'nudge';
+        }
+
+        $this->turnsSinceEscalation++;
+
+        // Second escalation after 2 turns
+        if ($this->stuckEscalation === 1 && $this->turnsSinceEscalation >= 2) {
+            $this->stuckEscalation = 2;
+            $this->turnsSinceEscalation = 0;
+
+            return 'final_notice';
+        }
+
+        // Force return after 2 more turns
+        if ($this->stuckEscalation >= 2 && $this->turnsSinceEscalation >= 2) {
+            return 'force_return';
+        }
+
+        return 'ok';
+    }
+
+    private function extractLastAssistantText(): string
+    {
+        $messages = $this->history->messages();
+
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if ($messages[$i] instanceof AssistantMessage && $messages[$i]->content !== '') {
+                return $messages[$i]->content;
+            }
+        }
+
+        return '(no response generated)';
+    }
+
     public function history(): ConversationHistory
     {
         return $this->history;
@@ -235,7 +478,16 @@ class AgentLoop
 
     public function getSessionCost(): float
     {
-        return $this->estimateCost($this->getModelName(), $this->sessionTokensIn, $this->sessionTokensOut);
+        $tokensIn = $this->sessionTokensIn;
+        $tokensOut = $this->sessionTokensOut;
+
+        if ($this->agentContext !== null) {
+            $sub = $this->agentContext->orchestrator->totalTokens();
+            $tokensIn += $sub['in'];
+            $tokensOut += $sub['out'];
+        }
+
+        return $this->estimateCost($this->getModelName(), $tokensIn, $tokensOut);
     }
 
     public function getSessionTokensIn(): int
@@ -268,7 +520,7 @@ class AgentLoop
     }
 
     /**
-     * @param ToolCall[] $toolCalls
+     * @param  ToolCall[]  $toolCalls
      * @return ToolResult[]
      */
     private function executeToolCalls(array $toolCalls): array
@@ -285,6 +537,7 @@ class AgentLoop
             [$permDenied, $wasAutoApproved] = $this->checkPermission($toolCall);
             if ($permDenied !== null) {
                 $denied[$toolCall->id] = $permDenied;
+
                 continue;
             }
 
@@ -297,11 +550,37 @@ class AgentLoop
                 $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
                 $this->ui->showToolResult($toolCall->name, $output, false);
                 $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+
                 continue;
+            }
+
+            // Ask-mode bash write-guard
+            if ($this->mode === AgentMode::Ask && $tool->name() === 'bash') {
+                $cmd = $toolCall->arguments()['command'] ?? '';
+                if ($this->permissions?->isMutativeCommand($cmd)) {
+                    $output = 'Command blocked in Ask mode (read-only). Switch to Edit mode for write operations.';
+                    $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+                    $this->ui->showToolResult($toolCall->name, $output, false);
+                    $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+
+                    continue;
+                }
             }
 
             $approved[] = [$toolCall, $tool];
             $autoApproved[$toolCall->id] = $wasAutoApproved;
+        }
+
+        // Show subagent spawn indicators before execution starts
+        $subagentSpawns = [];
+        foreach ($approved as [$tc, $_]) {
+            if ($tc->name === 'subagent') {
+                $subagentSpawns[] = ['args' => $tc->arguments(), 'id' => $tc->id];
+            }
+        }
+        if ($subagentSpawns !== []) {
+            $this->ui->showSubagentSpawn($subagentSpawns);
+            $this->ui->showSubagentRunning($subagentSpawns);
         }
 
         // Phase 2: Execute approved calls (concurrent within safe groups, sequential across)
@@ -327,25 +606,82 @@ class AgentLoop
         // Phase 3: Collect results in original order + UI display
         // Denied/not-found calls already displayed header+result in phase 1.
         // Approved calls: show header + auto-approve indicator + result together.
+        // Subagent calls are batched for grouped display.
         $results = [];
+        $subagentBatch = [];
+
         foreach ($toolCalls as $toolCall) {
             if (isset($denied[$toolCall->id])) {
                 $results[] = $denied[$toolCall->id];
+
                 continue;
             }
             if (isset($outcomes[$toolCall->id])) {
+                $result = $outcomes[$toolCall->id];
+                $success = ! str_starts_with($result->result, 'Error:');
+
+                if ($toolCall->name === 'subagent') {
+                    $agentId = $toolCall->arguments()['id'] ?? '';
+                    $subagentBatch[] = [
+                        'args' => $toolCall->arguments(),
+                        'result' => $result->result,
+                        'success' => $success,
+                        'children' => $this->buildChildTree($agentId),
+                    ];
+                    $results[] = $result;
+
+                    continue;
+                }
+
+                // Flush any buffered subagents before showing non-subagent tool
+                if ($subagentBatch !== []) {
+                    $this->ui->showSubagentBatch($subagentBatch);
+                    $subagentBatch = [];
+                }
+
                 $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
                 if ($autoApproved[$toolCall->id] ?? false) {
                     $this->ui->showAutoApproveIndicator($toolCall->name);
                 }
-                $result = $outcomes[$toolCall->id];
-                $success = ! str_starts_with($result->result, 'Error:');
                 $this->ui->showToolResult($toolCall->name, $result->result, $success);
                 $results[] = $result;
             }
         }
 
+        // Flush remaining subagent batch
+        if ($subagentBatch !== []) {
+            $this->ui->showSubagentBatch($subagentBatch);
+        }
+
         return $results;
+    }
+
+    /**
+     * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
+     */
+    private function buildChildTree(string $parentId): array
+    {
+        if ($this->agentContext === null) {
+            return [];
+        }
+
+        $children = [];
+        foreach ($this->agentContext->orchestrator->allStats() as $stats) {
+            if ($stats->parentId === $parentId) {
+                $children[] = [
+                    'id' => $stats->id,
+                    'type' => $stats->agentType,
+                    'task' => $stats->task,
+                    'status' => $stats->status,
+                    'elapsed' => round($stats->elapsed(), 1),
+                    'success' => $stats->status === 'done',
+                    'error' => $stats->error,
+                    'children' => $this->buildChildTree($stats->id),
+                ];
+            }
+        }
+
+        return $children;
     }
 
     /**
@@ -361,7 +697,7 @@ class AgentLoop
 
         if ($permResult->action === PermissionAction::Deny) {
             $output = ($permResult->reason ?? "Permission denied: '{$toolCall->name}' is blocked by policy.")
-                . ' Try a different approach.';
+                .' Try a different approach.';
             $this->log->info('Tool denied by policy', ['tool' => $toolCall->name, 'reason' => $permResult->reason]);
             $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
             $this->ui->showToolResult($toolCall->name, $output, false);
@@ -403,11 +739,22 @@ class AgentLoop
     {
         try {
             $output = $tool->handle(...$toolCall->arguments());
-            $outputStr = is_string($output) ? $output : (string) $output;
+            $this->stats?->incrementToolCalls();
+            $outputStr = match (true) {
+                is_string($output) => $output,
+                $output instanceof ToolOutput => $output->output,
+                $output instanceof ToolError => $output->error,
+                default => (string) $output,
+            };
 
             if ($this->truncator !== null) {
                 $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
             }
+
+            $this->log->debug('Tool execution complete', [
+                'tool' => $toolCall->name,
+                'output_length' => strlen($outputStr),
+            ]);
 
             return new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $outputStr);
         } catch (\Throwable $e) {
@@ -423,7 +770,7 @@ class AgentLoop
      *
      * Conservative: if any write conflict or bash+write mix exists, falls back to fully sequential.
      *
-     * @param array<array{ToolCall, Tool}> $approved
+     * @param  array<array{ToolCall, Tool}>  $approved
      * @return array<array<array{ToolCall, Tool}>>
      */
     private function partitionConcurrentGroups(array $approved): array
@@ -506,7 +853,7 @@ class AgentLoop
 
     private function getModelName(): string
     {
-        return $this->llm->getProvider() . '/' . $this->llm->getModel();
+        return $this->llm->getProvider().'/'.$this->llm->getModel();
     }
 
     private function estimateCost(string $model, int $tokensIn, int $tokensOut): float
@@ -571,6 +918,86 @@ class AgentLoop
         }
     }
 
+    /**
+     * Simplified pre-flight check for headless mode — only trim, never compact.
+     */
+    private function headlessPreFlightCheck(): void
+    {
+        if ($this->pruner === null) {
+            return;
+        }
+
+        $estimated = TokenEstimator::estimateMessages($this->history->messages());
+        $threshold = (int) ($this->getContextWindow($this->getModelName()) * 0.8);
+
+        if ($estimated >= $threshold) {
+            $messagesBefore = count($this->history->messages());
+            $this->history->trimOldest();
+            $this->log->info('Headless pre-flight trim', [
+                'estimated_tokens' => $estimated,
+                'threshold' => $threshold,
+                'messages_before' => $messagesBefore,
+                'messages_after' => count($this->history->messages()),
+            ]);
+        }
+    }
+
+    /**
+     * Inject completed background subagent results into conversation history.
+     */
+    private function injectPendingBackgroundResults(): void
+    {
+        if ($this->agentContext === null) {
+            return;
+        }
+
+        $results = $this->agentContext->orchestrator->collectPendingResults();
+        if (empty($results)) {
+            return;
+        }
+
+        $parts = [];
+        foreach ($results as $id => $result) {
+            $stats = $this->agentContext->orchestrator->getStats($id);
+            $type = $stats?->agentType ?? 'agent';
+            $tools = $stats?->toolCalls ?? 0;
+            $parts[] = "[Background {$type} agent '{$id}' completed ({$tools} tool calls)]:\n{$result}";
+        }
+
+        // Show completed background agents using the subagent batch display
+        $batchEntries = [];
+        foreach ($results as $id => $result) {
+            $stats = $this->agentContext->orchestrator->getStats($id);
+            $batchEntries[] = [
+                'args' => [
+                    'type' => $stats?->agentType ?? 'explore',
+                    'id' => $id,
+                    'task' => $stats?->task ?? '',
+                    'mode' => 'background',
+                ],
+                'result' => $result,
+                'success' => $stats?->status !== 'failed',
+            ];
+        }
+        $this->ui->showSubagentBatch($batchEntries);
+
+        $this->history->addUser(implode("\n\n---\n\n", $parts));
+        $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
+        $this->log->debug('Injected background results', ['count' => count($results)]);
+    }
+
+    private function formatTokenCount(int $tokens): string
+    {
+        if ($tokens >= 1_000_000) {
+            return round($tokens / 1_000_000, 1).'M';
+        }
+        if ($tokens >= 1_000) {
+            return round($tokens / 1_000, 1).'k';
+        }
+
+        return (string) $tokens;
+    }
+
     private function logMemoryUsage(): void
     {
         $usage = memory_get_usage(true);
@@ -586,7 +1013,7 @@ class AgentLoop
         }
     }
 
-    private function persistMessage(\Prism\Prism\Contracts\Message $message, int $tokensIn = 0, int $tokensOut = 0): void
+    private function persistMessage(Message $message, int $tokensIn = 0, int $tokensOut = 0): void
     {
         $this->sessionManager?->saveMessage($message, $tokensIn, $tokensOut);
     }
@@ -644,20 +1071,31 @@ class AgentLoop
 
             $this->ui->clearCompacting();
             $this->ui->showNotice('Context compacted.');
-            $this->log->info('Compaction complete', ['memories_extracted' => count($extraction['memories'])]);
+            $this->log->info('Compaction complete', [
+                'memories_extracted' => count($extraction['memories']),
+                'messages_after' => count($this->history->messages()),
+                'compaction_tokens_in' => $result['tokens_in'],
+                'compaction_tokens_out' => $result['tokens_out'],
+                'summary_length' => strlen($summary),
+            ]);
         } catch (\Throwable $e) {
             $this->ui->clearCompacting();
-            $this->log->error('Compaction failed, falling back to trimOldest', ['error' => $e->getMessage()]);
+            $messagesBefore = count($this->history->messages());
             $this->history->trimOldest();
+            $this->log->error('Compaction failed, falling back to trimOldest', [
+                'error' => $e->getMessage(),
+                'messages_before' => $messagesBefore,
+                'messages_after' => count($this->history->messages()),
+            ]);
         }
     }
 
     private function refreshSystemPrompt(): void
     {
-        $prompt = $this->baseSystemPrompt . $this->mode->systemPromptSuffix();
+        $prompt = $this->baseSystemPrompt.$this->mode->systemPromptSuffix();
 
         if ($this->taskStore !== null && ! $this->taskStore->isEmpty()) {
-            $prompt .= "\n\n## Current Tasks\n" . $this->taskStore->renderTree();
+            $prompt .= "\n\n## Current Tasks\n".$this->taskStore->renderTree();
         }
 
         $this->llm->setSystemPrompt($prompt);

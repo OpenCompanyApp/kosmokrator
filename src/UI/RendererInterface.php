@@ -3,6 +3,9 @@
 namespace Kosmokrator\UI;
 
 use Amp\Cancellation;
+use Kosmokrator\Agent\AgentPhase;
+use Kosmokrator\Agent\SubagentStats;
+use Prism\Prism\Contracts\Message;
 
 interface RendererInterface
 {
@@ -13,6 +16,8 @@ interface RendererInterface
     public function prompt(): string;
 
     public function showUserMessage(string $text): void;
+
+    public function setPhase(AgentPhase $phase): void;
 
     public function showThinking(): void;
 
@@ -64,7 +69,7 @@ interface RendererInterface
     /**
      * Replay resumed conversation history as a condensed visual summary.
      *
-     * @param array<int, \Prism\Prism\Contracts\Message> $messages
+     * @param  array<int, Message>  $messages
      */
     public function replayHistory(array $messages): void;
 
@@ -75,7 +80,7 @@ interface RendererInterface
     /**
      * Show the settings panel and block until the user closes it.
      *
-     * @param array<string, mixed> $currentSettings
+     * @param  array<string, mixed>  $currentSettings
      * @return array<string, string> Changed settings (id => new value)
      */
     public function showSettings(array $currentSettings): array;
@@ -83,7 +88,7 @@ interface RendererInterface
     /**
      * Show an interactive session picker. Returns selected session ID or null.
      *
-     * @param array<array{value: string, label: string, description?: string}> $items
+     * @param  array<array{value: string, label: string, description?: string}>  $items
      */
     public function pickSession(array $items): ?string;
 
@@ -104,9 +109,45 @@ interface RendererInterface
      * block (ASCII art / mockup) shown when that option is highlighted.
      * A "Dismiss" option is always appended. Returns selected label or 'dismissed'.
      *
-     * @param array<array{label: string, detail: string|null}> $choices
+     * @param  array<array{label: string, detail: string|null}>  $choices
      */
     public function askChoice(string $question, array $choices): string;
+
+    /**
+     * Update the subagent status display with current stats for all agents.
+     *
+     * @param  array<string, SubagentStats>  $stats
+     */
+    public function showSubagentStatus(array $stats): void;
+
+    /**
+     * Clear the subagent status display.
+     */
+    public function clearSubagentStatus(): void;
+
+    /**
+     * Show a running indicator while subagents execute.
+     * Called AFTER showSubagentSpawn(), cleared implicitly by showSubagentBatch().
+     *
+     * @param  array<int, array{args: array, id: string}>  $entries
+     */
+    public function showSubagentRunning(array $entries): void;
+
+    /**
+     * Show a grouped batch of subagent spawns (header + running indicators).
+     * Called BEFORE agents execute so the user sees them immediately.
+     *
+     * @param  array<int, array{args: array, id: string}>  $entries
+     */
+    public function showSubagentSpawn(array $entries): void;
+
+    /**
+     * Show grouped batch of subagent results (replaces the spawn display).
+     * Called AFTER agents complete with their results.
+     *
+     * @param  array<int, array{args: array, result: string, success: bool}>  $entries
+     */
+    public function showSubagentBatch(array $entries): void;
 
     public function teardown(): void;
 }

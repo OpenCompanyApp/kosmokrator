@@ -23,14 +23,15 @@ enum AgentMode: string
      * @return string[]
      */
     private const TASK_TOOLS = ['task_create', 'task_update', 'task_list', 'task_get'];
+
     private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
     public function allowedTools(): array
     {
         return match ($this) {
-            self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
-            self::Plan => ['file_read', 'glob', 'grep', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
-            self::Ask => ['file_read', 'glob', 'grep', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Plan => ['file_read', 'glob', 'grep', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Ask => ['file_read', 'glob', 'grep', 'bash', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
         };
     }
 
@@ -100,12 +101,14 @@ PROMPT;
 
 # Operational Mode: Ask (READ-ONLY)
 
-You can read and search files to answer questions, but MUST NOT modify anything. You do not have access to write, edit, or execute tools.
+You can read and search files to answer questions, but MUST NOT modify anything. You have access to bash for read-only commands (git status, git log, ls, cat, php -v, composer show, etc.) but write operations will be rejected.
 
 ## Guidelines
 
 - Answer questions directly and concisely.
 - Read source code when needed to give accurate answers.
+- Use bash for read-only investigation: git status, git log, ls, find, grep, php -v, composer show, etc.
+- Do NOT attempt write commands (rm, mv, git commit, npm install, etc.) — they will be blocked.
 - Reference specific files and line numbers: `src/Foo.php:42`.
 - If you don't know, say so — don't guess.
 - Explain concepts at the appropriate level for the user.

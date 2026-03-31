@@ -3,20 +3,19 @@
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
-use Kosmokrator\Agent\EnvironmentContext;
-use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\ContextPruner;
-use Kosmokrator\Agent\ToolResultDeduplicator;
+use Kosmokrator\Agent\EnvironmentContext;
+use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Agent\MemoryInjector;
 use Kosmokrator\Agent\OutputTruncator;
-use Kosmokrator\Command\Slash;
-use Kosmokrator\Command\SlashCommandAction;
-use Kosmokrator\Command\SlashCommandContext;
-use Kosmokrator\Command\SlashCommandRegistry;
-use Kosmokrator\Task\TaskStore;
+use Kosmokrator\Agent\SubagentFactory;
+use Kosmokrator\Agent\SubagentOrchestrator;
+use Kosmokrator\Agent\ToolResultDeduplicator;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
@@ -24,6 +23,10 @@ use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Task\TaskStore;
+use Kosmokrator\Tool\AskChoiceTool;
+use Kosmokrator\Tool\AskUserTool;
+use Kosmokrator\Tool\Coding\SubagentTool;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\ToolRegistry;
@@ -83,21 +86,22 @@ class AgentCommand extends Command
         $log = $this->container->make(LoggerInterface::class);
         $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
 
+        /** @var LlmClientInterface $llm */
         $llm = ($ui->getActiveRenderer() === 'tui')
             ? $this->container->make(AsyncLlmClient::class)
             : $this->container->make(PrismService::class);
 
-        // Wire retry notification so the user sees feedback during backoff
+        // Wire retry UI notification (max_retries wired below after sessionManager)
         if ($llm instanceof RetryableLlmClient) {
-            $llm->setOnRetry(function (int $attempt, int $max, float $delay, string $reason) use ($ui) {
+            $llm->setOnRetry(function (int $attempt, float $delay, string $reason) use ($ui) {
                 $delaySec = (int) ceil($delay);
-                $ui->showNotice("⟳ Rate limited — retrying in {$delaySec}s (attempt {$attempt}/{$max})");
+                $ui->showNotice("⟳ Retrying in {$delaySec}s (attempt {$attempt})");
             });
         }
 
         $toolRegistry = $this->container->make(ToolRegistry::class);
-        $toolRegistry->register(new \Kosmokrator\Tool\AskUserTool($ui));
-        $toolRegistry->register(new \Kosmokrator\Tool\AskChoiceTool($ui));
+        $toolRegistry->register(new AskUserTool($ui));
+        $toolRegistry->register(new AskChoiceTool($ui));
         $permissions = $this->container->make(PermissionEvaluator::class);
         $models = $this->container->make(ModelCatalog::class);
         $sessionManager = $this->container->make(SessionManager::class);
@@ -109,6 +113,13 @@ class AgentCommand extends Command
         // Load persisted settings
         $this->applyPersistedSettings($sessionManager, $llm, $permissions);
 
+        // Wire configurable max retries from settings/config
+        if ($llm instanceof RetryableLlmClient) {
+            $maxRetries = (int) ($sessionManager->getSetting('max_retries')
+                ?? $config->get('kosmokrator.agent.max_retries', 0));
+            $llm->setMaxAttempts($maxRetries);
+        }
+
         // Set initial permission mode on UI
         $permMode = $permissions->getPermissionMode();
         $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
@@ -118,9 +129,9 @@ class AgentCommand extends Command
         $memories = $memoriesEnabled ? $sessionManager->getMemories() : [];
 
         $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
-            . MemoryInjector::format($memories)
-            . InstructionLoader::gather()
-            . EnvironmentContext::gather();
+            .MemoryInjector::format($memories)
+            .InstructionLoader::gather()
+            .EnvironmentContext::gather();
         $taskStore = $this->container->make(TaskStore::class);
         $ui->setTaskStore($taskStore);
         $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
@@ -136,10 +147,39 @@ class AgentCommand extends Command
         $pruneProtect = (int) ($sessionManager->getSetting('prune_protect') ?? $config->get('kosmokrator.context.prune_protect', 40_000));
         $pruneMinSavings = (int) ($sessionManager->getSetting('prune_min_savings') ?? $config->get('kosmokrator.context.prune_min_savings', 20_000));
         $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
-        $deduplicator = new ToolResultDeduplicator();
+        $deduplicator = new ToolResultDeduplicator;
 
         $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
         $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $deduplicator, $memoryWarningThreshold);
+
+        // Subagent system
+        $maxDepth = (int) ($sessionManager->getSetting('subagent_max_depth')
+            ?? $config->get('kosmokrator.agent.subagent_max_depth', 3));
+        $orchestrator = new SubagentOrchestrator($log, $maxDepth);
+        $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
+
+        $llmClientClass = ($ui->getActiveRenderer() === 'tui') ? 'async' : 'prism';
+        $subagentFactory = new SubagentFactory(
+            rootRegistry: $toolRegistry,
+            log: $log,
+            models: $models,
+            truncator: $truncator,
+            permissions: $permissions,
+            rootCancellation: fn () => $ui->getCancellation(),
+            llmClientClass: $llmClientClass,
+            apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
+            baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
+            model: $llm->getModel(),
+            maxTokens: $llm->getMaxTokens(),
+            temperature: $llm->getTemperature(),
+            provider: $provider,
+        );
+
+        $toolRegistry->register(new SubagentTool(
+            $rootContext,
+            fn (AgentContext $ctx, string $task) => $subagentFactory->createAndRunAgent($ctx, $task),
+        ));
+        $agentLoop->setAgentContext($rootContext);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
         // Session: resume or create new
@@ -157,7 +197,7 @@ class AgentCommand extends Command
                 $ui->showNotice("Resumed session ({$resumeId})");
             }
         } else {
-            $modelName = $llm->getProvider() . '/' . $llm->getModel();
+            $modelName = $llm->getProvider().'/'.$llm->getModel();
             $sessionManager->createSession($modelName);
         }
 
@@ -200,6 +240,7 @@ class AgentCommand extends Command
                 if ($result->action === SlashCommandAction::Inject) {
                     $nextInput = $result->input;
                 }
+
                 continue;
             }
 
@@ -231,6 +272,7 @@ class AgentCommand extends Command
                     $sessionManager->setSetting('permission_mode', $permMode->value);
 
                     $nextInput = 'Implement the plan.';
+
                     continue;
                 }
             }
@@ -246,26 +288,26 @@ class AgentCommand extends Command
 
     private function buildSlashCommandRegistry(): SlashCommandRegistry
     {
-        $registry = new SlashCommandRegistry();
+        $registry = new SlashCommandRegistry;
 
-        $registry->register(new Slash\QuitCommand());
-        $registry->register(new Slash\ClearCommand());
-        $registry->register(new Slash\SeedCommand());
-        $registry->register(new Slash\TheogonyCommand());
-        $registry->register(new Slash\CompactCommand());
-        $registry->register(new Slash\TasksClearCommand());
-        $registry->register(new Slash\MemoriesCommand());
-        $registry->register(new Slash\SessionsCommand());
-        $registry->register(new Slash\ForgetCommand());
-        $registry->register(new Slash\GuardianCommand());
-        $registry->register(new Slash\ArgusCommand());
-        $registry->register(new Slash\PrometheusCommand());
+        $registry->register(new Slash\QuitCommand);
+        $registry->register(new Slash\ClearCommand);
+        $registry->register(new Slash\SeedCommand);
+        $registry->register(new Slash\TheogonyCommand);
+        $registry->register(new Slash\CompactCommand);
+        $registry->register(new Slash\TasksClearCommand);
+        $registry->register(new Slash\MemoriesCommand);
+        $registry->register(new Slash\SessionsCommand);
+        $registry->register(new Slash\ForgetCommand);
+        $registry->register(new Slash\GuardianCommand);
+        $registry->register(new Slash\ArgusCommand);
+        $registry->register(new Slash\PrometheusCommand);
         $registry->register(new Slash\ModeCommand(AgentMode::Edit));
         $registry->register(new Slash\ModeCommand(AgentMode::Plan));
         $registry->register(new Slash\ModeCommand(AgentMode::Ask));
-        $registry->register(new Slash\NewCommand());
-        $registry->register(new Slash\ResumeCommand());
-        $registry->register(new Slash\SettingsCommand());
+        $registry->register(new Slash\NewCommand);
+        $registry->register(new Slash\ResumeCommand);
+        $registry->register(new Slash\SettingsCommand);
 
         return $registry;
     }
@@ -296,5 +338,4 @@ class AgentCommand extends Command
             }
         }
     }
-
 }

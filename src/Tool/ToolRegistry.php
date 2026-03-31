@@ -2,6 +2,8 @@
 
 namespace Kosmokrator\Tool;
 
+use Kosmokrator\Agent\AgentContext;
+use Prism\Prism\Schema\StringSchema;
 use Prism\Prism\Tool as PrismTool;
 
 class ToolRegistry
@@ -28,6 +30,28 @@ class ToolRegistry
     }
 
     /**
+     * Create a filtered copy of this registry for the given agent context.
+     * Only includes tools allowed by the agent type.
+     * Does NOT include SubagentTool — that's added externally per-context.
+     */
+    public function scoped(AgentContext $context): self
+    {
+        $allowed = $context->type->allowedTools();
+        $scoped = new self;
+
+        foreach ($this->tools as $name => $tool) {
+            if ($name === 'subagent') {
+                continue;
+            }
+            if (in_array($name, $allowed, true)) {
+                $scoped->register($tool);
+            }
+        }
+
+        return $scoped;
+    }
+
+    /**
      * Convert all registered tools to Prism Tool instances.
      *
      * @return PrismTool[]
@@ -40,7 +64,7 @@ class ToolRegistry
     private function toPrismTool(ToolInterface $tool): PrismTool
     {
         // Prism calls tool handlers with named arguments matching the parameter names
-        $prismTool = (new PrismTool())
+        $prismTool = (new PrismTool)
             ->as($tool->name())
             ->for($tool->description())
             ->using(function (...$args) use ($tool) {
@@ -58,6 +82,8 @@ class ToolRegistry
                 'string' => $prismTool->withStringParameter($name, $description, $required),
                 'number', 'integer' => $prismTool->withNumberParameter($name, $description, $required),
                 'boolean' => $prismTool->withBooleanParameter($name, $description, $required),
+                'enum' => $prismTool->withEnumParameter($name, $description, $schema['options'] ?? [], $required),
+                'array' => $prismTool->withArrayParameter($name, $description, new StringSchema('item', 'Array item'), $required),
                 default => $prismTool->withStringParameter($name, $description, $required),
             };
         }

@@ -11,7 +11,7 @@ class BashToolTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tool = new BashTool();
+        $this->tool = new BashTool;
     }
 
     public function test_name_returns_bash(): void
@@ -106,5 +106,47 @@ class BashToolTest extends TestCase
         $this->assertStringContainsString('line1', $result->output);
         $this->assertStringContainsString('line2', $result->output);
         $this->assertStringContainsString('line3', $result->output);
+    }
+
+    public function test_custom_timeout_parameter(): void
+    {
+        $result = $this->tool->execute(['command' => 'sleep 1', 'timeout' => 5]);
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('Exit code: 0', $result->output);
+    }
+
+    public function test_timeout_parameter_caps_at_max(): void
+    {
+        // Should not throw — timeout is silently capped to 7200
+        $result = $this->tool->execute(['command' => 'echo capped', 'timeout' => 99999]);
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('capped', $result->output);
+    }
+
+    public function test_timeout_parameter_minimum_is_one(): void
+    {
+        // Negative/zero values should be clamped to 1
+        $result = $this->tool->execute(['command' => 'echo min', 'timeout' => -5]);
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('min', $result->output);
+    }
+
+    public function test_default_timeout_used_when_parameter_omitted(): void
+    {
+        // Without timeout param, the constructor default (120s) is used
+        $result = $this->tool->execute(['command' => 'echo default']);
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('default', $result->output);
+    }
+
+    public function test_timeout_parameter_in_definition(): void
+    {
+        $params = $this->tool->parameters();
+        $this->assertArrayHasKey('timeout', $params);
+        $this->assertSame('integer', $params['timeout']['type']);
     }
 }

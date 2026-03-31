@@ -3,25 +3,37 @@
 namespace Kosmokrator\UI\Ansi;
 
 use Amp\Cancellation;
+use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
+use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
+use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Tempest\Highlight\Highlighter;
 
 class AnsiRenderer implements RendererInterface
 {
     private readonly AnsiIntro $intro;
+
     private string $streamBuffer = '';
+
     private ?MarkdownToAnsi $markdownRenderer = null;
+
     private ?Highlighter $highlighter = null;
+
     private array $lastToolArgs = [];
+
     private ?TaskStore $taskStore = null;
+
     private string $currentModeLabel = 'Edit';
+
     private string $currentPermissionLabel = 'Guardian ◈';
 
     public function __construct()
     {
-        $this->intro = new AnsiIntro();
+        $this->intro = new AnsiIntro;
     }
 
     public function setTaskStore(TaskStore $store): void
@@ -50,7 +62,7 @@ class AnsiRenderer implements RendererInterface
         $r = Theme::reset();
         $red = Theme::primary();
 
-        $input = readline($red . '  ⟡ ' . $r);
+        $input = readline($red.'  ⟡ '.$r);
 
         if ($input === false) {
             return '/quit';
@@ -62,6 +74,14 @@ class AnsiRenderer implements RendererInterface
     public function showUserMessage(string $text): void
     {
         // No-op: readline already displays the typed input
+    }
+
+    public function setPhase(AgentPhase $phase): void
+    {
+        // ANSI mode: only Thinking has a visual indicator (static text)
+        if ($phase === AgentPhase::Thinking) {
+            $this->showThinking();
+        }
     }
 
     public function showThinking(): void
@@ -105,10 +125,10 @@ class AnsiRenderer implements RendererInterface
         if ($this->streamBuffer !== '') {
             if (str_contains($this->streamBuffer, "\x1b[")) {
                 // Raw ANSI art — output directly, don't parse as markdown
-                echo "\n" . $this->streamBuffer . Theme::reset() . "\n";
+                echo "\n".$this->streamBuffer.Theme::reset()."\n";
             } else {
                 $rendered = $this->getMarkdownRenderer()->render($this->streamBuffer);
-                echo "\n" . $rendered;
+                echo "\n".$rendered;
             }
             $this->streamBuffer = '';
         }
@@ -140,6 +160,11 @@ class AnsiRenderer implements RendererInterface
             return;
         }
 
+        // Subagent: handled by showSubagentSpawn/showSubagentBatch — skip individual display
+        if ($name === 'subagent') {
+            return;
+        }
+
         $skipKeys = ['content', 'old_string', 'new_string'];
 
         echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
@@ -152,7 +177,7 @@ class AnsiRenderer implements RendererInterface
                 $display = Theme::relativePath($display);
             }
             if (mb_strlen($display) > 100) {
-                $display = mb_substr($display, 0, 100) . '…';
+                $display = mb_substr($display, 0, 100).'…';
             }
             echo "\n{$border}  ┃{$r} {$dim}{$key}:{$r} {$display}";
         }
@@ -165,7 +190,7 @@ class AnsiRenderer implements RendererInterface
         $border = Theme::borderTask();
         $text = Theme::text();
         $dim = Theme::dim();
-        $status = $success ? Theme::success() . '✓' : Theme::error() . '✗';
+        $status = $success ? Theme::success().'✓' : Theme::error().'✗';
 
         $friendly = Theme::toolLabel($name);
 
@@ -179,10 +204,16 @@ class AnsiRenderer implements RendererInterface
             return;
         }
 
+        // Subagent: handled by showSubagentBatch — skip individual display
+        if ($name === 'subagent') {
+            return;
+        }
+
         // File read: just show status
         if ($name === 'file_read') {
             $lineCount = count(explode("\n", $output));
             echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r} {$dim}({$lineCount} lines){$r}\n";
+
             return;
         }
 
@@ -198,9 +229,10 @@ class AnsiRenderer implements RendererInterface
                 echo "{$border}  ┃{$r} {$line}{$r}\n";
             }
             if (count($diffLines) > $maxLines) {
-                echo "{$border}  ┃ {$dim}⊛ +" . (count($diffLines) - $maxLines) . " more lines{$r}\n";
+                echo "{$border}  ┃ {$dim}⊛ +".(count($diffLines) - $maxLines)." more lines{$r}\n";
             }
             echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
+
             return;
         }
 
@@ -212,7 +244,7 @@ class AnsiRenderer implements RendererInterface
         }
 
         if (count($lines) > $maxLines) {
-            echo "{$border}  ┃ {$dim}⊛ +" . (count($lines) - $maxLines) . " more lines{$r}\n";
+            echo "{$border}  ┃ {$dim}⊛ +".(count($lines) - $maxLines)." more lines{$r}\n";
         }
 
         echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
@@ -300,7 +332,7 @@ class AnsiRenderer implements RendererInterface
 
     private function getHighlighter(): Highlighter
     {
-        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme());
+        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme);
     }
 
     /**
@@ -354,7 +386,7 @@ class AnsiRenderer implements RendererInterface
         // Index tool results by toolCallId for pairing
         $resultsByCallId = [];
         foreach ($messages as $msg) {
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+            if ($msg instanceof ToolResultMessage) {
                 foreach ($msg->toolResults as $toolResult) {
                     $resultsByCallId[$toolResult->toolCallId] = $toolResult;
                 }
@@ -362,20 +394,21 @@ class AnsiRenderer implements RendererInterface
         }
 
         foreach ($messages as $msg) {
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\SystemMessage
-                || $msg instanceof \Prism\Prism\ValueObjects\Messages\ToolResultMessage) {
+            if ($msg instanceof SystemMessage
+                || $msg instanceof ToolResultMessage) {
                 continue;
             }
 
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\UserMessage) {
+            if ($msg instanceof UserMessage) {
                 echo "\n  {$white}⟡ {$msg->content}{$r}\n";
+
                 continue;
             }
 
-            if ($msg instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+            if ($msg instanceof AssistantMessage) {
                 if ($msg->content !== '') {
                     if (str_contains($msg->content, "\x1b[")) {
-                        echo "\n" . $msg->content . $r . "\n";
+                        echo "\n".$msg->content.$r."\n";
                     } else {
                         echo $this->getMarkdownRenderer()->render($msg->content);
                     }
@@ -394,6 +427,7 @@ class AnsiRenderer implements RendererInterface
                                 echo "{$border}  ┃ {$gold}{$label}{$r}\n";
                             }
                         }
+
                         continue;
                     }
 
@@ -409,6 +443,7 @@ class AnsiRenderer implements RendererInterface
                         $this->showToolResult($name, $output, true);
                     }
                 }
+
                 continue;
             }
         }
@@ -527,12 +562,12 @@ class AnsiRenderer implements RendererInterface
 
         echo "\n{$accent}?{$r} {$question}\n";
         foreach ($choices as $i => $choice) {
-            echo "  {$accent}" . ($i + 1) . ".{$r} {$choice['label']}\n";
+            echo "  {$accent}".($i + 1).".{$r} {$choice['label']}\n";
             if ($choice['detail'] !== null) {
                 echo "{$dim}{$choice['detail']}{$r}\n";
             }
         }
-        echo "  {$dim}" . (count($choices) + 1) . ". Dismiss{$r}\n";
+        echo "  {$dim}".(count($choices) + 1).". Dismiss{$r}\n";
 
         $pick = (int) readline("{$dim}>{$r} ");
         if ($pick >= 1 && $pick <= count($choices)) {
@@ -542,6 +577,61 @@ class AnsiRenderer implements RendererInterface
         return 'dismissed';
     }
 
+    public function showSubagentStatus(array $stats): void
+    {
+        if (empty($stats)) {
+            return;
+        }
+
+        $r = "\033[0m";
+        $dim = "\033[38;5;243m";
+        $green = "\033[38;2;80;200;120m";
+        $gold = "\033[38;2;218;165;32m";
+        $red = "\033[38;2;255;100;100m";
+        $blue = "\033[38;2;100;149;237m";
+        $border = "\033[38;5;240m";
+
+        $running = count(array_filter($stats, fn ($s) => $s->status === 'running'));
+        $done = count(array_filter($stats, fn ($s) => $s->status === 'done'));
+        $total = count($stats);
+
+        echo "\n{$border}  ┌ {$gold}{$running} running, {$done}/{$total} finished{$r}\n";
+
+        $items = array_values($stats);
+        $last = count($items) - 1;
+
+        foreach ($items as $i => $s) {
+            $connector = $i === $last ? '└─' : '├─';
+            $task = mb_substr($s->task, 0, 50);
+
+            $statusIcon = match ($s->status) {
+                'done' => "{$green}✓{$r}",
+                'running' => "{$gold}●{$r}",
+                'failed' => "{$red}✗{$r}",
+                'waiting' => "{$blue}◌{$r}",
+                default => "{$dim}○{$r}",
+            };
+
+            $meta = ucfirst($s->agentType)." \"{$task}\"";
+
+            $detail = match ($s->status) {
+                'done' => " · {$s->toolCalls} tools · ".$this->formatTokenCount($s->tokensIn + $s->tokensOut).' tokens',
+                'running' => " · {$s->toolCalls} tools · running",
+                'waiting' => ' · waiting on '.implode(', ', $s->dependsOn),
+                'queued' => $s->group !== null ? " · queued (group: {$s->group})" : ' · queued',
+                'failed' => ' · failed: '.mb_substr($s->error ?? '', 0, 40),
+                default => '',
+            };
+
+            echo "{$border}  {$connector} {$statusIcon} {$dim}{$meta}{$detail}{$r}\n";
+        }
+    }
+
+    public function clearSubagentStatus(): void
+    {
+        // ANSI mode: status is printed inline, nothing to clear
+    }
+
     public function teardown(): void
     {
         echo Theme::showCursor();
@@ -549,13 +639,13 @@ class AnsiRenderer implements RendererInterface
 
     public function playTheogony(): void
     {
-        $theogony = new AnsiTheogony();
+        $theogony = new AnsiTheogony;
         $theogony->animate();
     }
 
     public function playPrometheus(): void
     {
-        $prometheus = new AnsiPrometheus();
+        $prometheus = new AnsiPrometheus;
         $prometheus->animate();
     }
 
@@ -634,116 +724,116 @@ class AnsiRenderer implements RendererInterface
                 12000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$yellow}⚡ Thinking...{$r}\n" .
-                "{$dim}  │{$r} Analyzing the codebase to understand the current UserService\n" .
-                "{$dim}  │{$r} implementation, identify dependencies, and plan the refactor.\n" .
+                "\n{$dim}  ┌ {$yellow}⚡ Thinking...{$r}\n".
+                "{$dim}  │{$r} Analyzing the codebase to understand the current UserService\n".
+                "{$dim}  │{$r} implementation, identify dependencies, and plan the refactor.\n".
                 "{$dim}  └ {$dim}(2.1s){$r}\n",
                 8000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$cyan}◈ Search{$r} {$dim}── finding relevant files{$r}\n" .
-                "{$dim}  │{$r} {$dim}Pattern:{$r} class UserService\n" .
-                "{$dim}  │{$r} {$dim}Found 3 matches:{$r}\n" .
-                "{$dim}  │{$r}   {$blue}app/Services/UserService.php{$r}{$dim}:12{$r}  — class UserService\n" .
-                "{$dim}  │{$r}   {$blue}app/Http/Controllers/UserController.php{$r}{$dim}:8{$r}  — use UserService\n" .
-                "{$dim}  │{$r}   {$blue}tests/Unit/UserServiceTest.php{$r}{$dim}:15{$r}  — class UserServiceTest\n" .
+                "\n{$dim}  ┌ {$cyan}◈ Search{$r} {$dim}── finding relevant files{$r}\n".
+                "{$dim}  │{$r} {$dim}Pattern:{$r} class UserService\n".
+                "{$dim}  │{$r} {$dim}Found 3 matches:{$r}\n".
+                "{$dim}  │{$r}   {$blue}app/Services/UserService.php{$r}{$dim}:12{$r}  — class UserService\n".
+                "{$dim}  │{$r}   {$blue}app/Http/Controllers/UserController.php{$r}{$dim}:8{$r}  — use UserService\n".
+                "{$dim}  │{$r}   {$blue}tests/Unit/UserServiceTest.php{$r}{$dim}:15{$r}  — class UserServiceTest\n".
                 "{$dim}  └ {$dim}(0.3s){$r}\n",
                 6000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$cyan}◈ Read{$r} {$blue}app/Services/UserService.php{$r}\n" .
-                "{$dim}  │{$r}\n" .
-                "{$dim}  │  {$gray} 1{$r}  {$dimBg} <?php{$r}\n" .
-                "{$dim}  │  {$gray} 2{$r}  {$dimBg} {$r}\n" .
-                "{$dim}  │  {$gray} 3{$r}  {$dimBg} {$magenta}namespace{$r}{$dimBg} App\\Services;{$r}\n" .
-                "{$dim}  │  {$gray} 4{$r}  {$dimBg} {$r}\n" .
-                "{$dim}  │  {$gray} 5{$r}  {$dimBg} {$magenta}use{$r}{$dimBg} App\\Models\\User;{$r}\n" .
-                "{$dim}  │  {$gray} 6{$r}  {$dimBg} {$magenta}use{$r}{$dimBg} Illuminate\\Support\\Facades\\DB;{$r}\n" .
-                "{$dim}  │  {$gray} 7{$r}  {$dimBg} {$r}\n" .
-                "{$dim}  │  {$gray} 8{$r}  {$dimBg} {$magenta}class{$r}{$dimBg} {$yellow}UserService{$r}\n" .
-                "{$dim}  │  {$gray} 9{$r}  {$dimBg} {{$r}\n" .
-                "{$dim}  │  {$gray}10{$r}  {$dimBg}     {$magenta}public function{$r}{$dimBg} {$cyan}getById{$r}{$dimBg}({$magenta}int{$r}{$dimBg} \$id): ?User{$r}\n" .
-                "{$dim}  │  {$gray}11{$r}  {$dimBg}     {{$r}\n" .
-                "{$dim}  │  {$gray}12{$r}  {$dimBg}         {$magenta}return{$r}{$dimBg} User::find(\$id);{$r}\n" .
-                "{$dim}  │  {$gray}13{$r}  {$dimBg}     }{$r}\n" .
-                "{$dim}  │  {$gray}14{$r}  {$dimBg} }{$r}\n" .
-                "{$dim}  │{$r}\n" .
+                "\n{$dim}  ┌ {$cyan}◈ Read{$r} {$blue}app/Services/UserService.php{$r}\n".
+                "{$dim}  │{$r}\n".
+                "{$dim}  │  {$gray} 1{$r}  {$dimBg} <?php{$r}\n".
+                "{$dim}  │  {$gray} 2{$r}  {$dimBg} {$r}\n".
+                "{$dim}  │  {$gray} 3{$r}  {$dimBg} {$magenta}namespace{$r}{$dimBg} App\\Services;{$r}\n".
+                "{$dim}  │  {$gray} 4{$r}  {$dimBg} {$r}\n".
+                "{$dim}  │  {$gray} 5{$r}  {$dimBg} {$magenta}use{$r}{$dimBg} App\\Models\\User;{$r}\n".
+                "{$dim}  │  {$gray} 6{$r}  {$dimBg} {$magenta}use{$r}{$dimBg} Illuminate\\Support\\Facades\\DB;{$r}\n".
+                "{$dim}  │  {$gray} 7{$r}  {$dimBg} {$r}\n".
+                "{$dim}  │  {$gray} 8{$r}  {$dimBg} {$magenta}class{$r}{$dimBg} {$yellow}UserService{$r}\n".
+                "{$dim}  │  {$gray} 9{$r}  {$dimBg} {{$r}\n".
+                "{$dim}  │  {$gray}10{$r}  {$dimBg}     {$magenta}public function{$r}{$dimBg} {$cyan}getById{$r}{$dimBg}({$magenta}int{$r}{$dimBg} \$id): ?User{$r}\n".
+                "{$dim}  │  {$gray}11{$r}  {$dimBg}     {{$r}\n".
+                "{$dim}  │  {$gray}12{$r}  {$dimBg}         {$magenta}return{$r}{$dimBg} User::find(\$id);{$r}\n".
+                "{$dim}  │  {$gray}13{$r}  {$dimBg}     }{$r}\n".
+                "{$dim}  │  {$gray}14{$r}  {$dimBg} }{$r}\n".
+                "{$dim}  │{$r}\n".
                 "{$dim}  └ {$dim}14 lines{$r}\n",
                 4000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$yellow}⚡ Thinking...{$r}\n" .
-                "{$dim}  │{$r} The service directly queries Eloquent. I'll extract a\n" .
-                "{$dim}  │{$r} UserRepositoryInterface, create an EloquentUserRepository,\n" .
-                "{$dim}  │{$r} and add a caching decorator using Laravel's Cache facade.\n" .
+                "\n{$dim}  ┌ {$yellow}⚡ Thinking...{$r}\n".
+                "{$dim}  │{$r} The service directly queries Eloquent. I'll extract a\n".
+                "{$dim}  │{$r} UserRepositoryInterface, create an EloquentUserRepository,\n".
+                "{$dim}  │{$r} and add a caching decorator using Laravel's Cache facade.\n".
                 "{$dim}  └ {$dim}(1.8s){$r}\n",
                 8000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$green}◈ Write{$r} {$blue}app/Repositories/UserRepositoryInterface.php{$r} {$dim}(new){$r}\n" .
-                "{$dim}  │{$r}\n" .
-                "{$dim}  │  {$dimGreen}+ <?php{$r}\n" .
-                "{$dim}  │  {$dimGreen}+{$r}\n" .
-                "{$dim}  │  {$dimGreen}+ namespace App\\Repositories;{$r}\n" .
-                "{$dim}  │  {$dimGreen}+{$r}\n" .
-                "{$dim}  │  {$dimGreen}+ use App\\Models\\User;{$r}\n" .
-                "{$dim}  │  {$dimGreen}+{$r}\n" .
-                "{$dim}  │  {$dimGreen}+ interface UserRepositoryInterface{$r}\n" .
-                "{$dim}  │  {$dimGreen}+ {{$r}\n" .
-                "{$dim}  │  {$dimGreen}+     public function find(int \$id): ?User;{$r}\n" .
-                "{$dim}  │  {$dimGreen}+     public function findByEmail(string \$email): ?User;{$r}\n" .
-                "{$dim}  │  {$dimGreen}+     public function save(User \$user): User;{$r}\n" .
-                "{$dim}  │  {$dimGreen}+     public function delete(int \$id): bool;{$r}\n" .
-                "{$dim}  │  {$dimGreen}+ }{$r}\n" .
-                "{$dim}  │{$r}\n" .
+                "\n{$dim}  ┌ {$green}◈ Write{$r} {$blue}app/Repositories/UserRepositoryInterface.php{$r} {$dim}(new){$r}\n".
+                "{$dim}  │{$r}\n".
+                "{$dim}  │  {$dimGreen}+ <?php{$r}\n".
+                "{$dim}  │  {$dimGreen}+{$r}\n".
+                "{$dim}  │  {$dimGreen}+ namespace App\\Repositories;{$r}\n".
+                "{$dim}  │  {$dimGreen}+{$r}\n".
+                "{$dim}  │  {$dimGreen}+ use App\\Models\\User;{$r}\n".
+                "{$dim}  │  {$dimGreen}+{$r}\n".
+                "{$dim}  │  {$dimGreen}+ interface UserRepositoryInterface{$r}\n".
+                "{$dim}  │  {$dimGreen}+ {{$r}\n".
+                "{$dim}  │  {$dimGreen}+     public function find(int \$id): ?User;{$r}\n".
+                "{$dim}  │  {$dimGreen}+     public function findByEmail(string \$email): ?User;{$r}\n".
+                "{$dim}  │  {$dimGreen}+     public function save(User \$user): User;{$r}\n".
+                "{$dim}  │  {$dimGreen}+     public function delete(int \$id): bool;{$r}\n".
+                "{$dim}  │  {$dimGreen}+ }{$r}\n".
+                "{$dim}  │{$r}\n".
                 "{$dim}  └ {$green}✓ Created{$r}\n",
                 4000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$yellow}◈ Edit{$r} {$blue}app/Services/UserService.php{$r}\n" .
-                "{$dim}  │{$r}\n" .
-                "{$dim}  │  {$gray} 5{$r}  {$dimRed}- use Illuminate\\Support\\Facades\\DB;{$r}\n" .
-                "{$dim}  │  {$gray} 5{$r}  {$dimGreen}+ use App\\Repositories\\UserRepositoryInterface;{$r}\n" .
-                "{$dim}  │  {$gray} 6{$r}  {$dimGreen}+ use Illuminate\\Support\\Facades\\Cache;{$r}\n" .
-                "{$dim}  │  {$gray}  {$r}\n" .
-                "{$dim}  │  {$gray}10{$r}  {$dimRed}-     public function getById(int \$id): ?User{$r}\n" .
-                "{$dim}  │  {$gray}10{$r}  {$dimGreen}+     public function __construct({$r}\n" .
-                "{$dim}  │  {$gray}11{$r}  {$dimGreen}+         private UserRepositoryInterface \$repository{$r}\n" .
-                "{$dim}  │  {$gray}12{$r}  {$dimGreen}+     ) {}{$r}\n" .
-                "{$dim}  │  {$gray}13{$r}  {$dimGreen}+{$r}\n" .
-                "{$dim}  │  {$gray}14{$r}  {$dimGreen}+     public function getById(int \$id): ?User{$r}\n" .
-                "{$dim}  │  {$gray}  {$r}\n" .
-                "{$dim}  │  {$gray}12{$r}  {$dimRed}-         return User::find(\$id);{$r}\n" .
-                "{$dim}  │  {$gray}16{$r}  {$dimGreen}+         return Cache::remember(\"user.{\$id}\", 3600, function () use (\$id) {{$r}\n" .
-                "{$dim}  │  {$gray}17{$r}  {$dimGreen}+             return \$this->repository->find(\$id);{$r}\n" .
-                "{$dim}  │  {$gray}18{$r}  {$dimGreen}+         });{$r}\n" .
-                "{$dim}  │{$r}\n" .
+                "\n{$dim}  ┌ {$yellow}◈ Edit{$r} {$blue}app/Services/UserService.php{$r}\n".
+                "{$dim}  │{$r}\n".
+                "{$dim}  │  {$gray} 5{$r}  {$dimRed}- use Illuminate\\Support\\Facades\\DB;{$r}\n".
+                "{$dim}  │  {$gray} 5{$r}  {$dimGreen}+ use App\\Repositories\\UserRepositoryInterface;{$r}\n".
+                "{$dim}  │  {$gray} 6{$r}  {$dimGreen}+ use Illuminate\\Support\\Facades\\Cache;{$r}\n".
+                "{$dim}  │  {$gray}  {$r}\n".
+                "{$dim}  │  {$gray}10{$r}  {$dimRed}-     public function getById(int \$id): ?User{$r}\n".
+                "{$dim}  │  {$gray}10{$r}  {$dimGreen}+     public function __construct({$r}\n".
+                "{$dim}  │  {$gray}11{$r}  {$dimGreen}+         private UserRepositoryInterface \$repository{$r}\n".
+                "{$dim}  │  {$gray}12{$r}  {$dimGreen}+     ) {}{$r}\n".
+                "{$dim}  │  {$gray}13{$r}  {$dimGreen}+{$r}\n".
+                "{$dim}  │  {$gray}14{$r}  {$dimGreen}+     public function getById(int \$id): ?User{$r}\n".
+                "{$dim}  │  {$gray}  {$r}\n".
+                "{$dim}  │  {$gray}12{$r}  {$dimRed}-         return User::find(\$id);{$r}\n".
+                "{$dim}  │  {$gray}16{$r}  {$dimGreen}+         return Cache::remember(\"user.{\$id}\", 3600, function () use (\$id) {{$r}\n".
+                "{$dim}  │  {$gray}17{$r}  {$dimGreen}+             return \$this->repository->find(\$id);{$r}\n".
+                "{$dim}  │  {$gray}18{$r}  {$dimGreen}+         });{$r}\n".
+                "{$dim}  │{$r}\n".
                 "{$dim}  └ {$green}✓ Saved{$r} {$dim}(-2, +9 lines){$r}\n",
                 3000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ┌ {$cyan}◈ Bash{$r} {$dim}php artisan test --filter=UserService{$r}\n" .
-                "{$dim}  │{$r}\n" .
-                "{$dim}  │{$r}   {$green}PASS{$r}  Tests\\Unit\\UserServiceTest\n" .
-                "{$dim}  │{$r}   {$green}✓{$r} it returns a user by id {$dim}(0.04s){$r}\n" .
-                "{$dim}  │{$r}   {$green}✓{$r} it caches the user after first fetch {$dim}(0.02s){$r}\n" .
-                "{$dim}  │{$r}   {$green}✓{$r} it invalidates cache on user update {$dim}(0.03s){$r}\n" .
-                "{$dim}  │{$r}   {$green}✓{$r} it delegates to repository for persistence {$dim}(0.01s){$r}\n" .
-                "{$dim}  │{$r}\n" .
-                "{$dim}  │{$r}   Tests:    {$bold}{$green}4 passed{$r} {$dim}(4 assertions){$r}\n" .
-                "{$dim}  │{$r}   Duration: {$dim}0.31s{$r}\n" .
-                "{$dim}  │{$r}\n" .
+                "\n{$dim}  ┌ {$cyan}◈ Bash{$r} {$dim}php artisan test --filter=UserService{$r}\n".
+                "{$dim}  │{$r}\n".
+                "{$dim}  │{$r}   {$green}PASS{$r}  Tests\\Unit\\UserServiceTest\n".
+                "{$dim}  │{$r}   {$green}✓{$r} it returns a user by id {$dim}(0.04s){$r}\n".
+                "{$dim}  │{$r}   {$green}✓{$r} it caches the user after first fetch {$dim}(0.02s){$r}\n".
+                "{$dim}  │{$r}   {$green}✓{$r} it invalidates cache on user update {$dim}(0.03s){$r}\n".
+                "{$dim}  │{$r}   {$green}✓{$r} it delegates to repository for persistence {$dim}(0.01s){$r}\n".
+                "{$dim}  │{$r}\n".
+                "{$dim}  │{$r}   Tests:    {$bold}{$green}4 passed{$r} {$dim}(4 assertions){$r}\n".
+                "{$dim}  │{$r}   Duration: {$dim}0.31s{$r}\n".
+                "{$dim}  │{$r}\n".
                 "{$dim}  └ {$green}✓ Exit code 0{$r}\n",
                 5000
             ),
             fn () => $this->typeOut(
-                "\n{$dim}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n\n" .
-                "  {$white}Done.{$r} Refactored UserService to repository pattern with caching.\n\n" .
-                "  {$dim}Files changed:{$r}\n" .
-                "    {$green}+{$r} app/Repositories/UserRepositoryInterface.php {$dim}(new){$r}\n" .
-                "    {$green}+{$r} app/Repositories/EloquentUserRepository.php {$dim}(new){$r}\n" .
-                "    {$yellow}~{$r} app/Services/UserService.php {$dim}(-2, +9){$r}\n" .
-                "    {$yellow}~{$r} app/Providers/AppServiceProvider.php {$dim}(+3){$r}\n\n" .
+                "\n{$dim}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n\n".
+                "  {$white}Done.{$r} Refactored UserService to repository pattern with caching.\n\n".
+                "  {$dim}Files changed:{$r}\n".
+                "    {$green}+{$r} app/Repositories/UserRepositoryInterface.php {$dim}(new){$r}\n".
+                "    {$green}+{$r} app/Repositories/EloquentUserRepository.php {$dim}(new){$r}\n".
+                "    {$yellow}~{$r} app/Services/UserService.php {$dim}(-2, +9){$r}\n".
+                "    {$yellow}~{$r} app/Providers/AppServiceProvider.php {$dim}(+3){$r}\n\n".
                 "  {$dim}Tokens: 1,847 in · 923 out · cost: \$0.024{$r}\n\n",
                 6000
             ),
@@ -757,7 +847,7 @@ class AnsiRenderer implements RendererInterface
 
     private function getMarkdownRenderer(): MarkdownToAnsi
     {
-        return $this->markdownRenderer ??= new MarkdownToAnsi();
+        return $this->markdownRenderer ??= new MarkdownToAnsi;
     }
 
     private function typeOut(string $text, int $charDelay): void
@@ -768,6 +858,284 @@ class AnsiRenderer implements RendererInterface
                 usleep($charDelay);
             }
         }
+    }
+
+    public function showSubagentRunning(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $border = Theme::borderTask();
+        $count = count($entries);
+        $label = $count === 1 ? 'Running...' : "{$count} agents running...";
+
+        echo "{$border}  {$dim}⎿ {$label}{$r}\n";
+    }
+
+    public function showSubagentSpawn(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $cyan = "\033[38;2;100;200;220m";
+        $border = Theme::borderTask();
+
+        $count = count($entries);
+        $types = $this->summarizeAgentTypes($entries);
+        $isBg = ($entries[0]['args']['mode'] ?? 'await') === 'background';
+        $bgTag = $isBg ? " {$dim}(background){$r}" : '';
+
+        // Single agent: compact one-liner
+        if ($count === 1) {
+            $e = $entries[0];
+            [$label, $typeColor] = $this->formatAgentLabel($e['args'], 'spawn');
+            echo "\n{$border}  {$cyan}⏺{$r} {$label}{$bgTag}\n";
+
+            return;
+        }
+
+        // Multiple agents: tree
+        echo "\n{$border}  {$cyan}⏺ {$count} {$types}{$r}{$bgTag}\n";
+
+        $last = $count - 1;
+        foreach ($entries as $i => $entry) {
+            $connector = $i === $last ? '└─' : '├─';
+            [$label, $typeColor] = $this->formatAgentLabel($entry['args'], 'spawn');
+            $coord = $this->formatCoordinationTags($entry['args'], $dim, $r);
+
+            echo "{$border}  {$connector} {$typeColor}●{$r} {$label}{$coord}\n";
+        }
+    }
+
+    public function showSubagentBatch(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+        $cyan = "\033[38;2;100;200;220m";
+        $border = Theme::borderTask();
+
+        $count = count($entries);
+        $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
+        $failed = $count - $succeeded;
+        $types = $this->summarizeAgentTypes($entries);
+        $allBg = ! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')));
+
+        // Background ack — don't show a second block (spawn block is enough)
+        if ($allBg) {
+            return;
+        }
+
+        // Single agent: compact
+        if ($count === 1) {
+            $e = $entries[0];
+            $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            [$label, $_] = $this->formatAgentLabel($e['args'], 'result');
+            $stats = $this->formatAgentStats($e);
+            $preview = $this->extractResultPreview($e['result']);
+            $children = $e['children'] ?? [];
+
+            echo "\n{$border}  {$icon} {$label}{$stats}\n";
+            if ($children !== []) {
+                echo $this->renderChildTree($children, "{$border}     ");
+            }
+            if ($preview !== '') {
+                echo "{$border}     {$dim}⎿ {$preview}{$r}\n";
+            }
+
+            return;
+        }
+
+        // Multiple agents: tree
+        $failSuffix = $failed > 0 ? " {$red}({$failed} failed){$r}" : '';
+        echo "\n{$border}  {$green}✓{$r} {$succeeded}/{$count} {$types} finished{$failSuffix}\n";
+
+        $last = $count - 1;
+        foreach ($entries as $i => $entry) {
+            $connector = $i === $last ? '└─' : '├─';
+            $continuation = $i === $last ? '  ' : '│ ';
+            $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            [$label, $_] = $this->formatAgentLabel($entry['args'], 'result');
+            $stats = $this->formatAgentStats($entry);
+            $preview = $this->extractResultPreview($entry['result']);
+            $children = $entry['children'] ?? [];
+
+            echo "{$border}  {$connector} {$icon} {$label}{$stats}\n";
+            if ($children !== []) {
+                echo $this->renderChildTree($children, "{$border}  {$continuation}  ");
+            }
+            if ($preview !== '') {
+                echo "{$border}  {$continuation}  {$dim}⎿ {$preview}{$r}\n";
+            }
+        }
+    }
+
+    /**
+     * Format agent label: "id · task preview" or "Type · task preview".
+     *
+     * @return array{string, string} [formatted label, type color]
+     */
+    private function formatAgentLabel(array $args, string $context): array
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $type = ucfirst((string) ($args['type'] ?? 'explore'));
+        $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
+        $task = (string) ($args['task'] ?? '');
+        $taskPreview = mb_strlen($task) > 50 ? mb_substr($task, 0, 50).'...' : $task;
+
+        $typeColor = match (strtolower($type)) {
+            'general' => "\033[38;2;218;165;32m",
+            'plan' => "\033[38;2;160;120;255m",
+            default => "\033[38;2;100;200;220m",
+        };
+
+        // Primary label: use ID if set, otherwise type
+        $primary = $id !== null
+            ? "{$typeColor}{$type}{$r} {$id}"
+            : "{$typeColor}{$type}{$r}";
+
+        return ["{$primary} {$dim}· {$taskPreview}{$r}", $typeColor];
+    }
+
+    /**
+     * Format coordination tags (depends_on, group).
+     */
+    private function formatCoordinationTags(array $args, string $dim, string $r): string
+    {
+        $parts = [];
+        $dependsOn = $args['depends_on'] ?? [];
+        $group = isset($args['group']) && $args['group'] !== '' ? (string) $args['group'] : null;
+
+        if (is_array($dependsOn) && $dependsOn !== []) {
+            $parts[] = 'depends on: '.implode(', ', $dependsOn);
+        }
+        if ($group !== null) {
+            $parts[] = "group: {$group}";
+        }
+
+        if ($parts === []) {
+            return '';
+        }
+
+        return " {$dim}→ ".implode(' · ', $parts)."{$r}";
+    }
+
+    /**
+     * Format stats for a completed agent entry.
+     */
+    private function formatAgentStats(array $entry): string
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+
+        // We don't have direct access to SubagentStats here (only args + result text),
+        // but we can parse tool/token info from the result if the orchestrator included it.
+        // For now, keep it simple — stats are shown in the background completion notice.
+        return '';
+    }
+
+    /**
+     * Summarize agent types for the group header (e.g., "Explore agents", "2 Explore + 1 General agents").
+     */
+    private function summarizeAgentTypes(array $entries): string
+    {
+        $types = [];
+        foreach ($entries as $entry) {
+            $type = ucfirst((string) ($entry['args']['type'] ?? 'explore'));
+            $types[$type] = ($types[$type] ?? 0) + 1;
+        }
+
+        if (count($types) === 1) {
+            $type = array_key_first($types);
+
+            return $type.(count($entries) === 1 ? ' agent' : ' agents');
+        }
+
+        $parts = [];
+        foreach ($types as $type => $count) {
+            $parts[] = "{$count} {$type}";
+        }
+
+        return implode(' + ', $parts).' agents';
+    }
+
+    /**
+     * Render a nested child agent tree with box-drawing indentation.
+     */
+    private function renderChildTree(array $children, string $indent): string
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+        $output = '';
+
+        $last = count($children) - 1;
+        foreach ($children as $i => $child) {
+            $connector = $i === $last ? '└─' : '├─';
+            $continuation = $i === $last ? '   ' : '│  ';
+            $icon = $child['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            $type = ucfirst($child['type']);
+            $task = mb_strlen($child['task']) > 40 ? mb_substr($child['task'], 0, 40).'…' : $child['task'];
+            $elapsed = $child['elapsed'] > 0 ? " {$dim}({$child['elapsed']}s){$r}" : '';
+
+            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$task}{$elapsed}\n";
+
+            if (($child['children'] ?? []) !== []) {
+                $output .= $this->renderChildTree($child['children'], "{$indent}{$continuation}");
+            }
+        }
+
+        return $output;
+    }
+
+    /**
+     * Extract a short preview from subagent output for the tree display.
+     */
+    private function extractResultPreview(string $output): string
+    {
+        $lines = explode("\n", trim($output));
+
+        // Skip empty lines and markdown headers to find first content line
+        foreach ($lines as $line) {
+            $stripped = trim($line);
+            if ($stripped === '' || str_starts_with($stripped, '#') || str_starts_with($stripped, '---')) {
+                continue;
+            }
+            // Strip leading markdown list markers
+            $stripped = preg_replace('/^[-*]\s+/', '', $stripped);
+            if (mb_strlen($stripped) > 80) {
+                return mb_substr($stripped, 0, 80).'...';
+            }
+
+            return $stripped;
+        }
+
+        return '';
+    }
+
+    private function formatTokenCount(int $tokens): string
+    {
+        if ($tokens >= 1_000_000) {
+            return round($tokens / 1_000_000, 1).'M';
+        }
+        if ($tokens >= 1_000) {
+            return round($tokens / 1_000, 1).'k';
+        }
+
+        return (string) $tokens;
     }
 
     private function isTaskTool(string $name): bool
@@ -786,7 +1154,7 @@ class AnsiRenderer implements RendererInterface
             if (isset($args['tasks']) && $args['tasks'] !== '') {
                 $items = json_decode($args['tasks'], true);
                 if (is_array($items)) {
-                    return "{$icon} {$friendly} {$dim}created " . count($items) . " tasks{$r}";
+                    return "{$icon} {$friendly} {$dim}created ".count($items)." tasks{$r}";
                 }
             }
             $subject = $args['subject'] ?? '';

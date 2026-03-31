@@ -9,6 +9,8 @@ use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\UI\RendererInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
@@ -17,15 +19,17 @@ use Psr\Log\NullLogger;
 
 class AgentLoopTest extends TestCase
 {
-    private LlmClientInterface&\PHPUnit\Framework\MockObject\Stub $llm;
-    private RendererInterface&\PHPUnit\Framework\MockObject\MockObject $ui;
+    private LlmClientInterface&Stub $llm;
+
+    private RendererInterface&MockObject $ui;
+
     private AgentLoop $loop;
 
     protected function setUp(): void
     {
         $this->llm = $this->createStub(LlmClientInterface::class);
         $this->ui = $this->createMock(RendererInterface::class);
-        $this->loop = new AgentLoop($this->llm, $this->ui, new NullLogger(), 'You are a test assistant.');
+        $this->loop = new AgentLoop($this->llm, $this->ui, new NullLogger, 'You are a test assistant.');
     }
 
     public function test_simple_text_response_no_tools(): void
@@ -36,8 +40,7 @@ class AgentLoopTest extends TestCase
         $this->llm->method('getProvider')->willReturn('test');
         $this->llm->method('getModel')->willReturn('model');
 
-        $this->ui->expects($this->once())->method('showThinking');
-        $this->ui->expects($this->once())->method('clearThinking');
+        $this->ui->expects($this->atLeastOnce())->method('setPhase');
         $this->ui->expects($this->once())->method('streamChunk')->with('Hello!');
         $this->ui->expects($this->once())->method('streamComplete');
         $this->ui->expects($this->once())->method('showStatus');
@@ -60,7 +63,7 @@ class AgentLoopTest extends TestCase
         $this->llm->method('getModel')->willReturn('model');
 
         // Tool name must be in AgentMode::Edit allowed list
-        $tool = (new Tool())
+        $tool = (new Tool)
             ->as('grep')
             ->for('Search files')
             ->withStringParameter('pattern', 'Pattern')
@@ -86,7 +89,7 @@ class AgentLoopTest extends TestCase
 
         $this->ui->expects($this->once())
             ->method('showToolResult')
-            ->with('nonexistent', $this->stringContains("not found"), false);
+            ->with('nonexistent', $this->stringContains('not found'), false);
 
         $this->loop->run('Call missing tool');
     }
@@ -102,11 +105,13 @@ class AgentLoopTest extends TestCase
         $this->llm->method('getProvider')->willReturn('test');
         $this->llm->method('getModel')->willReturn('model');
 
-        $tool = (new Tool())
+        $tool = (new Tool)
             ->as('bash')
             ->for('Run commands')
             ->withoutErrorHandling()
-            ->using(function () { throw new \RuntimeException('Tool exploded'); });
+            ->using(function () {
+                throw new \RuntimeException('Tool exploded');
+            });
         $this->loop->setTools([$tool]);
 
         $this->ui->expects($this->once())
@@ -118,9 +123,9 @@ class AgentLoopTest extends TestCase
 
     public function test_cancelled_exception_returns_early(): void
     {
-        $this->llm->method('chat')->willThrowException(new CancelledException());
+        $this->llm->method('chat')->willThrowException(new CancelledException);
 
-        $this->ui->expects($this->once())->method('clearThinking');
+        $this->ui->expects($this->atLeastOnce())->method('setPhase');
         $this->ui->expects($this->never())->method('showStatus');
         $this->ui->expects($this->never())->method('showError');
 
@@ -226,7 +231,7 @@ class AgentLoopTest extends TestCase
         $this->llm->method('getModel')->willReturn('model');
 
         $executed = false;
-        $tool = (new Tool())
+        $tool = (new Tool)
             ->as('file_read')
             ->for('Read files')
             ->using(function () use (&$executed) {

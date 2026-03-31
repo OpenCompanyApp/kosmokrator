@@ -37,6 +37,8 @@ class SubagentStats
 
     public int $depth = 0;
 
+    public int $retries = 0;
+
     public function __construct(public readonly string $id) {}
 
     public function elapsed(): float

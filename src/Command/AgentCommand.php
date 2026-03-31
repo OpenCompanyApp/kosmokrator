@@ -155,7 +155,11 @@ class AgentCommand extends Command
         // Subagent system
         $maxDepth = (int) ($sessionManager->getSetting('subagent_max_depth')
             ?? $config->get('kosmokrator.agent.subagent_max_depth', 3));
-        $orchestrator = new SubagentOrchestrator($log, $maxDepth);
+        $concurrency = (int) ($sessionManager->getSetting('subagent_concurrency')
+            ?? $config->get('kosmokrator.agent.subagent_concurrency', 10));
+        $maxRetries = (int) ($sessionManager->getSetting('subagent_max_retries')
+            ?? $config->get('kosmokrator.agent.subagent_max_retries', 2));
+        $orchestrator = new SubagentOrchestrator($log, $maxDepth, $concurrency, $maxRetries);
         $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
 
         $llmClientClass = ($ui->getActiveRenderer() === 'tui') ? 'async' : 'prism';
@@ -182,6 +186,9 @@ class AgentCommand extends Command
         $agentLoop->setAgentContext($rootContext);
         $agentLoop->setTools($toolRegistry->toPrismTools());
 
+        // Wire live subagent tree for TUI display
+        $ui->setAgentTreeProvider(fn () => $agentLoop->buildLiveAgentTree());
+
         // Session: resume or create new
         $resumeId = $input->getOption('session');
         if ($resumeId === null && $input->getOption('resume')) {
@@ -201,19 +208,31 @@ class AgentCommand extends Command
             $sessionManager->createSession($modelName);
         }
 
-        return $this->repl($ui, $agentLoop, $permissions, $llm, $sessionManager);
+        return $this->repl($ui, $agentLoop, $permissions, $llm, $sessionManager, $orchestrator, $models);
     }
 
-    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm, SessionManager $sessionManager): int
+    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm, SessionManager $sessionManager, SubagentOrchestrator $orchestrator, ModelCatalog $models): int
     {
         $taskStore = $this->container->make(TaskStore::class);
         $config = $this->container->make('config');
         $settings = $this->container->make(SettingsRepository::class);
 
         $registry = $this->buildSlashCommandRegistry();
-        $ctx = new SlashCommandContext($ui, $agentLoop, $permissions, $sessionManager, $llm, $taskStore, $config, $settings);
+        $ctx = new SlashCommandContext($ui, $agentLoop, $permissions, $sessionManager, $llm, $taskStore, $config, $settings, $orchestrator, $models);
         $nextInput = null;
         $nextInputShown = false;
+
+        // Wire immediate command handler — dispatches slash commands during agent execution
+        $ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx): bool {
+            $command = $registry->resolve($input);
+            if ($command === null || ! $command->immediate()) {
+                return false;
+            }
+            $args = $registry->extractArgs($input, $command);
+            $command->execute($args, $ctx);
+
+            return true;
+        });
 
         while (true) {
             $taskStore->clearTerminal();
@@ -281,6 +300,7 @@ class AgentCommand extends Command
             $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
         }
 
+        $orchestrator->cancelAll();
         $ui->teardown();
 
         return Command::SUCCESS;
@@ -308,6 +328,7 @@ class AgentCommand extends Command
         $registry->register(new Slash\NewCommand);
         $registry->register(new Slash\ResumeCommand);
         $registry->register(new Slash\SettingsCommand);
+        $registry->register(new Slash\AgentsCommand);
 
         return $registry;
     }

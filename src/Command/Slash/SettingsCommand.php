@@ -28,6 +28,11 @@ class SettingsCommand implements SlashCommand
         return 'Open settings panel';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $memoriesEnabled = $ctx->sessionManager->getSetting('memories') ?? 'on';
@@ -44,6 +49,10 @@ class SettingsCommand implements SlashCommand
             'prune_min_savings' => (string) ($ctx->agentLoop->getPruner()?->getMinSavings() ?? 20000),
             'temperature' => (string) ($ctx->llm->getTemperature() ?? 0.0),
             'max_tokens' => (string) ($ctx->llm->getMaxTokens() ?? ''),
+            'subagent_concurrency' => (string) ($ctx->sessionManager->getSetting('subagent_concurrency')
+                ?? $ctx->config->get('kosmokrator.agent.subagent_concurrency', 10)),
+            'subagent_max_retries' => (string) ($ctx->sessionManager->getSetting('subagent_max_retries')
+                ?? $ctx->config->get('kosmokrator.agent.subagent_max_retries', 2)),
             'provider' => $currentProvider,
             'model' => $ctx->llm->getModel(),
             'api_key' => self::maskKey($ctx->config->get("prism.providers.{$currentProvider}.api_key", '')),
@@ -88,6 +97,8 @@ class SettingsCommand implements SlashCommand
                     $ctx->llm->setMaxTokens($tokens);
                     $ctx->sessionManager->setSetting('max_tokens', $value);
                 })(),
+                'subagent_concurrency' => $ctx->sessionManager->setSetting('subagent_concurrency', $value),
+                'subagent_max_retries' => $ctx->sessionManager->setSetting('subagent_max_retries', $value),
                 'provider' => (function () use ($ctx, $value) {
                     $ctx->llm->setProvider($value);
                     if (is_callable([$ctx->llm, 'setBaseUrl'])) {

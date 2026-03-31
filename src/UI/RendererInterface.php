@@ -64,6 +64,14 @@ interface RendererInterface
      */
     public function consumeQueuedMessage(): ?string;
 
+    /**
+     * Set a handler for immediate slash commands during agent execution.
+     * The closure receives the raw input and returns true if handled.
+     *
+     * @param  (\Closure(string): bool)|null  $handler
+     */
+    public function setImmediateCommandHandler(?\Closure $handler): void;
+
     public function clearConversation(): void;
 
     /**
@@ -148,6 +156,25 @@ interface RendererInterface
      * @param  array<int, array{args: array, result: string, success: bool}>  $entries
      */
     public function showSubagentBatch(array $entries): void;
+
+    /**
+     * Update the live subagent tree display with current orchestrator state.
+     */
+    public function refreshSubagentTree(array $tree): void;
+
+    /**
+     * Set a callback that returns the live agent tree (called during breathing animation).
+     */
+    public function setAgentTreeProvider(?\Closure $provider): void;
+
+    /**
+     * Show the swarm progress dashboard.
+     *
+     * @param  array  $summary  Aggregated stats (counts, tokens, cost, ETA, etc.)
+     * @param  array<string, SubagentStats>  $allStats  All agent stats
+     * @param  \Closure|null  $refresh  Callback returning ['summary' => ..., 'stats' => ...] for auto-refresh (TUI)
+     */
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void;
 
     public function teardown(): void;
 }

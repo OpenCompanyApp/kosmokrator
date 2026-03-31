@@ -23,6 +23,11 @@ class AnsiRenderer implements RendererInterface
 
     private ?Highlighter $highlighter = null;
 
+    private ?\Kosmokrator\UI\Diff\DiffRenderer $diffRenderer = null;
+
+    /** @var (\Closure(string): bool)|null */
+    private ?\Closure $immediateCommandHandler = null;
+
     private array $lastToolArgs = [];
 
     private ?TaskStore $taskStore = null;
@@ -340,34 +345,12 @@ class AnsiRenderer implements RendererInterface
      */
     private function buildDiffLines(string $old, string $new, string $path): array
     {
-        $r = Theme::reset();
-        $removeFg = Theme::diffRemove();
-        $addFg = Theme::diffAdd();
-        $removeBg = Theme::diffRemoveBg();
-        $addBg = Theme::diffAddBg();
-
-        $language = KosmokratorTerminalTheme::detectLanguage($path);
-        $oldCode = ($language !== '') ? $this->tryHighlight($old, $language) : $old;
-        $newCode = ($language !== '') ? $this->tryHighlight($new, $language) : $new;
-
-        $result = [];
-        foreach (explode("\n", $oldCode) as $line) {
-            $result[] = "{$removeBg}{$removeFg} - {$r}{$removeBg} {$line}{$r}";
-        }
-        foreach (explode("\n", $newCode) as $line) {
-            $result[] = "{$addBg}{$addFg} + {$r}{$addBg} {$line}{$r}";
-        }
-
-        return $result;
+        return $this->getDiffRenderer()->renderLines($old, $new, $path);
     }
 
-    private function tryHighlight(string $code, string $language): string
+    private function getDiffRenderer(): \Kosmokrator\UI\Diff\DiffRenderer
     {
-        try {
-            return $this->getHighlighter()->parse($code, $language);
-        } catch (\Throwable) {
-            return $code;
-        }
+        return $this->diffRenderer ??= new \Kosmokrator\UI\Diff\DiffRenderer;
     }
 
     public function clearConversation(): void
@@ -475,6 +458,11 @@ class AnsiRenderer implements RendererInterface
     public function consumeQueuedMessage(): ?string
     {
         return null; // ANSI mode is synchronous, no queuing
+    }
+
+    public function setImmediateCommandHandler(?\Closure $handler): void
+    {
+        $this->immediateCommandHandler = $handler;
     }
 
     public function showError(string $message): void
@@ -609,6 +597,7 @@ class AnsiRenderer implements RendererInterface
                 'running' => "{$gold}●{$r}",
                 'failed' => "{$red}✗{$r}",
                 'waiting' => "{$blue}◌{$r}",
+                'retrying' => "{$gold}↻{$r}",
                 default => "{$dim}○{$r}",
             };
 
@@ -619,6 +608,8 @@ class AnsiRenderer implements RendererInterface
                 'running' => " · {$s->toolCalls} tools · running",
                 'waiting' => ' · waiting on '.implode(', ', $s->dependsOn),
                 'queued' => $s->group !== null ? " · queued (group: {$s->group})" : ' · queued',
+                'queued_global' => ' · queued (concurrency limit)',
+                'retrying' => " · retry #{$s->retries} · {$s->toolCalls} tools",
                 'failed' => ' · failed: '.mb_substr($s->error ?? '', 0, 40),
                 default => '',
             };
@@ -630,6 +621,199 @@ class AnsiRenderer implements RendererInterface
     public function clearSubagentStatus(): void
     {
         // ANSI mode: status is printed inline, nothing to clear
+    }
+
+    public function refreshSubagentTree(array $tree): void {}
+
+    public function setAgentTreeProvider(?\Closure $provider): void {}
+
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
+    {
+        echo $this->formatDashboard($summary, $allStats);
+    }
+
+    private function formatDashboard(array $s, array $allStats): string
+    {
+        $r = Theme::reset();
+        $border = Theme::primaryDim();
+        $gold = Theme::accent();
+        $green = Theme::success();
+        $red = Theme::error();
+        $cyan = Theme::info();
+        $white = Theme::white();
+        $dim = Theme::dim();
+        $text = Theme::text();
+        $w = 72;
+
+        $out = '';
+        $hr = str_repeat('─', $w);
+        $strip = fn (string $s): string => preg_replace('/\033\[[^m]*m/', '', $s);
+        $pad = function (string $content) use ($r, $border, $w, $strip): string {
+            $visible = mb_strlen($strip($content));
+            $gap = max(0, $w - $visible);
+
+            return "{$border}  │{$r} {$content}".str_repeat(' ', $gap)." {$border}│{$r}\n";
+        };
+        $blank = "{$border}  │{$r}".str_repeat(' ', $w + 2)."{$border}│{$r}\n";
+
+        // ┌ Top border ┐
+        $out .= "\n{$border}  ┌{$hr}┐{$r}\n";
+        $out .= $blank;
+
+        // Title
+        $out .= $pad("{$gold}⏺  S W A R M   C O N T R O L{$r}");
+        $out .= $blank;
+
+        // Progress bar
+        $pct = $s['total'] > 0 ? $s['done'] / $s['total'] : 0;
+        $barWidth = 40;
+        $filled = (int) round($pct * $barWidth);
+        $empty = $barWidth - $filled;
+        $barColor = $pct < 0.5 ? $green : $gold;
+        $pctStr = number_format($pct * 100, 1).'%';
+        $out .= $pad("{$barColor}".str_repeat('█', $filled)."{$dim}".str_repeat('░', $empty)."{$r}  {$white}{$pctStr}{$r}");
+        $out .= $pad("{$text}{$s['done']} of {$s['total']} agents completed{$r}");
+        $out .= $blank;
+
+        // Status counts
+        $d = (string) $s['done'];
+        $ru = (string) $s['running'];
+        $q = (string) $s['queued'];
+        $f = (string) $s['failed'];
+        $out .= $pad("{$green}✓ {$d} done{$r}   {$gold}● {$ru} running{$r}   {$cyan}◌ {$q} queued{$r}   {$red}✗ {$f} failed{$r}");
+        $out .= $blank;
+
+        // ├─ Resources ─┤
+        $sectionHdr = function (string $icon, string $label) use ($border, $gold, $r, $w): string {
+            $labelLen = mb_strlen($icon) + 1 + strlen($label);
+            $fill = max(0, $w - $labelLen - 6);
+
+            return "{$border}  ├──── {$gold}{$icon} {$label}{$r} ".str_repeat("{$border}─", $fill)."{$border}┤{$r}\n";
+        };
+
+        $out .= $sectionHdr('☉', 'Resources');
+        $out .= $blank;
+
+        $tokIn = Theme::formatTokenCount($s['tokensIn']);
+        $tokOut = Theme::formatTokenCount($s['tokensOut']);
+        $tokTotal = Theme::formatTokenCount($s['tokensIn'] + $s['tokensOut']);
+        $out .= $pad("{$dim}Tokens    {$white}{$tokIn} in{$dim}  ·  {$white}{$tokOut} out{$dim}  ·  {$white}{$tokTotal} total{$r}");
+
+        $cost = Theme::formatCost($s['cost']);
+        $avgCost = Theme::formatCost($s['avgCost']);
+        $out .= $pad("{$dim}Cost      {$white}{$cost}{$dim}   ·  avg {$white}{$avgCost}{$dim}/agent{$r}");
+
+        $elapsed = $this->dashFormatElapsed($s['elapsed']);
+        $rate = $s['rate'] > 0 ? number_format($s['rate'], 1).' agents/min' : 'N/A';
+        $out .= $pad("{$dim}Elapsed   {$white}{$elapsed}{$dim}  ·  rate {$white}{$rate}{$r}");
+
+        if ($s['eta'] > 0) {
+            $eta = '~'.$this->dashFormatElapsed($s['eta']).' remaining';
+            $out .= $pad("{$dim}ETA       {$gold}{$eta}{$r}");
+        }
+        $out .= $blank;
+
+        // ├─ Active ─┤
+        if ($s['running'] > 0 || $s['retrying'] > 0) {
+            $ac = $s['running'] + $s['retrying'];
+            $out .= $sectionHdr('●', "Active ({$ac})");
+            $out .= $blank;
+
+            $shown = 0;
+            foreach ($s['active'] as $agent) {
+                if ($shown >= 8) {
+                    $remaining = count($s['active']) - 8;
+                    $out .= $pad("{$dim}… {$remaining} more agents running{$r}");
+                    break;
+                }
+                $out .= $pad($this->dashFormatAgentLine($agent));
+                $shown++;
+            }
+            $out .= $blank;
+        }
+
+        // ├─ Failures ─┤
+        if ($s['failed'] > 0) {
+            $out .= $sectionHdr('✗', "Failures ({$s['failed']})");
+            $out .= $blank;
+
+            if ($s['retriedAndRecovered'] > 0) {
+                $permanent = $s['failed'] - $s['retriedAndRecovered'];
+                $out .= $pad("{$dim}{$s['retriedAndRecovered']} recovered via retry  ·  {$permanent} permanent{$r}");
+            }
+
+            $shown = 0;
+            foreach ($s['failures'] as $agent) {
+                if ($shown >= 5) {
+                    $remaining = count($s['failures']) - 5;
+                    $out .= $pad("{$dim}… {$remaining} more failures{$r}");
+                    break;
+                }
+                $error = mb_substr($agent->error ?? 'unknown', 0, 30);
+                $retryTag = $agent->retries > 0 ? "  {$red}exhausted{$r}" : '';
+                $type = str_pad(ucfirst($agent->agentType), 8);
+                $task = str_pad(mb_substr($agent->task, 0, 22), 22);
+                $out .= $pad("{$red}✗{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$dim}{$error}{$r}{$retryTag}");
+                $shown++;
+            }
+            $out .= $blank;
+        }
+
+        // ├─ By Type ─┤
+        if (count($s['byType']) > 1) {
+            $out .= $sectionHdr('◈', 'By Type');
+            $out .= $blank;
+
+            $totalTokens = $s['tokensIn'] + $s['tokensOut'];
+            foreach ($s['byType'] as $type => $t) {
+                $typeName = str_pad(ucfirst($type), 10);
+                $typeCost = ($s['cost'] > 0 && $totalTokens > 0)
+                    ? Theme::formatCost($s['cost'] * ($t['tokensIn'] + $t['tokensOut']) / $totalTokens)
+                    : Theme::formatCost(0.0);
+                $out .= $pad("{$cyan}{$typeName}{$r} {$green}{$t['done']} done{$r}  ·  {$gold}{$t['running']} running{$r}  ·  {$dim}{$t['queued']} queued{$r}  ·  {$white}{$typeCost}{$r}");
+            }
+            $out .= $blank;
+        }
+
+        // └ Bottom border ┘
+        $out .= "{$border}  └{$hr}┘{$r}\n\n";
+
+        return $out;
+    }
+
+    private function dashFormatAgentLine(SubagentStats $agent): string
+    {
+        $r = Theme::reset();
+        $gold = Theme::accent();
+        $dim = Theme::dim();
+        $text = Theme::text();
+
+        $icon = $agent->status === 'retrying' ? '↻' : '●';
+        $type = str_pad(ucfirst($agent->agentType), 8);
+        $task = str_pad(mb_substr($agent->task, 0, 22), 22);
+
+        $barWidth = 16;
+        $ratio = min($agent->elapsed() / 120.0, 1.0);
+        $filled = (int) round($ratio * $barWidth);
+        $empty = $barWidth - $filled;
+
+        $elapsed = str_pad((int) $agent->elapsed().'s', 5);
+        $tools = $agent->toolCalls.' tool'.($agent->toolCalls !== 1 ? 's' : '');
+        $retryNote = $agent->status === 'retrying' ? "  retry #{$agent->retries}" : '';
+
+        return "{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $filled)."{$dim}".str_repeat('░', $empty)."{$r}  {$dim}{$elapsed} {$tools}{$retryNote}{$r}";
+    }
+
+    private function dashFormatElapsed(float $seconds): string
+    {
+        if ($seconds < 60) {
+            return (int) $seconds.'s';
+        }
+        if ($seconds < 3600) {
+            return (int) ($seconds / 60).'m '.(int) ($seconds % 60).'s';
+        }
+
+        return (int) ($seconds / 3600).'h '.(int) (($seconds % 3600) / 60).'m';
     }
 
     public function teardown(): void
@@ -695,7 +879,7 @@ class AnsiRenderer implements RendererInterface
         echo "  {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}\n";
         echo "  {$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$dim}  {$cyan}/tasks clear{$r}  {$dim}Context and session management{$r}\n";
         $muted = Theme::rgb(160, 160, 170);
-        echo "  {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}\n";
+        echo "  {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$dim}  {$muted}/agents{$r}  {$dim}Configuration and monitoring{$r}\n";
         echo "  {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}\n";
         echo "\n";
         echo "  {$text}Type a message to begin. Press {$white}Ctrl+C{$text} to exit.{$r}\n\n";

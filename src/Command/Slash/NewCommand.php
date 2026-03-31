@@ -27,6 +27,11 @@ class NewCommand implements SlashCommand
         return 'Clear conversation and start new session';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->agentLoop->history()->clear();

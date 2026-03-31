@@ -26,6 +26,11 @@ class ResumeCommand implements SlashCommand
         return 'Resume a previous session';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $sessionId = null;

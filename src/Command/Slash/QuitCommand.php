@@ -26,6 +26,11 @@ class QuitCommand implements SlashCommand
         return 'Exit the agent';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->ui->teardown();

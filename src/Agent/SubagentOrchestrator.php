@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\DeferredCancellation;
 use Amp\Future;
+use Amp\Http\Client\HttpException;
 use Amp\Sync\LocalSemaphore;
+use Kosmokrator\LLM\RetryableHttpException;
 use Psr\Log\LoggerInterface;
 
 use function Amp\async;
@@ -25,15 +28,25 @@ class SubagentOrchestrator
     /** @var array<string, SubagentStats> */
     private array $stats = [];
 
-    /** @var array<string, string> Completed background results not yet consumed */
+    /** @var array<string, array<string, string>> Completed background results keyed by parent ID: parentId => [agentId => result] */
     private array $pendingResults = [];
 
+    /** @var array<string, DeferredCancellation> Background agent cancellation tokens */
+    private array $cancellations = [];
+
     private int $autoIdCounter = 0;
+
+    private ?LocalSemaphore $globalSemaphore;
 
     public function __construct(
         private readonly LoggerInterface $log,
         private readonly int $maxDepth = 3,
-    ) {}
+        private readonly int $concurrency = 10,
+        private readonly int $maxRetries = 2,
+    ) {
+        // LocalSemaphore requires maxLocks >= 1, so 0 = unlimited (no semaphore)
+        $this->globalSemaphore = $concurrency > 0 ? new LocalSemaphore($concurrency) : null;
+    }
 
     public function getMaxDepth(): int
     {
@@ -64,7 +77,14 @@ class SubagentOrchestrator
             throw new \InvalidArgumentException("Agent ID '{$id}' already exists. Use a unique ID.");
         }
 
-        $childContext = $parentContext->childContext($childType, $id, $task);
+        $agentCancellation = null;
+        if ($mode === 'background') {
+            $deferred = new DeferredCancellation;
+            $this->cancellations[$id] = $deferred;
+            $agentCancellation = $deferred->getCancellation();
+        }
+
+        $childContext = $parentContext->childContext($childType, $id, $task, $agentCancellation);
 
         $stats = new SubagentStats($id);
         $stats->task = mb_substr($task, 0, 200);
@@ -74,6 +94,14 @@ class SubagentOrchestrator
         $stats->parentId = $parentContext->id;
         $stats->depth = $childContext->depth;
         $this->stats[$id] = $stats;
+
+        // Detect circular dependencies before spawning
+        if ($dependsOn !== [] && $this->wouldCreateCycle($id, $dependsOn)) {
+            unset($this->stats[$id]);
+            throw new \InvalidArgumentException(
+                "Circular dependency detected: agent '{$id}' would create a cycle with depends_on=[".implode(', ', $dependsOn).']'
+            );
+        }
 
         $this->log->info('Spawning subagent', [
             'id' => $id,
@@ -88,6 +116,7 @@ class SubagentOrchestrator
 
         $future = async(function () use ($childContext, $task, $id, $dependsOn, $group, $mode, $stats, $agentFactory) {
             $lock = null;
+            $globalLock = null;
 
             try {
                 // 1. Wait for dependencies
@@ -133,7 +162,15 @@ class SubagentOrchestrator
                     }
                 }
 
-                // 2. Acquire group semaphore (sequential within group)
+                // 2. Acquire global concurrency semaphore
+                if ($this->globalSemaphore !== null) {
+                    $stats->status = 'queued_global';
+                    $this->log->debug("Agent '{$id}' waiting for global semaphore", ['concurrency' => $this->concurrency]);
+                    $globalLock = $this->globalSemaphore->acquire();
+                    $this->log->debug("Agent '{$id}' acquired global semaphore");
+                }
+
+                // 3. Acquire group semaphore (sequential within group)
                 if ($group !== null) {
                     $stats->status = 'queued';
                     $this->log->debug("Agent '{$id}' waiting for group semaphore", ['group' => $group]);
@@ -144,7 +181,50 @@ class SubagentOrchestrator
                 $stats->status = 'running';
                 $stats->startTime = microtime(true);
 
-                $result = $agentFactory($childContext, $task);
+                $result = null;
+                $lastError = null;
+
+                for ($attempt = 0; $attempt <= $this->maxRetries; $attempt++) {
+                    if ($attempt > 0) {
+                        $stats->status = 'retrying';
+                        $stats->retries = $attempt;
+                        $delay = $this->retryDelay($attempt);
+                        $this->log->warning("Retrying agent '{$id}' (attempt {$attempt}/{$this->maxRetries})", [
+                            'delay' => round($delay, 1),
+                            'last_error' => $lastError,
+                        ]);
+                        \Amp\delay($delay);
+                        $stats->status = 'running';
+                    }
+
+                    try {
+                        $result = $agentFactory($childContext, $task);
+                    } catch (\Throwable $e) {
+                        $lastError = $e->getMessage();
+                        if ($attempt < $this->maxRetries && $this->isRetryableException($e)) {
+                            $this->log->warning("Subagent '{$id}' threw retryable exception", [
+                                'attempt' => $attempt + 1,
+                                'error' => $e->getMessage(),
+                            ]);
+
+                            continue;
+                        }
+
+                        throw $e;
+                    }
+
+                    if ($this->isRetryableResult($result) && $attempt < $this->maxRetries) {
+                        $lastError = $result;
+                        $this->log->warning("Subagent '{$id}' returned retryable error", [
+                            'attempt' => $attempt + 1,
+                            'result' => mb_substr($result, 0, 100),
+                        ]);
+
+                        continue;
+                    }
+
+                    break;
+                }
 
                 // Detect cancelled agents — they return '(cancelled)' without throwing
                 if ($result === '(cancelled)') {
@@ -169,10 +249,11 @@ class SubagentOrchestrator
                     'tokens_out' => $stats->tokensOut,
                     'elapsed' => round($stats->elapsed(), 2),
                     'result_length' => strlen($result),
+                    'retries' => $stats->retries,
                 ]);
 
                 if ($mode === 'background') {
-                    $this->pendingResults[$id] = $result;
+                    $this->pendingResults[$stats->parentId][$id] = $result;
                 }
 
                 return $result;
@@ -191,7 +272,7 @@ class SubagentOrchestrator
 
                 // Inject failure as a pending result so the parent is notified
                 if ($mode === 'background') {
-                    $this->pendingResults[$id] = "Error: Agent '{$id}' failed — {$e->getMessage()}";
+                    $this->pendingResults[$stats->parentId][$id] = "Error: Agent '{$id}' failed — {$e->getMessage()}";
                 }
 
                 throw $e;
@@ -200,6 +281,11 @@ class SubagentOrchestrator
                     $lock->release();
                     $this->log->debug("Agent '{$id}' released group semaphore", ['group' => $group]);
                 }
+                if ($globalLock !== null) {
+                    $globalLock->release();
+                    $this->log->debug("Agent '{$id}' released global semaphore");
+                }
+                unset($this->cancellations[$id]);
             }
         });
 
@@ -209,16 +295,59 @@ class SubagentOrchestrator
     }
 
     /**
-     * Drain and return all completed background results.
+     * Detect if adding dependsOn edges from $id would create a cycle.
+     * DFS: can any node in $dependsOn reach $id through existing edges?
      *
-     * @return array<string, string> id => result text
+     * @param  string[]  $dependsOn
      */
-    public function collectPendingResults(): array
+    private function wouldCreateCycle(string $id, array $dependsOn): bool
     {
-        $results = $this->pendingResults;
+        $visited = [];
+        $stack = $dependsOn;
+
+        while ($stack !== []) {
+            $current = array_pop($stack);
+
+            if ($current === $id) {
+                return true;
+            }
+
+            if (isset($visited[$current])) {
+                continue;
+            }
+            $visited[$current] = true;
+
+            $existingDeps = $this->stats[$current]->dependsOn ?? [];
+            foreach ($existingDeps as $dep) {
+                $stack[] = $dep;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Drain and return completed background results for a specific parent.
+     *
+     * @return array<string, string> agentId => result text
+     */
+    public function collectPendingResults(?string $parentId = null): array
+    {
+        if ($parentId !== null) {
+            $results = $this->pendingResults[$parentId] ?? [];
+            unset($this->pendingResults[$parentId]);
+
+            return $results;
+        }
+
+        // Legacy: drain all buckets (for contexts that don't pass parentId)
+        $all = [];
+        foreach ($this->pendingResults as $bucket) {
+            $all = array_merge($all, $bucket);
+        }
         $this->pendingResults = [];
 
-        return $results;
+        return $all;
     }
 
     public function getGroupSemaphore(string $name): LocalSemaphore
@@ -255,8 +384,106 @@ class SubagentOrchestrator
         return ['in' => $in, 'out' => $out];
     }
 
+    public function getConcurrency(): int
+    {
+        return $this->concurrency;
+    }
+
+    public function getMaxRetries(): int
+    {
+        return $this->maxRetries;
+    }
+
+    /**
+     * Cancel all running background agents. Called on session quit / Ctrl+C.
+     */
+    public function cancelAll(): void
+    {
+        foreach ($this->cancellations as $id => $deferred) {
+            $this->log->info("Cancelling background agent '{$id}'");
+            $deferred->cancel();
+        }
+    }
+
     public function generateId(): string
     {
         return 'agent-'.++$this->autoIdCounter;
+    }
+
+    /**
+     * Determine if an error result from runHeadless() is worth retrying.
+     *
+     * Retryable: "Error: ..." prefix (context overflow, transient LLM errors).
+     * NOT retryable: "(cancelled)", "(forced return: ...)", auth/key errors.
+     */
+    private function isRetryableResult(string $result): bool
+    {
+        if (str_starts_with($result, '(cancelled)')) {
+            return false;
+        }
+
+        if (str_contains($result, '(forced return:')) {
+            return false;
+        }
+
+        if (str_starts_with($result, 'Error:')) {
+            $lower = strtolower($result);
+
+            if (str_contains($lower, 'invalid api key')
+                || str_contains($lower, 'authentication')
+                || str_contains($lower, 'unauthorized')
+                || str_contains($lower, '401')
+                || str_contains($lower, '403')
+            ) {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine if a thrown exception is worth retrying at the agent level.
+     * Uses a whitelist approach: only known transient failures are retried.
+     */
+    private function isRetryableException(\Throwable $e): bool
+    {
+        // LLM retryable HTTP errors (429, 5xx) — always retry
+        if ($e instanceof RetryableHttpException) {
+            return true;
+        }
+
+        // Network-level failures (timeouts, connection resets) — always retry
+        if ($e instanceof HttpException) {
+            return true;
+        }
+
+        // Generic RuntimeExceptions from API calls — retry unless auth-related
+        if ($e instanceof \RuntimeException) {
+            $msg = strtolower($e->getMessage());
+
+            return ! (
+                str_contains($msg, 'unknown dependency')
+                || str_contains($msg, '401')
+                || str_contains($msg, '403')
+                || str_contains($msg, 'authentication')
+                || str_contains($msg, 'unauthorized')
+            );
+        }
+
+        // Everything else (TypeError, LogicException, InvalidArgumentException, etc.) — no retry
+        return false;
+    }
+
+    /**
+     * Exponential backoff with jitter for agent-level retries.
+     */
+    private function retryDelay(int $attempt): float
+    {
+        $base = min((int) pow(2, $attempt), 30);
+
+        return (float) ($base + random_int(0, max(1, (int) ($base * 0.3))));
     }
 }

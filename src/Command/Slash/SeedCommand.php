@@ -26,6 +26,11 @@ class SeedCommand implements SlashCommand
         return 'Seed mock session (dev)';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->ui->seedMockSession();

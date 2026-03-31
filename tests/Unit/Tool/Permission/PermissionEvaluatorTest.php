@@ -372,4 +372,66 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertSame(PermissionAction::Ask, $result->action);
         $this->assertFalse($result->autoApproved);
     }
+
+    // --- H3: Deny patterns before session grants ---
+
+    public function test_session_grant_does_not_override_deny_pattern(): void
+    {
+        $rules = [
+            new PermissionRule('bash', PermissionAction::Ask, ['rm -rf /']),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+        $evaluator->grantSession('bash');
+
+        // Granted, but deny pattern should still block
+        $result = $evaluator->evaluate('bash', ['command' => 'rm -rf /']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+        $this->assertStringContainsString('rm -rf /', $result->reason);
+    }
+
+    public function test_deny_pattern_blocks_even_in_prometheus_mode_with_grant(): void
+    {
+        $rules = [
+            new PermissionRule('bash', PermissionAction::Ask, ['rm -rf /']),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+        $evaluator->setPermissionMode(PermissionMode::Prometheus);
+        $evaluator->grantSession('bash');
+
+        // Prometheus + session grant, but deny pattern is absolute
+        $result = $evaluator->evaluate('bash', ['command' => 'rm -rf /']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+    }
+
+    public function test_session_grant_still_overrides_ask(): void
+    {
+        $rules = [
+            new PermissionRule('bash', PermissionAction::Ask, ['rm -rf /']),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+        $evaluator->setPermissionMode(PermissionMode::Argus);
+        $evaluator->grantSession('bash');
+
+        // Safe command: granted, should pass
+        $result = $evaluator->evaluate('bash', ['command' => 'git status']);
+        $this->assertSame(PermissionAction::Allow, $result->action);
+
+        // Blocked command: deny pattern still applies
+        $blocked = $evaluator->evaluate('bash', ['command' => 'rm -rf /']);
+        $this->assertSame(PermissionAction::Deny, $blocked->action);
+    }
+
+    public function test_no_deny_patterns_grant_works_normally(): void
+    {
+        $rules = [
+            new PermissionRule('file_write', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+        $evaluator->setPermissionMode(PermissionMode::Argus);
+        $evaluator->grantSession('file_write');
+
+        // No deny patterns on file_write — grant should work
+        $result = $evaluator->evaluate('file_write', ['path' => '/tmp/test']);
+        $this->assertSame(PermissionAction::Allow, $result->action);
+    }
 }

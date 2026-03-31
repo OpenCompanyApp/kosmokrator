@@ -26,6 +26,11 @@ class ClearCommand implements SlashCommand
         return 'Clear the terminal screen';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         echo "\033[2J\033[H";

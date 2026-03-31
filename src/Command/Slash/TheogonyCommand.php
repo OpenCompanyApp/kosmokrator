@@ -26,6 +26,11 @@ class TheogonyCommand implements SlashCommand
         return 'Play the Theogony';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->ui->playTheogony();

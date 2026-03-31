@@ -31,6 +31,11 @@ class ModeCommand implements SlashCommand
         return "Switch to {$this->mode->label()} mode";
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->agentLoop->setMode($this->mode);

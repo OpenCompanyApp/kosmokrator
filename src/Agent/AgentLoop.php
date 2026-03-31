@@ -659,6 +659,16 @@ class AgentLoop
     /**
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
      */
+    /**
+     * Build the full live agent tree from orchestrator stats (root-level agents + all children).
+     *
+     * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
+     */
+    public function buildLiveAgentTree(): array
+    {
+        return $this->buildChildTree('root');
+    }
+
     private function buildChildTree(string $parentId): array
     {
         if ($this->agentContext === null) {
@@ -951,7 +961,7 @@ class AgentLoop
             return;
         }
 
-        $results = $this->agentContext->orchestrator->collectPendingResults();
+        $results = $this->agentContext->orchestrator->collectPendingResults($this->agentContext->id);
         if (empty($results)) {
             return;
         }

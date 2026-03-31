@@ -17,10 +17,18 @@ KosmoKrator is a mythology-themed AI coding agent that runs in your terminal. It
 
 Built with **PHP 8.4**, **Symfony Console**, and a dual renderer (interactive TUI / ANSI fallback). Supports multiple LLM providers via OpenAI-compatible APIs.
 
+## Prerequisites
+
+- **PHP 8.4+** with the `pcntl`, `posix`, and `mbstring` extensions
+- **Composer 2.x**
+- A terminal with ANSI color support (TUI mode requires a modern terminal like iTerm2, Kitty, or Windows Terminal)
+
 ## Quick Start
 
 ```bash
-# Install
+# Clone and install
+git clone https://github.com/opencompany/kosmokrator.git
+cd kosmokrator
 composer install
 
 # Configure your API key and provider

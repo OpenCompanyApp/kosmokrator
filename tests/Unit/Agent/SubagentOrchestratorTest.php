@@ -2,11 +2,14 @@
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Amp\CancelledException;
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
+use Kosmokrator\LLM\RetryableHttpException;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Revolt\EventLoop;
 
 class SubagentOrchestratorTest extends TestCase
 {
@@ -16,10 +19,21 @@ class SubagentOrchestratorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->orchestrator = new SubagentOrchestrator(new NullLogger, 3);
+        $this->orchestrator = new SubagentOrchestrator(new NullLogger, 3, maxRetries: 0);
         $this->rootContext = new AgentContext(
             AgentType::General, 0, 3, $this->orchestrator, 'root', '',
         );
+    }
+
+    protected function tearDown(): void
+    {
+        // Suppress unhandled future errors from agents that were cancelled/abandoned during tests.
+        // These futures resolve with errors in the event loop after the test completes.
+        $this->orchestrator->cancelAll();
+        $previousHandler = EventLoop::setErrorHandler(function (\Throwable $e) {});
+        // Give the event loop a tick to process pending cancellations
+        \Amp\delay(0.01);
+        EventLoop::setErrorHandler($previousHandler);
     }
 
     public function test_spawn_returns_future(): void
@@ -50,7 +64,7 @@ class SubagentOrchestratorTest extends TestCase
         );
         $future->await(); // Wait for it to actually complete
 
-        $pending = $this->orchestrator->collectPendingResults();
+        $pending = $this->orchestrator->collectPendingResults('root');
         $this->assertArrayHasKey('bg-1', $pending);
         $this->assertSame('bg result', $pending['bg-1']);
     }
@@ -63,10 +77,10 @@ class SubagentOrchestratorTest extends TestCase
         );
         $future->await();
 
-        $first = $this->orchestrator->collectPendingResults();
+        $first = $this->orchestrator->collectPendingResults('root');
         $this->assertCount(1, $first);
 
-        $second = $this->orchestrator->collectPendingResults();
+        $second = $this->orchestrator->collectPendingResults('root');
         $this->assertEmpty($second);
     }
 
@@ -241,6 +255,654 @@ class SubagentOrchestratorTest extends TestCase
         // Grandchild: depth 2, parentId = parent-1
         $this->assertSame('parent-1', $stats['grandchild-1']->parentId);
         $this->assertSame(2, $stats['grandchild-1']->depth);
+    }
+
+    public function test_concurrency_limits_parallel_agents(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $running = 0;
+        $maxRunning = 0;
+
+        $factory = function ($ctx, $task) use (&$running, &$maxRunning) {
+            $running++;
+            $maxRunning = max($maxRunning, $running);
+            // Yield to allow other fibers to attempt acquire
+            \Amp\delay(0.01);
+            $running--;
+
+            return 'done';
+        };
+
+        $futures = [];
+        for ($i = 0; $i < 3; $i++) {
+            $futures[] = $orchestrator->spawnAgent(
+                $context, "task-{$i}", AgentType::Explore, 'await', "c-{$i}", [], null, $factory,
+            );
+        }
+
+        // Await all
+        foreach ($futures as $f) {
+            $f->await();
+        }
+
+        $this->assertSame(1, $maxRunning, 'Only 1 agent should run at a time with concurrency=1');
+    }
+
+    public function test_concurrency_zero_means_unlimited(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 0, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $running = 0;
+        $maxRunning = 0;
+
+        $factory = function ($ctx, $task) use (&$running, &$maxRunning) {
+            $running++;
+            $maxRunning = max($maxRunning, $running);
+            \Amp\delay(0.01);
+            $running--;
+
+            return 'done';
+        };
+
+        $futures = [];
+        for ($i = 0; $i < 5; $i++) {
+            $futures[] = $orchestrator->spawnAgent(
+                $context, "task-{$i}", AgentType::Explore, 'await', "u-{$i}", [], null, $factory,
+            );
+        }
+
+        foreach ($futures as $f) {
+            $f->await();
+        }
+
+        $this->assertGreaterThan(1, $maxRunning, 'With concurrency=0, multiple agents should run in parallel');
+    }
+
+    public function test_stats_show_queued_global(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $observedStatus = null;
+
+        // First agent blocks so second must queue
+        $orchestrator->spawnAgent(
+            $context, 'blocker', AgentType::Explore, 'await', 'blocker', [], null,
+            function ($ctx, $task) use ($orchestrator, &$observedStatus) {
+                // While this runs, check second agent's status
+                \Amp\delay(0.01);
+                $observedStatus = $orchestrator->getStats('waiter')?->status;
+
+                return 'done';
+            },
+        );
+
+        $orchestrator->spawnAgent(
+            $context, 'waiter', AgentType::Explore, 'background', 'waiter', [], null,
+            fn ($ctx, $task) => 'done',
+        );
+
+        // Wait a tick for both fibers to start
+        \Amp\delay(0.05);
+
+        $this->assertSame('queued_global', $observedStatus);
+    }
+
+    public function test_global_semaphore_released_on_failure(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        // First agent fails
+        $f1 = $orchestrator->spawnAgent(
+            $context, 'fail', AgentType::Explore, 'await', 'fail-g', [], null,
+            fn ($ctx, $task) => throw new \RuntimeException('boom'),
+        );
+
+        try {
+            $f1->await();
+        } catch (\RuntimeException) {
+        }
+
+        // Second agent should be able to acquire the semaphore (not deadlocked)
+        $f2 = $orchestrator->spawnAgent(
+            $context, 'after-fail', AgentType::Explore, 'await', 'after-g', [], null,
+            fn ($ctx, $task) => 'ok',
+        );
+
+        $this->assertSame('ok', $f2->await());
+    }
+
+    public function test_get_concurrency_returns_configured_value(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 25, 0);
+        $this->assertSame(25, $orchestrator->getConcurrency());
+    }
+
+    public function test_retry_succeeds_on_second_attempt(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'flaky task', AgentType::Explore, 'await', 'retry-1', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                if ($attempt === 1) {
+                    return 'Error: context overflow after 3 trim attempts';
+                }
+
+                return 'success on retry';
+            },
+        );
+
+        $result = $future->await();
+        $this->assertSame('success on retry', $result);
+        $this->assertSame(2, $attempt);
+
+        $stats = $orchestrator->getStats('retry-1');
+        $this->assertSame('done', $stats->status);
+        $this->assertSame(1, $stats->retries);
+    }
+
+    public function test_non_retryable_result_skips_retry(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'cancelled task', AgentType::Explore, 'await', 'noretry-1', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+
+                return '(cancelled)';
+            },
+        );
+
+        $result = $future->await();
+        $this->assertSame('(cancelled)', $result);
+        $this->assertSame(1, $attempt);
+        $this->assertSame('cancelled', $orchestrator->getStats('noretry-1')->status);
+        $this->assertSame(0, $orchestrator->getStats('noretry-1')->retries);
+    }
+
+    public function test_max_retries_exhausted(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'always fails', AgentType::Explore, 'await', 'exhaust-1', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+
+                return 'Error: something broke';
+            },
+        );
+
+        $result = $future->await();
+        $this->assertSame('Error: something broke', $result);
+        $this->assertSame(3, $attempt); // original + 2 retries
+
+        $stats = $orchestrator->getStats('exhaust-1');
+        $this->assertSame('done', $stats->status);
+        $this->assertSame(2, $stats->retries);
+    }
+
+    public function test_stats_track_retry_count(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 3);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'flaky', AgentType::Explore, 'await', 'stats-retry', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                if ($attempt <= 2) {
+                    return 'Error: transient failure';
+                }
+
+                return 'recovered';
+            },
+        );
+
+        $result = $future->await();
+        $this->assertSame('recovered', $result);
+
+        $stats = $orchestrator->getStats('stats-retry');
+        $this->assertSame(2, $stats->retries);
+        $this->assertSame('done', $stats->status);
+    }
+
+    public function test_exception_retry_succeeds(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 1);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'exception retry', AgentType::Explore, 'await', 'exc-retry', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                if ($attempt === 1) {
+                    throw new \RuntimeException('transient factory error');
+                }
+
+                return 'recovered from exception';
+            },
+        );
+
+        $result = $future->await();
+        $this->assertSame('recovered from exception', $result);
+        $this->assertSame(2, $attempt);
+        $this->assertSame(1, $orchestrator->getStats('exc-retry')->retries);
+    }
+
+    public function test_non_retryable_exception_skips_retry(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'bad config', AgentType::Explore, 'await', 'noretry-exc', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+
+                throw new \InvalidArgumentException('permanent error');
+            },
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('permanent error');
+        $future->await();
+
+        // Only 1 attempt — no retry for non-retryable exceptions
+        $this->assertSame(1, $attempt);
+    }
+
+    public function test_auth_error_401_not_retried(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'auth fail', AgentType::Explore, 'await', 'auth-401', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                throw new \RuntimeException('API error (401): Unauthorized');
+            },
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('API error (401)');
+        $future->await();
+
+        $this->assertSame(1, $attempt);
+    }
+
+    public function test_auth_error_403_not_retried(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'forbidden', AgentType::Explore, 'await', 'auth-403', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                throw new \RuntimeException('API error (403): Forbidden');
+            },
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('API error (403)');
+        $future->await();
+
+        $this->assertSame(1, $attempt);
+    }
+
+    public function test_type_error_not_retried(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'type error', AgentType::Explore, 'await', 'type-err', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                throw new \TypeError('str_replace(): Argument #1 must be of type string');
+            },
+        );
+
+        $this->expectException(\TypeError::class);
+        $future->await();
+
+        $this->assertSame(1, $attempt);
+    }
+
+    public function test_retryable_http_exception_is_retried(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'rate limited', AgentType::Explore, 'await', 'retry-http', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                if ($attempt === 1) {
+                    throw new RetryableHttpException(429, 'Rate limited');
+                }
+
+                return 'recovered';
+            },
+        );
+
+        $result = $future->await();
+        $this->assertSame('recovered', $result);
+        $this->assertSame(2, $attempt);
+    }
+
+    public function test_background_agent_gets_dedicated_cancellation(): void
+    {
+        $bgCancellation = null;
+        $awaitCancellation = 'unset';
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'bg task', AgentType::Explore, 'background', 'bg-cancel', [], null,
+            function ($ctx, $task) use (&$bgCancellation) {
+                $bgCancellation = $ctx->cancellation;
+
+                return 'done';
+            },
+        )->await();
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'await task', AgentType::Explore, 'await', 'await-cancel', [], null,
+            function ($ctx, $task) use (&$awaitCancellation) {
+                $awaitCancellation = $ctx->cancellation;
+
+                return 'done';
+            },
+        )->await();
+
+        $this->assertNotNull($bgCancellation, 'Background agent should get a dedicated cancellation token');
+        $this->assertNull($awaitCancellation, 'Await agent should have null cancellation (uses parent closure)');
+    }
+
+    public function test_cancel_all_cancels_background_agents(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $f1 = $orchestrator->spawnAgent(
+            $context, 'long bg 1', AgentType::Explore, 'background', 'cancel-1', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(10, cancellation: $ctx->cancellation);
+
+                return 'should not reach';
+            },
+        );
+
+        $f2 = $orchestrator->spawnAgent(
+            $context, 'long bg 2', AgentType::Explore, 'background', 'cancel-2', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(10, cancellation: $ctx->cancellation);
+
+                return 'should not reach';
+            },
+        );
+
+        // Let fibers start
+        \Amp\delay(0.01);
+
+        $orchestrator->cancelAll();
+
+        // Both should throw CancelledException
+        try {
+            $f1->await();
+            $this->fail('Expected CancelledException for cancel-1');
+        } catch (CancelledException) {
+            // expected
+        }
+
+        try {
+            $f2->await();
+            $this->fail('Expected CancelledException for cancel-2');
+        } catch (CancelledException) {
+            // expected
+        }
+
+        $this->assertSame('failed', $orchestrator->getStats('cancel-1')->status);
+        $this->assertSame('failed', $orchestrator->getStats('cancel-2')->status);
+    }
+
+    public function test_cancel_all_does_not_affect_await_agents(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $future = $orchestrator->spawnAgent(
+            $context, 'await task', AgentType::Explore, 'await', 'await-safe', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(0.05);
+
+                return 'completed safely';
+            },
+        );
+
+        // Cancel background agents (there are none, but this tests that await is unaffected)
+        $orchestrator->cancelAll();
+
+        $this->assertSame('completed safely', $future->await());
+    }
+
+    public function test_cancellation_cleanup_after_completion(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'bg', AgentType::Explore, 'background', 'cleanup-1', [], null,
+            fn ($ctx, $task) => 'done',
+        )->await();
+
+        // cancelAll after completion should not throw — token was cleaned up in finally
+        $this->orchestrator->cancelAll();
+
+        $this->assertSame('done', $this->orchestrator->getStats('cleanup-1')->status);
+    }
+
+    // --- H1: Background result scoping ---
+
+    public function test_background_results_scoped_by_parent(): void
+    {
+        // Root spawns bg-A and bg-B — results should appear under 'root'
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'task A', AgentType::Explore, 'background', 'bg-A', [], null,
+            fn ($ctx, $task) => 'result-A',
+        )->await();
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'task B', AgentType::Explore, 'background', 'bg-B', [], null,
+            fn ($ctx, $task) => 'result-B',
+        )->await();
+
+        $rootResults = $this->orchestrator->collectPendingResults('root');
+        $this->assertCount(2, $rootResults);
+        $this->assertSame('result-A', $rootResults['bg-A']);
+        $this->assertSame('result-B', $rootResults['bg-B']);
+    }
+
+    public function test_nested_agent_cannot_drain_sibling_results(): void
+    {
+        // Root spawns bg-A (background) and await-C.
+        // await-C spawns bg-C1 (background).
+        // await-C should only see bg-C1, not bg-A.
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'root child', AgentType::Explore, 'background', 'bg-A', [], null,
+            fn ($ctx, $task) => 'result-A',
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'nested parent', AgentType::General, 'await', 'await-C', [], null,
+            function ($ctx, $task) {
+                // Spawn a child of this agent
+                $this->orchestrator->spawnAgent(
+                    $ctx, 'nested child', AgentType::Explore, 'background', 'bg-C1', [], null,
+                    fn ($ctx2, $task2) => 'result-C1',
+                )->await();
+
+                // This agent should only see its own children, not siblings
+                $myResults = $this->orchestrator->collectPendingResults('await-C');
+                // The child result was already drained by the time we check —
+                // but it should have been under 'await-C', not under 'root'
+
+                return 'nested-done';
+            },
+        )->await();
+
+        // Root should still see bg-A
+        $rootResults = $this->orchestrator->collectPendingResults('root');
+        $this->assertCount(1, $rootResults);
+        $this->assertArrayHasKey('bg-A', $rootResults);
+        $this->assertSame('result-A', $rootResults['bg-A']);
+
+        // await-C's bucket should be empty (already drained by await-C itself)
+        $cResults = $this->orchestrator->collectPendingResults('await-C');
+        $this->assertEmpty($cResults);
+    }
+
+    public function test_collect_pending_legacy_drain_all(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'task', AgentType::Explore, 'background', 'legacy-1', [], null,
+            fn ($ctx, $task) => 'result',
+        )->await();
+
+        // Calling without parentId drains all buckets
+        $all = $this->orchestrator->collectPendingResults();
+        $this->assertCount(1, $all);
+        $this->assertArrayHasKey('legacy-1', $all);
+    }
+
+    public function test_background_failure_scoped_by_parent(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'fail task', AgentType::Explore, 'background', 'fail-bg', [], null,
+            fn ($ctx, $task) => throw new \RuntimeException('boom'),
+        );
+
+        // Let it complete
+        \Amp\delay(0.05);
+
+        $results = $this->orchestrator->collectPendingResults('root');
+        $this->assertArrayHasKey('fail-bg', $results);
+        $this->assertStringContainsString('boom', $results['fail-bg']);
+    }
+
+    // --- H2: Cycle detection ---
+
+    public function test_circular_dependency_throws(): void
+    {
+        // Register A with dependency on B (B doesn't exist yet — registration succeeds, runtime will fail)
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'agent A', AgentType::Explore, 'await', 'circ-A', ['circ-B'], null,
+            fn ($ctx, $task) => 'result-A',
+        );
+
+        // Registering B with depends_on=['circ-A'] should detect the cycle A→B→A
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Circular dependency');
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'agent B', AgentType::Explore, 'await', 'circ-B', ['circ-A'], null,
+            fn ($ctx, $task) => 'result-B',
+        );
+    }
+
+    public function test_self_dependency_throws(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Circular dependency');
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'self dep', AgentType::Explore, 'await', 'self-1', ['self-1'], null,
+            fn ($ctx, $task) => 'never',
+        );
+    }
+
+    public function test_transitive_cycle_detected(): void
+    {
+        // A → B → C → A (transitive cycle)
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'A', AgentType::Explore, 'await', 'tc-A', ['tc-B'], null,
+            fn ($ctx, $task) => 'A',
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'B', AgentType::Explore, 'await', 'tc-B', ['tc-C'], null,
+            fn ($ctx, $task) => 'B',
+        );
+
+        // C depends on A — closes the cycle A→B→C→A
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Circular dependency');
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'C', AgentType::Explore, 'await', 'tc-C', ['tc-A'], null,
+            fn ($ctx, $task) => 'C',
+        );
+    }
+
+    public function test_valid_diamond_no_cycle(): void
+    {
+        // A depends on B and C, both B and C depend on D. No cycle.
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'D', AgentType::Explore, 'background', 'dia-D', [], null,
+            fn ($ctx, $task) => 'D',
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'B', AgentType::Explore, 'background', 'dia-B', ['dia-D'], null,
+            fn ($ctx, $task) => 'B',
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'C', AgentType::Explore, 'background', 'dia-C', ['dia-D'], null,
+            fn ($ctx, $task) => 'C',
+        );
+
+        // A depends on B and C — should NOT throw
+        $future = $this->orchestrator->spawnAgent(
+            $this->rootContext, 'A', AgentType::Explore, 'await', 'dia-A', ['dia-B', 'dia-C'], null,
+            fn ($ctx, $task) => 'A',
+        );
+
+        $this->assertSame('A', $future->await());
+    }
+
+    public function test_cycle_detection_cleans_up_stats(): void
+    {
+        try {
+            $this->orchestrator->spawnAgent(
+                $this->rootContext, 'self', AgentType::Explore, 'await', 'clean-1', ['clean-1'], null,
+                fn ($ctx, $task) => 'never',
+            );
+        } catch (\InvalidArgumentException) {
+            // expected
+        }
+
+        // Stats should be cleaned up — the agent was never actually registered
+        $this->assertNull($this->orchestrator->getStats('clean-1'));
     }
 
     /**

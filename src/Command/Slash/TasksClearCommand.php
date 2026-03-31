@@ -26,6 +26,11 @@ class TasksClearCommand implements SlashCommand
         return 'Remove all tasks';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $count = count($ctx->taskStore->all());

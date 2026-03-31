@@ -27,6 +27,11 @@ class ArgusCommand implements SlashCommand
         return 'Switch to Argus permission mode';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->permissions->setPermissionMode(PermissionMode::Argus);

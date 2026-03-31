@@ -26,6 +26,11 @@ class CompactCommand implements SlashCommand
         return 'Force context compaction';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->agentLoop->performCompaction();

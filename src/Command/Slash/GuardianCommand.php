@@ -27,6 +27,11 @@ class GuardianCommand implements SlashCommand
         return 'Switch to Guardian permission mode';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->permissions->setPermissionMode(PermissionMode::Guardian);

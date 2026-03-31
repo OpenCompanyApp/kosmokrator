@@ -46,7 +46,7 @@ class SubagentFactory
     public function createAndRunAgent(AgentContext $context, string $task): string
     {
         $llm = $this->createLlmClient();
-        $ui = new NullRenderer($this->rootCancellation);
+        $ui = new NullRenderer($context->cancellation ?? $this->rootCancellation);
         $systemPrompt = $this->buildSystemPrompt($context);
         $llm->setSystemPrompt($systemPrompt);
 

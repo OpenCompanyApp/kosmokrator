@@ -77,6 +77,8 @@ class NullRenderer implements RendererInterface
         return null;
     }
 
+    public function setImmediateCommandHandler(?\Closure $handler): void {}
+
     public function clearConversation(): void {}
 
     public function replayHistory(array $messages): void {}
@@ -119,6 +121,12 @@ class NullRenderer implements RendererInterface
     public function showSubagentSpawn(array $entries): void {}
 
     public function showSubagentBatch(array $entries): void {}
+
+    public function refreshSubagentTree(array $tree): void {}
+
+    public function setAgentTreeProvider(?\Closure $provider): void {}
+
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void {}
 
     public function teardown(): void {}
 }

@@ -27,6 +27,11 @@ class PrometheusCommand implements SlashCommand
         return 'Switch to Prometheus permission mode';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $ctx->ui->playPrometheus();

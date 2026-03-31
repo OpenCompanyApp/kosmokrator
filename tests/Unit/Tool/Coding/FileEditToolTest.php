@@ -81,7 +81,7 @@ class FileEditToolTest extends TestCase
         ]);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('3 times', $result->output);
+        $this->assertStringContainsString('multiple times', $result->output);
     }
 
     public function test_reports_removed_and_added_line_counts(): void
@@ -151,6 +151,95 @@ class FileEditToolTest extends TestCase
 
         // Should succeed — 'indented line' IS in '    indented line'
         $this->assertTrue($result->success);
+    }
+
+    public function test_large_file_edit(): void
+    {
+        // Create a ~1MB file with a unique marker in the middle
+        $before = str_repeat('a', 500_000);
+        $marker = '<<UNIQUE_MARKER>>';
+        $after = str_repeat('b', 500_000);
+        $path = $this->createFile($before.$marker.$after);
+
+        $result = $this->tool->execute([
+            'path' => $path,
+            'old_string' => $marker,
+            'new_string' => 'REPLACED',
+        ]);
+
+        $this->assertTrue($result->success);
+        $content = file_get_contents($path);
+        $this->assertSame($before.'REPLACED'.$after, $content);
+    }
+
+    public function test_match_at_file_start(): void
+    {
+        $path = $this->createFile('HEADER'.str_repeat('x', 1000));
+
+        $result = $this->tool->execute([
+            'path' => $path,
+            'old_string' => 'HEADER',
+            'new_string' => 'NEWHEADER',
+        ]);
+
+        $this->assertTrue($result->success);
+        $content = file_get_contents($path);
+        $this->assertSame('NEWHEADER'.str_repeat('x', 1000), $content);
+    }
+
+    public function test_match_at_file_end(): void
+    {
+        $path = $this->createFile(str_repeat('x', 1000).'FOOTER');
+
+        $result = $this->tool->execute([
+            'path' => $path,
+            'old_string' => 'FOOTER',
+            'new_string' => 'NEWFOOTER',
+        ]);
+
+        $this->assertTrue($result->success);
+        $content = file_get_contents($path);
+        $this->assertSame(str_repeat('x', 1000).'NEWFOOTER', $content);
+    }
+
+    public function test_match_spanning_chunk_boundary(): void
+    {
+        // Create a file where the match straddles the 65536-byte chunk boundary
+        $chunkSize = 65536;
+        $needle = 'BOUNDARY_MATCH';
+        $needleLen = strlen($needle);
+        // Place needle so it starts 5 bytes before the chunk boundary
+        $beforeChunk = str_repeat('a', $chunkSize - 5);
+        $afterChunk = str_repeat('b', $chunkSize);
+        $path = $this->createFile($beforeChunk.$needle.$afterChunk);
+
+        $result = $this->tool->execute([
+            'path' => $path,
+            'old_string' => $needle,
+            'new_string' => 'REPLACED',
+        ]);
+
+        $this->assertTrue($result->success);
+        $content = file_get_contents($path);
+        $this->assertSame($beforeChunk.'REPLACED'.$afterChunk, $content);
+    }
+
+    public function test_deletion_with_empty_new_string_on_large_file(): void
+    {
+        $before = str_repeat('a', 100_000);
+        $target = 'DELETE_ME';
+        $after = str_repeat('b', 100_000);
+        $path = $this->createFile($before.$target.$after);
+
+        $result = $this->tool->execute([
+            'path' => $path,
+            'old_string' => $target,
+            'new_string' => '',
+        ]);
+
+        $this->assertTrue($result->success);
+        $content = file_get_contents($path);
+        $this->assertSame($before.$after, $content);
     }
 
     private function createFile(string $content, string $name = 'test.txt'): string

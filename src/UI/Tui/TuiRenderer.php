@@ -10,6 +10,7 @@ use Kosmokrator\UI\Ansi\AnsiIntro;
 use Kosmokrator\UI\Ansi\AnsiPrometheus;
 use Kosmokrator\UI\Ansi\AnsiTheogony;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
+use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
@@ -17,6 +18,7 @@ use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
+use Kosmokrator\UI\Tui\Widget\SwarmDashboardWidget;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
@@ -70,6 +72,10 @@ class TuiRenderer implements RendererInterface
 
     private ?string $subagentTimerId = null;
 
+    private ?TextWidget $subagentTree = null;
+
+    private ?\Closure $agentTreeProvider = null;
+
     private ?string $pendingEditorRestore = null;
 
     private ?DeferredCancellation $requestCancellation = null;
@@ -105,6 +111,11 @@ class TuiRenderer implements RendererInterface
     private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
 
     private bool $activeResponseIsAnsi = false;
+
+    private ?DiffRenderer $diffRenderer = null;
+
+    /** @var (\Closure(string): bool)|null */
+    private ?\Closure $immediateCommandHandler = null;
 
     private const THINKING_PHRASES = [
         '◈ Consulting the Oracle at Delphi...',
@@ -183,6 +194,7 @@ class TuiRenderer implements RendererInterface
         ['value' => '/sessions', 'label' => '/sessions', 'description' => 'List recent sessions'],
         ['value' => '/memories', 'label' => '/memories', 'description' => 'Show stored memories'],
         ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
+        ['value' => '/agents', 'label' => '/agents', 'description' => 'Show swarm progress dashboard'],
         ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
     ];
 
@@ -253,7 +265,7 @@ class TuiRenderer implements RendererInterface
             if ($this->slashCompletion !== null) {
                 if ($kb->matches($data, 'cursor_up') || $kb->matches($data, 'cursor_down')) {
                     $this->slashCompletion->handleInput($data);
-                    $this->tui->processRender();
+                    $this->flushRender();
 
                     return true;
                 }
@@ -386,9 +398,12 @@ class TuiRenderer implements RendererInterface
                 return;
             }
 
-            // During thinking: queue the message for after current response
+            // During thinking: try immediate commands first, else queue
             if ($this->requestCancellation !== null) {
                 if (trim($value) !== '') {
+                    if ($this->immediateCommandHandler !== null && ($this->immediateCommandHandler)($value)) {
+                        return;
+                    }
                     $this->queueMessage($value);
                 }
 
@@ -482,7 +497,7 @@ ART;
 {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}
 {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}
 {$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$dim}  {$cyan}/tasks clear{$r}  {$dim}Context and session management{$r}
-{$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$r}   {$dim}Configuration and persistence{$r}
+{$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$dim}  {$muted}/agents{$r}  {$dim}Configuration and monitoring{$r}
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 HELP;
 
@@ -498,7 +513,7 @@ HELP;
         $tutorialWidget->addStyleClass('welcome');
         $this->conversation->add($tutorialWidget);
 
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function prompt(): string
@@ -529,7 +544,7 @@ HELP;
         $widget = new TextWidget("{$bg}{$white}{$content}".str_repeat(' ', $pad)."{$r}");
         $widget->addStyleClass('user-message');
         $this->conversation->add($widget);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function setPhase(AgentPhase $phase): void
@@ -561,6 +576,7 @@ HELP;
     private function enterThinking(): void
     {
         $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
+        $hasTasks = $this->taskStore !== null && ! $this->taskStore->isEmpty();
 
         // Reuse existing cancellation token if one is active — creating a new one
         // would orphan the old token that background subagents may be reading.
@@ -571,32 +587,36 @@ HELP;
         $this->breathTick = 0;
         $this->thinkingPhrase = $phrase;
 
-        // Register custom spinners on first use
-        if (! $this->spinnersRegistered) {
-            foreach (self::SPINNERS as $name => $frames) {
-                CancellableLoaderWidget::addSpinner($name, $frames);
+        // Only show the standalone loader when there are no tasks —
+        // when tasks exist, the breathing animation on in-progress tasks IS the indicator
+        if (! $hasTasks) {
+            // Register custom spinners on first use
+            if (! $this->spinnersRegistered) {
+                foreach (self::SPINNERS as $name => $frames) {
+                    CancellableLoaderWidget::addSpinner($name, $frames);
+                }
+                $this->spinnersRegistered = true;
             }
-            $this->spinnersRegistered = true;
+
+            $spinnerNames = array_keys(self::SPINNERS);
+            $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
+            $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
+            $this->spinnerIndex++;
+
+            $this->loader = new CancellableLoaderWidget($phrase);
+            $this->loader->setId('loader');
+            $this->loader->setSpinner($spinnerName);
+            $this->loader->setIntervalMs(120);
+            $this->loader->start();
+
+            $this->loader->onCancel(function () {
+                if ($this->requestCancellation !== null) {
+                    $this->requestCancellation->cancel();
+                }
+            });
+
+            $this->thinkingBar->add($this->loader);
         }
-
-        $spinnerNames = array_keys(self::SPINNERS);
-        $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
-        $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
-        $this->spinnerIndex++;
-
-        $this->loader = new CancellableLoaderWidget($phrase);
-        $this->loader->setId('loader');
-        $this->loader->setSpinner($spinnerName);
-        $this->loader->setIntervalMs(120);
-        $this->loader->start();
-
-        $this->loader->onCancel(function () {
-            if ($this->requestCancellation !== null) {
-                $this->requestCancellation->cancel();
-            }
-        });
-
-        $this->thinkingBar->add($this->loader);
 
         // Update status detail
         $dim = "\033[38;5;245m";
@@ -607,7 +627,7 @@ HELP;
         // Breathing pulse at 30fps — animates loader text OR in-progress task color
         $this->startBreathingAnimation($phrase, 'blue');
 
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     private function enterTools(AgentPhase $previous): void
@@ -640,7 +660,7 @@ HELP;
         }
         $this->startBreathingAnimation('', 'amber');
 
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     private function enterIdle(): void
@@ -661,9 +681,14 @@ HELP;
         $this->breathColor = null;
         $this->refreshTaskBar();
 
+        // Clear stale subagent tree — results were already shown via showSubagentBatch()
+        if ($this->subagentTree !== null) {
+            $this->conversation->remove($this->subagentTree);
+            $this->subagentTree = null;
+        }
+
         $this->requestCancellation = null;
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
     }
 
     /**
@@ -708,8 +733,15 @@ HELP;
                 $this->refreshTaskBar();
             }
 
-            $this->tui->requestRender();
-            $this->tui->processRender();
+            // Live subagent tree — refresh every ~0.5s
+            if ($this->agentTreeProvider !== null && $this->breathTick % 15 === 0) {
+                $tree = ($this->agentTreeProvider)();
+                if ($tree !== []) {
+                    $this->refreshSubagentTree($tree);
+                }
+            }
+
+            $this->flushRender();
         });
     }
 
@@ -760,11 +792,10 @@ HELP;
                 $this->compactingLoader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
             }
 
-            $this->tui->requestRender();
-            $this->tui->processRender();
+            $this->flushRender();
         });
 
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function clearCompacting(): void
@@ -781,8 +812,7 @@ HELP;
             $this->compactingLoader = null;
         }
 
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
     }
 
     public function getCancellation(): ?Cancellation
@@ -819,14 +849,14 @@ HELP;
 
         $current = $this->activeResponse->getText();
         $this->activeResponse->setText($current.$text);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function streamComplete(): void
     {
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function showToolCall(string $name, array $args): void
@@ -841,8 +871,7 @@ HELP;
         // Task tools: update task bar only, no conversation widget (task bar shows the tree)
         if ($this->isTaskTool($name)) {
             $this->refreshTaskBar();
-            $this->tui->requestRender();
-            $this->tui->processRender();
+            $this->flushRender();
 
             return;
         }
@@ -891,7 +920,7 @@ HELP;
         }
 
         $this->conversation->add($widget);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function showToolResult(string $name, string $output, bool $success): void
@@ -906,8 +935,7 @@ HELP;
         // Task tools: silent result — the call line + sticky task bar are enough
         if ($this->isTaskTool($name)) {
             $this->refreshTaskBar();
-            $this->tui->requestRender();
-            $this->tui->processRender();
+            $this->flushRender();
 
             return;
         }
@@ -941,8 +969,11 @@ HELP;
 
         $widget = new CollapsibleWidget($header, $content, $lineCount);
         $widget->addStyleClass('tool-result');
+        if ($name === 'file_edit' && $success) {
+            $widget->setExpanded(true);
+        }
         $this->conversation->add($widget);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function askToolPermission(string $toolName, array $args): string
@@ -981,7 +1012,7 @@ HELP;
         $this->overlay->add($header);
         $this->overlay->add($selectList);
         $this->tui->setFocus($selectList);
-        $this->tui->processRender();
+        $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
 
@@ -998,8 +1029,7 @@ HELP;
         $this->overlay->remove($selectList);
         $this->overlay->remove($header);
         $this->tui->setFocus($this->input);
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
 
         return $decision;
     }
@@ -1014,8 +1044,7 @@ HELP;
         $this->currentPermissionLabel = $label;
         $this->currentPermissionColor = $color;
         $this->refreshStatusBar();
-        $this->tui->requestRender();
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function approvePlan(string $currentPermissionMode): ?array
@@ -1025,7 +1054,7 @@ HELP;
 
         $this->overlay->add($widget);
         $this->tui->setFocus($widget);
-        $this->tui->processRender();
+        $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
 
@@ -1044,8 +1073,7 @@ HELP;
 
         $this->overlay->remove($widget);
         $this->tui->setFocus($this->input);
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
 
         return $result;
     }
@@ -1059,7 +1087,7 @@ HELP;
         $this->overlay->add($widget);
 
         $this->tui->setFocus($this->input);
-        $this->tui->processRender();
+        $this->flushRender();
 
         $this->askSuspension = EventLoop::getSuspension();
         $answer = $this->askSuspension->suspend();
@@ -1070,8 +1098,7 @@ HELP;
         $qWidget = new TextWidget("{$accent}?{$r} {$dim}{$question}{$r}");
         $this->conversation->add($qWidget);
         $this->showUserMessage($answer);
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
 
         return $answer;
     }
@@ -1133,7 +1160,7 @@ HELP;
         });
 
         $this->tui->setFocus($selectList);
-        $this->tui->processRender();
+        $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
 
@@ -1158,8 +1185,7 @@ HELP;
         $this->showUserMessage($result === 'dismissed' ? '(dismissed)' : $result);
 
         $this->tui->setFocus($this->input);
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
 
         return $result;
     }
@@ -1208,42 +1234,12 @@ HELP;
 
     private function buildDiffView(string $old, string $new, string $path): string
     {
-        $r = Theme::reset();
-        $removeFg = Theme::diffRemove();
-        $addFg = Theme::diffAdd();
-        $removeBg = Theme::diffRemoveBg();
-        $addBg = Theme::diffAddBg();
-
-        $language = KosmokratorTerminalTheme::detectLanguage($path);
-
-        $oldHighlighted = $this->highlightBlock($old, $language);
-        $newHighlighted = $this->highlightBlock($new, $language);
-
-        $oldLines = explode("\n", $oldHighlighted);
-        $newLines = explode("\n", $newHighlighted);
-
-        $result = [];
-        foreach ($oldLines as $line) {
-            $result[] = "{$removeBg}{$removeFg} - {$r}{$removeBg} {$line}{$r}";
-        }
-        foreach ($newLines as $line) {
-            $result[] = "{$addBg}{$addFg} + {$r}{$addBg} {$line}{$r}";
-        }
-
-        return implode("\n", $result);
+        return $this->getDiffRenderer()->render($old, $new, $path);
     }
 
-    private function highlightBlock(string $code, string $language): string
+    private function getDiffRenderer(): DiffRenderer
     {
-        if ($language === '') {
-            return $code;
-        }
-
-        try {
-            return $this->getHighlighter()->parse($code, $language);
-        } catch (\Throwable) {
-            return $code;
-        }
+        return $this->diffRenderer ??= new DiffRenderer;
     }
 
     private function getHighlighter(): Highlighter
@@ -1256,7 +1252,7 @@ HELP;
         $this->conversation->clear();
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function replayHistory(array $messages): void
@@ -1381,8 +1377,7 @@ HELP;
             }
         }
 
-        $this->tui->requestRender();
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function showNotice(string $message): void
@@ -1390,7 +1385,7 @@ HELP;
         $widget = new TextWidget($message);
         $widget->addStyleClass('subtitle');
         $this->conversation->add($widget);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function showMode(string $label, string $color = ''): void
@@ -1400,7 +1395,7 @@ HELP;
             $this->currentModeColor = $color;
         }
         $this->refreshStatusBar();
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function showError(string $message): void
@@ -1408,7 +1403,7 @@ HELP;
         $widget = new TextWidget("✗ Error: {$message}");
         $widget->addStyleClass('tool-error');
         $this->conversation->add($widget);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
@@ -1432,7 +1427,7 @@ HELP;
 
         $this->statusDetail = "{$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}";
         $this->refreshStatusBar();
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     private function refreshStatusBar(): void
@@ -1533,6 +1528,20 @@ HELP;
                 description: 'Maximum output tokens per LLM response (empty = provider default)',
                 values: ['', '4096', '8192', '16384', '32768', '65536'],
             ),
+            new SettingItem(
+                id: 'subagent_concurrency',
+                label: 'Subagent concurrency',
+                currentValue: $currentSettings['subagent_concurrency'] ?? '10',
+                description: 'Max concurrent subagents (0 = unlimited). Takes effect next session.',
+                values: ['0', '1', '3', '5', '10', '20', '50', '100', '250', '500', '1000'],
+            ),
+            new SettingItem(
+                id: 'subagent_max_retries',
+                label: 'Subagent max retries',
+                currentValue: $currentSettings['subagent_max_retries'] ?? '2',
+                description: 'Max agent-level retries on transient failure (0 = no retry). Takes effect next session.',
+                values: ['0', '1', '2', '3', '5'],
+            ),
         ];
 
         $settingsWidget = new SettingsListWidget($items);
@@ -1540,7 +1549,7 @@ HELP;
 
         $this->overlay->add($settingsWidget);
         $this->tui->setFocus($settingsWidget);
-        $this->tui->processRender();
+        $this->flushRender();
 
         $changes = [];
         $suspension = EventLoop::getSuspension();
@@ -1557,8 +1566,7 @@ HELP;
 
         $this->overlay->remove($settingsWidget);
         $this->tui->setFocus($this->input);
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
 
         return $changes;
     }
@@ -1575,7 +1583,7 @@ HELP;
 
         $this->overlay->add($selectList);
         $this->tui->setFocus($selectList);
-        $this->tui->processRender();
+        $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
 
@@ -1591,8 +1599,7 @@ HELP;
 
         $this->overlay->remove($selectList);
         $this->tui->setFocus($this->input);
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
 
         return $result;
     }
@@ -1616,8 +1623,7 @@ HELP;
         usleep(800000);
         echo "\033[2J\033[H";
         $this->tui->start();
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
     }
 
     public function playPrometheus(): void
@@ -1630,8 +1636,7 @@ HELP;
 
         echo "\033[2J\033[H";
         $this->tui->start();
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->forceRender();
     }
 
     public function consumeQueuedMessage(): ?string
@@ -1641,6 +1646,11 @@ HELP;
         }
 
         return array_shift($this->messageQueue);
+    }
+
+    public function setImmediateCommandHandler(?\Closure $handler): void
+    {
+        $this->immediateCommandHandler = $handler;
     }
 
     private function queueMessage(string $message): void
@@ -1667,6 +1677,7 @@ HELP;
                 'running' => '●',
                 'failed' => '✗',
                 'waiting' => '◌',
+                'retrying' => '↻',
                 default => '○',
             };
             $task = mb_substr($s->task, 0, 50);
@@ -1674,7 +1685,7 @@ HELP;
             $lines[] = "  {$icon} {$type} \"{$task}\" · {$s->toolCalls} tools";
         }
 
-        $this->addToConversation(new \Symfony\Component\Console\TUI\Widget\TextWidget(implode("\n", $lines)));
+        $this->addToConversation(new TextWidget(implode("\n", $lines)));
     }
 
     public function clearSubagentStatus(): void
@@ -1716,8 +1727,8 @@ HELP;
 
         $this->conversation->add($this->subagentLoader);
 
-        // Elapsed timer — update every second with color escalation
-        $this->subagentTimerId = EventLoop::repeat(1.0, function () use ($dim, $r, $count) {
+        // Elapsed timer — update every second with color escalation + live tree refresh
+        $this->subagentTimerId = EventLoop::repeat(1.0, function () use ($dim, $r) {
             if ($this->subagentLoader === null) {
                 return;
             }
@@ -1725,7 +1736,26 @@ HELP;
             $minutes = (int) ($elapsed / 60);
             $seconds = $elapsed % 60;
             $time = sprintf('%d:%02d', $minutes, $seconds);
-            $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
+
+            // Refresh live agent tree and build dynamic label from current stats
+            $label = 'Agents running...';
+            if ($this->agentTreeProvider !== null) {
+                try {
+                    $tree = ($this->agentTreeProvider)();
+                    if ($tree !== []) {
+                        $this->refreshSubagentTree($tree);
+                        $total = $this->countNodes($tree);
+                        $done = $this->countByStatus($tree, 'done');
+                        if ($done > 0) {
+                            $label = "{$total} agents ({$done} done)";
+                        } else {
+                            $label = $total === 1 ? 'Agent running...' : "{$total} agents running...";
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Don't crash the timer on tree provider errors
+                }
+            }
 
             $color = match (true) {
                 $elapsed >= 120 => Theme::error(),
@@ -1734,11 +1764,10 @@ HELP;
             };
 
             $this->subagentLoader->setMessage("{$color}{$label}  {$dim}{$time}{$r}");
-            $this->tui->requestRender();
-            $this->tui->processRender();
+            $this->flushRender();
         });
 
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     private function stopSubagentLoader(): void
@@ -1753,6 +1782,126 @@ HELP;
             $this->conversation->remove($this->subagentLoader);
             $this->subagentLoader = null;
         }
+        if ($this->subagentTree !== null) {
+            $this->conversation->remove($this->subagentTree);
+            $this->subagentTree = null;
+        }
+    }
+
+    public function setAgentTreeProvider(?\Closure $provider): void
+    {
+        $this->agentTreeProvider = $provider;
+    }
+
+    public function refreshSubagentTree(array $tree): void
+    {
+        if ($tree === []) {
+            if ($this->subagentTree !== null) {
+                $this->conversation->remove($this->subagentTree);
+                $this->subagentTree = null;
+            }
+
+            return;
+        }
+
+        $text = $this->renderLiveTree($tree);
+
+        if ($this->subagentTree === null) {
+            $this->subagentTree = new TextWidget($text);
+            $this->subagentTree->setId('subagent-tree');
+            $this->conversation->add($this->subagentTree);
+        } else {
+            $this->subagentTree->setText($text);
+        }
+    }
+
+    private function renderLiveTree(array $nodes): string
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+        $amber = $this->breathColor ?? "\033[38;2;200;150;60m";
+        $gray = "\033[38;5;240m";
+        $cyan = "\033[38;2;100;200;220m";
+
+        // Summary header
+        $total = $this->countNodes($nodes);
+        $running = $this->countByStatus($nodes, 'running');
+        $waiting = $this->countByStatus($nodes, 'waiting');
+        $done = $this->countByStatus($nodes, 'done');
+        $parts = [];
+        if ($running > 0) {
+            $parts[] = "{$running} running";
+        }
+        if ($waiting > 0) {
+            $parts[] = "{$waiting} waiting";
+        }
+        if ($done > 0) {
+            $parts[] = "{$done} done";
+        }
+        $summary = implode(', ', $parts);
+        $header = "{$cyan}⏺{$r} {$total} agents ({$summary})";
+
+        return $header."\n".$this->renderTreeNodes($nodes, '  ', $r, $dim, $green, $red, $amber, $gray);
+    }
+
+    private function renderTreeNodes(array $nodes, string $indent, string $r, string $dim, string $green, string $red, string $amber, string $gray): string
+    {
+        $output = '';
+        $last = count($nodes) - 1;
+
+        foreach ($nodes as $i => $node) {
+            $connector = $i === $last ? '└─' : '├─';
+            $continuation = $i === $last ? '   ' : '│  ';
+
+            $icon = match ($node['status']) {
+                'done' => "{$green}✓{$r}",
+                'failed', 'cancelled' => "{$red}✗{$r}",
+                'running' => "{$amber}●{$r}",
+                'waiting', 'queued' => "{$gray}◌{$r}",
+                'retrying' => "{$amber}⟳{$r}",
+                default => "{$gray}·{$r}",
+            };
+
+            $type = ucfirst($node['type']);
+            $id = $node['id'];
+            $task = mb_strlen($node['task']) > 50 ? mb_substr($node['task'], 0, 50).'…' : $node['task'];
+            $elapsed = $node['elapsed'] > 0 ? " {$dim}({$node['elapsed']}s){$r}" : '';
+
+            $taskSnippet = $task !== '' ? " {$dim}· {$task}{$r}" : '';
+            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$taskSnippet}{$elapsed}\n";
+
+            $children = $node['children'] ?? [];
+            if ($children !== []) {
+                $output .= $this->renderTreeNodes($children, "{$indent}{$continuation}", $r, $dim, $green, $red, $amber, $gray);
+            }
+        }
+
+        return $output;
+    }
+
+    private function countNodes(array $nodes): int
+    {
+        $count = count($nodes);
+        foreach ($nodes as $node) {
+            $count += $this->countNodes($node['children'] ?? []);
+        }
+
+        return $count;
+    }
+
+    private function countByStatus(array $nodes, string $status): int
+    {
+        $count = 0;
+        foreach ($nodes as $node) {
+            if ($node['status'] === $status) {
+                $count++;
+            }
+            $count += $this->countByStatus($node['children'] ?? [], $status);
+        }
+
+        return $count;
     }
 
     public function showSubagentSpawn(array $entries): void
@@ -1767,29 +1916,29 @@ HELP;
 
         $count = count($entries);
 
-        // Single agent: compact one-liner
+        // Build initial display text
         if ($count === 1) {
             $label = $this->formatAgentLabelTui($entries[0]['args']);
-            $widget = new TextWidget("{$cyan}⏺{$r} {$label}");
-            $widget->addStyleClass('tool-call');
-            $this->conversation->add($widget);
-            $this->tui->processRender();
-
-            return;
+            $text = "{$cyan}⏺{$r} {$label}";
+        } else {
+            $types = $this->summarizeAgentTypesTui($entries);
+            $lines = ["{$cyan}⏺ {$types}{$r}"];
+            foreach ($entries as $entry) {
+                $label = $this->formatAgentLabelTui($entry['args']);
+                $lines[] = "  {$cyan}●{$r} {$label}";
+            }
+            $text = implode("\n", $lines);
         }
 
-        // Multiple: header + list
-        $types = $this->summarizeAgentTypesTui($entries);
-        $lines = ["{$cyan}⏺ {$types}{$r}"];
-        foreach ($entries as $entry) {
-            $label = $this->formatAgentLabelTui($entry['args']);
-            $lines[] = "  {$cyan}●{$r} {$label}";
+        // Create (or reuse) the subagent tree widget at THIS position in the conversation.
+        // refreshSubagentTree() will update it in-place as children appear.
+        if ($this->subagentTree !== null) {
+            $this->conversation->remove($this->subagentTree);
         }
-
-        $widget = new TextWidget(implode("\n", $lines));
-        $widget->addStyleClass('tool-call');
-        $this->conversation->add($widget);
-        $this->tui->processRender();
+        $this->subagentTree = new TextWidget($text);
+        $this->subagentTree->setId('subagent-tree');
+        $this->conversation->add($this->subagentTree);
+        $this->flushRender();
     }
 
     public function showSubagentBatch(array $entries): void
@@ -1829,7 +1978,7 @@ HELP;
             $widget = new CollapsibleWidget("{$icon} {$label}", $e['result'], 1, 120);
             $widget->addStyleClass('tool-result');
             $this->conversation->add($widget);
-            $this->tui->processRender();
+            $this->flushRender();
 
             return;
         }
@@ -1864,7 +2013,7 @@ HELP;
         $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
         $expand->addStyleClass('tool-result');
         $this->conversation->add($expand);
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     /**
@@ -1956,11 +2105,72 @@ HELP;
         return implode(' + ', $parts).' agents';
     }
 
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
+    {
+        $widget = new SwarmDashboardWidget($summary, $allStats);
+        $widget->setId('agents-dashboard');
+
+        $this->overlay->add($widget);
+        $this->tui->setFocus($widget);
+        $this->flushRender();
+
+        $suspension = EventLoop::getSuspension();
+
+        $widget->onDismiss(fn () => $suspension->resume(null));
+
+        // Auto-refresh every 2s if refresh callback provided
+        $timerId = null;
+        if ($refresh !== null) {
+            $timerId = EventLoop::repeat(2.0, function () use ($widget, $refresh) {
+                try {
+                    $data = $refresh();
+                    $widget->setData($data['summary'], $data['stats']);
+                    $this->forceRender();
+                } catch (\Throwable) {
+                    // Ignore refresh errors
+                }
+            });
+        }
+
+        $suspension->suspend();
+
+        if ($timerId !== null) {
+            EventLoop::cancel($timerId);
+        }
+
+        $this->overlay->remove($widget);
+        $this->tui->setFocus($this->input);
+        $this->forceRender();
+    }
+
     public function teardown(): void
     {
         if ($this->tui->isRunning()) {
             $this->tui->stop();
         }
+    }
+
+    /**
+     * Request and immediately process a render pass.
+     *
+     * Widget.invalidate() increments the render revision but does NOT set
+     * the renderRequested flag on the Tui.  processRender() is a no-op when
+     * renderRequested is false.  Always pair the two calls via this helper
+     * so renders are never silently skipped.
+     */
+    private function flushRender(): void
+    {
+        $this->tui->requestRender();
+        $this->tui->processRender();
+    }
+
+    /**
+     * Force a full re-render (clears all screen cache).
+     */
+    private function forceRender(): void
+    {
+        $this->tui->requestRender(force: true);
+        $this->tui->processRender();
     }
 
     private function cycleMode(): string
@@ -1995,7 +2205,7 @@ HELP;
             $this->slashCompletion->setItems($filtered);
         }
 
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     private function hideSlashCompletion(): void
@@ -2003,7 +2213,7 @@ HELP;
         if ($this->slashCompletion !== null) {
             $this->overlay->remove($this->slashCompletion);
             $this->slashCompletion = null;
-            $this->tui->processRender();
+            $this->flushRender();
         }
     }
 
@@ -2014,7 +2224,7 @@ HELP;
                 $widget->toggle();
             }
         }
-        $this->tui->processRender();
+        $this->flushRender();
     }
 
     private function containsAnsiEscapes(string $text): bool

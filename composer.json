@@ -16,6 +16,7 @@
         "league/commonmark": "^2.9",
         "prism-php/prism": "^0.99",
         "revolt/event-loop": "^1.0",
+        "sebastian/diff": "^7.0",
         "symfony/console": "^7.4|^8.0",
         "symfony/event-dispatcher": "^7.4|^8.0",
         "symfony/finder": "^7.4|^8.0",

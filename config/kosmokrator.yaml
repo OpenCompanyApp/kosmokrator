@@ -4,6 +4,8 @@ agent:
   temperature: 0.0
   max_retries: 0              # 0 = unlimited (retry forever), positive int = cap
   subagent_max_depth: 3
+  subagent_concurrency: 10     # max concurrent subagents (0 = unlimited)
+  subagent_max_retries: 2     # max agent-level retries on transient failure (0 = no retry)
   system_prompt: |
     You are KosmoKrator, a coding agent operating in the user's terminal.
     You help with software engineering tasks: solving bugs, building features, refactoring code, explaining code, and answering questions.

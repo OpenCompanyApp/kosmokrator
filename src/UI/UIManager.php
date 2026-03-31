@@ -154,6 +154,11 @@ class UIManager implements RendererInterface
         return $this->renderer->consumeQueuedMessage();
     }
 
+    public function setImmediateCommandHandler(?\Closure $handler): void
+    {
+        $this->renderer->setImmediateCommandHandler($handler);
+    }
+
     public function showError(string $message): void
     {
         $this->renderer->showError($message);
@@ -212,6 +217,21 @@ class UIManager implements RendererInterface
     public function showSubagentBatch(array $entries): void
     {
         $this->renderer->showSubagentBatch($entries);
+    }
+
+    public function refreshSubagentTree(array $tree): void
+    {
+        $this->renderer->refreshSubagentTree($tree);
+    }
+
+    public function setAgentTreeProvider(?\Closure $provider): void
+    {
+        $this->renderer->setAgentTreeProvider($provider);
+    }
+
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
+    {
+        $this->renderer->showAgentsDashboard($summary, $allStats, $refresh);
     }
 
     public function teardown(): void

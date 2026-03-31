@@ -26,6 +26,11 @@ class MemoriesCommand implements SlashCommand
         return 'List stored memories';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $memories = $ctx->sessionManager->getMemories();

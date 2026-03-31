@@ -19,7 +19,7 @@ class PermissionEvaluator
 
     public function evaluate(string $toolName, array $args): PermissionResult
     {
-        // Blocked paths — absolute deny, checked before everything
+        // 1. Blocked paths — absolute deny, checked before everything
         if ($this->blockedPaths !== [] && isset($args['path'])) {
             $matchedPattern = $this->findBlockedPathPattern($args['path']);
             if ($matchedPattern !== null) {
@@ -32,10 +32,18 @@ class PermissionEvaluator
             }
         }
 
+        // 2. Deny patterns — absolute deny, checked before session grants
+        $denyResult = $this->checkDenyPatterns($toolName, $args);
+        if ($denyResult !== null) {
+            return $denyResult;
+        }
+
+        // 3. Session grants — allow if previously granted (overrides Ask, but not Deny)
         if ($this->grants->isGranted($toolName)) {
             return new PermissionResult(PermissionAction::Allow);
         }
 
+        // 4. Rule evaluation (Ask/Deny actions)
         foreach ($this->rules as $rule) {
             $ruleResult = $rule->evaluate($toolName, $args);
             if ($ruleResult === null) {
@@ -67,7 +75,37 @@ class PermissionEvaluator
             return new PermissionResult($ruleResult->action);
         }
 
+        // 5. No matching rule — allow
         return new PermissionResult(PermissionAction::Allow);
+    }
+
+    /**
+     * Check deny patterns across all matching rules.
+     * Returns a Deny result if any rule's deny pattern matches, null otherwise.
+     */
+    private function checkDenyPatterns(string $toolName, array $args): ?PermissionResult
+    {
+        foreach ($this->rules as $rule) {
+            if ($rule->toolName !== $toolName || $rule->denyPatterns === []) {
+                continue;
+            }
+
+            if (! isset($args['command'])) {
+                continue;
+            }
+
+            $command = trim((string) $args['command']);
+            foreach ($rule->denyPatterns as $pattern) {
+                if (PermissionRule::matchesGlob($command, $pattern)) {
+                    return new PermissionResult(
+                        PermissionAction::Deny,
+                        "Command matches blocked pattern '{$pattern}'",
+                    );
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -26,6 +26,11 @@ class ForgetCommand implements SlashCommand
         return 'Delete a memory by ID';
     }
 
+    public function immediate(): bool
+    {
+        return false;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $id = (int) trim($args);

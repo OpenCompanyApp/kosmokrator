@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\Cancellation;
+
 /**
  * Immutable context that travels down the subagent tree.
  * Each child gets a new context with incremented depth and narrowed type.
@@ -17,6 +19,7 @@ readonly class AgentContext
         public SubagentOrchestrator $orchestrator,
         public string $id,
         public string $task,
+        public ?Cancellation $cancellation = null,
     ) {}
 
     /**
@@ -32,7 +35,7 @@ readonly class AgentContext
      *
      * @throws \InvalidArgumentException if the child type violates permission inheritance
      */
-    public function childContext(AgentType $childType, string $childId, string $childTask): self
+    public function childContext(AgentType $childType, string $childId, string $childTask, ?Cancellation $cancellation = null): self
     {
         if (! in_array($childType, $this->type->allowedChildTypes(), true)) {
             throw new \InvalidArgumentException(
@@ -48,6 +51,7 @@ readonly class AgentContext
             orchestrator: $this->orchestrator,
             id: $childId,
             task: $childTask,
+            cancellation: $cancellation ?? $this->cancellation,
         );
     }
 }

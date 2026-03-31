@@ -26,6 +26,11 @@ class SessionsCommand implements SlashCommand
         return 'List recent sessions';
     }
 
+    public function immediate(): bool
+    {
+        return true;
+    }
+
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $sessions = $ctx->sessionManager->listSessions(10);

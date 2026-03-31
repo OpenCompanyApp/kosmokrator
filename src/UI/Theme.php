@@ -134,6 +134,21 @@ class Theme
         return self::bgRgb(55, 15, 15);
     }
 
+    public static function diffAddBgStrong(): string
+    {
+        return self::bgRgb(30, 70, 30);
+    }
+
+    public static function diffRemoveBgStrong(): string
+    {
+        return self::bgRgb(80, 20, 20);
+    }
+
+    public static function diffContext(): string
+    {
+        return self::color256(244);
+    }
+
     // Code background
     public static function codeBg(): string
     {

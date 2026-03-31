@@ -2,6 +2,7 @@
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
@@ -82,5 +83,37 @@ class AgentContextTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $parent->childContext(AgentType::Plan, 'bad', 'task');
+    }
+
+    public function test_cancellation_propagates_to_child(): void
+    {
+        $deferred = new DeferredCancellation;
+        $token = $deferred->getCancellation();
+
+        $parent = new AgentContext(AgentType::General, 0, 3, $this->orchestrator, 'root', '', $token);
+        $child = $parent->childContext(AgentType::Explore, 'child', 'task');
+
+        $this->assertSame($token, $child->cancellation);
+    }
+
+    public function test_cancellation_override_in_child(): void
+    {
+        $parentDeferred = new DeferredCancellation;
+        $childDeferred = new DeferredCancellation;
+
+        $parent = new AgentContext(AgentType::General, 0, 3, $this->orchestrator, 'root', '', $parentDeferred->getCancellation());
+        $child = $parent->childContext(AgentType::Explore, 'child', 'task', $childDeferred->getCancellation());
+
+        $this->assertSame($childDeferred->getCancellation(), $child->cancellation);
+        $this->assertNotSame($parentDeferred->getCancellation(), $child->cancellation);
+    }
+
+    public function test_cancellation_defaults_to_null(): void
+    {
+        $ctx = new AgentContext(AgentType::General, 0, 3, $this->orchestrator, 'root', '');
+        $this->assertNull($ctx->cancellation);
+
+        $child = $ctx->childContext(AgentType::Explore, 'child', 'task');
+        $this->assertNull($child->cancellation);
     }
 }

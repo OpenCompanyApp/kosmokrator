@@ -6,7 +6,9 @@ namespace Kosmokrator\Command;
 
 use Illuminate\Config\Repository;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Task\TaskStore;
@@ -24,5 +26,7 @@ readonly class SlashCommandContext
         public TaskStore $taskStore,
         public Repository $config,
         public SettingsRepository $settings,
+        public ?SubagentOrchestrator $orchestrator = null,
+        public ?ModelCatalog $models = null,
     ) {}
 }

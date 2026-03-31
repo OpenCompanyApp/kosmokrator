@@ -37,6 +37,11 @@ class SlashCommandRegistryTest extends TestCase
                 return 'Test command';
             }
 
+            public function immediate(): bool
+            {
+                return false;
+            }
+
             public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
             {
                 return SlashCommandResult::continue();
@@ -93,6 +98,11 @@ class SlashCommandRegistryTest extends TestCase
                 return 'Forget command';
             }
 
+            public function immediate(): bool
+            {
+                return false;
+            }
+
             public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
             {
                 return SlashCommandResult::continue();
@@ -123,6 +133,11 @@ class SlashCommandRegistryTest extends TestCase
             public function description(): string
             {
                 return 'Forget command';
+            }
+
+            public function immediate(): bool
+            {
+                return false;
             }
 
             public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult

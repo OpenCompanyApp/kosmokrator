@@ -263,6 +263,12 @@ final class TuiModalManager
         $providerAuthModes = is_array($currentSettings['provider_auth_modes'] ?? null)
             ? $currentSettings['provider_auth_modes']
             : [];
+        $providerModelValues = is_array($currentSettings['provider_model_values'] ?? null)
+            ? $currentSettings['provider_model_values']
+            : [];
+        $providerApiKeyDisplay = is_array($currentSettings['provider_api_key_display'] ?? null)
+            ? $currentSettings['provider_api_key_display']
+            : [];
 
         $items = [
             new SettingItem(
@@ -403,10 +409,33 @@ final class TuiModalManager
         $changes = [];
         $suspension = EventLoop::getSuspension();
 
-        $settingsWidget->onChange(function (SettingChangeEvent $event) use (&$changes, &$selectedProvider) {
+        $settingsWidget->onChange(function (SettingChangeEvent $event) use (&$changes, &$selectedProvider, $settingsWidget, $providerAuthModes, $providerStatuses, $providerModelValues, $providerApiKeyDisplay) {
             $changes[$event->getId()] = $event->getValue();
             if ($event->getId() === 'provider') {
                 $selectedProvider = $event->getValue();
+                unset($changes['api_key'], $changes['auth_action']);
+                $rememberedModel = (string) ($providerModelValues[$selectedProvider] ?? '');
+                if ($rememberedModel !== '') {
+                    $settingsWidget->updateValue('model', $rememberedModel);
+                    $changes['model'] = $rememberedModel;
+                }
+
+                $settingsWidget->updateValue(
+                    'api_key',
+                    (string) ($providerApiKeyDisplay[$selectedProvider] ?? '(not used)'),
+                );
+                $settingsWidget->updateValue(
+                    'auth_action',
+                    (string) ($providerStatuses[$selectedProvider] ?? ''),
+                );
+
+                $authMode = $providerAuthModes[$selectedProvider] ?? 'api_key';
+                $apiKeyDisplay = $providerApiKeyDisplay[$selectedProvider] ?? '(not used)';
+
+                if ($authMode === 'api_key' && $apiKeyDisplay === '(not set)') {
+                    $this->focusSettingsItem($settingsWidget, 'api_key');
+                    $this->activateSettingsItem($settingsWidget);
+                }
             }
         });
 
@@ -632,5 +661,32 @@ final class TuiModalManager
     private function forceRender(): void
     {
         ($this->forceRenderCallback)();
+    }
+
+    private function focusSettingsItem(SettingsListWidget $widget, string $id): void
+    {
+        $select = \Closure::bind(function (string $id): void {
+            foreach ($this->items as $index => $item) {
+                if ($item->getId() === $id) {
+                    if ($this->selectedIndex !== $index) {
+                        $this->selectedIndex = $index;
+                        $this->invalidate();
+                    }
+
+                    return;
+                }
+            }
+        }, $widget, $widget::class);
+
+        $select($id);
+    }
+
+    private function activateSettingsItem(SettingsListWidget $widget): void
+    {
+        $activate = \Closure::bind(function (): void {
+            $this->activateCurrentItem();
+        }, $widget, $widget::class);
+
+        $activate();
     }
 }

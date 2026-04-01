@@ -565,6 +565,8 @@ class AnsiRenderer implements RendererInterface
         $providerStatuses = is_array($currentSettings['provider_statuses'] ?? null) ? $currentSettings['provider_statuses'] : [];
         $providerAuthModes = is_array($currentSettings['provider_auth_modes'] ?? null) ? $currentSettings['provider_auth_modes'] : [];
         $providerDefaults = is_array($currentSettings['provider_defaults'] ?? null) ? $currentSettings['provider_defaults'] : [];
+        $providerModelValues = is_array($currentSettings['provider_model_values'] ?? null) ? $currentSettings['provider_model_values'] : [];
+        $providerApiKeyDisplay = is_array($currentSettings['provider_api_key_display'] ?? null) ? $currentSettings['provider_api_key_display'] : [];
 
         if ($providerOptions !== []) {
             echo "{$white}  Providers{$r}\n";
@@ -583,7 +585,7 @@ class AnsiRenderer implements RendererInterface
 
         $currentModel = (string) ($currentSettings['model'] ?? '');
         $providerModels = $modelsByProvider[$provider] ?? [];
-        $modelDefault = $providerDefaults[$provider] ?? $currentModel;
+        $modelDefault = $providerModelValues[$provider] ?? $providerDefaults[$provider] ?? $currentModel;
         if ($providerModels !== []) {
             echo "{$white}  Models for {$provider}{$r}\n";
             foreach ($providerModels as $model) {
@@ -603,16 +605,24 @@ class AnsiRenderer implements RendererInterface
         echo "{$dim}  Auth status: {$authStatus}{$r}\n";
 
         if ($authMode === 'api_key') {
-            $action = strtolower(trim(readline('  API key action [keep/edit/clear/status]: ')));
-            if ($action === 'edit') {
+            $storedDisplay = $providerApiKeyDisplay[$provider] ?? '(not set)';
+            if ($storedDisplay === '(not set)') {
                 $apiKey = trim(readline('  API key: '));
                 if ($apiKey !== '') {
                     $changes['api_key'] = $apiKey;
                 }
-            } elseif ($action === 'clear') {
-                $changes['auth_action'] = 'clear_key';
-            } elseif ($action === 'status') {
-                $changes['auth_action'] = 'status';
+            } else {
+                $action = strtolower(trim(readline('  API key action [keep/edit/clear/status]: ')));
+                if ($action === 'edit') {
+                    $apiKey = trim(readline('  API key: '));
+                    if ($apiKey !== '') {
+                        $changes['api_key'] = $apiKey;
+                    }
+                } elseif ($action === 'clear') {
+                    $changes['auth_action'] = 'clear_key';
+                } elseif ($action === 'status') {
+                    $changes['auth_action'] = 'status';
+                }
             }
         } elseif ($authMode === 'oauth') {
             $action = strtolower(trim(readline('  Codex auth [browser/device/logout/status/skip]: ')));

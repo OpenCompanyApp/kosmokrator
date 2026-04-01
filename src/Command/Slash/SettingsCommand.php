@@ -167,6 +167,8 @@ final class SettingsCommand implements SlashCommand
             'model_options_by_provider' => $catalog->modelOptionsByProvider(),
             'provider_statuses' => $catalog->authStatuses(),
             'provider_auth_modes' => $catalog->authModes(),
+            'provider_model_values' => $this->providerModelValues($ctx, $catalog, $currentProvider),
+            'provider_api_key_display' => $this->providerApiKeyDisplay($catalog),
             'provider_defaults' => array_reduce(
                 $catalog->providers(),
                 static function (array $carry, $provider): array {
@@ -207,6 +209,7 @@ final class SettingsCommand implements SlashCommand
     private function applyModel(SlashCommandContext $ctx, string $provider, string $model): void
     {
         $ctx->settings->set('global', 'agent.default_model', $model);
+        $ctx->settings->set('global', "provider.{$provider}.last_model", $model);
 
         if (! self::requiresRestart($ctx->llm, $provider)) {
             $ctx->llm->setModel($model);
@@ -307,5 +310,43 @@ final class SettingsCommand implements SlashCommand
     private static function innerClient(LlmClientInterface $llm): LlmClientInterface
     {
         return $llm instanceof RetryableLlmClient ? $llm->inner() : $llm;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function providerModelValues(SlashCommandContext $ctx, ProviderCatalog $catalog, string $currentProvider): array
+    {
+        $values = [];
+
+        foreach ($catalog->providers() as $provider) {
+            $stored = $ctx->settings->get('global', "provider.{$provider->id}.last_model");
+            $current = $provider->id === $currentProvider ? $ctx->llm->getModel() : null;
+
+            $candidate = $stored ?? $current ?? $provider->defaultModel;
+            if (! $catalog->supportsModel($provider->id, $candidate)) {
+                $candidate = $provider->defaultModel;
+            }
+
+            $values[$provider->id] = $candidate;
+        }
+
+        return $values;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function providerApiKeyDisplay(ProviderCatalog $catalog): array
+    {
+        $values = [];
+
+        foreach ($catalog->providers() as $provider) {
+            $values[$provider->id] = $catalog->authMode($provider->id) === 'api_key'
+                ? $catalog->maskedCredential($provider->id)
+                : '(not used)';
+        }
+
+        return $values;
     }
 }

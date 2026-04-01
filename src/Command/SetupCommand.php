@@ -69,7 +69,8 @@ class SetupCommand extends Command
         echo "\n";
 
         $savedModel = $settings->get('global', 'agent.default_model');
-        $currentModel = $savedModel;
+        $providerSavedModel = $settings->get('global', "provider.{$provider}.last_model");
+        $currentModel = $providerSavedModel ?? $savedModel;
         if ($currentModel === null || ! $providers->supportsModel($provider, $currentModel)) {
             $currentModel = $definition->defaultModel !== '' ? $definition->defaultModel : ($providerModels[0] ?? '');
         }
@@ -78,6 +79,7 @@ class SetupCommand extends Command
 
         $settings->set('global', 'agent.default_provider', $provider);
         $settings->set('global', 'agent.default_model', $model);
+        $settings->set('global', "provider.{$provider}.last_model", $model);
 
         if ($definition->authMode === 'oauth') {
             echo "{$dim}  Codex uses your ChatGPT login, not an API key.{$r}\n";

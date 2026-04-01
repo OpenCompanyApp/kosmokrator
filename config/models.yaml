@@ -2,60 +2,25 @@
 # Pricing is per million tokens (USD)
 
 models:
-  # Z.AI GLM family
-  glm-5.1:
-    provider: z
-    context: 204800
-    max_output: 131072
-    input_price: 1.00
-    output_price: 3.20
+  # ── Anthropic Claude family ──
+  claude-opus-4-5-20250929:
+    provider: anthropic
+    context: 200000
+    max_output: 32768
+    input_price: 15.00
+    output_price: 75.00
     thinking: true
     streaming: true
-    tool_streaming: true
 
-  glm-5:
-    provider: z
-    context: 204800
-    max_output: 131072
-    input_price: 1.00
-    output_price: 3.20
-    thinking: true
-    streaming: true
-    tool_streaming: true
-
-  glm-5-turbo:
-    provider: z
-    context: 204800
+  claude-sonnet-4-5-20250929:
+    provider: anthropic
+    context: 200000
     max_output: 16384
-    input_price: 0.50
-    output_price: 1.50
-    thinking: false
-    streaming: true
-
-  # Kimi family
-  kimi-k2.5:
-    provider: kimi
-    context: 131072
-    max_output: 8192
+    input_price: 3.00
+    output_price: 15.00
     thinking: true
     streaming: true
 
-  moonshot-v1-128k:
-    provider: kimi
-    context: 131072
-    max_output: 8192
-    thinking: false
-    streaming: true
-
-  # MiniMax family
-  minimax-m1:
-    provider: minimax
-    context: 1000000
-    max_output: 131072
-    thinking: false
-    streaming: true
-
-  # Anthropic Claude family
   claude-opus-4-20250514:
     provider: anthropic
     context: 200000
@@ -74,6 +39,15 @@ models:
     thinking: true
     streaming: true
 
+  claude-haiku-4-5-20251001:
+    provider: anthropic
+    context: 200000
+    max_output: 8192
+    input_price: 0.80
+    output_price: 4.00
+    thinking: false
+    streaming: true
+
   claude-haiku-4-20251001:
     provider: anthropic
     context: 200000
@@ -83,13 +57,113 @@ models:
     thinking: false
     streaming: true
 
-  # OpenAI GPT family
+  # ── OpenAI GPT / o-family ──
   gpt-4o:
     provider: openai
     context: 128000
     max_output: 16384
     input_price: 2.50
     output_price: 10.00
+    thinking: false
+    streaming: true
+
+  gpt-4o-mini:
+    provider: openai
+    context: 128000
+    max_output: 16384
+    input_price: 0.15
+    output_price: 0.60
+    thinking: false
+    streaming: true
+
+  gpt-4.1:
+    provider: openai
+    context: 1047576
+    max_output: 32768
+    input_price: 2.00
+    output_price: 8.00
+    thinking: false
+    streaming: true
+
+  gpt-4.1-mini:
+    provider: openai
+    context: 1047576
+    max_output: 32768
+    input_price: 0.40
+    output_price: 1.60
+    thinking: false
+    streaming: true
+
+  gpt-4.1-nano:
+    provider: openai
+    context: 1047576
+    max_output: 32768
+    input_price: 0.10
+    output_price: 0.40
+    thinking: false
+    streaming: true
+
+  o1:
+    provider: openai
+    context: 200000
+    max_output: 100000
+    input_price: 15.00
+    output_price: 60.00
+    thinking: true
+    streaming: true
+
+  o1-mini:
+    provider: openai
+    context: 128000
+    max_output: 65536
+    input_price: 1.10
+    output_price: 4.40
+    thinking: true
+    streaming: true
+
+  o3:
+    provider: openai
+    context: 200000
+    max_output: 100000
+    input_price: 10.00
+    output_price: 40.00
+    thinking: true
+    streaming: true
+
+  o3-mini:
+    provider: openai
+    context: 200000
+    max_output: 100000
+    input_price: 1.10
+    output_price: 4.40
+    thinking: true
+    streaming: true
+
+  o4-mini:
+    provider: openai
+    context: 200000
+    max_output: 100000
+    input_price: 1.10
+    output_price: 4.40
+    thinking: true
+    streaming: true
+
+  # ── Codex (ChatGPT subscription) ──
+  gpt-5.4:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: true
+    streaming: true
+
+  gpt-5.4-mini:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
     thinking: false
     streaming: true
 
@@ -120,25 +194,43 @@ models:
     thinking: true
     streaming: true
 
-  gpt-4-turbo:
-    provider: openai
+  gpt-5.1-codex-max:
+    provider: codex
     context: 128000
-    max_output: 4096
-    input_price: 10.00
-    output_price: 30.00
-    thinking: false
-    streaming: true
-
-  o3:
-    provider: openai
-    context: 200000
-    max_output: 100000
-    input_price: 10.00
-    output_price: 40.00
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
     thinking: true
     streaming: true
 
-  # Gemini family
+  gpt-5.1-codex-mini:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: false
+    streaming: true
+
+  gpt-5-codex:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: true
+    streaming: true
+
+  gpt-5-codex-mini:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: false
+    streaming: true
+
+  # ── Gemini family ──
   gemini-2.5-pro:
     provider: gemini
     context: 1048576
@@ -148,7 +240,25 @@ models:
     thinking: true
     streaming: true
 
-  # DeepSeek family
+  gemini-2.5-flash:
+    provider: gemini
+    context: 1048576
+    max_output: 65536
+    input_price: 0.15
+    output_price: 0.60
+    thinking: true
+    streaming: true
+
+  gemini-2.0-flash:
+    provider: gemini
+    context: 1048576
+    max_output: 8192
+    input_price: 0.10
+    output_price: 0.40
+    thinking: false
+    streaming: true
+
+  # ── DeepSeek family ──
   deepseek-chat:
     provider: deepseek
     context: 64000
@@ -158,7 +268,16 @@ models:
     thinking: false
     streaming: true
 
-  # Groq defaults
+  deepseek-reasoner:
+    provider: deepseek
+    context: 64000
+    max_output: 8192
+    input_price: 0.55
+    output_price: 2.19
+    thinking: true
+    streaming: true
+
+  # ── Groq defaults ──
   llama-3.3-70b-versatile:
     provider: groq
     context: 128000
@@ -168,7 +287,7 @@ models:
     thinking: false
     streaming: true
 
-  # Mistral defaults
+  # ── Mistral family ──
   mistral-large-latest:
     provider: mistral
     context: 128000
@@ -178,7 +297,16 @@ models:
     thinking: false
     streaming: true
 
-  # xAI defaults
+  codestral-latest:
+    provider: mistral
+    context: 256000
+    max_output: 8192
+    input_price: 0.30
+    output_price: 0.90
+    thinking: false
+    streaming: true
+
+  # ── xAI family ──
   grok-3:
     provider: xai
     context: 131072
@@ -188,11 +316,89 @@ models:
     thinking: true
     streaming: true
 
-  # Perplexity defaults
+  grok-3-mini:
+    provider: xai
+    context: 131072
+    max_output: 16384
+    input_price: 0.30
+    output_price: 0.50
+    thinking: true
+    streaming: true
+
+  grok-2:
+    provider: xai
+    context: 131072
+    max_output: 8192
+    input_price: 2.00
+    output_price: 10.00
+    thinking: false
+    streaming: true
+
+  # ── Perplexity family ──
   sonar-pro:
     provider: perplexity
     context: 200000
     max_output: 8192
+    thinking: false
+    streaming: true
+
+  sonar:
+    provider: perplexity
+    context: 128000
+    max_output: 8192
+    thinking: false
+    streaming: true
+
+  # ── Z.AI GLM family ──
+  glm-5.1:
+    provider: z
+    context: 204800
+    max_output: 131072
+    input_price: 1.00
+    output_price: 3.20
+    thinking: true
+    streaming: true
+    tool_streaming: true
+
+  glm-5:
+    provider: z
+    context: 204800
+    max_output: 131072
+    input_price: 1.00
+    output_price: 3.20
+    thinking: true
+    streaming: true
+    tool_streaming: true
+
+  glm-5-turbo:
+    provider: z
+    context: 204800
+    max_output: 16384
+    input_price: 0.50
+    output_price: 1.50
+    thinking: false
+    streaming: true
+
+  # ── Kimi family ──
+  kimi-k2.5:
+    provider: kimi
+    context: 131072
+    max_output: 8192
+    thinking: true
+    streaming: true
+
+  moonshot-v1-128k:
+    provider: kimi
+    context: 131072
+    max_output: 8192
+    thinking: false
+    streaming: true
+
+  # ── MiniMax family ──
+  minimax-m1:
+    provider: minimax
+    context: 1000000
+    max_output: 131072
     thinking: false
     streaming: true
 

@@ -12,9 +12,11 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Facade;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
@@ -54,10 +56,11 @@ use Monolog\Logger;
 use OpenCompany\PrismCodex\Codex;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
+use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use Prism\Prism\PrismManager;
+use Prism\Prism\PrismServiceProvider;
 use Prism\Prism\Providers\Anthropic\Anthropic;
 use Prism\Prism\Providers\DeepSeek\DeepSeek;
-use Prism\Prism\PrismServiceProvider;
 use Prism\Prism\Providers\Z\Z;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Application;
@@ -148,6 +151,11 @@ class Kernel
         $this->container->singleton(CodexOAuthService::class, fn () => new CodexOAuthService(
             $this->container->make(CodexTokenStoreContract::class),
             $this->container->make(HttpFactory::class),
+        ));
+        $this->container->singleton(CodexAuthFlow::class, fn () => new CodexAuthFlow(
+            $this->container->make(CodexOAuthService::class),
+            $this->container->make(CodexTokenStoreContract::class),
+            $this->container->make('config'),
         ));
     }
 
@@ -251,6 +259,13 @@ class Kernel
 
         // HTTP client factory (used by Prism via Http facade)
         $this->container->singleton('http', fn () => new HttpFactory);
+        $this->container->singleton(ProviderMeta::class, fn () => new ProviderMeta);
+        $this->container->singleton(ProviderCatalog::class, fn () => new ProviderCatalog(
+            $this->container->make(ProviderMeta::class),
+            $this->container->make('config'),
+            $this->container->make(SettingsRepository::class),
+            $this->container->make(CodexTokenStoreContract::class),
+        ));
     }
 
     private function registerPrism(): void
@@ -358,6 +373,7 @@ class Kernel
 
         $this->container->singleton(ModelCatalog::class, fn () => new ModelCatalog(
             $config->get('models', []),
+            $this->container->make(ProviderMeta::class),
         ));
 
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);

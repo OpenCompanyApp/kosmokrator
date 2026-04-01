@@ -7,6 +7,7 @@ use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionMode;
@@ -84,8 +85,10 @@ class AgentCommand extends Command
         $settings = $this->container->make(SettingsRepository::class);
         $models = $this->container->make(ModelCatalog::class);
 
+        $providers = $this->container->make(ProviderCatalog::class);
+
         $registry = $this->buildSlashCommandRegistry();
-        $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models);
+        $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models, $providers);
         $nextInput = null;
         $nextInputShown = false;
 
@@ -194,7 +197,7 @@ class AgentCommand extends Command
         $registry->register(new Slash\ModeCommand(AgentMode::Ask));
         $registry->register(new Slash\NewCommand);
         $registry->register(new Slash\ResumeCommand);
-        $registry->register(new Slash\SettingsCommand);
+        $registry->register(new Slash\SettingsCommand($this->container));
         $registry->register(new Slash\AgentsCommand);
 
         return $registry;

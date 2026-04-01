@@ -29,7 +29,7 @@ $console->addCommand(new Kosmokrator\Command\SetupCommand($kernel->getContainer(
 
 // Run setup if explicitly requested, otherwise default to agent (single-command style)
 $args = $_SERVER['argv'] ?? [];
-$explicitCommands = ['agent', 'setup', 'codex:login', 'codex:status', 'codex:logout'];
+$explicitCommands = ['agent', 'setup', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
 $requestedCommand = $args[1] ?? null;
 $isExplicitCommand = is_string($requestedCommand) && in_array($requestedCommand, $explicitCommands, true);
 

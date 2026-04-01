@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8f963cbb157de20a8455a9da45bd3f65",
+    "content-hash": "16b9685ddb1901c0f119c341e746c461",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3613,6 +3613,41 @@
                 "openai",
                 "prism"
             ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "opencompanyapp/prism-relay",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../../Sites/opencompany/tmp/prism-relay",
+                "reference": "0126bda0e558679c90cba4455bce300837839ea8"
+            },
+            "require": {
+                "php": "^8.2",
+                "prism-php/prism": "^0.99 || ^0.100 || ^1.0",
+                "psr/log": "^3.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\PrismRelay\\PrismRelayServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\PrismRelay\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Provider normalizer and registry for Prism PHP — custom providers, error categorization, tool call sanitization, caching strategy",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9290,6 +9325,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "opencompany/prism-codex": 20,
+        "opencompanyapp/prism-relay": 20,
         "symfony/tui": 20
     },
     "prefer-stable": true,

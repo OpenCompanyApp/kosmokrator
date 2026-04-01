@@ -15,6 +15,7 @@
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
         "opencompany/prism-codex": "dev-main",
+        "opencompanyapp/prism-relay": "dev-main",
         "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
         "sebastian/diff": "^7.0",
@@ -44,6 +45,13 @@
         {
             "type": "path",
             "url": "../../Sites/opencompany/tmp/prism-codex",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../Sites/opencompany/tmp/prism-relay",
             "options": {
                 "symlink": true
             }

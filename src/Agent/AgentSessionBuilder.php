@@ -9,6 +9,7 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
@@ -56,16 +57,19 @@ final class AgentSessionBuilder
 
         // Validate API key
         $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        if ($provider === 'codex') {
+        $providers = $this->container->make(ProviderCatalog::class);
+        $authMode = $providers->authMode($provider);
+
+        if ($authMode === 'oauth') {
             $oauth = $this->container->make(CodexOAuthService::class);
             if (! $oauth->isConfigured()) {
                 throw new \RuntimeException('Codex is not authenticated. Run `kosmokrator codex:login`.');
             }
-        } else {
-            $apiKey = $config->get("prism.providers.{$provider}.api_key", '');
+        } elseif ($authMode === 'api_key') {
+            $apiKey = $providers->apiKey($provider);
 
             if ($apiKey === '' || $apiKey === null) {
-                throw new \RuntimeException('No API key configured.');
+                throw new \RuntimeException("No API key configured for {$provider}.");
             }
         }
 

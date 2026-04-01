@@ -551,11 +551,90 @@ class AnsiRenderer implements RendererInterface
 
         echo "\n{$accent}  ⚙ Settings{$r}\n";
         foreach ($currentSettings as $key => $value) {
+            if (is_array($value)) {
+                continue;
+            }
             echo "{$dim}    {$white}{$key}{$r}{$dim}: {$value}{$r}\n";
         }
-        echo "{$dim}  (Interactive settings panel requires TUI mode){$r}\n\n";
+        echo "\n{$dim}  Provider/model/auth can be edited here. Press Enter to keep the current value.{$r}\n\n";
 
-        return [];
+        $changes = [];
+        $provider = (string) ($currentSettings['provider'] ?? '');
+        $providerOptions = is_array($currentSettings['provider_options'] ?? null) ? $currentSettings['provider_options'] : [];
+        $modelsByProvider = is_array($currentSettings['model_options_by_provider'] ?? null) ? $currentSettings['model_options_by_provider'] : [];
+        $providerStatuses = is_array($currentSettings['provider_statuses'] ?? null) ? $currentSettings['provider_statuses'] : [];
+        $providerAuthModes = is_array($currentSettings['provider_auth_modes'] ?? null) ? $currentSettings['provider_auth_modes'] : [];
+        $providerDefaults = is_array($currentSettings['provider_defaults'] ?? null) ? $currentSettings['provider_defaults'] : [];
+
+        if ($providerOptions !== []) {
+            echo "{$white}  Providers{$r}\n";
+            foreach ($providerOptions as $option) {
+                $marker = $option['value'] === $provider ? '*' : ' ';
+                echo "{$dim}    {$marker} {$white}{$option['value']}{$r}{$dim} — {$option['description']}{$r}\n";
+            }
+            echo "\n";
+
+            $selectedProvider = trim(readline("  Provider [{$provider}]: "));
+            if ($selectedProvider !== '' && $selectedProvider !== $provider) {
+                $provider = $selectedProvider;
+                $changes['provider'] = $selectedProvider;
+            }
+        }
+
+        $currentModel = (string) ($currentSettings['model'] ?? '');
+        $providerModels = $modelsByProvider[$provider] ?? [];
+        $modelDefault = $providerDefaults[$provider] ?? $currentModel;
+        if ($providerModels !== []) {
+            echo "{$white}  Models for {$provider}{$r}\n";
+            foreach ($providerModels as $model) {
+                echo "{$dim}    {$white}{$model['value']}{$r}{$dim} — {$model['description']}{$r}\n";
+            }
+            echo "\n";
+        }
+
+        $modelPromptDefault = $currentModel !== '' ? $currentModel : $modelDefault;
+        $selectedModel = trim(readline("  Model [{$modelPromptDefault}]: "));
+        if ($selectedModel !== '' && $selectedModel !== $currentModel) {
+            $changes['model'] = $selectedModel;
+        }
+
+        $authMode = $providerAuthModes[$provider] ?? 'api_key';
+        $authStatus = $providerStatuses[$provider] ?? 'Unknown';
+        echo "{$dim}  Auth status: {$authStatus}{$r}\n";
+
+        if ($authMode === 'api_key') {
+            $action = strtolower(trim(readline('  API key action [keep/edit/clear/status]: ')));
+            if ($action === 'edit') {
+                $apiKey = trim(readline('  API key: '));
+                if ($apiKey !== '') {
+                    $changes['api_key'] = $apiKey;
+                }
+            } elseif ($action === 'clear') {
+                $changes['auth_action'] = 'clear_key';
+            } elseif ($action === 'status') {
+                $changes['auth_action'] = 'status';
+            }
+        } elseif ($authMode === 'oauth') {
+            $action = strtolower(trim(readline('  Codex auth [browser/device/logout/status/skip]: ')));
+            $map = [
+                'browser' => 'login_browser',
+                'device' => 'login_device',
+                'logout' => 'logout',
+                'status' => 'status',
+            ];
+            if (isset($map[$action])) {
+                $changes['auth_action'] = $map[$action];
+            }
+        } else {
+            $action = strtolower(trim(readline('  Auth action [status/skip]: ')));
+            if ($action === 'status') {
+                $changes['auth_action'] = 'status';
+            }
+        }
+
+        echo "\n";
+
+        return $changes;
     }
 
     public function pickSession(array $items): ?string

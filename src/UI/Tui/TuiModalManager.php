@@ -7,8 +7,8 @@ namespace Kosmokrator\UI\Tui;
 use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
-use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\PermissionPromptWidget;
+use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
 use Kosmokrator\UI\Tui\Widget\SwarmDashboardWidget;
 use Revolt\EventLoop;
@@ -17,6 +17,12 @@ use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Event\SelectionChangeEvent;
 use Symfony\Component\Tui\Event\SettingChangeEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
+use Symfony\Component\Tui\Style\Border;
+use Symfony\Component\Tui\Style\BorderPattern;
+use Symfony\Component\Tui\Style\Color;
+use Symfony\Component\Tui\Style\Padding;
+use Symfony\Component\Tui\Style\Style;
+use Symfony\Component\Tui\Style\VerticalAlign;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
@@ -244,27 +250,45 @@ final class TuiModalManager
      */
     public function showSettings(array $currentSettings): array
     {
+        $selectedProvider = (string) ($currentSettings['provider'] ?? '');
+        $modelsByProvider = is_array($currentSettings['model_options_by_provider'] ?? null)
+            ? $currentSettings['model_options_by_provider']
+            : [];
+        $providerOptions = is_array($currentSettings['provider_options'] ?? null)
+            ? $currentSettings['provider_options']
+            : [];
+        $providerStatuses = is_array($currentSettings['provider_statuses'] ?? null)
+            ? $currentSettings['provider_statuses']
+            : [];
+        $providerAuthModes = is_array($currentSettings['provider_auth_modes'] ?? null)
+            ? $currentSettings['provider_auth_modes']
+            : [];
+
         $items = [
             new SettingItem(
                 id: 'provider',
                 label: 'Provider',
                 currentValue: $currentSettings['provider'] ?? '',
-                description: 'LLM provider -- press Enter to select',
-                submenu: fn (string $current, callable $onDone) => $this->buildProviderSubmenu($current, $onDone),
+                description: 'LLM provider -- press Enter to select from the shared provider catalog',
+                submenu: fn (string $current, callable $onDone) => $this->buildProviderSubmenu($providerOptions),
             ),
             new SettingItem(
                 id: 'model',
                 label: 'Model',
                 currentValue: $currentSettings['model'] ?? '',
-                description: 'LLM model -- press Enter to edit',
-                submenu: fn (string $current, callable $onDone) => $this->buildInputSubmenu($current, $onDone, 'Model: '),
+                description: 'LLM model -- provider-aware list sourced from PrismRelay metadata',
+                submenu: function (string $current, callable $onDone) use (&$selectedProvider, $modelsByProvider) {
+                    return $this->buildModelSubmenu($selectedProvider, $current, $onDone, $modelsByProvider);
+                },
             ),
             new SettingItem(
-                id: 'api_key',
-                label: 'API Key',
-                currentValue: $currentSettings['api_key'] ?? '(not set)',
-                description: 'API key for current provider -- press Enter to change',
-                submenu: fn (string $current, callable $onDone) => $this->buildInputSubmenu('', $onDone, 'API Key: '),
+                id: 'auth_action',
+                label: 'Auth',
+                currentValue: $currentSettings['auth_status'] ?? '',
+                description: 'Authentication status and actions for the selected provider',
+                submenu: function (string $current, callable $onDone) use (&$selectedProvider, $providerStatuses, $providerAuthModes) {
+                    return $this->buildAuthSubmenu($selectedProvider, $providerStatuses, $providerAuthModes);
+                },
             ),
             new SettingItem(
                 id: 'mode',
@@ -345,18 +369,36 @@ final class TuiModalManager
             ),
         ];
 
-        $settingsWidget = new SettingsListWidget($items);
+        $settingsWidget = new SettingsListWidget($items, maxVisible: $this->settingsMaxVisible());
         $settingsWidget->setId('settings-panel');
+        $settingsWidget->setStyle(new Style(
+            padding: new Padding(0, 0, 0, 0),
+            border: Border::all(0),
+        ));
 
-        $this->overlay->add($settingsWidget);
+        $panel = new ContainerWidget;
+        $panel->setId('settings-panel-wrapper');
+        $panel->expandVertically(true);
+        $panel->setStyle(new Style(
+            border: Border::all(1, BorderPattern::rounded(), Color::hex('#ffc850')),
+            padding: new Padding(0, 1, 0, 1),
+            verticalAlign: VerticalAlign::Top,
+        ));
+        $panel->add($settingsWidget);
+
+        $this->overlay->expandVertically(true);
+        $this->overlay->add($panel);
         $this->tui->setFocus($settingsWidget);
         $this->flushRender();
 
         $changes = [];
         $suspension = EventLoop::getSuspension();
 
-        $settingsWidget->onChange(function (SettingChangeEvent $event) use (&$changes) {
+        $settingsWidget->onChange(function (SettingChangeEvent $event) use (&$changes, &$selectedProvider) {
             $changes[$event->getId()] = $event->getValue();
+            if ($event->getId() === 'provider') {
+                $selectedProvider = $event->getValue();
+            }
         });
 
         $settingsWidget->onCancel(function () use ($suspension) {
@@ -365,7 +407,8 @@ final class TuiModalManager
 
         $suspension->suspend();
 
-        $this->overlay->remove($settingsWidget);
+        $this->overlay->remove($panel);
+        $this->overlay->expandVertically(false);
         $this->tui->setFocus($this->input);
         $this->forceRender();
 
@@ -496,29 +539,59 @@ final class TuiModalManager
     /**
      * Build a provider selection submenu for the settings panel.
      */
-    private function buildProviderSubmenu(string $current, callable $onDone): SelectListWidget
+    private function buildProviderSubmenu(array $providers): SelectListWidget
     {
-        $providers = [
-            ['value' => 'anthropic', 'label' => 'anthropic', 'description' => 'Anthropic (Claude)'],
-            ['value' => 'openai', 'label' => 'openai', 'description' => 'OpenAI (GPT)'],
-            ['value' => 'codex', 'label' => 'codex', 'description' => 'OpenAI Codex via ChatGPT login'],
-            ['value' => 'gemini', 'label' => 'gemini', 'description' => 'Google Gemini'],
-            ['value' => 'deepseek', 'label' => 'deepseek', 'description' => 'DeepSeek'],
-            ['value' => 'groq', 'label' => 'groq', 'description' => 'Groq'],
-            ['value' => 'mistral', 'label' => 'mistral', 'description' => 'Mistral AI'],
-            ['value' => 'xai', 'label' => 'xai', 'description' => 'xAI (Grok)'],
-            ['value' => 'openrouter', 'label' => 'openrouter', 'description' => 'OpenRouter (multi-provider)'],
-            ['value' => 'perplexity', 'label' => 'perplexity', 'description' => 'Perplexity'],
-            ['value' => 'ollama', 'label' => 'ollama', 'description' => 'Ollama (local, no key needed)'],
-            ['value' => 'kimi', 'label' => 'kimi', 'description' => 'Kimi (Moonshot AI)'],
-            ['value' => 'kimi-coding', 'label' => 'kimi-coding', 'description' => 'Kimi coding plan'],
-            ['value' => 'minimax', 'label' => 'minimax', 'description' => 'MiniMax'],
-            ['value' => 'minimax-cn', 'label' => 'minimax-cn', 'description' => 'MiniMax China region'],
-            ['value' => 'z', 'label' => 'z', 'description' => 'Z.AI coding plan'],
-            ['value' => 'z-api', 'label' => 'z-api', 'description' => 'Z.AI standard API'],
-        ];
-
         return new SelectListWidget($providers);
+    }
+
+    /**
+     * @param  array<string, list<array{value: string, label: string, description: string}>>  $modelsByProvider
+     */
+    private function buildModelSubmenu(string $provider, string $current, callable $onDone, array $modelsByProvider): SelectListWidget|InputWidget
+    {
+        $models = $modelsByProvider[$provider] ?? [];
+
+        if ($models === []) {
+            return $this->buildInputSubmenu($current, $onDone, 'Model: ');
+        }
+
+        return new SelectListWidget($models);
+    }
+
+    /**
+     * @param  array<string, string>  $providerStatuses
+     * @param  array<string, string>  $providerAuthModes
+     */
+    private function buildAuthSubmenu(string $provider, array $providerStatuses, array $providerAuthModes): SelectListWidget
+    {
+        $status = $providerStatuses[$provider] ?? 'Unknown';
+        $mode = $providerAuthModes[$provider] ?? 'api_key';
+
+        $items = match ($mode) {
+            'oauth' => [
+                ['value' => 'login_browser', 'label' => 'login_browser', 'description' => "Open browser login · {$status}"],
+                ['value' => 'login_device', 'label' => 'login_device', 'description' => 'Use device-code login'],
+                ['value' => 'status', 'label' => 'status', 'description' => 'Show current authentication status'],
+                ['value' => 'logout', 'label' => 'logout', 'description' => 'Remove stored Codex authentication'],
+            ],
+            'none' => [
+                ['value' => 'status', 'label' => 'status', 'description' => $status],
+            ],
+            default => [
+                ['value' => 'edit_key', 'label' => 'edit_key', 'description' => "Set or replace API key · {$status}"],
+                ['value' => 'status', 'label' => 'status', 'description' => 'Show current key status'],
+                ['value' => 'clear_key', 'label' => 'clear_key', 'description' => 'Remove the stored API key'],
+            ],
+        };
+
+        return new SelectListWidget($items);
+    }
+
+    private function settingsMaxVisible(): int
+    {
+        // Leave a little room for the selected item's description, hint line,
+        // and surrounding chrome while still using nearly the full viewport.
+        return max(8, $this->tui->getTerminal()->getRows() - 6);
     }
 
     /**

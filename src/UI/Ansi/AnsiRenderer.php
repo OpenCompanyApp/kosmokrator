@@ -36,6 +36,9 @@ class AnsiRenderer implements RendererInterface
 
     private bool $wasActive = false;
 
+    /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
+    private array $pendingQuestionRecap = [];
+
     public function __construct()
     {
         $this->intro = new AnsiIntro;
@@ -67,6 +70,7 @@ class AnsiRenderer implements RendererInterface
 
     public function prompt(): string
     {
+        $this->flushPendingQuestionRecap();
         $this->echoTaskBar();
 
         $r = Theme::reset();
@@ -83,6 +87,7 @@ class AnsiRenderer implements RendererInterface
 
     public function showUserMessage(string $text): void
     {
+        $this->flushPendingQuestionRecap();
         // No-op: readline already displays the typed input
     }
 
@@ -136,6 +141,7 @@ class AnsiRenderer implements RendererInterface
 
     public function streamChunk(string $text): void
     {
+        $this->flushPendingQuestionRecap();
         $this->streamBuffer .= $text;
     }
 
@@ -155,6 +161,10 @@ class AnsiRenderer implements RendererInterface
 
     public function showToolCall(string $name, array $args): void
     {
+        if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
+            $this->flushPendingQuestionRecap();
+        }
+
         $r = Theme::reset();
         $dim = Theme::dim();
         $gold = Theme::accent();
@@ -205,6 +215,10 @@ class AnsiRenderer implements RendererInterface
 
     public function showToolResult(string $name, string $output, bool $success): void
     {
+        if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
+            $this->flushPendingQuestionRecap();
+        }
+
         $r = Theme::reset();
         $border = Theme::borderTask();
         $text = Theme::text();
@@ -322,10 +336,12 @@ class AnsiRenderer implements RendererInterface
     public function clearConversation(): void
     {
         // ANSI renderer prints directly to stdout, no widget tree to clear
+        $this->pendingQuestionRecap = [];
     }
 
     public function replayHistory(array $messages): void
     {
+        $this->pendingQuestionRecap = [];
         $r = Theme::reset();
         $dim = Theme::dim();
         $white = Theme::white();
@@ -349,6 +365,7 @@ class AnsiRenderer implements RendererInterface
             }
 
             if ($msg instanceof UserMessage) {
+                $this->flushPendingQuestionRecap();
                 echo "\n  {$white}⟡ {$msg->content}{$r}\n";
 
                 continue;
@@ -356,6 +373,7 @@ class AnsiRenderer implements RendererInterface
 
             if ($msg instanceof AssistantMessage) {
                 if ($msg->content !== '') {
+                    $this->flushPendingQuestionRecap();
                     if (str_contains($msg->content, "\x1b[")) {
                         echo "\n".$msg->content.$r."\n";
                     } else {
@@ -366,6 +384,38 @@ class AnsiRenderer implements RendererInterface
                 foreach ($msg->toolCalls as $toolCall) {
                     $name = $toolCall->name;
                     $args = $toolCall->arguments();
+                    $toolResult = $resultsByCallId[$toolCall->id] ?? null;
+
+                    if ($name === 'ask_user') {
+                        $answer = $toolResult !== null
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            : '';
+                        $trimmed = trim($answer);
+
+                        $this->queueQuestionRecap(
+                            question: (string) ($args['question'] ?? ''),
+                            answer: $trimmed,
+                            answered: $trimmed !== '',
+                        );
+
+                        continue;
+                    }
+
+                    if ($name === 'ask_choice') {
+                        $answer = $toolResult !== null
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            : 'dismissed';
+                        $selected = $this->findChoiceFromArgs($args, $answer);
+
+                        $this->queueQuestionRecap(
+                            question: (string) ($args['question'] ?? ''),
+                            answer: $answer === 'dismissed' ? '' : $answer,
+                            answered: $answer !== 'dismissed',
+                            recommended: (bool) ($selected['recommended'] ?? false),
+                        );
+
+                        continue;
+                    }
 
                     if ($this->isTaskTool($name)) {
                         if ($name === 'task_create') {
@@ -381,11 +431,11 @@ class AnsiRenderer implements RendererInterface
                     }
 
                     // Render tool call
+                    $this->flushPendingQuestionRecap();
                     $this->lastToolArgs = $args;
                     $this->showToolCall($name, $args);
 
                     // Render paired result immediately after
-                    $toolResult = $resultsByCallId[$toolCall->id] ?? null;
                     if ($toolResult !== null) {
                         $this->lastToolArgs = $toolResult->args;
                         $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
@@ -396,11 +446,13 @@ class AnsiRenderer implements RendererInterface
                 continue;
             }
         }
+        $this->flushPendingQuestionRecap();
         echo "\n";
     }
 
     public function showNotice(string $message): void
     {
+        $this->flushPendingQuestionRecap();
         $r = Theme::reset();
         $yellow = Theme::warning();
         echo "\n{$yellow}  {$message}{$r}\n\n";
@@ -470,6 +522,7 @@ class AnsiRenderer implements RendererInterface
 
     public function showError(string $message): void
     {
+        $this->flushPendingQuestionRecap();
         $r = Theme::reset();
         $err = Theme::error();
         echo "\n{$err}  ✗ Error: {$message}{$r}\n\n";
@@ -477,6 +530,7 @@ class AnsiRenderer implements RendererInterface
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
+        $this->flushPendingQuestionRecap();
         $r = Theme::reset();
         $dim = Theme::dim();
         $bar = Theme::contextBar($tokensIn, $maxContext);
@@ -541,8 +595,16 @@ class AnsiRenderer implements RendererInterface
         $r = Theme::reset();
         $accent = Theme::accent();
         echo "\n{$accent}?{$r} {$question}\n";
+        $answer = readline('> ') ?: '';
+        $trimmed = trim($answer);
 
-        return readline('> ') ?: '';
+        $this->queueQuestionRecap(
+            question: $question,
+            answer: $trimmed,
+            answered: $trimmed !== '',
+        );
+
+        return $answer;
     }
 
     public function askChoice(string $question, array $choices): string
@@ -562,8 +624,22 @@ class AnsiRenderer implements RendererInterface
 
         $pick = (int) readline("{$dim}>{$r} ");
         if ($pick >= 1 && $pick <= count($choices)) {
-            return $choices[$pick - 1]['label'];
+            $choice = $choices[$pick - 1];
+            $this->queueQuestionRecap(
+                question: $question,
+                answer: $choice['label'],
+                answered: true,
+                recommended: (bool) ($choice['recommended'] ?? false),
+            );
+
+            return $choice['label'];
         }
+
+        $this->queueQuestionRecap(
+            question: $question,
+            answer: '',
+            answered: false,
+        );
 
         return 'dismissed';
     }
@@ -1159,6 +1235,132 @@ class AnsiRenderer implements RendererInterface
     private function isTaskTool(string $name): bool
     {
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
+    }
+
+    private function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
+    {
+        $this->pendingQuestionRecap[] = [
+            'question' => $question,
+            'answer' => $answer,
+            'answered' => $answered,
+            'recommended' => $answered && $recommended,
+        ];
+    }
+
+    private function flushPendingQuestionRecap(): void
+    {
+        if ($this->pendingQuestionRecap === []) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $accent = Theme::accent();
+        $white = Theme::white();
+        $answerColor = Theme::info();
+        $dim = Theme::dim();
+
+        $answeredCount = count(array_filter($this->pendingQuestionRecap, static fn (array $entry): bool => $entry['answered']));
+        echo "\n{$accent}› •{$r} {$dim}Questions {$answeredCount}/".count($this->pendingQuestionRecap)." answered{$r}\n";
+
+        foreach ($this->pendingQuestionRecap as $index => $entry) {
+            if ($index > 0) {
+                echo "\n";
+            }
+
+            foreach ($this->wrapWithPrefix($entry['question'], '    • ', '      ', 100) as $line) {
+                echo "{$white}{$line}{$r}\n";
+            }
+
+            $answer = $entry['answered']
+                ? $entry['answer'].($entry['recommended'] ? ' (Recommended)' : '')
+                : '(dismissed)';
+            $color = $entry['answered'] ? $answerColor : $dim;
+
+            foreach ($this->wrapWithPrefix($answer, '      ', '      ', 100) as $line) {
+                echo "{$color}{$line}{$r}\n";
+            }
+        }
+
+        $this->pendingQuestionRecap = [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{label: string, detail: string|null, recommended?: bool}|null
+     */
+    private function findChoiceFromArgs(array $args, string $label): ?array
+    {
+        $raw = json_decode((string) ($args['choices'] ?? '[]'), true);
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        $choices = [];
+        foreach ($raw as $item) {
+            if (is_string($item)) {
+                $choices[] = ['label' => $item, 'detail' => null, 'recommended' => false];
+
+                continue;
+            }
+
+            if (! is_array($item) || ! isset($item['label'])) {
+                continue;
+            }
+
+            $choices[] = [
+                'label' => (string) $item['label'],
+                'detail' => isset($item['detail']) ? (string) $item['detail'] : null,
+                'recommended' => (bool) ($item['recommended'] ?? false),
+            ];
+        }
+
+        foreach ($choices as $choice) {
+            if ($choice['label'] === $label) {
+                return $choice;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function wrapWithPrefix(string $text, string $firstPrefix, string $restPrefix, int $width): array
+    {
+        $wrapped = [];
+        $current = '';
+        $words = preg_split('/\s+/', trim($text)) ?: [];
+
+        foreach ($words as $word) {
+            $prefix = $current === '' && $wrapped === [] ? $firstPrefix : ($current === '' ? $restPrefix : '');
+            $lineWidth = max(10, $width - mb_strwidth($prefix));
+            $candidate = $current === '' ? $word : "{$current} {$word}";
+
+            if (mb_strwidth($candidate) > $lineWidth) {
+                if ($current !== '') {
+                    $wrapped[] = ($wrapped === [] ? $firstPrefix : $restPrefix).$current;
+                    $current = $word;
+
+                    continue;
+                }
+
+                $wrapped[] = ($wrapped === [] ? $firstPrefix : $restPrefix).mb_substr($word, 0, $lineWidth);
+                $current = mb_substr($word, $lineWidth);
+
+                continue;
+            }
+
+            $current = $candidate;
+        }
+
+        if ($current === '') {
+            return [($wrapped === [] ? $firstPrefix : $restPrefix)];
+        }
+
+        $wrapped[] = ($wrapped === [] ? $firstPrefix : $restPrefix).$current;
+
+        return $wrapped;
     }
 
     /**

@@ -35,9 +35,9 @@ enum AgentType: string
     public function allowedTools(): array
     {
         return match ($this) {
-            self::General => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent'],
-            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'subagent'],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'subagent'],
+            self::General => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent', 'memory_search', 'memory_save'],
+            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'subagent', 'memory_search'],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'subagent', 'memory_search'],
         };
     }
 
@@ -68,8 +68,8 @@ PROMPT;
 
 # Role: Explore Agent (read-only)
 
-You have READ-ONLY access: read files, search the codebase, run read-only bash commands.
-You MUST NOT create, modify, or delete any files. Do not use file_write or file_edit.
+You have READ-ONLY access: read files, search the codebase, run read-only bash commands, and search saved memories.
+You MUST NOT create, modify, or delete any files. Do not use file_write, file_edit, or memory_save.
 
 - Cast a wide net — search broadly, then drill into relevant files.
 - Read the actual code, don't guess from file names alone.
@@ -81,7 +81,7 @@ PROMPT;
 
 # Role: Plan Agent (read-only)
 
-You have READ-ONLY access. You analyze and plan but MUST NOT modify anything.
+You have READ-ONLY access. You analyze and plan but MUST NOT modify anything. You may search saved memories, but you must not write new ones.
 
 - Research the codebase thoroughly before proposing changes.
 - Produce a detailed, actionable implementation plan with:

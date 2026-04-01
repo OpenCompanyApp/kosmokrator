@@ -41,7 +41,7 @@ interface DialogRendererInterface
      * block (ASCII art / mockup) shown when that option is highlighted.
      * A "Dismiss" option is always appended. Returns selected label or 'dismissed'.
      *
-     * @param  array<array{label: string, detail: string|null}>  $choices
+     * @param  array<array{label: string, detail: string|null, recommended?: bool}>  $choices
      */
     public function askChoice(string $question, array $choices): string;
 }

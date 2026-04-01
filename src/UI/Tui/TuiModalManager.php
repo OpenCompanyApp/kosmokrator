@@ -180,7 +180,7 @@ final class TuiModalManager
      * that option is highlighted. A "Dismiss" option is always appended.
      *
      * @param  string  $question  The question to display
-     * @param  array<array{label: string, detail: string|null}>  $choices
+     * @param  array<array{label: string, detail: string|null, recommended?: bool}>  $choices
      * @return string Selected label or 'dismissed'
      */
     public function askChoice(string $question, array $choices): string

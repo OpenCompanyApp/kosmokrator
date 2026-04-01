@@ -14,6 +14,7 @@ use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
@@ -125,6 +126,9 @@ class TuiRenderer implements RendererInterface
     private array $lastToolArgs = [];
 
     private ?TaskStore $taskStore = null;
+
+    /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
+    private array $pendingQuestionRecap = [];
 
     public function setTaskStore(TaskStore $store): void
     {
@@ -484,6 +488,8 @@ HELP;
 
     public function prompt(): string
     {
+        $this->flushPendingQuestionRecap();
+
         // Restore editor text if mode was cycled via Shift+Tab
         if ($this->pendingEditorRestore !== null) {
             $this->input->setText($this->pendingEditorRestore);
@@ -500,6 +506,8 @@ HELP;
 
     public function showUserMessage(string $text): void
     {
+        $this->flushPendingQuestionRecap();
+
         $r = Theme::reset();
         $bg = Theme::bgRgb(35, 35, 45);
         $white = Theme::white();
@@ -570,6 +578,8 @@ HELP;
 
     public function streamChunk(string $text): void
     {
+        $this->flushPendingQuestionRecap();
+
         if ($this->activeResponse === null) {
             $this->clearThinking();
 
@@ -609,6 +619,10 @@ HELP;
 
     public function showToolCall(string $name, array $args): void
     {
+        if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
+            $this->flushPendingQuestionRecap();
+        }
+
         $this->lastToolArgs = $args;
         $icon = Theme::toolIcon($name);
         $friendly = Theme::toolLabel($name);
@@ -673,6 +687,10 @@ HELP;
 
     public function showToolResult(string $name, string $output, bool $success): void
     {
+        if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
+            $this->flushPendingQuestionRecap();
+        }
+
         $statusColor = $success ? Theme::success() : Theme::error();
         $indicator = $success ? '✓' : '✗';
         $r = Theme::reset();
@@ -825,15 +843,13 @@ HELP;
     public function askUser(string $question): string
     {
         $answer = $this->modalManager->askUser($question);
+        $trimmed = trim($answer);
 
-        // Show Q&A inline in conversation
-        $r = Theme::reset();
-        $accent = Theme::accent();
-        $dim = Theme::dim();
-        $qWidget = new TextWidget("{$accent}?{$r} {$dim}{$question}{$r}");
-        $this->conversation->add($qWidget);
-        $this->showUserMessage($answer);
-        $this->forceRender();
+        $this->queueQuestionRecap(
+            question: $question,
+            answer: $trimmed,
+            answered: $trimmed !== '',
+        );
 
         return $answer;
     }
@@ -841,15 +857,14 @@ HELP;
     public function askChoice(string $question, array $choices): string
     {
         $result = $this->modalManager->askChoice($question, $choices);
+        $selected = $this->findChoice($choices, $result);
 
-        // Show Q&A inline in conversation
-        $r = Theme::reset();
-        $accent = Theme::accent();
-        $dim = Theme::dim();
-        $qWidget = new TextWidget("{$accent}?{$r} {$dim}{$question}{$r}");
-        $this->conversation->add($qWidget);
-        $this->showUserMessage($result === 'dismissed' ? '(dismissed)' : $result);
-        $this->forceRender();
+        $this->queueQuestionRecap(
+            question: $question,
+            answer: $result === 'dismissed' ? '' : $result,
+            answered: $result !== 'dismissed',
+            recommended: (bool) ($selected['recommended'] ?? false),
+        );
 
         return $result;
     }
@@ -916,11 +931,13 @@ HELP;
         $this->conversation->clear();
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
+        $this->pendingQuestionRecap = [];
         $this->flushRender();
     }
 
     public function replayHistory(array $messages): void
     {
+        $this->pendingQuestionRecap = [];
         $r = Theme::reset();
         $dim = Theme::dim();
         $white = Theme::white();
@@ -943,6 +960,7 @@ HELP;
             }
 
             if ($msg instanceof UserMessage) {
+                $this->flushPendingQuestionRecap();
                 $widget = new TextWidget('⟡ '.$msg->content);
                 $widget->addStyleClass('user-message');
                 $this->conversation->add($widget);
@@ -953,6 +971,7 @@ HELP;
             if ($msg instanceof AssistantMessage) {
                 // Text content
                 if ($msg->content !== '') {
+                    $this->flushPendingQuestionRecap();
                     if ($this->containsAnsiEscapes($msg->content)) {
                         $widget = new AnsiArtWidget($msg->content);
                         $widget->addStyleClass('ansi-art');
@@ -967,11 +986,45 @@ HELP;
                 foreach ($msg->toolCalls as $toolCall) {
                     $name = $toolCall->name;
                     $args = $toolCall->arguments();
+                    $toolResult = $resultsByCallId[$toolCall->id] ?? null;
+
+                    if ($name === 'ask_user') {
+                        $answer = $toolResult !== null
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            : '';
+                        $trimmed = trim($answer);
+
+                        $this->queueQuestionRecap(
+                            question: (string) ($args['question'] ?? ''),
+                            answer: $trimmed,
+                            answered: $trimmed !== '',
+                        );
+
+                        continue;
+                    }
+
+                    if ($name === 'ask_choice') {
+                        $answer = $toolResult !== null
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            : 'dismissed';
+                        $selected = $this->findChoiceFromArgs($args, $answer);
+
+                        $this->queueQuestionRecap(
+                            question: (string) ($args['question'] ?? ''),
+                            answer: $answer === 'dismissed' ? '' : $answer,
+                            answered: $answer !== 'dismissed',
+                            recommended: (bool) ($selected['recommended'] ?? false),
+                        );
+
+                        continue;
+                    }
 
                     // Task tools: skip — task bar shows the tree
                     if ($this->isTaskTool($name)) {
                         continue;
                     }
+
+                    $this->flushPendingQuestionRecap();
 
                     // Render tool call line
                     $icon = Theme::toolIcon($name);
@@ -1009,7 +1062,6 @@ HELP;
                     $this->conversation->add($w);
 
                     // Render paired result immediately after the call
-                    $toolResult = $resultsByCallId[$toolCall->id] ?? null;
                     if ($toolResult !== null) {
                         $this->lastToolArgs = $toolResult->args;
                         $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
@@ -1041,11 +1093,13 @@ HELP;
             }
         }
 
+        $this->flushPendingQuestionRecap();
         $this->flushRender();
     }
 
     public function showNotice(string $message): void
     {
+        $this->flushPendingQuestionRecap();
         $widget = new TextWidget($message);
         $widget->addStyleClass('subtitle');
         $this->conversation->add($widget);
@@ -1064,6 +1118,7 @@ HELP;
 
     public function showError(string $message): void
     {
+        $this->flushPendingQuestionRecap();
         $widget = new TextWidget("✗ Error: {$message}");
         $widget->addStyleClass('tool-error');
         $this->conversation->add($widget);
@@ -1370,5 +1425,74 @@ HELP;
     private function isTaskTool(string $name): bool
     {
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
+    }
+
+    private function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
+    {
+        $this->pendingQuestionRecap[] = [
+            'question' => $question,
+            'answer' => $answer,
+            'answered' => $answered,
+            'recommended' => $answered && $recommended,
+        ];
+    }
+
+    private function flushPendingQuestionRecap(): void
+    {
+        if ($this->pendingQuestionRecap === []) {
+            return;
+        }
+
+        $this->conversation->add(new AnsweredQuestionsWidget($this->pendingQuestionRecap));
+        $this->pendingQuestionRecap = [];
+        $this->flushRender();
+    }
+
+    /**
+     * @param  array<array{label: string, detail: string|null, recommended?: bool}>  $choices
+     * @return array{label: string, detail: string|null, recommended?: bool}|null
+     */
+    private function findChoice(array $choices, string $label): ?array
+    {
+        foreach ($choices as $choice) {
+            if ($choice['label'] === $label) {
+                return $choice;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array{label: string, detail: string|null, recommended?: bool}|null
+     */
+    private function findChoiceFromArgs(array $args, string $label): ?array
+    {
+        $raw = json_decode((string) ($args['choices'] ?? '[]'), true);
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        $choices = [];
+        foreach ($raw as $item) {
+            if (is_string($item)) {
+                $choices[] = ['label' => $item, 'detail' => null, 'recommended' => false];
+
+                continue;
+            }
+
+            if (! is_array($item) || ! isset($item['label'])) {
+                continue;
+            }
+
+            $choices[] = [
+                'label' => (string) $item['label'],
+                'detail' => isset($item['detail']) ? (string) $item['detail'] : null,
+                'recommended' => (bool) ($item['recommended'] ?? false),
+            ];
+        }
+
+        return $this->findChoice($choices, $label);
     }
 }

@@ -83,11 +83,11 @@ final class ToolExecutor
                 continue;
             }
 
-            // Ask-mode bash write-guard
-            if ($mode === AgentMode::Ask && $tool->name() === 'bash') {
+            // Read-only mode bash write-guard
+            if (($mode === AgentMode::Ask || $mode === AgentMode::Plan) && $tool->name() === 'bash') {
                 $cmd = $toolCall->arguments()['command'] ?? '';
                 if ($this->permissions?->isMutativeCommand($cmd)) {
-                    $output = 'Command blocked in Ask mode (read-only). Switch to Edit mode for write operations.';
+                    $output = "Command blocked in {$mode->label()} mode (read-only). Switch to Edit mode for write operations.";
                     SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
                     SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
                     $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
@@ -155,18 +155,15 @@ final class ToolExecutor
 
                 $this->collectResult($toolCall, $result, $agentContext, $subagentBatch, $results);
             } else {
-                // Concurrent group: show all headers, then await+display each result in order
-                $nonSubagent = [];
-                foreach ($group as [$toolCall, $tool]) {
-                    if ($toolCall->name !== 'subagent') {
-                        SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
-                        if ($autoApproved[$toolCall->id] ?? false) {
-                            SafeDisplay::call(fn () => $this->ui->showAutoApproveIndicator($toolCall->name), $this->log);
-                        }
-                        $nonSubagent[] = $toolCall->id;
+                // Concurrent group: launch all, then show header+result pairs in order
+                $hasNonSubagent = false;
+                foreach ($group as [$tc, $_]) {
+                    if ($tc->name !== 'subagent') {
+                        $hasNonSubagent = true;
+                        break;
                     }
                 }
-                if ($nonSubagent !== []) {
+                if ($hasNonSubagent) {
                     SafeDisplay::call(fn () => $this->ui->showToolExecuting('concurrent'), $this->log);
                 }
 
@@ -176,12 +173,13 @@ final class ToolExecutor
                     $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $tool, $stats));
                 }
 
-                // Await and display each result in original tool call order
+                // Await and display each header+result pair in original order
                 foreach ($group as [$toolCall, $tool]) {
                     $outcome = $futures[$toolCall->id]->await();
 
                     if ($toolCall->name !== 'subagent') {
                         SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
+                        SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
                     }
 
                     $this->collectResult($toolCall, $outcome, $agentContext, $subagentBatch, $results);

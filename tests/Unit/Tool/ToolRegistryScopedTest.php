@@ -5,6 +5,10 @@ namespace Kosmokrator\Tests\Unit\Tool;
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
+use Kosmokrator\Session\MemoryRepository;
+use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\SessionRepository;
+use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
 use Kosmokrator\Tool\Coding\FileReadTool;
@@ -12,6 +16,8 @@ use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
 use Kosmokrator\Tool\Coding\SubagentTool;
+use Kosmokrator\Session\Tool\MemorySaveTool;
+use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Tool\ToolRegistry;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -31,6 +37,15 @@ class ToolRegistryScopedTest extends TestCase
         $this->registry->register(new GlobTool);
         $this->registry->register(new GrepTool);
         $this->registry->register(new BashTool);
+        $sessionManager = new SessionManager(
+            $this->createStub(SessionRepository::class),
+            $this->createStub(\Kosmokrator\Session\MessageRepository::class),
+            $this->createStub(SettingsRepository::class),
+            $this->createStub(MemoryRepository::class),
+            new NullLogger,
+        );
+        $this->registry->register(new MemorySaveTool($sessionManager));
+        $this->registry->register(new MemorySearchTool($sessionManager));
         // Simulate root SubagentTool in registry
         $this->orchestrator = new SubagentOrchestrator(new NullLogger, 3);
         $rootCtx = new AgentContext(AgentType::General, 0, 3, $this->orchestrator, 'root', '');
@@ -51,6 +66,8 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('file_write', $names);
         $this->assertContains('file_edit', $names);
         $this->assertContains('bash', $names);
+        $this->assertContains('memory_save', $names);
+        $this->assertContains('memory_search', $names);
         // subagent is excluded by scoped(), added externally
         $this->assertNotContains('subagent', $names);
     }
@@ -64,8 +81,10 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('glob', $names);
         $this->assertContains('grep', $names);
         $this->assertContains('bash', $names);
+        $this->assertContains('memory_search', $names);
         $this->assertNotContains('file_write', $names);
         $this->assertNotContains('file_edit', $names);
+        $this->assertNotContains('memory_save', $names);
         $this->assertNotContains('subagent', $names);
     }
 
@@ -76,6 +95,8 @@ class ToolRegistryScopedTest extends TestCase
 
         $this->assertNotContains('file_write', $names);
         $this->assertNotContains('file_edit', $names);
+        $this->assertContains('memory_search', $names);
+        $this->assertNotContains('memory_save', $names);
     }
 
     public function test_scoped_returns_new_instance(): void

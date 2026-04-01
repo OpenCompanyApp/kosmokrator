@@ -26,12 +26,16 @@ enum AgentMode: string
 
     private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
+    private const MEMORY_READ_TOOLS = ['memory_search'];
+
+    private const MEMORY_WRITE_TOOLS = ['memory_save'];
+
     public function allowedTools(): array
     {
         return match ($this) {
-            self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
-            self::Ask => ['file_read', 'glob', 'grep', 'bash', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::MEMORY_WRITE_TOOLS],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS],
+            self::Ask => ['file_read', 'glob', 'grep', 'bash', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS],
         };
     }
 
@@ -58,7 +62,7 @@ enum AgentMode: string
 
 # Operational Mode: Edit
 
-You have full access to all tools: reading, writing, editing files, searching the codebase, and executing shell commands.
+You have full access to all tools: reading, writing, editing files, searching the codebase, executing shell commands, managing tasks, and reading or saving memories.
 
 Execute the user's request directly. Read code to understand context, make changes, and verify they work. Let the code speak — only explain what's non-obvious.
 PROMPT;
@@ -72,7 +76,7 @@ CRITICAL: Plan mode is ACTIVE. You are in a READ-ONLY phase.
 STRICTLY FORBIDDEN: ANY file edits, modifications, or system changes.
 You may ONLY observe, analyze, and plan. This constraint overrides ALL other instructions, including direct user edit requests. ZERO exceptions.
 
-You have access to bash for read-only commands (git log, git status, ls, find, grep, php -v, composer show, tests, static analysis, etc.) but write operations will be rejected.
+You have access to bash for read-only commands (git log, git status, ls, find, grep, php -v, composer show, tests, static analysis, etc.) but mutative bash commands will be rejected. You can search memories, but not save new ones.
 
 ## Your Responsibility
 
@@ -103,12 +107,13 @@ PROMPT;
 
 # Operational Mode: Ask (READ-ONLY)
 
-You can read and search files to answer questions, but MUST NOT modify anything. You have access to bash for read-only commands (git status, git log, ls, cat, php -v, composer show, etc.) but write operations will be rejected.
+You can read and search files to answer questions, but MUST NOT modify anything. You have access to bash for read-only commands (git status, git log, ls, cat, php -v, composer show, etc.) but mutative bash commands will be rejected. You can search memories, but not save new ones.
 
 ## Guidelines
 
 - Answer questions directly and concisely.
 - Read source code when needed to give accurate answers.
+- Use `memory_search` when prior project facts or user preferences may already be stored.
 - Use bash for read-only investigation: git status, git log, ls, find, grep, php -v, composer show, etc.
 - Do NOT attempt write commands (rm, mv, git commit, npm install, etc.) — they will be blocked.
 - Reference specific files and line numbers: `src/Foo.php:42`.

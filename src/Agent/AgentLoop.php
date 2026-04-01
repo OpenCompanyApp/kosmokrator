@@ -141,6 +141,7 @@ class AgentLoop
                 $this->sessionTokensOut += $compactOut;
                 $this->contextManager->refreshSystemPrompt($this->mode);
                 $this->injectPendingBackgroundResults();
+                $this->injectQueuedUserMessages();
                 SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Thinking), $this->log);
 
                 try {
@@ -232,6 +233,7 @@ class AgentLoop
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Thinking), $this->log);
 
                     $this->injectPendingBackgroundResults();
+                    $this->injectQueuedUserMessages();
 
                     // Deduplicate superseded tool results (cheap, no LLM call)
                     if ($this->deduplicator !== null) {
@@ -575,6 +577,21 @@ class AgentLoop
 
         // Free memory for completed agents whose results we just consumed
         $this->agentContext->orchestrator->pruneCompleted();
+    }
+
+    /**
+     * Drain queued user messages from the UI and inject them into conversation history.
+     * This allows follow-up messages typed during tool execution to be seen by the LLM
+     * on the next API call within the same turn.
+     */
+    private function injectQueuedUserMessages(): void
+    {
+        while (($message = $this->ui->consumeQueuedMessage()) !== null) {
+            $this->history->addUser($message);
+            $lastMessage = $this->history->messages()[array_key_last($this->history->messages())];
+            $this->persistMessage($lastMessage);
+            $this->log->debug('Injected queued user message mid-turn', ['length' => strlen($message)]);
+        }
     }
 
     private function logMemoryUsage(): void

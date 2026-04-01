@@ -70,7 +70,7 @@ class ToolRegistry
             ->using(function (...$args) use ($tool) {
                 $result = $tool->execute($args);
 
-                return $result->output;
+                return $result->success ? $result->output : "Error: {$result->output}";
             });
 
         foreach ($tool->parameters() as $name => $schema) {

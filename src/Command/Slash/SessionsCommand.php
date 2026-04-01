@@ -53,7 +53,7 @@ class SessionsCommand implements SlashCommand
         $id = substr($session['id'], 0, 8);
         $current = $session['id'] === $currentId ? ' ←' : '';
         $msgCount = $session['message_count'] ?? 0;
-        $age = self::formatAge($session['updated_at'] ?? '');
+        $age = SessionFormatter::formatAge($session['updated_at'] ?? '');
         $preview = $session['last_user_message'] ?? $session['title'] ?? null;
 
         if ($preview !== null) {
@@ -63,26 +63,5 @@ class SessionsCommand implements SlashCommand
         }
 
         return "  {$id}  {$preview}  ({$msgCount} msgs, {$age}){$current}";
-    }
-
-    private static function formatAge(string $timestamp): string
-    {
-        if ($timestamp === '') {
-            return '?';
-        }
-
-        $seconds = time() - (int) ((float) $timestamp);
-
-        if ($seconds < 60) {
-            return 'just now';
-        }
-        if ($seconds < 3600) {
-            return (int) ($seconds / 60).'m ago';
-        }
-        if ($seconds < 86400) {
-            return (int) ($seconds / 3600).'h ago';
-        }
-
-        return (int) ($seconds / 86400).'d ago';
     }
 }

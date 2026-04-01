@@ -176,6 +176,11 @@ class KosmokratorStyleSheet
                 italic: true,
             ),
 
+            // Subagent loader — no top padding so it sits flush below the agent tree
+            '.subagent-loader' => new Style(
+                padding: new Padding(0, 2, 0, 2),
+            ),
+
             // Markdown widget — cap width for readability
             MarkdownWidget::class => new Style(
                 padding: new Padding(0, 2, 0, 2),

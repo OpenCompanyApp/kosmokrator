@@ -6,6 +6,7 @@ namespace Kosmokrator\UI;
 
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
+use Kosmokrator\Task\TaskStore;
 
 /**
  * No-op renderer for headless subagents.
@@ -129,4 +130,14 @@ class NullRenderer implements RendererInterface
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void {}
 
     public function teardown(): void {}
+
+    public function showWelcome(): void {}
+
+    public function setTaskStore(TaskStore $store): void {}
+
+    public function refreshTaskBar(): void {}
+
+    public function playTheogony(): void {}
+
+    public function playPrometheus(): void {}
 }

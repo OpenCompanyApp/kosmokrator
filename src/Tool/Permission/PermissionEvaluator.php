@@ -121,15 +121,8 @@ class PermissionEvaluator
         // Check both raw path and resolved (symlink-followed) path
         $pathsToCheck = [$path];
 
-        $resolved = realpath($path);
-        if ($resolved === false) {
-            // File doesn't exist yet — resolve parent directory
-            $parentResolved = realpath(dirname($path));
-            if ($parentResolved !== false) {
-                $resolved = $parentResolved.'/'.basename($path);
-            }
-        }
-        if ($resolved !== false && $resolved !== $path) {
+        $resolved = PathResolver::resolve($path);
+        if ($resolved !== null && $resolved !== $path) {
             $pathsToCheck[] = $resolved;
         }
 

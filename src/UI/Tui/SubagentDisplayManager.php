@@ -32,6 +32,9 @@ final class SubagentDisplayManager
     /** Wrapper container added once to conversation; all subagent widgets live inside it. */
     private ?ContainerWidget $container = null;
 
+    /** Prevents tickTreeRefresh from recreating the tree after batch results are shown. */
+    private bool $batchDisplayed = false;
+
     private ?CancellableLoaderWidget $loader = null;
 
     private ?TextWidget $treeWidget = null;
@@ -39,6 +42,10 @@ final class SubagentDisplayManager
     private ?string $elapsedTimerId = null;
 
     private float $startTime = 0.0;
+
+    private int $loaderBreathTick = 0;
+
+    private string $cachedLoaderLabel = 'Agents running...';
 
     private ?\Closure $treeProvider = null;
 
@@ -97,7 +104,13 @@ final class SubagentDisplayManager
             return;
         }
 
-        $container = $this->ensureContainer();
+        // Fresh container at current conversation position — old one stays with its results
+        $this->container = new ContainerWidget;
+        $this->container->setId('subagent-container');
+        $this->conversation->add($this->container);
+        $this->batchDisplayed = false;
+
+        $container = $this->container;
 
         $r = Theme::reset();
         $dim = Theme::dim();
@@ -143,6 +156,7 @@ final class SubagentDisplayManager
         }
 
         $this->stopLoader();
+        $this->batchDisplayed = false;
 
         ($this->ensureSpinners)();
 
@@ -156,33 +170,47 @@ final class SubagentDisplayManager
         $container = $this->ensureContainer();
 
         $this->loader = new CancellableLoaderWidget("{$blue}{$label}{$r}");
+        $this->loader->addStyleClass('subagent-loader');
         $this->loader->setSpinner('cosmos', 120);
         $this->startTime = microtime(true);
+        $this->loaderBreathTick = 0;
+        $this->cachedLoaderLabel = $label;
 
         $container->add($this->loader);
 
-        // Elapsed timer — updates loader label only (tree refresh is in breathing timer)
-        $this->elapsedTimerId = EventLoop::repeat(1.0, function () use ($dim, $r): void {
+        // Breathing timer — blue color modulation at ~20fps, label update every ~1s
+        $this->elapsedTimerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {
             if ($this->loader === null) {
                 return;
             }
-            $elapsed = (int) (microtime(true) - $this->startTime);
-            $minutes = (int) ($elapsed / 60);
-            $seconds = $elapsed % 60;
-            $time = sprintf('%d:%02d', $minutes, $seconds);
+            $this->loaderBreathTick++;
 
-            // Build dynamic label from live tree data
-            $label = 'Agents running...';
-            if ($this->treeProvider !== null) {
+            // Blue breathing color (same sine wave as thinking indicator)
+            $t = sin($this->loaderBreathTick * 0.07);
+            $cr = (int) (112 + 40 * $t);
+            $cg = (int) (160 + 40 * $t);
+            $cb = (int) (208 + 47 * $t);
+            $color = "\033[38;2;{$cr};{$cg};{$cb}m";
+
+            // Escalate color for long-running agents
+            $elapsed = (int) (microtime(true) - $this->startTime);
+            if ($elapsed >= 120) {
+                $color = Theme::error();
+            } elseif ($elapsed >= 60) {
+                $color = Theme::warning();
+            }
+
+            // Update label from tree data every ~1s (every 20th tick)
+            if ($this->loaderBreathTick % 20 === 0 && $this->treeProvider !== null) {
                 try {
                     $tree = ($this->treeProvider)();
                     if ($tree !== []) {
                         $total = AgentDisplayFormatter::countNodes($tree);
                         $done = AgentDisplayFormatter::countByStatus($tree, 'done');
                         if ($done > 0) {
-                            $label = "{$total} agents ({$done} done)";
+                            $this->cachedLoaderLabel = "{$total} agents ({$done} done)";
                         } else {
-                            $label = $total === 1 ? 'Agent running...' : "{$total} agents running...";
+                            $this->cachedLoaderLabel = $total === 1 ? 'Agent running...' : "{$total} agents running...";
                         }
                     }
                 } catch (\Throwable) {
@@ -190,13 +218,8 @@ final class SubagentDisplayManager
                 }
             }
 
-            $color = match (true) {
-                $elapsed >= 120 => Theme::error(),
-                $elapsed >= 60 => Theme::warning(),
-                default => "\033[38;2;112;160;208m",
-            };
-
-            $this->loader->setMessage("{$color}{$label}  {$dim}{$time}{$r}");
+            $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
+            $this->loader->setMessage("{$color}{$this->cachedLoaderLabel}  {$dim}{$time}{$r}");
             ($this->renderCallback)();
         });
 
@@ -211,6 +234,8 @@ final class SubagentDisplayManager
     public function showBatch(array $entries): void
     {
         $this->stopLoader();
+        $this->removeTree();
+        $this->batchDisplayed = true;
 
         if (empty($entries)) {
             return;
@@ -221,8 +246,9 @@ final class SubagentDisplayManager
         $green = Theme::success();
         $red = Theme::error();
 
-        // Skip for background acks
-        if (! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')))) {
+        // Filter out background acks — show remaining (failures, awaited results)
+        $entries = array_values(array_filter($entries, fn ($e) => ! str_contains($e['result'], 'spawned in background')));
+        if (empty($entries)) {
             return;
         }
 
@@ -322,7 +348,7 @@ final class SubagentDisplayManager
      */
     public function tickTreeRefresh(): void
     {
-        if ($this->treeProvider === null) {
+        if ($this->treeProvider === null || $this->batchDisplayed) {
             return;
         }
 
@@ -346,8 +372,8 @@ final class SubagentDisplayManager
     {
         $this->stopLoader();
         $this->removeTree();
-        // Reset container reference so the next subagent batch gets a fresh one
-        $this->container = null;
+        // Don't null container — batch results persist in conversation.
+        // showSpawn() creates a fresh container for the next batch.
     }
 
     /**
@@ -380,7 +406,7 @@ final class SubagentDisplayManager
         $summary = implode(', ', $parts);
         $header = "{$cyan}⏺{$r} {$total} agents ({$summary})";
 
-        return $header."\n".$this->renderTreeNodes($nodes, '  ', $r, $dim, $green, $red, $amber, $gray);
+        return $header."\n".rtrim($this->renderTreeNodes($nodes, '  ', $r, $dim, $green, $red, $amber, $gray));
     }
 
     /**
@@ -436,7 +462,6 @@ final class SubagentDisplayManager
             $this->container->remove($this->loader);
             $this->loader = null;
         }
-        $this->removeTree();
     }
 
     /**

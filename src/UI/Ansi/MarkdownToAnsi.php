@@ -2,6 +2,8 @@
 
 namespace Kosmokrator\UI\Ansi;
 
+use Kosmokrator\UI\Ansi\Handler\ListTracker;
+use Kosmokrator\UI\Ansi\Handler\TableCollector;
 use Kosmokrator\UI\Theme;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
@@ -20,9 +22,6 @@ use League\CommonMark\Extension\CommonMark\Node\Inline\Strong;
 use League\CommonMark\Extension\GithubFlavoredMarkdownExtension;
 use League\CommonMark\Extension\Strikethrough\Strikethrough;
 use League\CommonMark\Extension\Table\Table;
-use League\CommonMark\Extension\Table\TableCell;
-use League\CommonMark\Extension\Table\TableRow;
-use League\CommonMark\Extension\Table\TableSection;
 use League\CommonMark\Extension\TaskList\TaskListItemMarker;
 use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Node\Block\Paragraph;
@@ -39,7 +38,9 @@ class MarkdownToAnsi
 
     private Highlighter $highlighter;
 
-    private AnsiTableRenderer $tableRenderer;
+    private TableCollector $tableCollector;
+
+    private ListTracker $listTracker;
 
     private string $output = '';
 
@@ -49,40 +50,12 @@ class MarkdownToAnsi
 
     private int $termWidth;
 
-    /** @var list<array{type: string, counter: int, start: int}> */
-    private array $listStack = [];
-
-    // Table collection state
-    private bool $collectingTable = false;
-
-    /** @var list<string|null> */
-    private array $tableAlignments = [];
-
-    /** @var list<list<string>> */
-    private array $tableHead = [];
-
-    /** @var list<list<string>> */
-    private array $tableBody = [];
-
-    private bool $tableInHead = false;
-
-    /** @var list<string> */
-    private array $tableCurrentRow = [];
-
-    private string $tableCellBuffer = '';
-
-    private bool $collectingCell = false;
-
     // Link collection state
     private bool $collectingLink = false;
 
     private string $linkUrl = '';
 
     private string $linkBuffer = '';
-
-    private bool $insideListItem = false;
-
-    private bool $listItemNeedsBullet = false;
 
     public function __construct()
     {
@@ -92,7 +65,8 @@ class MarkdownToAnsi
 
         $this->parser = new MarkdownParser($environment);
         $this->highlighter = new Highlighter(new KosmokratorTerminalTheme);
-        $this->tableRenderer = new AnsiTableRenderer;
+        $this->tableCollector = new TableCollector(new AnsiTableRenderer);
+        $this->listTracker = new ListTracker;
         $this->termWidth = self::detectTermWidth();
     }
 
@@ -101,10 +75,8 @@ class MarkdownToAnsi
         $this->output = '';
         $this->inlineBuffer = '';
         $this->blockquoteDepth = 0;
-        $this->listStack = [];
-        $this->collectingTable = false;
+        $this->listTracker->reset();
         $this->collectingLink = false;
-        $this->insideListItem = false;
 
         $document = $this->parser->parse($markdown);
         $walker = $document->walker();
@@ -118,8 +90,8 @@ class MarkdownToAnsi
             }
 
             // When collecting table data, handle table nodes specially
-            if ($this->collectingTable && ! ($node instanceof Table && ! $entering)) {
-                $this->handleTableNode($node, $entering);
+            if ($this->tableCollector->isCollecting() && ! ($node instanceof Table && ! $entering)) {
+                $this->tableCollector->handleNode($node, $entering);
 
                 continue;
             }
@@ -175,8 +147,13 @@ class MarkdownToAnsi
         if ($entering) {
             $this->inlineBuffer = '';
         } else {
-            if ($this->insideListItem) {
-                $this->flushListItemParagraph();
+            if ($this->listTracker->isInsideItem()) {
+                $this->output .= $this->listTracker->flushListItemParagraph(
+                    $this->inlineBuffer,
+                    $this->indent(),
+                    $this->termWidth,
+                );
+                $this->inlineBuffer = '';
             } else {
                 $this->flushParagraph();
             }
@@ -270,79 +247,18 @@ class MarkdownToAnsi
 
     private function handleListBlock(ListBlock $node, bool $entering): void
     {
-        if ($entering) {
-            $this->listStack[] = [
-                'type' => $node->getListData()->type,
-                'counter' => $node->getListData()->start ?? 1,
-                'start' => $node->getListData()->start ?? 1,
-            ];
-        } else {
-            array_pop($this->listStack);
-            if ($this->listStack === []) {
-                $this->output .= "\n";
-            }
+        $trailing = $this->listTracker->handleListBlock($node, $entering);
+        if ($trailing !== null) {
+            $this->output .= $trailing;
         }
     }
 
     private function handleListItem(bool $entering): void
     {
+        $this->listTracker->handleListItem($entering);
         if ($entering) {
-            $this->insideListItem = true;
-            $this->listItemNeedsBullet = true;
             $this->inlineBuffer = '';
-        } else {
-            $this->insideListItem = false;
-            $this->listItemNeedsBullet = false;
         }
-    }
-
-    private function flushListItemParagraph(): void
-    {
-        if ($this->inlineBuffer === '') {
-            return;
-        }
-
-        $indent = $this->indent();
-        $listCtx = end($this->listStack);
-        $depth = count($this->listStack);
-        $bulletIndent = str_repeat('  ', $depth - 1);
-
-        if ($this->listItemNeedsBullet) {
-            if ($listCtx !== false) {
-                if ($listCtx['type'] === ListBlock::TYPE_ORDERED) {
-                    $bullet = $listCtx['counter'].'. ';
-                    $this->listStack[array_key_last($this->listStack)]['counter']++;
-                } else {
-                    $bullet = $depth > 1 ? '◦ ' : '• ';
-                }
-            } else {
-                $bullet = '• ';
-            }
-
-            $continuationIndent = $indent.$bulletIndent.str_repeat(' ', mb_strlen($bullet));
-            $contWidth = AnsiTableRenderer::visibleWidth($continuationIndent);
-            $availableWidth = max(40, $this->termWidth - $contWidth - 2);
-            $lines = $this->wrapAnsiText($this->inlineBuffer, $availableWidth);
-
-            $this->output .= $indent.$bulletIndent.Theme::dim().$bullet.Theme::reset().array_shift($lines).Theme::reset()."\n";
-            foreach ($lines as $line) {
-                $this->output .= $continuationIndent.$line.Theme::reset()."\n";
-            }
-
-            $this->listItemNeedsBullet = false;
-        } else {
-            // Continuation paragraph in same list item (loose list)
-            $continuationIndent = $indent.$bulletIndent.'  ';
-            $contWidth = AnsiTableRenderer::visibleWidth($continuationIndent);
-            $availableWidth = max(40, $this->termWidth - $contWidth - 2);
-            $lines = $this->wrapAnsiText($this->inlineBuffer, $availableWidth);
-
-            foreach ($lines as $line) {
-                $this->output .= $continuationIndent.$line.Theme::reset()."\n";
-            }
-        }
-
-        $this->inlineBuffer = '';
     }
 
     private function handleThematicBreak(): void
@@ -358,70 +274,9 @@ class MarkdownToAnsi
     private function handleTable(bool $entering): void
     {
         if ($entering) {
-            $this->collectingTable = true;
-            $this->tableAlignments = [];
-            $this->tableHead = [];
-            $this->tableBody = [];
-            $this->tableInHead = false;
-            $this->tableCurrentRow = [];
+            $this->tableCollector->start();
         } else {
-            $this->collectingTable = false;
-
-            $rendered = $this->tableRenderer->render([
-                'alignments' => $this->tableAlignments,
-                'head' => $this->tableHead,
-                'body' => $this->tableBody,
-            ], $this->indent());
-
-            $this->output .= $rendered."\n";
-        }
-    }
-
-    private function handleTableNode(mixed $node, bool $entering): void
-    {
-        match (true) {
-            $node instanceof TableSection => $this->handleTableSection($node, $entering),
-            $node instanceof TableRow => $this->handleTableRow($entering),
-            $node instanceof TableCell => $this->handleTableCell($node, $entering),
-            $node instanceof Text => $entering && $this->collectingCell ? $this->tableCellBuffer .= $node->getLiteral() : null,
-            $node instanceof Code => $entering && $this->collectingCell ? $this->tableCellBuffer .= Theme::code().'`'.$node->getLiteral().'`'.Theme::reset() : null,
-            $node instanceof Strong => $this->collectingCell ? ($entering ? $this->tableCellBuffer .= Theme::bold() : $this->tableCellBuffer .= Theme::reset()) : null,
-            $node instanceof Emphasis => $this->collectingCell ? ($entering ? $this->tableCellBuffer .= "\033[3m" : $this->tableCellBuffer .= "\033[23m") : null,
-            default => null,
-        };
-    }
-
-    private function handleTableSection(TableSection $node, bool $entering): void
-    {
-        $this->tableInHead = $entering && $node->isHead();
-    }
-
-    private function handleTableRow(bool $entering): void
-    {
-        if ($entering) {
-            $this->tableCurrentRow = [];
-        } else {
-            if ($this->tableInHead) {
-                $this->tableHead[] = $this->tableCurrentRow;
-            } else {
-                $this->tableBody[] = $this->tableCurrentRow;
-            }
-        }
-    }
-
-    private function handleTableCell(TableCell $node, bool $entering): void
-    {
-        if ($entering) {
-            $this->collectingCell = true;
-            $this->tableCellBuffer = '';
-
-            // Collect alignment from header cells
-            if ($node->getType() === TableCell::TYPE_HEADER) {
-                $this->tableAlignments[] = $node->getAlign();
-            }
-        } else {
-            $this->collectingCell = false;
-            $this->tableCurrentRow[] = $this->tableCellBuffer;
+            $this->output .= $this->tableCollector->finish($this->indent())."\n";
         }
     }
 

@@ -2,11 +2,14 @@
 
 namespace Kosmokrator\Tool\Coding;
 
+use Amp\Process\Process;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use Symfony\Component\Process\Process;
+use Revolt\EventLoop;
+
+use function Amp\ByteStream\buffer;
 
 class BashTool implements ToolInterface
 {
@@ -51,10 +54,8 @@ class BashTool implements ToolInterface
             return ToolResult::error('No command provided');
         }
 
-        $process = Process::fromShellCommandline($command);
         $timeout = (int) ($args['timeout'] ?? $this->timeout);
         $timeout = max(1, min($timeout, 7200));
-        $process->setTimeout($timeout);
 
         if ($timeout !== $this->timeout) {
             $this->log->debug('Bash using custom timeout', ['timeout' => $timeout, 'default' => $this->timeout]);
@@ -62,7 +63,29 @@ class BashTool implements ToolInterface
 
         $startTime = microtime(true);
         try {
-            $process->run();
+            // Amp Process — fiber-aware, yields to event loop during execution
+            $process = Process::start(['sh', '-c', $command]);
+
+            // Timeout watchdog — kills the process if it exceeds the limit
+            $timedOut = false;
+            $timerId = EventLoop::delay($timeout, function () use ($process, &$timedOut): void {
+                $timedOut = true;
+                if ($process->isRunning()) {
+                    $process->kill();
+                }
+            });
+
+            // Buffer stdout/stderr concurrently to avoid pipe deadlock
+            $stdoutFuture = \Amp\async(fn () => buffer($process->getStdout()));
+            $stderrFuture = \Amp\async(fn () => buffer($process->getStderr()));
+            $exitCode = $process->join();
+            $output = $stdoutFuture->await();
+            $errorOutput = $stderrFuture->await();
+            EventLoop::cancel($timerId);
+
+            if ($timedOut) {
+                return ToolResult::error("Process timed out after {$timeout}s");
+            }
         } catch (\Throwable $e) {
             $this->log->warning('Bash process error', [
                 'command' => mb_substr($command, 0, 100),
@@ -73,10 +96,6 @@ class BashTool implements ToolInterface
 
             return ToolResult::error("Process error: {$e->getMessage()}");
         }
-
-        $output = $process->getOutput();
-        $errorOutput = $process->getErrorOutput();
-        $exitCode = $process->getExitCode();
 
         $this->log->debug('Bash command complete', [
             'command' => mb_substr($command, 0, 100),

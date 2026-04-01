@@ -48,7 +48,7 @@ class ResumeCommand implements SlashCommand
             foreach ($sessions as $s) {
                 $current = $s['id'] === $ctx->sessionManager->currentSessionId() ? ' (current)' : '';
                 $msgCount = $s['message_count'] ?? 0;
-                $age = self::formatAge($s['updated_at'] ?? '');
+                $age = SessionFormatter::formatAge($s['updated_at'] ?? '');
                 $preview = $s['last_user_message'] ?? $s['title'] ?? '(empty)';
                 $preview = mb_substr(trim(str_replace("\n", ' ', $preview)), 0, 50);
 
@@ -82,26 +82,5 @@ class ResumeCommand implements SlashCommand
         }
 
         return SlashCommandResult::continue();
-    }
-
-    private static function formatAge(string $timestamp): string
-    {
-        if ($timestamp === '') {
-            return '?';
-        }
-
-        $seconds = time() - (int) ((float) $timestamp);
-
-        if ($seconds < 60) {
-            return 'just now';
-        }
-        if ($seconds < 3600) {
-            return (int) ($seconds / 60).'m ago';
-        }
-        if ($seconds < 86400) {
-            return (int) ($seconds / 3600).'h ago';
-        }
-
-        return (int) ($seconds / 86400).'d ago';
     }
 }

@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\UI;
+
+use Kosmokrator\Agent\SubagentStats;
+
+/**
+ * Subagent swarm display and orchestration feedback.
+ */
+interface SubagentRendererInterface
+{
+    /**
+     * Update the subagent status display with current stats for all agents.
+     *
+     * @param  array<string, SubagentStats>  $stats
+     */
+    public function showSubagentStatus(array $stats): void;
+
+    /**
+     * Clear the subagent status display.
+     */
+    public function clearSubagentStatus(): void;
+
+    /**
+     * Show a running indicator while subagents execute.
+     * Called AFTER showSubagentSpawn(), cleared implicitly by showSubagentBatch().
+     *
+     * @param  array<int, array{args: array, id: string}>  $entries
+     */
+    public function showSubagentRunning(array $entries): void;
+
+    /**
+     * Show a grouped batch of subagent spawns (header + running indicators).
+     * Called BEFORE agents execute so the user sees them immediately.
+     *
+     * @param  array<int, array{args: array, id: string}>  $entries
+     */
+    public function showSubagentSpawn(array $entries): void;
+
+    /**
+     * Show grouped batch of subagent results (replaces the spawn display).
+     * Called AFTER agents complete with their results.
+     *
+     * @param  array<int, array{args: array, result: string, success: bool, children?: array}>  $entries
+     */
+    public function showSubagentBatch(array $entries): void;
+
+    /**
+     * Update the live subagent tree display with current orchestrator state.
+     */
+    public function refreshSubagentTree(array $tree): void;
+
+    /**
+     * Set a callback that returns the live agent tree (called during breathing animation).
+     */
+    public function setAgentTreeProvider(?\Closure $provider): void;
+
+    /**
+     * Show the swarm progress dashboard.
+     *
+     * @param  array  $summary  Aggregated stats (counts, tokens, cost, ETA, etc.)
+     * @param  array<string, SubagentStats>  $allStats  All agent stats
+     * @param  \Closure|null  $refresh  Callback returning ['summary' => ..., 'stats' => ...] for auto-refresh (TUI)
+     */
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void;
+}

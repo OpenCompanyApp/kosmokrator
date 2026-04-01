@@ -4,6 +4,7 @@ namespace Kosmokrator\UI\Ansi;
 
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
+use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\Diff\DiffRenderer;
@@ -13,7 +14,6 @@ use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Tempest\Highlight\Highlighter;
 
 class AnsiRenderer implements RendererInterface
 {
@@ -23,12 +23,7 @@ class AnsiRenderer implements RendererInterface
 
     private ?MarkdownToAnsi $markdownRenderer = null;
 
-    private ?Highlighter $highlighter = null;
-
     private ?DiffRenderer $diffRenderer = null;
-
-    /** @var (\Closure(string): bool)|null */
-    private ?\Closure $immediateCommandHandler = null;
 
     private array $lastToolArgs = [];
 
@@ -46,6 +41,11 @@ class AnsiRenderer implements RendererInterface
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
+    }
+
+    public function refreshTaskBar(): void
+    {
+        // ANSI: task bar is rendered fresh on each prompt() call, no explicit refresh needed
     }
 
     public function initialize(): void
@@ -294,54 +294,6 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
-    private function renderFileReadResult(array $lines, int $maxLines): void
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $gray = Theme::text();
-
-        // Detect language from file extension
-        $path = $this->lastToolArgs['path'] ?? '';
-        $language = KosmokratorTerminalTheme::detectLanguage($path);
-
-        // Separate line numbers from code content
-        $codeLines = [];
-        $lineNums = [];
-        foreach (array_slice($lines, 0, $maxLines) as $line) {
-            if (preg_match('/^(\s*\d+)\t(.*)$/', $line, $m)) {
-                $lineNums[] = $m[1];
-                $codeLines[] = $m[2];
-            } else {
-                $lineNums[] = '';
-                $codeLines[] = $line;
-            }
-        }
-
-        // Highlight the code block
-        $code = implode("\n", $codeLines);
-        if ($language !== '') {
-            try {
-                $highlighted = $this->getHighlighter()->parse($code, $language);
-            } catch (\Throwable) {
-                $highlighted = $code;
-            }
-            $highlightedLines = explode("\n", $highlighted);
-        } else {
-            $highlightedLines = $codeLines;
-        }
-
-        // Output with line numbers
-        foreach ($highlightedLines as $i => $hLine) {
-            $num = $lineNums[$i] ?? '';
-            echo "{$dim}  │{$r} {$gray}{$num}{$r}\t{$hLine}{$r}\n";
-        }
-    }
-
-    private function getHighlighter(): Highlighter
-    {
-        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme);
-    }
-
     /**
      * @return string[]
      */
@@ -464,7 +416,7 @@ class AnsiRenderer implements RendererInterface
 
     public function setImmediateCommandHandler(?\Closure $handler): void
     {
-        $this->immediateCommandHandler = $handler;
+        // No-op: ANSI mode is synchronous, immediate commands not supported
     }
 
     public function showError(string $message): void
@@ -1100,16 +1052,16 @@ class AnsiRenderer implements RendererInterface
         $cyan = "\033[38;2;100;200;220m";
         $border = Theme::borderTask();
 
+        // Filter out background acks — show remaining (failures, awaited results)
+        $entries = array_values(array_filter($entries, fn ($e) => ! str_contains($e['result'], 'spawned in background')));
+        if (empty($entries)) {
+            return;
+        }
+
         $count = count($entries);
         $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
         $failed = $count - $succeeded;
         $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
-        $allBg = ! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')));
-
-        // Background ack — don't show a second block (spawn block is enough)
-        if ($allBg) {
-            return;
-        }
 
         // Single agent: compact
         if ($count === 1) {
@@ -1186,7 +1138,7 @@ class AnsiRenderer implements RendererInterface
             }
             $id = $args['id'] ?? '';
             $task = $this->taskStore?->get($id);
-            $subject = $task?->subject ?? $id;
+            $subject = $task->subject ?? $id;
             $statusIcon = match ($status) {
                 'completed' => "\033[38;2;80;220;100m\u{25CF}{$r}",
                 'cancelled' => "\033[38;2;255;80;60m\u{2717}{$r}",

@@ -60,16 +60,9 @@ class GuardianEvaluator
             return false;
         }
 
-        // Resolve to absolute path, handling symlinks
-        $resolved = realpath($path);
-
-        if ($resolved === false) {
-            // File doesn't exist yet (file_write) — resolve parent directory
-            $parent = realpath(dirname($path));
-            if ($parent === false) {
-                return false;
-            }
-            $resolved = $parent.'/'.basename($path);
+        $resolved = PathResolver::resolve($path);
+        if ($resolved === null) {
+            return false;
         }
 
         return str_starts_with($resolved, $this->projectRoot.'/');

@@ -2,9 +2,11 @@
 
 namespace Kosmokrator\Tool\Coding;
 
+use Amp\Process\Process;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
-use Symfony\Component\Process\Process;
+
+use function Amp\ByteStream\buffer;
 
 class GrepTool implements ToolInterface
 {
@@ -59,13 +61,12 @@ class GrepTool implements ToolInterface
             }
         }
 
-        $process = Process::fromShellCommandline($fullCmd);
-        $process->setTimeout($this->timeout);
-        $process->run();
-
-        $exitCode = $process->getExitCode();
-        $stdout = trim($process->getOutput());
-        $stderr = trim($process->getErrorOutput());
+        $process = Process::start(['sh', '-c', $fullCmd]);
+        $stdoutFuture = \Amp\async(fn () => buffer($process->getStdout()));
+        $stderrFuture = \Amp\async(fn () => buffer($process->getStderr()));
+        $exitCode = $process->join();
+        $stdout = trim($stdoutFuture->await());
+        $stderr = trim($stderrFuture->await());
 
         // Exit code 1 = no matches (normal), 2+ = error
         if ($exitCode === 1 || ($exitCode === 0 && $stdout === '')) {
@@ -86,9 +87,8 @@ class GrepTool implements ToolInterface
 
     private function hasRipgrep(): bool
     {
-        $process = Process::fromShellCommandline('which rg');
-        $process->run();
+        $process = Process::start(['which', 'rg']);
 
-        return $process->isSuccessful();
+        return $process->join() === 0;
     }
 }

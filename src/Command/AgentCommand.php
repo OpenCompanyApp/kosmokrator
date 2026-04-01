@@ -3,35 +3,13 @@
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
-use Kosmokrator\Agent\AgentContext;
-use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
-use Kosmokrator\Agent\AgentType;
-use Kosmokrator\Agent\ContextCompactor;
-use Kosmokrator\Agent\ContextPruner;
-use Kosmokrator\Agent\EnvironmentContext;
-use Kosmokrator\Agent\InstructionLoader;
-use Kosmokrator\Agent\MemoryInjector;
-use Kosmokrator\Agent\OutputTruncator;
-use Kosmokrator\Agent\SubagentFactory;
-use Kosmokrator\Agent\SubagentOrchestrator;
-use Kosmokrator\Agent\ToolResultDeduplicator;
-use Kosmokrator\LLM\AsyncLlmClient;
-use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\Agent\AgentSession;
+use Kosmokrator\Agent\AgentSessionBuilder;
 use Kosmokrator\LLM\ModelCatalog;
-use Kosmokrator\LLM\PrismService;
-use Kosmokrator\LLM\RetryableLlmClient;
-use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Task\TaskStore;
-use Kosmokrator\Tool\AskChoiceTool;
-use Kosmokrator\Tool\AskUserTool;
-use Kosmokrator\Tool\Coding\SubagentTool;
-use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
-use Kosmokrator\Tool\ToolRegistry;
-use Kosmokrator\UI\UIManager;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -61,169 +39,58 @@ class AgentCommand extends Command
         $rendererPref = $input->getOption('renderer') ?: $config->get('kosmokrator.ui.renderer', 'auto');
         $animated = ! $input->getOption('no-animation') && $config->get('kosmokrator.ui.intro_animated', true);
 
-        // Always show the intro first
-        $ui = new UIManager($rendererPref);
-        $ui->initialize();
-        $ui->renderIntro($animated);
-        $ui->showWelcome();
+        $builder = new AgentSessionBuilder($this->container);
 
-        // Check if API key is configured — prompt setup if not
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        $apiKey = $config->get("prism.providers.{$provider}.api_key", '');
-
-        if ($apiKey === '' || $apiKey === null) {
+        try {
+            $session = $builder->build($rendererPref, $animated);
+        } catch (\RuntimeException $e) {
             $r = "\033[0m";
             $dim = "\033[38;5;245m";
             $accent = "\033[38;2;255;200;80m";
             $white = "\033[1;37m";
 
-            echo "{$accent}  ⚡ No API key configured.{$r}\n";
+            echo "{$accent}  ⚡ {$e->getMessage()}{$r}\n";
             echo "{$dim}  Run {$white}kosmokrator setup{$dim} to configure your provider and API key.{$r}\n\n";
 
             return Command::FAILURE;
         }
 
-        $log = $this->container->make(LoggerInterface::class);
-        $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
-
-        /** @var LlmClientInterface $llm */
-        $llm = ($ui->getActiveRenderer() === 'tui')
-            ? $this->container->make(AsyncLlmClient::class)
-            : $this->container->make(PrismService::class);
-
-        // Wire retry UI notification (max_retries wired below after sessionManager)
-        if ($llm instanceof RetryableLlmClient) {
-            $llm->setOnRetry(function (int $attempt, float $delay, string $reason) use ($ui) {
-                $delaySec = (int) ceil($delay);
-                $ui->showNotice("⟳ Retrying in {$delaySec}s (attempt {$attempt})");
-            });
-        }
-
-        $toolRegistry = $this->container->make(ToolRegistry::class);
-        $toolRegistry->register(new AskUserTool($ui));
-        $toolRegistry->register(new AskChoiceTool($ui));
-        $permissions = $this->container->make(PermissionEvaluator::class);
-        $models = $this->container->make(ModelCatalog::class);
-        $sessionManager = $this->container->make(SessionManager::class);
-
-        // Set project scope for settings/memories
-        $project = InstructionLoader::gitRoot() ?? getcwd();
-        $sessionManager->setProject($project);
-
-        // Load persisted settings
-        $this->applyPersistedSettings($sessionManager, $llm, $permissions);
-
-        // Wire configurable max retries from settings/config
-        if ($llm instanceof RetryableLlmClient) {
-            $maxRetries = (int) ($sessionManager->getSetting('max_retries')
-                ?? $config->get('kosmokrator.agent.max_retries', 0));
-            $llm->setMaxAttempts($maxRetries);
-        }
-
-        // Set initial permission mode on UI
-        $permMode = $permissions->getPermissionMode();
-        $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
-
-        // Build system prompt: base + memories + instructions + environment
-        $memoriesEnabled = ($sessionManager->getSetting('memories') ?? 'on') !== 'off';
-        $memories = $memoriesEnabled ? $sessionManager->getMemories() : [];
-
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
-            .MemoryInjector::format($memories)
-            .InstructionLoader::gather()
-            .EnvironmentContext::gather();
-        $taskStore = $this->container->make(TaskStore::class);
-        $ui->setTaskStore($taskStore);
-        $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
-        $compactThreshold = (int) ($sessionManager->getSetting('compact_threshold')
-            ?? $config->get('kosmokrator.context.compact_threshold', 60));
-        $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log, $compactThreshold) : null;
-
-        $truncator = new OutputTruncator(
-            maxLines: (int) $config->get('kosmokrator.context.max_output_lines', 2000),
-            maxBytes: (int) $config->get('kosmokrator.context.max_output_bytes', 50_000),
-        );
-
-        $pruneProtect = (int) ($sessionManager->getSetting('prune_protect') ?? $config->get('kosmokrator.context.prune_protect', 40_000));
-        $pruneMinSavings = (int) ($sessionManager->getSetting('prune_min_savings') ?? $config->get('kosmokrator.context.prune_min_savings', 20_000));
-        $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
-        $deduplicator = new ToolResultDeduplicator;
-
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $deduplicator, $memoryWarningThreshold);
-
-        // Subagent system
-        $maxDepth = (int) ($sessionManager->getSetting('subagent_max_depth')
-            ?? $config->get('kosmokrator.agent.subagent_max_depth', 3));
-        $concurrency = (int) ($sessionManager->getSetting('subagent_concurrency')
-            ?? $config->get('kosmokrator.agent.subagent_concurrency', 10));
-        $maxRetries = (int) ($sessionManager->getSetting('subagent_max_retries')
-            ?? $config->get('kosmokrator.agent.subagent_max_retries', 2));
-        $orchestrator = new SubagentOrchestrator($log, $maxDepth, $concurrency, $maxRetries);
-        $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
-
-        $llmClientClass = ($ui->getActiveRenderer() === 'tui') ? 'async' : 'prism';
-        $subagentFactory = new SubagentFactory(
-            rootRegistry: $toolRegistry,
-            log: $log,
-            models: $models,
-            truncator: $truncator,
-            permissions: $permissions,
-            rootCancellation: fn () => $ui->getCancellation(),
-            llmClientClass: $llmClientClass,
-            apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
-            baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
-            model: $llm->getModel(),
-            maxTokens: $llm->getMaxTokens(),
-            temperature: $llm->getTemperature(),
-            provider: $provider,
-        );
-
-        $toolRegistry->register(new SubagentTool(
-            $rootContext,
-            fn (AgentContext $ctx, string $task) => $subagentFactory->createAndRunAgent($ctx, $task),
-        ));
-        $agentLoop->setAgentContext($rootContext);
-        $agentLoop->setTools($toolRegistry->toPrismTools());
-
-        // Wire live subagent tree for TUI display
-        $ui->setAgentTreeProvider(fn () => $agentLoop->buildLiveAgentTree());
-
         // Session: resume or create new
         $resumeId = $input->getOption('session');
         if ($resumeId === null && $input->getOption('resume')) {
-            $resumeId = $sessionManager->latestSession();
+            $resumeId = $session->sessionManager->latestSession();
         }
 
         if ($resumeId !== null) {
-            $sessionManager->setCurrentSession($resumeId);
-            $history = $sessionManager->loadHistory($resumeId);
+            $session->sessionManager->setCurrentSession($resumeId);
+            $history = $session->sessionManager->loadHistory($resumeId);
             if ($history->count() > 0) {
-                $agentLoop->setHistory($history);
-                $ui->replayHistory($history->messages());
-                $ui->showNotice("Resumed session ({$resumeId})");
+                $session->agentLoop->setHistory($history);
+                $session->ui->replayHistory($history->messages());
+                $session->ui->showNotice("Resumed session ({$resumeId})");
             }
         } else {
-            $modelName = $llm->getProvider().'/'.$llm->getModel();
-            $sessionManager->createSession($modelName);
+            $modelName = $session->llm->getProvider().'/'.$session->llm->getModel();
+            $session->sessionManager->createSession($modelName);
         }
 
-        return $this->repl($ui, $agentLoop, $permissions, $llm, $sessionManager, $orchestrator, $models);
+        return $this->repl($session);
     }
 
-    private function repl(UIManager $ui, AgentLoop $agentLoop, PermissionEvaluator $permissions, LlmClientInterface $llm, SessionManager $sessionManager, SubagentOrchestrator $orchestrator, ModelCatalog $models): int
+    private function repl(AgentSession $session): int
     {
         $taskStore = $this->container->make(TaskStore::class);
         $config = $this->container->make('config');
         $settings = $this->container->make(SettingsRepository::class);
+        $models = $this->container->make(ModelCatalog::class);
 
         $registry = $this->buildSlashCommandRegistry();
-        $ctx = new SlashCommandContext($ui, $agentLoop, $permissions, $sessionManager, $llm, $taskStore, $config, $settings, $orchestrator, $models);
+        $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models);
         $nextInput = null;
         $nextInputShown = false;
 
-        // Wire immediate command handler — dispatches slash commands during agent execution
-        $ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx): bool {
+        // Wire immediate command handler -- dispatches slash commands during agent execution
+        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx): bool {
             $command = $registry->resolve($input);
             if ($command === null || ! $command->immediate()) {
                 return false;
@@ -236,9 +103,9 @@ class AgentCommand extends Command
 
         while (true) {
             $taskStore->clearTerminal();
-            $ui->refreshTaskBar();
+            $session->ui->refreshTaskBar();
 
-            $input = $nextInput ?? $ui->prompt();
+            $input = $nextInput ?? $session->ui->prompt();
             $alreadyShown = $nextInputShown;
             $nextInput = null;
             $nextInputShown = false;
@@ -265,30 +132,30 @@ class AgentCommand extends Command
 
             // Send to agent
             if (! $alreadyShown) {
-                $ui->showUserMessage($input);
+                $session->ui->showUserMessage($input);
             }
-            $agentLoop->run($input);
+            $session->agentLoop->run($input);
 
             // Plan mode: show approval dialog after run completes
-            if ($agentLoop->getMode() === AgentMode::Plan) {
-                $approval = $ui->approvePlan($permissions->getPermissionMode()->value);
+            if ($session->agentLoop->getMode() === AgentMode::Plan) {
+                $approval = $session->ui->approvePlan($session->permissions->getPermissionMode()->value);
 
                 if ($approval !== null) {
                     if ($approval['context'] === 'compact') {
-                        $agentLoop->performCompaction();
+                        $session->agentLoop->performCompaction();
                     } elseif ($approval['context'] === 'clear') {
-                        $agentLoop->history()->clearKeepingLast();
+                        $session->agentLoop->history()->clearKeepingLast();
                     }
 
                     $editMode = AgentMode::Edit;
-                    $agentLoop->setMode($editMode);
-                    $ui->showMode($editMode->label(), $editMode->color());
-                    $sessionManager->setSetting('mode', 'edit');
+                    $session->agentLoop->setMode($editMode);
+                    $session->ui->showMode($editMode->label(), $editMode->color());
+                    $session->sessionManager->setSetting('mode', 'edit');
 
                     $permMode = PermissionMode::from($approval['permission']);
-                    $permissions->setPermissionMode($permMode);
-                    $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
-                    $sessionManager->setSetting('permission_mode', $permMode->value);
+                    $session->permissions->setPermissionMode($permMode);
+                    $session->ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
+                    $session->sessionManager->setSetting('permission_mode', $permMode->value);
 
                     $nextInput = 'Implement the plan.';
 
@@ -296,12 +163,12 @@ class AgentCommand extends Command
                 }
             }
 
-            $nextInput = $ui->consumeQueuedMessage();
+            $nextInput = $session->ui->consumeQueuedMessage();
             $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
         }
 
-        $orchestrator->cancelAll();
-        $ui->teardown();
+        $session->orchestrator?->cancelAll();
+        $session->ui->teardown();
 
         return Command::SUCCESS;
     }
@@ -331,32 +198,5 @@ class AgentCommand extends Command
         $registry->register(new Slash\AgentsCommand);
 
         return $registry;
-    }
-
-    private function applyPersistedSettings(SessionManager $sm, LlmClientInterface $llm, PermissionEvaluator $permissions): void
-    {
-        $temp = $sm->getSetting('temperature');
-        if ($temp !== null) {
-            $llm->setTemperature((float) $temp);
-        }
-
-        $maxTokens = $sm->getSetting('max_tokens');
-        if ($maxTokens !== null) {
-            $llm->setMaxTokens((int) $maxTokens);
-        }
-
-        $permMode = $sm->getSetting('permission_mode');
-        if ($permMode !== null) {
-            $mode = PermissionMode::tryFrom($permMode);
-            if ($mode !== null) {
-                $permissions->setPermissionMode($mode);
-            }
-        } else {
-            // Backward compat: old auto_approve setting
-            $autoApprove = $sm->getSetting('auto_approve');
-            if ($autoApprove === 'on') {
-                $permissions->setPermissionMode(PermissionMode::Prometheus);
-            }
-        }
     }
 }

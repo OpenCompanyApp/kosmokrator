@@ -20,19 +20,12 @@ class UIManager implements RendererInterface
 
     public function setTaskStore(TaskStore $store): void
     {
-        if ($this->renderer instanceof AnsiRenderer) {
-            $this->renderer->setTaskStore($store);
-        } elseif ($this->renderer instanceof TuiRenderer) {
-            $this->renderer->setTaskStore($store);
-        }
+        $this->renderer->setTaskStore($store);
     }
 
     public function refreshTaskBar(): void
     {
-        if ($this->renderer instanceof TuiRenderer) {
-            $this->renderer->refreshTaskBar();
-        }
-        // ANSI: task bar is rendered fresh on each prompt() call, no explicit refresh needed
+        $this->renderer->refreshTaskBar();
     }
 
     public function getActiveRenderer(): string
@@ -241,11 +234,7 @@ class UIManager implements RendererInterface
 
     public function showWelcome(): void
     {
-        if ($this->renderer instanceof AnsiRenderer) {
-            $this->renderer->showWelcome();
-        } elseif ($this->renderer instanceof TuiRenderer) {
-            $this->renderer->showWelcome();
-        }
+        $this->renderer->showWelcome();
     }
 
     public function seedMockSession(): void
@@ -257,20 +246,12 @@ class UIManager implements RendererInterface
 
     public function playTheogony(): void
     {
-        if ($this->renderer instanceof TuiRenderer) {
-            $this->renderer->playTheogony();
-        } elseif ($this->renderer instanceof AnsiRenderer) {
-            $this->renderer->playTheogony();
-        }
+        $this->renderer->playTheogony();
     }
 
     public function playPrometheus(): void
     {
-        if ($this->renderer instanceof TuiRenderer) {
-            $this->renderer->playPrometheus();
-        } elseif ($this->renderer instanceof AnsiRenderer) {
-            $this->renderer->playPrometheus();
-        }
+        $this->renderer->playPrometheus();
     }
 
     private function resolveRenderer(string $preference): RendererInterface

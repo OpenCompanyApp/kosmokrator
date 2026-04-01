@@ -1,0 +1,452 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\UI\Tui;
+
+use Kosmokrator\UI\AgentDisplayFormatter;
+use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
+use Revolt\EventLoop;
+use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
+use Symfony\Component\Tui\Widget\ContainerWidget;
+use Symfony\Component\Tui\Widget\TextWidget;
+
+/**
+ * Manages the full subagent display lifecycle in TUI mode.
+ *
+ * Owns all widget and timer state for subagent display. The breathing
+ * animation timer in TuiRenderer is NOT cancelled when subagents start —
+ * it delegates tree refresh here via tickTreeRefresh(). This manager owns
+ * its own 1-second elapsed timer that ONLY updates the loader label.
+ *
+ * Uses a nested ContainerWidget to keep all subagent widgets at a fixed
+ * position in the conversation — preventing them from being pushed to the
+ * bottom when other widgets are appended.
+ *
+ * Lifecycle: showSpawn() → showRunning() → showBatch()
+ * Each method is idempotent and cleans up prior state.
+ */
+final class SubagentDisplayManager
+{
+    /** Wrapper container added once to conversation; all subagent widgets live inside it. */
+    private ?ContainerWidget $container = null;
+
+    private ?CancellableLoaderWidget $loader = null;
+
+    private ?TextWidget $treeWidget = null;
+
+    private ?string $elapsedTimerId = null;
+
+    private float $startTime = 0.0;
+
+    private ?\Closure $treeProvider = null;
+
+    /**
+     * @param  ContainerWidget  $conversation  The conversation container to add/remove widgets
+     * @param  \Closure(): ?string  $breathColorProvider  Returns current breath animation color
+     * @param  \Closure(): void  $renderCallback  Triggers a TUI render pass (flushRender)
+     * @param  \Closure(): void  $ensureSpinners  Ensures custom spinners are registered
+     */
+    public function __construct(
+        private readonly ContainerWidget $conversation,
+        private readonly \Closure $breathColorProvider,
+        private readonly \Closure $renderCallback,
+        private readonly \Closure $ensureSpinners,
+    ) {}
+
+    /**
+     * Set the callback that returns the live agent tree array.
+     *
+     * @param  \Closure(): array  $provider  Returns tree data from AgentLoop::buildLiveAgentTree()
+     */
+    public function setTreeProvider(?\Closure $provider): void
+    {
+        $this->treeProvider = $provider;
+    }
+
+    /**
+     * Ensure the wrapper container exists in the conversation.
+     *
+     * Creates a ContainerWidget and adds it to the conversation once.
+     * All subagent widgets are added inside this container so they stay
+     * at the position where they were first inserted.
+     */
+    private function ensureContainer(): ContainerWidget
+    {
+        if ($this->container === null) {
+            $this->container = new ContainerWidget;
+            $this->container->setId('subagent-container');
+            $this->conversation->add($this->container);
+        }
+
+        return $this->container;
+    }
+
+    /**
+     * Show spawn indicators before agents start executing.
+     *
+     * Creates a tree widget showing which agents were spawned. This widget
+     * is updated in-place by refreshTree() as agents progress.
+     *
+     * @param  array<int, array{args: array, id: string}>  $entries
+     */
+    public function showSpawn(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        $container = $this->ensureContainer();
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $cyan = "\033[38;2;100;200;220m";
+
+        $count = count($entries);
+
+        if ($count === 1) {
+            [$label] = AgentDisplayFormatter::formatAgentLabel($entries[0]['args']);
+            $text = "{$cyan}⏺{$r} {$label}";
+        } else {
+            $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
+            $lines = ["{$cyan}⏺ {$types}{$r}"];
+            foreach ($entries as $entry) {
+                [$label] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
+                $lines[] = "  {$cyan}●{$r} {$label}";
+            }
+            $text = implode("\n", $lines);
+        }
+
+        if ($this->treeWidget !== null) {
+            $container->remove($this->treeWidget);
+        }
+        $this->treeWidget = new TextWidget($text);
+        $this->treeWidget->setId('subagent-tree');
+        $container->add($this->treeWidget);
+        ($this->renderCallback)();
+    }
+
+    /**
+     * Show running indicator with elapsed timer.
+     *
+     * Starts a 1-second timer that updates the loader label with elapsed time,
+     * agent done count, and color escalation. Does NOT cancel the breathing
+     * animation — tree refresh is handled by tickTreeRefresh() called from there.
+     *
+     * @param  array<int, array{args: array, id: string}>  $entries
+     */
+    public function showRunning(array $entries): void
+    {
+        if (empty($entries)) {
+            return;
+        }
+
+        $this->stopLoader();
+
+        ($this->ensureSpinners)();
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $blue = "\033[38;2;112;160;208m";
+
+        $count = count($entries);
+        $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
+
+        $container = $this->ensureContainer();
+
+        $this->loader = new CancellableLoaderWidget("{$blue}{$label}{$r}");
+        $this->loader->setSpinner('cosmos', 120);
+        $this->startTime = microtime(true);
+
+        $container->add($this->loader);
+
+        // Elapsed timer — updates loader label only (tree refresh is in breathing timer)
+        $this->elapsedTimerId = EventLoop::repeat(1.0, function () use ($dim, $r): void {
+            if ($this->loader === null) {
+                return;
+            }
+            $elapsed = (int) (microtime(true) - $this->startTime);
+            $minutes = (int) ($elapsed / 60);
+            $seconds = $elapsed % 60;
+            $time = sprintf('%d:%02d', $minutes, $seconds);
+
+            // Build dynamic label from live tree data
+            $label = 'Agents running...';
+            if ($this->treeProvider !== null) {
+                try {
+                    $tree = ($this->treeProvider)();
+                    if ($tree !== []) {
+                        $total = AgentDisplayFormatter::countNodes($tree);
+                        $done = AgentDisplayFormatter::countByStatus($tree, 'done');
+                        if ($done > 0) {
+                            $label = "{$total} agents ({$done} done)";
+                        } else {
+                            $label = $total === 1 ? 'Agent running...' : "{$total} agents running...";
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Don't crash the timer on tree provider errors
+                }
+            }
+
+            $color = match (true) {
+                $elapsed >= 120 => Theme::error(),
+                $elapsed >= 60 => Theme::warning(),
+                default => "\033[38;2;112;160;208m",
+            };
+
+            $this->loader->setMessage("{$color}{$label}  {$dim}{$time}{$r}");
+            ($this->renderCallback)();
+        });
+
+        ($this->renderCallback)();
+    }
+
+    /**
+     * Show completed batch results. Stops the elapsed timer and cleans up loader/tree.
+     *
+     * @param  array<int, array{args: array, result: string, success: bool, children?: array, stats?: mixed}>  $entries
+     */
+    public function showBatch(array $entries): void
+    {
+        $this->stopLoader();
+
+        if (empty($entries)) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+
+        // Skip for background acks
+        if (! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')))) {
+            return;
+        }
+
+        $container = $this->ensureContainer();
+        $count = count($entries);
+
+        // Single agent: compact result with optional child tree
+        if ($count === 1) {
+            $e = $entries[0];
+            $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            $label = $e['success'] ? 'Done' : 'Failed';
+            $stats = AgentDisplayFormatter::formatAgentStats($e);
+            $children = $e['children'] ?? [];
+
+            if ($children !== []) {
+                $tree = AgentDisplayFormatter::renderChildTree($children, '   ');
+                $treeWidget = new TextWidget(rtrim($tree));
+                $treeWidget->addStyleClass('tool-result');
+                $container->add($treeWidget);
+            }
+
+            $widget = new CollapsibleWidget("{$icon} {$label}{$stats}", $e['result'], 1, 120);
+            $widget->addStyleClass('tool-result');
+            $container->add($widget);
+            ($this->renderCallback)();
+
+            return;
+        }
+
+        // Multiple: summary as TextWidget with child trees, full details as CollapsibleWidget
+        $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
+        $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
+
+        $lines = ["{$green}✓{$r} {$succeeded}/{$count} {$types} finished"];
+        foreach ($entries as $entry) {
+            $args = $entry['args'];
+            $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
+            $type = ucfirst((string) ($args['type'] ?? 'explore'));
+            $primary = $id !== null ? $id : $type;
+            $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
+            $stats = AgentDisplayFormatter::formatAgentStats($entry);
+
+            $preview = AgentDisplayFormatter::extractResultPreview($entry['result']);
+            $previewSuffix = $preview !== '' ? " {$dim}· {$preview}{$r}" : '';
+            $lines[] = "  {$icon} {$primary}{$stats}{$previewSuffix}";
+
+            $children = $entry['children'] ?? [];
+            if ($children !== []) {
+                $lines[] = rtrim(AgentDisplayFormatter::renderChildTree($children, '     '));
+            }
+        }
+
+        $summary = new TextWidget(implode("\n", $lines));
+        $summary->addStyleClass('tool-result');
+        $container->add($summary);
+
+        $details = implode("\n---\n", array_map(fn ($e) => $e['result'], $entries));
+        $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
+        $expand->addStyleClass('tool-result');
+        $container->add($expand);
+        ($this->renderCallback)();
+    }
+
+    /**
+     * Update the live tree widget from current orchestrator state.
+     *
+     * @param  array<int, array{id: string, type: string, task: string, status: string, elapsed: float, children?: array}>  $tree
+     */
+    public function refreshTree(array $tree): void
+    {
+        if ($tree === []) {
+            if ($this->treeWidget !== null && $this->container !== null) {
+                $this->container->remove($this->treeWidget);
+                $this->treeWidget = null;
+            }
+
+            return;
+        }
+
+        $text = $this->renderLiveTree($tree);
+
+        if ($this->treeWidget === null) {
+            $container = $this->ensureContainer();
+            $this->treeWidget = new TextWidget($text);
+            $this->treeWidget->setId('subagent-tree');
+            $container->add($this->treeWidget);
+        } else {
+            $this->treeWidget->setText($text);
+        }
+    }
+
+    /**
+     * Called by the breathing animation timer (~every 0.5s) to refresh the tree.
+     *
+     * Keeps tree refresh as a breathing timer responsibility, so it can never
+     * be "lost" when timer ownership changes.
+     */
+    public function tickTreeRefresh(): void
+    {
+        if ($this->treeProvider === null) {
+            return;
+        }
+
+        try {
+            $tree = ($this->treeProvider)();
+            if ($tree !== []) {
+                $this->refreshTree($tree);
+            }
+        } catch (\Throwable) {
+            // Don't crash the breathing timer on tree provider errors
+        }
+    }
+
+    /**
+     * Clean up all subagent display state.
+     *
+     * Called on phase transition to Idle. Cancels timers and removes widgets.
+     * Does NOT remove the container — batch results should persist in conversation.
+     */
+    public function cleanup(): void
+    {
+        $this->stopLoader();
+        $this->removeTree();
+        // Reset container reference so the next subagent batch gets a fresh one
+        $this->container = null;
+    }
+
+    /**
+     * Render the live agent tree with status icons, elapsed times, and a summary header.
+     */
+    private function renderLiveTree(array $nodes): string
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $green = Theme::success();
+        $red = Theme::error();
+        $amber = ($this->breathColorProvider)() ?? "\033[38;2;200;150;60m";
+        $gray = "\033[38;5;240m";
+        $cyan = "\033[38;2;100;200;220m";
+
+        $total = AgentDisplayFormatter::countNodes($nodes);
+        $running = AgentDisplayFormatter::countByStatus($nodes, 'running');
+        $waiting = AgentDisplayFormatter::countByStatus($nodes, 'waiting');
+        $done = AgentDisplayFormatter::countByStatus($nodes, 'done');
+        $parts = [];
+        if ($running > 0) {
+            $parts[] = "{$running} running";
+        }
+        if ($waiting > 0) {
+            $parts[] = "{$waiting} waiting";
+        }
+        if ($done > 0) {
+            $parts[] = "{$done} done";
+        }
+        $summary = implode(', ', $parts);
+        $header = "{$cyan}⏺{$r} {$total} agents ({$summary})";
+
+        return $header."\n".$this->renderTreeNodes($nodes, '  ', $r, $dim, $green, $red, $amber, $gray);
+    }
+
+    /**
+     * Render tree nodes recursively with box-drawing connectors.
+     */
+    private function renderTreeNodes(array $nodes, string $indent, string $r, string $dim, string $green, string $red, string $amber, string $gray): string
+    {
+        $output = '';
+        $last = count($nodes) - 1;
+
+        foreach ($nodes as $i => $node) {
+            $connector = $i === $last ? '└─' : '├─';
+            $continuation = $i === $last ? '   ' : '│  ';
+
+            $icon = match ($node['status']) {
+                'done' => "{$green}✓{$r}",
+                'failed', 'cancelled' => "{$red}✗{$r}",
+                'running' => "{$amber}●{$r}",
+                'waiting', 'queued' => "{$gray}◌{$r}",
+                'retrying' => "{$amber}⟳{$r}",
+                default => "{$gray}·{$r}",
+            };
+
+            $type = ucfirst($node['type']);
+            $id = $node['id'];
+            $task = mb_strlen($node['task']) > 50 ? mb_substr($node['task'], 0, 50).'…' : $node['task'];
+            $elapsed = $node['elapsed'] > 0 ? " {$dim}(".AgentDisplayFormatter::formatElapsed($node['elapsed'])."){$r}" : '';
+
+            $taskSnippet = $task !== '' ? " {$dim}· {$task}{$r}" : '';
+            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$taskSnippet}{$elapsed}\n";
+
+            $children = $node['children'] ?? [];
+            if ($children !== []) {
+                $output .= $this->renderTreeNodes($children, "{$indent}{$continuation}", $r, $dim, $green, $red, $amber, $gray);
+            }
+        }
+
+        return $output;
+    }
+
+    /**
+     * Stop the elapsed timer and remove the loader widget.
+     */
+    private function stopLoader(): void
+    {
+        if ($this->elapsedTimerId !== null) {
+            EventLoop::cancel($this->elapsedTimerId);
+            $this->elapsedTimerId = null;
+        }
+        if ($this->loader !== null && $this->container !== null) {
+            $this->loader->setFinishedIndicator('✓');
+            $this->loader->stop();
+            $this->container->remove($this->loader);
+            $this->loader = null;
+        }
+        $this->removeTree();
+    }
+
+    /**
+     * Remove the tree widget from the container.
+     */
+    private function removeTree(): void
+    {
+        if ($this->treeWidget !== null && $this->container !== null) {
+            $this->container->remove($this->treeWidget);
+            $this->treeWidget = null;
+        }
+    }
+}

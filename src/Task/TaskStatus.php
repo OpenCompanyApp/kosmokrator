@@ -62,6 +62,7 @@ enum TaskStatus: string
     public function canTransitionTo(self $target): bool
     {
         $allowed = self::transitions()[$this->value] ?? [];
+
         return in_array($target->value, $allowed, true);
     }
 }

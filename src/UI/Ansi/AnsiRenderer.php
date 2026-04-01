@@ -5,6 +5,8 @@ namespace Kosmokrator\UI\Ansi;
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\AgentDisplayFormatter;
+use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\Theme;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
@@ -23,7 +25,7 @@ class AnsiRenderer implements RendererInterface
 
     private ?Highlighter $highlighter = null;
 
-    private ?\Kosmokrator\UI\Diff\DiffRenderer $diffRenderer = null;
+    private ?DiffRenderer $diffRenderer = null;
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -348,9 +350,9 @@ class AnsiRenderer implements RendererInterface
         return $this->getDiffRenderer()->renderLines($old, $new, $path);
     }
 
-    private function getDiffRenderer(): \Kosmokrator\UI\Diff\DiffRenderer
+    private function getDiffRenderer(): DiffRenderer
     {
-        return $this->diffRenderer ??= new \Kosmokrator\UI\Diff\DiffRenderer;
+        return $this->diffRenderer ??= new DiffRenderer;
     }
 
     public function clearConversation(): void
@@ -604,7 +606,7 @@ class AnsiRenderer implements RendererInterface
             $meta = ucfirst($s->agentType)." \"{$task}\"";
 
             $detail = match ($s->status) {
-                'done' => " · {$s->toolCalls} tools · ".$this->formatTokenCount($s->tokensIn + $s->tokensOut).' tokens',
+                'done' => " · {$s->toolCalls} tools · ".Theme::formatTokenCount($s->tokensIn + $s->tokensOut).' tokens',
                 'running' => " · {$s->toolCalls} tools · running",
                 'waiting' => ' · waiting on '.implode(', ', $s->dependsOn),
                 'queued' => $s->group !== null ? " · queued (group: {$s->group})" : ' · queued',
@@ -703,12 +705,12 @@ class AnsiRenderer implements RendererInterface
         $avgCost = Theme::formatCost($s['avgCost']);
         $out .= $pad("{$dim}Cost      {$white}{$cost}{$dim}   ·  avg {$white}{$avgCost}{$dim}/agent{$r}");
 
-        $elapsed = $this->dashFormatElapsed($s['elapsed']);
+        $elapsed = AgentDisplayFormatter::formatElapsed($s['elapsed']);
         $rate = $s['rate'] > 0 ? number_format($s['rate'], 1).' agents/min' : 'N/A';
         $out .= $pad("{$dim}Elapsed   {$white}{$elapsed}{$dim}  ·  rate {$white}{$rate}{$r}");
 
         if ($s['eta'] > 0) {
-            $eta = '~'.$this->dashFormatElapsed($s['eta']).' remaining';
+            $eta = '~'.AgentDisplayFormatter::formatElapsed($s['eta']).' remaining';
             $out .= $pad("{$dim}ETA       {$gold}{$eta}{$r}");
         }
         $out .= $blank;
@@ -802,18 +804,6 @@ class AnsiRenderer implements RendererInterface
         $retryNote = $agent->status === 'retrying' ? "  retry #{$agent->retries}" : '';
 
         return "{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $filled)."{$dim}".str_repeat('░', $empty)."{$r}  {$dim}{$elapsed} {$tools}{$retryNote}{$r}";
-    }
-
-    private function dashFormatElapsed(float $seconds): string
-    {
-        if ($seconds < 60) {
-            return (int) $seconds.'s';
-        }
-        if ($seconds < 3600) {
-            return (int) ($seconds / 60).'m '.(int) ($seconds % 60).'s';
-        }
-
-        return (int) ($seconds / 3600).'h '.(int) (($seconds % 3600) / 60).'m';
     }
 
     public function teardown(): void
@@ -1071,14 +1061,14 @@ class AnsiRenderer implements RendererInterface
         $border = Theme::borderTask();
 
         $count = count($entries);
-        $types = $this->summarizeAgentTypes($entries);
+        $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
         $isBg = ($entries[0]['args']['mode'] ?? 'await') === 'background';
         $bgTag = $isBg ? " {$dim}(background){$r}" : '';
 
         // Single agent: compact one-liner
         if ($count === 1) {
             $e = $entries[0];
-            [$label, $typeColor] = $this->formatAgentLabel($e['args'], 'spawn');
+            [$label, $typeColor] = AgentDisplayFormatter::formatAgentLabel($e['args']);
             echo "\n{$border}  {$cyan}⏺{$r} {$label}{$bgTag}\n";
 
             return;
@@ -1090,8 +1080,8 @@ class AnsiRenderer implements RendererInterface
         $last = $count - 1;
         foreach ($entries as $i => $entry) {
             $connector = $i === $last ? '└─' : '├─';
-            [$label, $typeColor] = $this->formatAgentLabel($entry['args'], 'spawn');
-            $coord = $this->formatCoordinationTags($entry['args'], $dim, $r);
+            [$label, $typeColor] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
+            $coord = AgentDisplayFormatter::formatCoordinationTags($entry['args']);
 
             echo "{$border}  {$connector} {$typeColor}●{$r} {$label}{$coord}\n";
         }
@@ -1113,7 +1103,7 @@ class AnsiRenderer implements RendererInterface
         $count = count($entries);
         $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
         $failed = $count - $succeeded;
-        $types = $this->summarizeAgentTypes($entries);
+        $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
         $allBg = ! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')));
 
         // Background ack — don't show a second block (spawn block is enough)
@@ -1125,14 +1115,14 @@ class AnsiRenderer implements RendererInterface
         if ($count === 1) {
             $e = $entries[0];
             $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            [$label, $_] = $this->formatAgentLabel($e['args'], 'result');
-            $stats = $this->formatAgentStats($e);
-            $preview = $this->extractResultPreview($e['result']);
+            [$label, $_] = AgentDisplayFormatter::formatAgentLabel($e['args']);
+            $stats = AgentDisplayFormatter::formatAgentStats($e);
+            $preview = AgentDisplayFormatter::extractResultPreview($e['result']);
             $children = $e['children'] ?? [];
 
             echo "\n{$border}  {$icon} {$label}{$stats}\n";
             if ($children !== []) {
-                echo $this->renderChildTree($children, "{$border}     ");
+                echo AgentDisplayFormatter::renderChildTree($children, "{$border}     ");
             }
             if ($preview !== '') {
                 echo "{$border}     {$dim}⎿ {$preview}{$r}\n";
@@ -1150,176 +1140,19 @@ class AnsiRenderer implements RendererInterface
             $connector = $i === $last ? '└─' : '├─';
             $continuation = $i === $last ? '  ' : '│ ';
             $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            [$label, $_] = $this->formatAgentLabel($entry['args'], 'result');
-            $stats = $this->formatAgentStats($entry);
-            $preview = $this->extractResultPreview($entry['result']);
+            [$label, $_] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
+            $stats = AgentDisplayFormatter::formatAgentStats($entry);
+            $preview = AgentDisplayFormatter::extractResultPreview($entry['result']);
             $children = $entry['children'] ?? [];
 
             echo "{$border}  {$connector} {$icon} {$label}{$stats}\n";
             if ($children !== []) {
-                echo $this->renderChildTree($children, "{$border}  {$continuation}  ");
+                echo AgentDisplayFormatter::renderChildTree($children, "{$border}  {$continuation}  ");
             }
             if ($preview !== '') {
                 echo "{$border}  {$continuation}  {$dim}⎿ {$preview}{$r}\n";
             }
         }
-    }
-
-    /**
-     * Format agent label: "id · task preview" or "Type · task preview".
-     *
-     * @return array{string, string} [formatted label, type color]
-     */
-    private function formatAgentLabel(array $args, string $context): array
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $type = ucfirst((string) ($args['type'] ?? 'explore'));
-        $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
-        $task = (string) ($args['task'] ?? '');
-        $taskPreview = mb_strlen($task) > 50 ? mb_substr($task, 0, 50).'...' : $task;
-
-        $typeColor = match (strtolower($type)) {
-            'general' => "\033[38;2;218;165;32m",
-            'plan' => "\033[38;2;160;120;255m",
-            default => "\033[38;2;100;200;220m",
-        };
-
-        // Primary label: use ID if set, otherwise type
-        $primary = $id !== null
-            ? "{$typeColor}{$type}{$r} {$id}"
-            : "{$typeColor}{$type}{$r}";
-
-        return ["{$primary} {$dim}· {$taskPreview}{$r}", $typeColor];
-    }
-
-    /**
-     * Format coordination tags (depends_on, group).
-     */
-    private function formatCoordinationTags(array $args, string $dim, string $r): string
-    {
-        $parts = [];
-        $dependsOn = $args['depends_on'] ?? [];
-        $group = isset($args['group']) && $args['group'] !== '' ? (string) $args['group'] : null;
-
-        if (is_array($dependsOn) && $dependsOn !== []) {
-            $parts[] = 'depends on: '.implode(', ', $dependsOn);
-        }
-        if ($group !== null) {
-            $parts[] = "group: {$group}";
-        }
-
-        if ($parts === []) {
-            return '';
-        }
-
-        return " {$dim}→ ".implode(' · ', $parts)."{$r}";
-    }
-
-    /**
-     * Format stats for a completed agent entry.
-     */
-    private function formatAgentStats(array $entry): string
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-
-        // We don't have direct access to SubagentStats here (only args + result text),
-        // but we can parse tool/token info from the result if the orchestrator included it.
-        // For now, keep it simple — stats are shown in the background completion notice.
-        return '';
-    }
-
-    /**
-     * Summarize agent types for the group header (e.g., "Explore agents", "2 Explore + 1 General agents").
-     */
-    private function summarizeAgentTypes(array $entries): string
-    {
-        $types = [];
-        foreach ($entries as $entry) {
-            $type = ucfirst((string) ($entry['args']['type'] ?? 'explore'));
-            $types[$type] = ($types[$type] ?? 0) + 1;
-        }
-
-        if (count($types) === 1) {
-            $type = array_key_first($types);
-
-            return $type.(count($entries) === 1 ? ' agent' : ' agents');
-        }
-
-        $parts = [];
-        foreach ($types as $type => $count) {
-            $parts[] = "{$count} {$type}";
-        }
-
-        return implode(' + ', $parts).' agents';
-    }
-
-    /**
-     * Render a nested child agent tree with box-drawing indentation.
-     */
-    private function renderChildTree(array $children, string $indent): string
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $green = Theme::success();
-        $red = Theme::error();
-        $output = '';
-
-        $last = count($children) - 1;
-        foreach ($children as $i => $child) {
-            $connector = $i === $last ? '└─' : '├─';
-            $continuation = $i === $last ? '   ' : '│  ';
-            $icon = $child['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            $type = ucfirst($child['type']);
-            $task = mb_strlen($child['task']) > 40 ? mb_substr($child['task'], 0, 40).'…' : $child['task'];
-            $elapsed = $child['elapsed'] > 0 ? " {$dim}({$child['elapsed']}s){$r}" : '';
-
-            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$task}{$elapsed}\n";
-
-            if (($child['children'] ?? []) !== []) {
-                $output .= $this->renderChildTree($child['children'], "{$indent}{$continuation}");
-            }
-        }
-
-        return $output;
-    }
-
-    /**
-     * Extract a short preview from subagent output for the tree display.
-     */
-    private function extractResultPreview(string $output): string
-    {
-        $lines = explode("\n", trim($output));
-
-        // Skip empty lines and markdown headers to find first content line
-        foreach ($lines as $line) {
-            $stripped = trim($line);
-            if ($stripped === '' || str_starts_with($stripped, '#') || str_starts_with($stripped, '---')) {
-                continue;
-            }
-            // Strip leading markdown list markers
-            $stripped = preg_replace('/^[-*]\s+/', '', $stripped);
-            if (mb_strlen($stripped) > 80) {
-                return mb_substr($stripped, 0, 80).'...';
-            }
-
-            return $stripped;
-        }
-
-        return '';
-    }
-
-    private function formatTokenCount(int $tokens): string
-    {
-        if ($tokens >= 1_000_000) {
-            return round($tokens / 1_000_000, 1).'M';
-        }
-        if ($tokens >= 1_000) {
-            return round($tokens / 1_000, 1).'k';
-        }
-
-        return (string) $tokens;
     }
 
     private function isTaskTool(string $name): bool

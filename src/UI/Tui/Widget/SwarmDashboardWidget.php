@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui\Widget;
 
+use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\Theme;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Input\Key;
@@ -121,12 +122,12 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         $avgCost = Theme::formatCost($s['avgCost']);
         $lines[] = $pad("{$dim}Cost      {$white}{$cost}{$dim}   ·  avg {$white}{$avgCost}{$dim}/agent{$r}");
 
-        $elapsed = self::formatElapsed($s['elapsed']);
+        $elapsed = AgentDisplayFormatter::formatElapsed($s['elapsed']);
         $rate = $s['rate'] > 0 ? number_format($s['rate'], 1).' agents/min' : 'N/A';
         $lines[] = $pad("{$dim}Elapsed   {$white}{$elapsed}{$dim}  ·  rate {$white}{$rate}{$r}");
 
         if ($s['eta'] > 0) {
-            $eta = '~'.self::formatElapsed($s['eta']).' remaining';
+            $eta = '~'.AgentDisplayFormatter::formatElapsed($s['eta']).' remaining';
             $lines[] = $pad("{$dim}ETA       {$gold}{$eta}{$r}");
         }
         $lines[] = $blank;
@@ -218,19 +219,6 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         $gap = max(0, $width - $visible);
 
         return "{$border}│{$reset} {$content}".str_repeat(' ', $gap)." {$border}│{$reset}";
-    }
-
-    private static function formatElapsed(float $seconds): string
-    {
-        $s = (int) $seconds;
-        if ($s < 60) {
-            return $s.'s';
-        }
-        if ($s < 3600) {
-            return (int) ($s / 60).'m '.($s % 60).'s';
-        }
-
-        return (int) ($s / 3600).'h '.(int) (($s % 3600) / 60).'m';
     }
 
     protected static function getDefaultKeybindings(): array

@@ -10,6 +10,7 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
+use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
@@ -622,11 +623,13 @@ class AgentLoop
 
                 if ($toolCall->name === 'subagent') {
                     $agentId = $toolCall->arguments()['id'] ?? '';
+                    $orchestrator = $this->agentContext?->orchestrator;
                     $subagentBatch[] = [
                         'args' => $toolCall->arguments(),
                         'result' => $result->result,
                         'success' => $success,
-                        'children' => $this->buildChildTree($agentId),
+                        'children' => $orchestrator !== null ? AgentTreeBuilder::buildSubtree($orchestrator, $agentId) : [],
+                        'stats' => $orchestrator?->getStats($agentId),
                     ];
                     $results[] = $result;
 
@@ -657,41 +660,20 @@ class AgentLoop
     }
 
     /**
-     * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
-     */
-    /**
-     * Build the full live agent tree from orchestrator stats (root-level agents + all children).
+     * Build the full live agent tree from orchestrator stats.
+     *
+     * Delegates to AgentTreeBuilder — kept as a public method because
+     * AgentCommand wires it as the TUI tree provider.
      *
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
      */
     public function buildLiveAgentTree(): array
     {
-        return $this->buildChildTree('root');
-    }
-
-    private function buildChildTree(string $parentId): array
-    {
         if ($this->agentContext === null) {
             return [];
         }
 
-        $children = [];
-        foreach ($this->agentContext->orchestrator->allStats() as $stats) {
-            if ($stats->parentId === $parentId) {
-                $children[] = [
-                    'id' => $stats->id,
-                    'type' => $stats->agentType,
-                    'task' => $stats->task,
-                    'status' => $stats->status,
-                    'elapsed' => round($stats->elapsed(), 1),
-                    'success' => $stats->status === 'done',
-                    'error' => $stats->error,
-                    'children' => $this->buildChildTree($stats->id),
-                ];
-            }
-        }
-
-        return $children;
+        return AgentTreeBuilder::buildTree($this->agentContext->orchestrator);
     }
 
     /**
@@ -994,18 +976,6 @@ class AgentLoop
         $this->history->addUser(implode("\n\n---\n\n", $parts));
         $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
         $this->log->debug('Injected background results', ['count' => count($results)]);
-    }
-
-    private function formatTokenCount(int $tokens): string
-    {
-        if ($tokens >= 1_000_000) {
-            return round($tokens / 1_000_000, 1).'M';
-        }
-        if ($tokens >= 1_000) {
-            return round($tokens / 1_000, 1).'k';
-        }
-
-        return (string) $tokens;
     }
 
     private function logMemoryUsage(): void

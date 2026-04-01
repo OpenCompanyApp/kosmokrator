@@ -66,3 +66,7 @@ php vendor/bin/box compile      # Uses box.json config
 - Mythology-themed UI: planetary symbols for tool icons, mythological thinking phrases, cosmic spinner animations
 - ANSI renderer uses league/commonmark for markdown parsing + tempest/highlight for code blocks
 - TUI renderer uses Symfony TUI's MarkdownWidget with custom stylesheet
+- PHPDoc on all public methods: `@param` with type + description, `@return` with type, one-line summary before params
+- PHPDoc on classes: one-line summary of purpose, longer description if non-obvious
+- No PHPDoc on trivial getters/setters or when signature is self-documenting
+- Use `@var` annotations on typed properties only when the type needs clarification (e.g., array shapes)

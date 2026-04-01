@@ -66,15 +66,7 @@ class TuiRenderer implements RendererInterface
 
     private ?CancellableLoaderWidget $loader = null;
 
-    private ?CancellableLoaderWidget $subagentLoader = null;
-
-    private float $subagentStartTime = 0.0;
-
-    private ?string $subagentTimerId = null;
-
-    private ?TextWidget $subagentTree = null;
-
-    private ?\Closure $agentTreeProvider = null;
+    private SubagentDisplayManager $subagentDisplay;
 
     private ?string $pendingEditorRestore = null;
 
@@ -209,6 +201,22 @@ class TuiRenderer implements RendererInterface
         $this->taskStore = $store;
     }
 
+    /**
+     * Ensure custom spinners are registered with CancellableLoaderWidget.
+     *
+     * Safe to call multiple times — registration is idempotent.
+     */
+    public function ensureSpinnersRegistered(): void
+    {
+        if ($this->spinnersRegistered) {
+            return;
+        }
+        foreach (self::SPINNERS as $name => $frames) {
+            CancellableLoaderWidget::addSpinner($name, $frames);
+        }
+        $this->spinnersRegistered = true;
+    }
+
     public function initialize(): void
     {
         $this->tui = new Tui(KosmokratorStyleSheet::create());
@@ -245,6 +253,14 @@ class TuiRenderer implements RendererInterface
         // Thinking bar — loader sits between task bar and status bar
         $this->thinkingBar = new ContainerWidget;
         $this->thinkingBar->setId('thinking-bar');
+
+        // Subagent display — owns spawn/running/batch lifecycle and timer state
+        $this->subagentDisplay = new SubagentDisplayManager(
+            conversation: $this->conversation,
+            breathColorProvider: fn () => $this->breathColor,
+            renderCallback: fn () => $this->flushRender(),
+            ensureSpinners: fn () => $this->ensureSpinnersRegistered(),
+        );
 
         // Multi-line editor prompt (Enter = submit, Shift+Enter / Alt+Enter = newline)
         $this->input = new EditorWidget;
@@ -590,13 +606,7 @@ HELP;
         // Only show the standalone loader when there are no tasks —
         // when tasks exist, the breathing animation on in-progress tasks IS the indicator
         if (! $hasTasks) {
-            // Register custom spinners on first use
-            if (! $this->spinnersRegistered) {
-                foreach (self::SPINNERS as $name => $frames) {
-                    CancellableLoaderWidget::addSpinner($name, $frames);
-                }
-                $this->spinnersRegistered = true;
-            }
+            $this->ensureSpinnersRegistered();
 
             $spinnerNames = array_keys(self::SPINNERS);
             $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
@@ -680,12 +690,7 @@ HELP;
         $this->thinkingPhrase = null;
         $this->breathColor = null;
         $this->refreshTaskBar();
-
-        // Clear stale subagent tree — results were already shown via showSubagentBatch()
-        if ($this->subagentTree !== null) {
-            $this->conversation->remove($this->subagentTree);
-            $this->subagentTree = null;
-        }
+        $this->subagentDisplay->cleanup();
 
         $this->requestCancellation = null;
         $this->forceRender();
@@ -733,12 +738,9 @@ HELP;
                 $this->refreshTaskBar();
             }
 
-            // Live subagent tree — refresh every ~0.5s
-            if ($this->agentTreeProvider !== null && $this->breathTick % 15 === 0) {
-                $tree = ($this->agentTreeProvider)();
-                if ($tree !== []) {
-                    $this->refreshSubagentTree($tree);
-                }
+            // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
+            if ($this->breathTick % 15 === 0) {
+                $this->subagentDisplay->tickTreeRefresh();
             }
 
             $this->flushRender();
@@ -749,13 +751,7 @@ HELP;
     {
         $phrase = self::COMPACTION_PHRASES[array_rand(self::COMPACTION_PHRASES)];
 
-        // Register custom spinners if not done yet
-        if (! $this->spinnersRegistered) {
-            foreach (self::SPINNERS as $name => $frames) {
-                CancellableLoaderWidget::addSpinner($name, $frames);
-            }
-            $this->spinnersRegistered = true;
-        }
+        $this->ensureSpinnersRegistered();
 
         $spinnerNames = array_keys(self::SPINNERS);
         $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
@@ -1695,414 +1691,27 @@ HELP;
 
     public function showSubagentRunning(array $entries): void
     {
-        if (empty($entries)) {
-            return;
-        }
-
-        // Stop the tools-phase breathing animation — subagent loader takes over
-        if ($this->thinkingTimerId !== null) {
-            EventLoop::cancel($this->thinkingTimerId);
-            $this->thinkingTimerId = null;
-        }
-
-        $this->stopSubagentLoader();
-
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $blue = "\033[38;2;112;160;208m";
-
-        $count = count($entries);
-        $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
-
-        // Register spinner if not done
-        static $registered = false;
-        if (! $registered) {
-            CancellableLoaderWidget::addSpinner('cosmos', ['✦', '✧', '⊛', '◈', '⊛', '✧']);
-            $registered = true;
-        }
-
-        $this->subagentLoader = new CancellableLoaderWidget("{$blue}{$label}{$r}");
-        $this->subagentLoader->setSpinner('cosmos', 120);
-        $this->subagentStartTime = microtime(true);
-
-        $this->conversation->add($this->subagentLoader);
-
-        // Elapsed timer — update every second with color escalation + live tree refresh
-        $this->subagentTimerId = EventLoop::repeat(1.0, function () use ($dim, $r) {
-            if ($this->subagentLoader === null) {
-                return;
-            }
-            $elapsed = (int) (microtime(true) - $this->subagentStartTime);
-            $minutes = (int) ($elapsed / 60);
-            $seconds = $elapsed % 60;
-            $time = sprintf('%d:%02d', $minutes, $seconds);
-
-            // Refresh live agent tree and build dynamic label from current stats
-            $label = 'Agents running...';
-            if ($this->agentTreeProvider !== null) {
-                try {
-                    $tree = ($this->agentTreeProvider)();
-                    if ($tree !== []) {
-                        $this->refreshSubagentTree($tree);
-                        $total = $this->countNodes($tree);
-                        $done = $this->countByStatus($tree, 'done');
-                        if ($done > 0) {
-                            $label = "{$total} agents ({$done} done)";
-                        } else {
-                            $label = $total === 1 ? 'Agent running...' : "{$total} agents running...";
-                        }
-                    }
-                } catch (\Throwable) {
-                    // Don't crash the timer on tree provider errors
-                }
-            }
-
-            $color = match (true) {
-                $elapsed >= 120 => Theme::error(),
-                $elapsed >= 60 => Theme::warning(),
-                default => "\033[38;2;112;160;208m",
-            };
-
-            $this->subagentLoader->setMessage("{$color}{$label}  {$dim}{$time}{$r}");
-            $this->flushRender();
-        });
-
-        $this->flushRender();
-    }
-
-    private function stopSubagentLoader(): void
-    {
-        if ($this->subagentTimerId !== null) {
-            EventLoop::cancel($this->subagentTimerId);
-            $this->subagentTimerId = null;
-        }
-        if ($this->subagentLoader !== null) {
-            $this->subagentLoader->setFinishedIndicator('✓');
-            $this->subagentLoader->stop();
-            $this->conversation->remove($this->subagentLoader);
-            $this->subagentLoader = null;
-        }
-        if ($this->subagentTree !== null) {
-            $this->conversation->remove($this->subagentTree);
-            $this->subagentTree = null;
-        }
+        $this->subagentDisplay->showRunning($entries);
     }
 
     public function setAgentTreeProvider(?\Closure $provider): void
     {
-        $this->agentTreeProvider = $provider;
+        $this->subagentDisplay->setTreeProvider($provider);
     }
 
     public function refreshSubagentTree(array $tree): void
     {
-        if ($tree === []) {
-            if ($this->subagentTree !== null) {
-                $this->conversation->remove($this->subagentTree);
-                $this->subagentTree = null;
-            }
-
-            return;
-        }
-
-        $text = $this->renderLiveTree($tree);
-
-        if ($this->subagentTree === null) {
-            $this->subagentTree = new TextWidget($text);
-            $this->subagentTree->setId('subagent-tree');
-            $this->conversation->add($this->subagentTree);
-        } else {
-            $this->subagentTree->setText($text);
-        }
-    }
-
-    private function renderLiveTree(array $nodes): string
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $green = Theme::success();
-        $red = Theme::error();
-        $amber = $this->breathColor ?? "\033[38;2;200;150;60m";
-        $gray = "\033[38;5;240m";
-        $cyan = "\033[38;2;100;200;220m";
-
-        // Summary header
-        $total = $this->countNodes($nodes);
-        $running = $this->countByStatus($nodes, 'running');
-        $waiting = $this->countByStatus($nodes, 'waiting');
-        $done = $this->countByStatus($nodes, 'done');
-        $parts = [];
-        if ($running > 0) {
-            $parts[] = "{$running} running";
-        }
-        if ($waiting > 0) {
-            $parts[] = "{$waiting} waiting";
-        }
-        if ($done > 0) {
-            $parts[] = "{$done} done";
-        }
-        $summary = implode(', ', $parts);
-        $header = "{$cyan}⏺{$r} {$total} agents ({$summary})";
-
-        return $header."\n".$this->renderTreeNodes($nodes, '  ', $r, $dim, $green, $red, $amber, $gray);
-    }
-
-    private function renderTreeNodes(array $nodes, string $indent, string $r, string $dim, string $green, string $red, string $amber, string $gray): string
-    {
-        $output = '';
-        $last = count($nodes) - 1;
-
-        foreach ($nodes as $i => $node) {
-            $connector = $i === $last ? '└─' : '├─';
-            $continuation = $i === $last ? '   ' : '│  ';
-
-            $icon = match ($node['status']) {
-                'done' => "{$green}✓{$r}",
-                'failed', 'cancelled' => "{$red}✗{$r}",
-                'running' => "{$amber}●{$r}",
-                'waiting', 'queued' => "{$gray}◌{$r}",
-                'retrying' => "{$amber}⟳{$r}",
-                default => "{$gray}·{$r}",
-            };
-
-            $type = ucfirst($node['type']);
-            $id = $node['id'];
-            $task = mb_strlen($node['task']) > 50 ? mb_substr($node['task'], 0, 50).'…' : $node['task'];
-            $elapsed = $node['elapsed'] > 0 ? " {$dim}({$node['elapsed']}s){$r}" : '';
-
-            $taskSnippet = $task !== '' ? " {$dim}· {$task}{$r}" : '';
-            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$taskSnippet}{$elapsed}\n";
-
-            $children = $node['children'] ?? [];
-            if ($children !== []) {
-                $output .= $this->renderTreeNodes($children, "{$indent}{$continuation}", $r, $dim, $green, $red, $amber, $gray);
-            }
-        }
-
-        return $output;
-    }
-
-    private function countNodes(array $nodes): int
-    {
-        $count = count($nodes);
-        foreach ($nodes as $node) {
-            $count += $this->countNodes($node['children'] ?? []);
-        }
-
-        return $count;
-    }
-
-    private function countByStatus(array $nodes, string $status): int
-    {
-        $count = 0;
-        foreach ($nodes as $node) {
-            if ($node['status'] === $status) {
-                $count++;
-            }
-            $count += $this->countByStatus($node['children'] ?? [], $status);
-        }
-
-        return $count;
+        $this->subagentDisplay->refreshTree($tree);
     }
 
     public function showSubagentSpawn(array $entries): void
     {
-        if (empty($entries)) {
-            return;
-        }
-
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $cyan = "\033[38;2;100;200;220m";
-
-        $count = count($entries);
-
-        // Build initial display text
-        if ($count === 1) {
-            $label = $this->formatAgentLabelTui($entries[0]['args']);
-            $text = "{$cyan}⏺{$r} {$label}";
-        } else {
-            $types = $this->summarizeAgentTypesTui($entries);
-            $lines = ["{$cyan}⏺ {$types}{$r}"];
-            foreach ($entries as $entry) {
-                $label = $this->formatAgentLabelTui($entry['args']);
-                $lines[] = "  {$cyan}●{$r} {$label}";
-            }
-            $text = implode("\n", $lines);
-        }
-
-        // Create (or reuse) the subagent tree widget at THIS position in the conversation.
-        // refreshSubagentTree() will update it in-place as children appear.
-        if ($this->subagentTree !== null) {
-            $this->conversation->remove($this->subagentTree);
-        }
-        $this->subagentTree = new TextWidget($text);
-        $this->subagentTree->setId('subagent-tree');
-        $this->conversation->add($this->subagentTree);
-        $this->flushRender();
+        $this->subagentDisplay->showSpawn($entries);
     }
 
     public function showSubagentBatch(array $entries): void
     {
-        $this->stopSubagentLoader();
-
-        if (empty($entries)) {
-            return;
-        }
-
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $green = Theme::success();
-        $red = Theme::error();
-
-        // Skip for background acks
-        if (! empty(array_filter($entries, fn ($e) => str_contains($e['result'], 'spawned in background')))) {
-            return;
-        }
-
-        $count = count($entries);
-
-        // Single agent: compact result with optional child tree
-        if ($count === 1) {
-            $e = $entries[0];
-            $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            $label = $e['success'] ? 'Done' : 'Failed';
-            $children = $e['children'] ?? [];
-
-            if ($children !== []) {
-                $tree = $this->renderChildTreeTui($children, '   ');
-                $treeWidget = new TextWidget(rtrim($tree));
-                $treeWidget->addStyleClass('tool-result');
-                $this->conversation->add($treeWidget);
-            }
-
-            $widget = new CollapsibleWidget("{$icon} {$label}", $e['result'], 1, 120);
-            $widget->addStyleClass('tool-result');
-            $this->conversation->add($widget);
-            $this->flushRender();
-
-            return;
-        }
-
-        // Multiple: summary as TextWidget with child trees, full details as CollapsibleWidget
-        $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
-        $types = $this->summarizeAgentTypesTui($entries);
-
-        $lines = ["{$green}✓{$r} {$succeeded}/{$count} {$types} finished"];
-        foreach ($entries as $entry) {
-            $args = $entry['args'];
-            $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
-            $type = ucfirst((string) ($args['type'] ?? 'explore'));
-            $primary = $id !== null ? $id : $type;
-            $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-
-            $preview = $this->extractResultPreviewTui($entry['result']);
-            $previewSuffix = $preview !== '' ? " {$dim}· {$preview}{$r}" : '';
-            $lines[] = "  {$icon} {$primary}{$previewSuffix}";
-
-            $children = $entry['children'] ?? [];
-            if ($children !== []) {
-                $lines[] = rtrim($this->renderChildTreeTui($children, '     '));
-            }
-        }
-
-        $summary = new TextWidget(implode("\n", $lines));
-        $summary->addStyleClass('tool-result');
-        $this->conversation->add($summary);
-
-        $details = implode("\n---\n", array_map(fn ($e) => $e['result'], $entries));
-        $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
-        $expand->addStyleClass('tool-result');
-        $this->conversation->add($expand);
-        $this->flushRender();
-    }
-
-    /**
-     * Render a nested child agent tree for TUI display.
-     */
-    private function renderChildTreeTui(array $children, string $indent): string
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $green = Theme::success();
-        $red = Theme::error();
-        $output = '';
-
-        $last = count($children) - 1;
-        foreach ($children as $i => $child) {
-            $connector = $i === $last ? '└─' : '├─';
-            $continuation = $i === $last ? '   ' : '│  ';
-            $icon = $child['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            $type = ucfirst($child['type']);
-            $task = mb_strlen($child['task']) > 40 ? mb_substr($child['task'], 0, 40).'…' : $child['task'];
-            $elapsed = $child['elapsed'] > 0 ? " {$dim}({$child['elapsed']}s){$r}" : '';
-
-            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$task}{$elapsed}\n";
-
-            if (($child['children'] ?? []) !== []) {
-                $output .= $this->renderChildTreeTui($child['children'], "{$indent}{$continuation}");
-            }
-        }
-
-        return $output;
-    }
-
-    /**
-     * Extract a short preview from subagent output.
-     */
-    private function extractResultPreviewTui(string $output): string
-    {
-        foreach (explode("\n", trim($output)) as $line) {
-            $stripped = trim($line);
-            if ($stripped === '' || str_starts_with($stripped, '#') || str_starts_with($stripped, '---')) {
-                continue;
-            }
-            $stripped = preg_replace('/^[-*]\s+/', '', $stripped);
-            if (mb_strlen($stripped) > 80) {
-                return mb_substr($stripped, 0, 80).'...';
-            }
-
-            return $stripped;
-        }
-
-        return '';
-    }
-
-    /**
-     * Format a compact agent label for TUI widgets: "Type id · task preview"
-     */
-    private function formatAgentLabelTui(array $args): string
-    {
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $type = ucfirst((string) ($args['type'] ?? 'explore'));
-        $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
-        $task = (string) ($args['task'] ?? '');
-        $taskPreview = mb_strlen($task) > 50 ? mb_substr($task, 0, 50).'...' : $task;
-        $primary = $id !== null ? "{$type} {$id}" : $type;
-
-        return "{$primary} {$dim}· {$taskPreview}{$r}";
-    }
-
-    private function summarizeAgentTypesTui(array $entries): string
-    {
-        $types = [];
-        foreach ($entries as $entry) {
-            $type = ucfirst((string) ($entry['args']['type'] ?? 'explore'));
-            $types[$type] = ($types[$type] ?? 0) + 1;
-        }
-
-        if (count($types) === 1) {
-            $type = array_key_first($types);
-
-            return $type.(count($entries) === 1 ? ' agent' : ' agents');
-        }
-
-        $parts = [];
-        foreach ($types as $type => $count) {
-            $parts[] = "{$count} {$type}";
-        }
-
-        return implode(' + ', $parts).' agents';
+        $this->subagentDisplay->showBatch($entries);
     }
 
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void

@@ -171,8 +171,8 @@ class DiffRendererTest extends TestCase
 
     public function test_render_returns_string(): void
     {
-        $old = "before";
-        $new = "after";
+        $old = 'before';
+        $new = 'after';
 
         $result = $this->renderer->render($old, $new, '');
 

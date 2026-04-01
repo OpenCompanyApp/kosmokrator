@@ -67,6 +67,12 @@ class NullRenderer implements RendererInterface
 
     public function showAutoApproveIndicator(string $toolName): void {}
 
+    public function showToolExecuting(string $name): void {}
+
+    public function updateToolExecuting(string $output): void {}
+
+    public function clearToolExecuting(): void {}
+
     public function showNotice(string $message): void {}
 
     public function showMode(string $label, string $color = ''): void {}

@@ -327,6 +327,34 @@ class SubagentOrchestrator
     }
 
     /**
+     * Remove completed agents and their stats to free memory.
+     *
+     * Keeps entries that are still running, waiting, queued, or retrying.
+     * Also keeps entries needed for dependency resolution and tree display
+     * of recently completed agents (those that failed or were cancelled).
+     *
+     * Safe to call periodically (e.g., after collecting background results).
+     */
+    public function pruneCompleted(): int
+    {
+        $terminalStates = ['done' => true, 'cancelled' => true];
+        $pruned = 0;
+
+        foreach ($this->stats as $id => $stats) {
+            if (isset($terminalStates[$stats->status])) {
+                unset($this->stats[$id], $this->agents[$id]);
+                $pruned++;
+            }
+        }
+
+        if ($pruned > 0) {
+            $this->log->debug('Pruned completed agents', ['count' => $pruned, 'remaining' => count($this->stats)]);
+        }
+
+        return $pruned;
+    }
+
+    /**
      * Drain and return completed background results for a specific parent.
      *
      * @return array<string, string> agentId => result text

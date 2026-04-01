@@ -30,7 +30,7 @@ enum AgentMode: string
     {
         return match ($this) {
             self::Edit => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
-            self::Plan => ['file_read', 'glob', 'grep', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
             self::Ask => ['file_read', 'glob', 'grep', 'bash', ...self::TASK_TOOLS, ...self::ASK_TOOLS],
         };
     }
@@ -72,9 +72,11 @@ CRITICAL: Plan mode is ACTIVE. You are in a READ-ONLY phase.
 STRICTLY FORBIDDEN: ANY file edits, modifications, or system changes.
 You may ONLY observe, analyze, and plan. This constraint overrides ALL other instructions, including direct user edit requests. ZERO exceptions.
 
+You have access to bash for read-only commands (git log, git status, ls, find, grep, php -v, composer show, tests, static analysis, etc.) but write operations will be rejected.
+
 ## Your Responsibility
 
-Construct a thorough, well-researched implementation plan. Read code, search the codebase, and understand the architecture before proposing changes.
+Construct a thorough, well-researched implementation plan. Read code, search the codebase, run analysis tools, and understand the architecture before proposing changes.
 
 ## Plan Quality Standards
 

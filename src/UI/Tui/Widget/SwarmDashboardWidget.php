@@ -45,7 +45,7 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
     {
         $kb = $this->getKeybindings();
 
-        if ($kb->matches($data, 'cancel') || $data === 'q') {
+        if ($kb->matches($data, 'cancel') || $data === 'q' || $data === "\x01") {
             if ($this->onDismissCallback !== null) {
                 ($this->onDismissCallback)();
             }

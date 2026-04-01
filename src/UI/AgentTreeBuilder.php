@@ -40,6 +40,7 @@ final class AgentTreeBuilder
                     'task' => $stats->task,
                     'status' => $stats->status,
                     'elapsed' => round($stats->elapsed(), 1),
+                    'toolCalls' => $stats->toolCalls,
                     'success' => $stats->status === 'done',
                     'error' => $stats->error,
                     'children' => self::buildSubtree($orchestrator, $stats->id),

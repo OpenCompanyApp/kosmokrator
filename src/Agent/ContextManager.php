@@ -9,6 +9,7 @@ use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\RendererInterface;
+use Kosmokrator\UI\SafeDisplay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -43,32 +44,38 @@ final class ContextManager
             return [0, 0];
         }
 
-        $estimated = TokenEstimator::estimateMessages($history->messages());
-        $modelName = $this->getModelName();
+        try {
+            $estimated = TokenEstimator::estimateMessages($history->messages());
+            $modelName = $this->getModelName();
 
-        // Use compactor's configurable threshold; fall back to 80% for pruner-only mode
-        if ($this->compactor !== null) {
-            $threshold = $this->compactor->getThresholdTokens($modelName);
-        } else {
-            $threshold = (int) ($this->getContextWindow() * 0.8);
-        }
+            // Use compactor's configurable threshold; fall back to 80% for pruner-only mode
+            if ($this->compactor !== null) {
+                $threshold = $this->compactor->getThresholdTokens($modelName);
+            } else {
+                $threshold = (int) ($this->getContextWindow() * 0.8);
+            }
 
-        if ($estimated < $threshold) {
+            if ($estimated < $threshold) {
+                return [0, 0];
+            }
+
+            $this->log->info('Pre-flight context check: estimated tokens exceed threshold', [
+                'estimated' => $estimated,
+                'threshold' => $threshold,
+            ]);
+
+            if ($this->compactor !== null) {
+                return $this->performCompaction($history);
+            }
+
+            $history->trimOldest();
+
+            return [0, 0];
+        } catch (\Throwable $e) {
+            $this->log->error('Pre-flight check failed', ['error' => $e->getMessage()]);
+
             return [0, 0];
         }
-
-        $this->log->info('Pre-flight context check: estimated tokens exceed threshold', [
-            'estimated' => $estimated,
-            'threshold' => $threshold,
-        ]);
-
-        if ($this->compactor !== null) {
-            return $this->performCompaction($history);
-        }
-
-        $history->trimOldest();
-
-        return [0, 0];
     }
 
     /**
@@ -109,7 +116,7 @@ final class ContextManager
         }
 
         $this->log->info('Starting context compaction');
-        $this->ui->showCompacting();
+        SafeDisplay::call(fn () => $this->ui->showCompacting(), $this->log);
 
         try {
             $result = $this->compactor->compact($history);
@@ -119,8 +126,8 @@ final class ContextManager
             $tokensOut = $result['tokens_out'];
 
             if ($summary === '') {
-                $this->ui->clearCompacting();
-                $this->ui->showNotice('Nothing to compact.');
+                SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
+                SafeDisplay::call(fn () => $this->ui->showNotice('Nothing to compact.'), $this->log);
 
                 return [$tokensIn, $tokensOut];
             }
@@ -149,8 +156,8 @@ final class ContextManager
                 }
             }
 
-            $this->ui->clearCompacting();
-            $this->ui->showNotice('Context compacted.');
+            SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
+            SafeDisplay::call(fn () => $this->ui->showNotice('Context compacted.'), $this->log);
             $this->log->info('Compaction complete', [
                 'memories_extracted' => count($extraction['memories']),
                 'messages_after' => count($history->messages()),
@@ -161,7 +168,7 @@ final class ContextManager
 
             return [$tokensIn, $tokensOut];
         } catch (\Throwable $e) {
-            $this->ui->clearCompacting();
+            SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
             $messagesBefore = count($history->messages());
             $history->trimOldest();
             $this->log->error('Compaction failed, falling back to trimOldest', [

@@ -24,4 +24,19 @@ interface ToolRendererInterface
      * Show a dimmed auto-approve indicator after a tool call line.
      */
     public function showAutoApproveIndicator(string $toolName): void;
+
+    /**
+     * Show an executing spinner below the tool call header.
+     */
+    public function showToolExecuting(string $name): void;
+
+    /**
+     * Update the executing spinner with streaming output (e.g., bash chunks).
+     */
+    public function updateToolExecuting(string $output): void;
+
+    /**
+     * Remove the executing spinner.
+     */
+    public function clearToolExecuting(): void;
 }

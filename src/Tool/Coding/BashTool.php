@@ -13,6 +13,9 @@ use function Amp\ByteStream\buffer;
 
 class BashTool implements ToolInterface
 {
+    /** @var (\Closure(string): void)|null */
+    public static ?\Closure $progressCallback = null;
+
     private int $timeout;
 
     private LoggerInterface $log;
@@ -75,8 +78,20 @@ class BashTool implements ToolInterface
                 }
             });
 
-            // Buffer stdout/stderr concurrently to avoid pipe deadlock
-            $stdoutFuture = \Amp\async(fn () => buffer($process->getStdout()));
+            // Read stdout/stderr concurrently, streaming chunks via progress callback
+            $progressCb = self::$progressCallback;
+            $stdoutFuture = \Amp\async(function () use ($process, $progressCb): string {
+                $buf = '';
+                $stream = $process->getStdout();
+                while (($chunk = $stream->read()) !== null) {
+                    $buf .= $chunk;
+                    if ($progressCb !== null) {
+                        $progressCb($buf);
+                    }
+                }
+
+                return $buf;
+            });
             $stderrFuture = \Amp\async(fn () => buffer($process->getStderr()));
             $exitCode = $process->join();
             $output = $stdoutFuture->await();

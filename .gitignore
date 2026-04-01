@@ -8,3 +8,4 @@
 .env
 /tmp
 /docs/confidential
+/.playwright-cli

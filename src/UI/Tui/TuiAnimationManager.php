@@ -198,7 +198,14 @@ final class TuiAnimationManager
         $this->compactingLoader->setIntervalMs(120);
         $this->compactingLoader->start();
 
-        $this->thinkingBar->add($this->compactingLoader);
+        try {
+            $this->thinkingBar->add($this->compactingLoader);
+        } catch (\Throwable) {
+            $this->compactingLoader->stop();
+            $this->compactingLoader = null;
+
+            return;
+        }
 
         $this->compactingStartTime = microtime(true);
         $this->compactingBreathTick = 0;
@@ -298,7 +305,12 @@ final class TuiAnimationManager
                 $cancellation?->cancel();
             });
 
-            $this->thinkingBar->add($this->loader);
+            try {
+                $this->thinkingBar->add($this->loader);
+            } catch (\Throwable) {
+                $this->loader->stop();
+                $this->loader = null;
+            }
         }
 
         // Breathing pulse at 30fps — animates loader text OR in-progress task color

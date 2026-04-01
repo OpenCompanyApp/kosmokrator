@@ -9,6 +9,7 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\RendererInterface;
+use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -32,6 +33,8 @@ class AnsiRenderer implements RendererInterface
     private string $currentModeLabel = 'Edit';
 
     private string $currentPermissionLabel = 'Guardian ◈';
+
+    private bool $wasActive = false;
 
     public function __construct()
     {
@@ -85,9 +88,18 @@ class AnsiRenderer implements RendererInterface
 
     public function setPhase(AgentPhase $phase): void
     {
+        if ($phase === AgentPhase::Thinking || $phase === AgentPhase::Tools) {
+            $this->wasActive = true;
+        }
+
         // ANSI mode: only Thinking has a visual indicator (static text)
         if ($phase === AgentPhase::Thinking) {
             $this->showThinking();
+        }
+
+        if ($phase === AgentPhase::Idle && $this->wasActive) {
+            $this->wasActive = false;
+            TerminalNotification::notify();
         }
     }
 
@@ -407,6 +419,43 @@ class AnsiRenderer implements RendererInterface
     public function showAutoApproveIndicator(string $toolName): void
     {
         // Intentionally silent — auto-approve is already visible in the status bar
+    }
+
+    public function showToolExecuting(string $name): void
+    {
+        // ANSI mode: show a simple "running..." indicator
+        if ($this->isTaskTool($name) || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
+            return;
+        }
+        $dim = Theme::dim();
+        $r = Theme::reset();
+        $border = Theme::borderTask();
+        echo "{$border}  ┃ {$dim}running...{$r}\r";
+    }
+
+    public function updateToolExecuting(string $output): void
+    {
+        // ANSI mode: show last line of output
+        $lines = explode("\n", trim($output));
+        $last = '';
+        for ($i = count($lines) - 1; $i >= 0; $i--) {
+            if (trim($lines[$i]) !== '') {
+                $last = trim($lines[$i]);
+                break;
+            }
+        }
+        if ($last !== '') {
+            $dim = Theme::dim();
+            $r = Theme::reset();
+            $border = Theme::borderTask();
+            $preview = mb_strlen($last) > 80 ? mb_substr($last, 0, 80).'…' : $last;
+            echo "\r{$border}  ┃ {$dim}{$preview}{$r}\r";
+        }
+    }
+
+    public function clearToolExecuting(): void
+    {
+        echo "\r\033[2K"; // Clear the running line
     }
 
     public function consumeQueuedMessage(): ?string
@@ -1027,7 +1076,7 @@ class AnsiRenderer implements RendererInterface
         }
 
         // Multiple agents: tree
-        echo "\n{$border}  {$cyan}⏺ {$count} {$types}{$r}{$bgTag}\n";
+        echo "\n{$border}  {$cyan}⏺ {$count} agents{$r}{$bgTag}\n";
 
         $last = $count - 1;
         foreach ($entries as $i => $entry) {

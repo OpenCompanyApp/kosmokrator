@@ -43,7 +43,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('ask_choice', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
-        $this->assertNotContains('bash', $tools);
+        $this->assertContains('bash', $tools);
     }
 
     public function test_ask_mode_has_read_only_tools_plus_bash(): void

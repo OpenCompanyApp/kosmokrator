@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
+use Kosmokrator\UI\SafeDisplay;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolError;
@@ -74,8 +76,8 @@ final class ToolExecutor
                 $output = $existsInAll
                     ? "Tool '{$toolCall->name}' is not available in {$mode->label()} mode. Switch to Edit mode to use write tools."
                     : "Tool '{$toolCall->name}' not found.";
-                $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
-                $this->ui->showToolResult($toolCall->name, $output, false);
+                SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
                 $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
 
                 continue;
@@ -86,8 +88,8 @@ final class ToolExecutor
                 $cmd = $toolCall->arguments()['command'] ?? '';
                 if ($this->permissions?->isMutativeCommand($cmd)) {
                     $output = 'Command blocked in Ask mode (read-only). Switch to Edit mode for write operations.';
-                    $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
-                    $this->ui->showToolResult($toolCall->name, $output, false);
+                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                    SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
                     $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
 
                     continue;
@@ -106,76 +108,97 @@ final class ToolExecutor
             }
         }
         if ($subagentSpawns !== []) {
-            $this->ui->showSubagentSpawn($subagentSpawns);
-            $this->ui->showSubagentRunning($subagentSpawns);
+            SafeDisplay::call(fn () => $this->ui->showSubagentSpawn($subagentSpawns), $this->log);
+            SafeDisplay::call(fn () => $this->ui->showSubagentRunning($subagentSpawns), $this->log);
         }
 
-        // Phase 2: Execute approved calls (concurrent within safe groups, sequential across)
-        $outcomes = [];
+        // Phase 2: Execute with live feedback — show header + spinner before, result after
+        $results = [];
+        $subagentBatch = [];
         $groups = $this->partitionConcurrentGroups($approved);
+
+        // Build lookup: toolCall id → [toolCall, wasAutoApproved]
+        $approvedById = [];
+        foreach ($approved as [$tc, $t]) {
+            $approvedById[$tc->id] = [$tc, $t, $autoApproved[$tc->id] ?? false];
+        }
 
         foreach ($groups as $group) {
             if (count($group) === 1) {
                 [$toolCall, $tool] = $group[0];
-                $outcomes[$toolCall->id] = $this->executeSingleTool($toolCall, $tool, $stats);
+
+                if ($toolCall->name !== 'subagent') {
+                    // Show header + spinner before execution
+                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                    if ($autoApproved[$toolCall->id] ?? false) {
+                        SafeDisplay::call(fn () => $this->ui->showAutoApproveIndicator($toolCall->name), $this->log);
+                    }
+                    SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
+
+                    // Wire bash streaming callback
+                    if ($toolCall->name === 'bash') {
+                        BashTool::$progressCallback = fn (string $chunk) => SafeDisplay::call(
+                            fn () => $this->ui->updateToolExecuting($chunk), $this->log
+                        );
+                    }
+                }
+
+                $result = $this->executeSingleTool($toolCall, $tool, $stats);
+
+                if ($toolCall->name === 'bash') {
+                    BashTool::$progressCallback = null;
+                }
+
+                if ($toolCall->name !== 'subagent') {
+                    SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
+                }
+
+                $this->collectResult($toolCall, $result, $agentContext, $subagentBatch, $results);
             } else {
+                // Concurrent group: show all headers, then await+display each result in order
+                $nonSubagent = [];
+                foreach ($group as [$toolCall, $tool]) {
+                    if ($toolCall->name !== 'subagent') {
+                        SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                        if ($autoApproved[$toolCall->id] ?? false) {
+                            SafeDisplay::call(fn () => $this->ui->showAutoApproveIndicator($toolCall->name), $this->log);
+                        }
+                        $nonSubagent[] = $toolCall->id;
+                    }
+                }
+                if ($nonSubagent !== []) {
+                    SafeDisplay::call(fn () => $this->ui->showToolExecuting('concurrent'), $this->log);
+                }
+
+                // Launch all futures concurrently
                 $futures = [];
                 foreach ($group as [$toolCall, $tool]) {
                     $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $tool, $stats));
                 }
-                foreach ($futures as $id => $future) {
-                    $outcomes[$id] = $future->await();
+
+                // Await and display each result in original tool call order
+                foreach ($group as [$toolCall, $tool]) {
+                    $outcome = $futures[$toolCall->id]->await();
+
+                    if ($toolCall->name !== 'subagent') {
+                        SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
+                    }
+
+                    $this->collectResult($toolCall, $outcome, $agentContext, $subagentBatch, $results);
                 }
             }
         }
 
-        // Phase 3: Collect results in original order + UI display
-        $results = [];
-        $subagentBatch = [];
-
+        // Add denied results in original order
         foreach ($toolCalls as $toolCall) {
             if (isset($denied[$toolCall->id])) {
                 $results[] = $denied[$toolCall->id];
-
-                continue;
-            }
-            if (isset($outcomes[$toolCall->id])) {
-                $result = $outcomes[$toolCall->id];
-                $success = ! str_starts_with($result->result, 'Error:');
-
-                if ($toolCall->name === 'subagent') {
-                    $agentId = $toolCall->arguments()['id'] ?? '';
-                    $orchestrator = $agentContext?->orchestrator;
-                    $subagentBatch[] = [
-                        'args' => $toolCall->arguments(),
-                        'result' => $result->result,
-                        'success' => $success,
-                        'children' => $orchestrator !== null ? AgentTreeBuilder::buildSubtree($orchestrator, $agentId) : [],
-                        'stats' => $orchestrator?->getStats($agentId),
-                    ];
-                    $results[] = $result;
-
-                    continue;
-                }
-
-                // Flush any buffered subagents before showing non-subagent tool
-                if ($subagentBatch !== []) {
-                    $this->ui->showSubagentBatch($subagentBatch);
-                    $subagentBatch = [];
-                }
-
-                $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
-                if ($autoApproved[$toolCall->id] ?? false) {
-                    $this->ui->showAutoApproveIndicator($toolCall->name);
-                }
-                $this->ui->showToolResult($toolCall->name, $result->result, $success);
-                $results[] = $result;
             }
         }
 
         // Flush remaining subagent batch
         if ($subagentBatch !== []) {
-            $this->ui->showSubagentBatch($subagentBatch);
+            SafeDisplay::call(fn () => $this->ui->showSubagentBatch($subagentBatch), $this->log);
         }
 
         return $results;
@@ -198,20 +221,20 @@ final class ToolExecutor
             $output = ($permResult->reason ?? "Permission denied: '{$toolCall->name}' is blocked by policy.")
                 .' Try a different approach.';
             $this->log->info('Tool denied by policy', ['tool' => $toolCall->name, 'reason' => $permResult->reason]);
-            $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
-            $this->ui->showToolResult($toolCall->name, $output, false);
+            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+            SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
             return [new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
         }
 
         if ($permResult->action === PermissionAction::Ask) {
-            $this->ui->showToolCall($toolCall->name, $toolCall->arguments());
+            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
             $decision = $this->ui->askToolPermission($toolCall->name, $toolCall->arguments());
 
             if ($decision === 'deny') {
                 $output = "User denied permission for '{$toolCall->name}'. Try a different approach.";
                 $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
-                $this->ui->showToolResult($toolCall->name, $output, false);
+                SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
                 return [new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
             }
@@ -221,11 +244,11 @@ final class ToolExecutor
             }
             if ($decision === 'guardian') {
                 $this->permissions->setPermissionMode(PermissionMode::Guardian);
-                $this->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
+                SafeDisplay::call(fn () => $this->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color()), $this->log);
             }
             if ($decision === 'prometheus') {
                 $this->permissions->setPermissionMode(PermissionMode::Prometheus);
-                $this->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color());
+                SafeDisplay::call(fn () => $this->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color()), $this->log);
             }
 
             return [null, false];
@@ -327,6 +350,46 @@ final class ToolExecutor
 
         // No conflicts — everything in one concurrent group
         return [$approved];
+    }
+
+    /**
+     * Collect a tool result into the appropriate batch (subagent) or show it directly.
+     *
+     * @param  array<int, array{args: array, result: string, success: bool, children?: array, stats?: mixed}>  $subagentBatch
+     * @param  ToolResult[]  $results
+     */
+    private function collectResult(
+        ToolCall $toolCall,
+        ToolResult $result,
+        ?AgentContext $agentContext,
+        array &$subagentBatch,
+        array &$results,
+    ): void {
+        $success = ! str_starts_with($result->result, 'Error:');
+
+        if ($toolCall->name === 'subagent') {
+            $agentId = $toolCall->arguments()['id'] ?? '';
+            $orchestrator = $agentContext?->orchestrator;
+            $subagentBatch[] = [
+                'args' => $toolCall->arguments(),
+                'result' => $result->result,
+                'success' => $success,
+                'children' => $orchestrator !== null ? AgentTreeBuilder::buildSubtree($orchestrator, $agentId) : [],
+                'stats' => $orchestrator?->getStats($agentId),
+            ];
+            $results[] = $result;
+
+            return;
+        }
+
+        // Flush any buffered subagents before showing non-subagent result
+        if ($subagentBatch !== []) {
+            SafeDisplay::call(fn () => $this->ui->showSubagentBatch($subagentBatch), $this->log);
+            $subagentBatch = [];
+        }
+
+        SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $result->result, $success), $this->log);
+        $results[] = $result;
     }
 
     /**

@@ -12,6 +12,7 @@ use Kosmokrator\UI\Ansi\AnsiTheogony;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\RendererInterface;
+use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
@@ -80,6 +81,16 @@ class TuiRenderer implements RendererInterface
     private bool $activeResponseIsAnsi = false;
 
     private ?DiffRenderer $diffRenderer = null;
+
+    private ?CancellableLoaderWidget $toolExecutingLoader = null;
+
+    private ?string $toolExecutingTimerId = null;
+
+    private float $toolExecutingStartTime = 0.0;
+
+    private int $toolExecutingBreathTick = 0;
+
+    private ?string $toolExecutingPreview = null;
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -237,6 +248,22 @@ class TuiRenderer implements RendererInterface
 
                     return true;
                 }
+            }
+
+            // Ctrl+A — open swarm dashboard (agents running)
+            if ($data === "\x01") {
+                if ($this->immediateCommandHandler !== null) {
+                    ($this->immediateCommandHandler)('/agents');
+                }
+
+                return true;
+            }
+
+            // Ctrl+L — force full re-render
+            if ($data === "\x0C") {
+                $this->forceRender();
+
+                return true;
             }
 
             // Ctrl+O — toggle all tool results expanded/collapsed
@@ -512,6 +539,7 @@ HELP;
 
         if ($phase === AgentPhase::Idle) {
             $this->requestCancellation = null;
+            TerminalNotification::notify();
         }
     }
 
@@ -704,6 +732,81 @@ HELP;
     public function showAutoApproveIndicator(string $toolName): void
     {
         // Intentionally silent — auto-approve is already visible in the status bar
+    }
+
+    public function showToolExecuting(string $name): void
+    {
+        if ($this->isTaskTool($name) || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
+            return;
+        }
+
+        $this->animationManager->ensureSpinnersRegistered();
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $blue = "\033[38;2;112;160;208m";
+
+        $this->toolExecutingLoader = new CancellableLoaderWidget("{$blue}running...{$r}");
+        $this->toolExecutingLoader->setId('tool-executing');
+        $this->toolExecutingLoader->addStyleClass('tool-result');
+        $this->toolExecutingLoader->setSpinner('cosmos', 120);
+        $this->toolExecutingStartTime = microtime(true);
+        $this->toolExecutingBreathTick = 0;
+
+        $this->conversation->add($this->toolExecutingLoader);
+
+        $this->toolExecutingTimerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {
+            if ($this->toolExecutingLoader === null) {
+                return;
+            }
+            $this->toolExecutingBreathTick++;
+            $t = sin($this->toolExecutingBreathTick * 0.07);
+            $cr = (int) (112 + 40 * $t);
+            $cg = (int) (160 + 40 * $t);
+            $cb = (int) (208 + 47 * $t);
+            $color = "\033[38;2;{$cr};{$cg};{$cb}m";
+
+            $elapsed = (int) (microtime(true) - $this->toolExecutingStartTime);
+            $time = $elapsed > 0 ? " {$dim}({$elapsed}s){$r}" : '';
+
+            $preview = $this->toolExecutingPreview ?? 'running...';
+            $this->toolExecutingLoader->setMessage("{$color}{$preview}{$r}{$time}");
+            $this->flushRender();
+        });
+
+        $this->flushRender();
+    }
+
+    public function updateToolExecuting(string $output): void
+    {
+        // Show last non-empty line as preview
+        $lines = explode("\n", trim($output));
+        $last = '';
+        for ($i = count($lines) - 1; $i >= 0; $i--) {
+            $trimmed = trim($lines[$i]);
+            if ($trimmed !== '') {
+                $last = $trimmed;
+                break;
+            }
+        }
+        if ($last !== '') {
+            $this->toolExecutingPreview = mb_strlen($last) > 100 ? mb_substr($last, 0, 100).'…' : $last;
+        }
+    }
+
+    public function clearToolExecuting(): void
+    {
+        if ($this->toolExecutingTimerId !== null) {
+            EventLoop::cancel($this->toolExecutingTimerId);
+            $this->toolExecutingTimerId = null;
+        }
+        if ($this->toolExecutingLoader !== null) {
+            $this->toolExecutingLoader->setFinishedIndicator('');
+            $this->toolExecutingLoader->stop();
+            $this->conversation->remove($this->toolExecutingLoader);
+            $this->toolExecutingLoader = null;
+        }
+        $this->toolExecutingPreview = null;
     }
 
     public function setPermissionMode(string $label, string $color): void
@@ -1207,11 +1310,17 @@ HELP;
 
     private function toggleAllToolResults(): void
     {
-        foreach ($this->conversation->all() as $widget) {
-            if ($widget instanceof CollapsibleWidget) {
-                $widget->toggle();
+        $toggle = function (array $widgets) use (&$toggle): void {
+            foreach ($widgets as $widget) {
+                if ($widget instanceof CollapsibleWidget) {
+                    $widget->toggle();
+                }
+                if ($widget instanceof ContainerWidget) {
+                    $toggle($widget->all());
+                }
             }
-        }
+        };
+        $toggle($this->conversation->all());
         $this->flushRender();
     }
 

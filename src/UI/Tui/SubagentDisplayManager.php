@@ -7,6 +7,7 @@ namespace Kosmokrator\UI\Tui;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
+use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -54,12 +55,14 @@ final class SubagentDisplayManager
      * @param  \Closure(): ?string  $breathColorProvider  Returns current breath animation color
      * @param  \Closure(): void  $renderCallback  Triggers a TUI render pass (flushRender)
      * @param  \Closure(): void  $ensureSpinners  Ensures custom spinners are registered
+     * @param  ?LoggerInterface  $log  Logger for recording display failures
      */
     public function __construct(
         private readonly ContainerWidget $conversation,
         private readonly \Closure $breathColorProvider,
         private readonly \Closure $renderCallback,
         private readonly \Closure $ensureSpinners,
+        private readonly ?LoggerInterface $log = null,
     ) {}
 
     /**
@@ -79,12 +82,19 @@ final class SubagentDisplayManager
      * All subagent widgets are added inside this container so they stay
      * at the position where they were first inserted.
      */
-    private function ensureContainer(): ContainerWidget
+    private function ensureContainer(): ?ContainerWidget
     {
         if ($this->container === null) {
             $this->container = new ContainerWidget;
             $this->container->setId('subagent-container');
-            $this->conversation->add($this->container);
+            try {
+                $this->conversation->add($this->container);
+            } catch (\Throwable $e) {
+                $this->log?->warning('Failed to add subagent container', ['error' => $e->getMessage()]);
+                $this->container = null;
+
+                return null;
+            }
         }
 
         return $this->container;
@@ -107,7 +117,14 @@ final class SubagentDisplayManager
         // Fresh container at current conversation position — old one stays with its results
         $this->container = new ContainerWidget;
         $this->container->setId('subagent-container');
-        $this->conversation->add($this->container);
+        try {
+            $this->conversation->add($this->container);
+        } catch (\Throwable $e) {
+            $this->log?->warning('Failed to add subagent container', ['error' => $e->getMessage()]);
+            $this->container = null;
+
+            return;
+        }
         $this->batchDisplayed = false;
 
         $container = $this->container;
@@ -122,8 +139,7 @@ final class SubagentDisplayManager
             [$label] = AgentDisplayFormatter::formatAgentLabel($entries[0]['args']);
             $text = "{$cyan}⏺{$r} {$label}";
         } else {
-            $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
-            $lines = ["{$cyan}⏺ {$types}{$r}"];
+            $lines = ["{$cyan}⏺ {$count} agents{$r}"];
             foreach ($entries as $entry) {
                 [$label] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
                 $lines[] = "  {$cyan}●{$r} {$label}";
@@ -168,10 +184,14 @@ final class SubagentDisplayManager
         $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
 
         $container = $this->ensureContainer();
+        if ($container === null) {
+            return;
+        }
 
         $this->loader = new CancellableLoaderWidget("{$blue}{$label}{$r}");
         $this->loader->addStyleClass('subagent-loader');
-        $this->loader->setSpinner('cosmos', 120);
+        $this->loader->setSpinner('cosmos');
+        $this->loader->setIntervalMs(120);
         $this->startTime = microtime(true);
         $this->loaderBreathTick = 0;
         $this->cachedLoaderLabel = $label;
@@ -213,13 +233,14 @@ final class SubagentDisplayManager
                             $this->cachedLoaderLabel = $total === 1 ? 'Agent running...' : "{$total} agents running...";
                         }
                     }
-                } catch (\Throwable) {
-                    // Don't crash the timer on tree provider errors
+                } catch (\Throwable $e) {
+                    $this->log?->warning('Tree provider error in loader timer', ['error' => $e->getMessage()]);
                 }
             }
 
             $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
-            $this->loader->setMessage("{$color}{$this->cachedLoaderLabel}  {$dim}{$time}{$r}");
+            $hint = "{$dim}(ctrl+a for dashboard){$r}";
+            $this->loader->setMessage("{$color}{$this->cachedLoaderLabel}  {$dim}{$time}{$r}  {$hint}");
             ($this->renderCallback)();
         });
 
@@ -233,26 +254,31 @@ final class SubagentDisplayManager
      */
     public function showBatch(array $entries): void
     {
-        $this->stopLoader();
-        $this->removeTree();
-        $this->batchDisplayed = true;
-
         if (empty($entries)) {
             return;
         }
+
+        // Filter out background acks — show remaining (failures, awaited results)
+        $entries = array_values(array_filter($entries, fn ($e) => ! str_contains($e['result'], 'spawned in background')));
+        if (empty($entries)) {
+            // All background — keep loader and tree running
+            return;
+        }
+
+        // Actual results to display — clean up running indicators
+        $this->stopLoader();
+        $this->removeTree();
+        $this->batchDisplayed = true;
 
         $r = Theme::reset();
         $dim = Theme::dim();
         $green = Theme::success();
         $red = Theme::error();
 
-        // Filter out background acks — show remaining (failures, awaited results)
-        $entries = array_values(array_filter($entries, fn ($e) => ! str_contains($e['result'], 'spawned in background')));
-        if (empty($entries)) {
+        $container = $this->ensureContainer();
+        if ($container === null) {
             return;
         }
-
-        $container = $this->ensureContainer();
         $count = count($entries);
 
         // Single agent: compact result with optional child tree
@@ -332,6 +358,9 @@ final class SubagentDisplayManager
 
         if ($this->treeWidget === null) {
             $container = $this->ensureContainer();
+            if ($container === null) {
+                return;
+            }
             $this->treeWidget = new TextWidget($text);
             $this->treeWidget->setId('subagent-tree');
             $container->add($this->treeWidget);
@@ -357,8 +386,8 @@ final class SubagentDisplayManager
             if ($tree !== []) {
                 $this->refreshTree($tree);
             }
-        } catch (\Throwable) {
-            // Don't crash the breathing timer on tree provider errors
+        } catch (\Throwable $e) {
+            $this->log?->warning('Tree provider error in refresh tick', ['error' => $e->getMessage()]);
         }
     }
 
@@ -433,10 +462,25 @@ final class SubagentDisplayManager
             $type = ucfirst($node['type']);
             $id = $node['id'];
             $task = mb_strlen($node['task']) > 50 ? mb_substr($node['task'], 0, 50).'…' : $node['task'];
-            $elapsed = $node['elapsed'] > 0 ? " {$dim}(".AgentDisplayFormatter::formatElapsed($node['elapsed'])."){$r}" : '';
+            $elapsed = $node['elapsed'] > 0 ? AgentDisplayFormatter::formatElapsed($node['elapsed']) : '';
+            $tools = $node['toolCalls'] ?? 0;
 
-            $taskSnippet = $task !== '' ? " {$dim}· {$task}{$r}" : '';
-            $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$taskSnippet}{$elapsed}\n";
+            if ($node['status'] === 'done') {
+                // Completed: green stats, dimmed task
+                $stats = $elapsed !== '' ? " {$green}· {$elapsed} · {$tools} tools{$r}" : '';
+                $taskSnippet = $task !== '' ? " {$gray}· {$task}{$r}" : '';
+                $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$stats}{$taskSnippet}\n";
+            } elseif ($node['status'] === 'failed' || $node['status'] === 'cancelled') {
+                // Failed: red stats, error hint
+                $stats = $elapsed !== '' ? " {$red}· {$elapsed}{$r}" : '';
+                $taskSnippet = $task !== '' ? " {$gray}· {$task}{$r}" : '';
+                $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$stats}{$taskSnippet}\n";
+            } else {
+                // Running/waiting: amber with task visible
+                $elapsedStr = $elapsed !== '' ? " {$dim}({$elapsed}){$r}" : '';
+                $taskSnippet = $task !== '' ? " {$dim}· {$task}{$r}" : '';
+                $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$taskSnippet}{$elapsedStr}\n";
+            }
 
             $children = $node['children'] ?? [];
             if ($children !== []) {

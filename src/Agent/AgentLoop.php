@@ -10,9 +10,12 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
+use Kosmokrator\UI\SafeDisplay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
+use Prism\Prism\ValueObjects\ToolCall;
+use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
 class AgentLoop
@@ -129,144 +132,165 @@ class AgentLoop
         $round = 0;
         $trimAttempts = 0;
 
-        while (true) {
-            $round++;
+        try {
+            while (true) {
+                $round++;
 
-            [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history);
-            $this->sessionTokensIn += $compactIn;
-            $this->sessionTokensOut += $compactOut;
-            $this->contextManager->refreshSystemPrompt($this->mode);
-            $this->injectPendingBackgroundResults();
-            $this->ui->setPhase(AgentPhase::Thinking);
+                [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history);
+                $this->sessionTokensIn += $compactIn;
+                $this->sessionTokensOut += $compactOut;
+                $this->contextManager->refreshSystemPrompt($this->mode);
+                $this->injectPendingBackgroundResults();
+                SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Thinking), $this->log);
 
-            try {
-                $cancellation = $this->ui->getCancellation();
-                $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
-                $this->ui->setPhase(AgentPhase::Tools);
-                $trimAttempts = 0;
+                try {
+                    $cancellation = $this->ui->getCancellation();
+                    $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Tools), $this->log);
+                    $trimAttempts = 0;
 
-                $fullText = $response->text;
-                $toolCalls = $response->toolCalls;
-                $finishReason = $response->finishReason;
-                $tokensIn = $response->promptTokens;
-                $tokensOut = $response->completionTokens;
+                    $fullText = $response->text;
+                    $toolCalls = $response->toolCalls;
+                    $finishReason = $response->finishReason;
+                    $tokensIn = $response->promptTokens;
+                    $tokensOut = $response->completionTokens;
 
-                // Accumulate session-level token usage
-                $this->sessionTokensIn += $tokensIn;
-                $this->sessionTokensOut += $tokensOut;
+                    // Accumulate session-level token usage
+                    $this->sessionTokensIn += $tokensIn;
+                    $this->sessionTokensOut += $tokensOut;
 
-                if ($fullText !== '') {
-                    $this->ui->streamChunk($fullText);
-                }
-            } catch (CancelledException $e) {
-                $this->ui->setPhase(AgentPhase::Idle);
-                $this->log->info('LLM request cancelled by user', ['round' => $round]);
+                    if ($fullText !== '') {
+                        SafeDisplay::call(fn () => $this->ui->streamChunk($fullText), $this->log);
+                    }
+                } catch (CancelledException $e) {
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+                    $this->log->info('LLM request cancelled by user', ['round' => $round]);
 
-                return;
-            } catch (\Throwable $e) {
-                $this->ui->setPhase(AgentPhase::Idle);
+                    return;
+                } catch (\Throwable $e) {
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
 
-                // Context window overflow — compact or trim and retry
-                if ($this->isContextOverflow($e) && $trimAttempts < 3) {
-                    $trimAttempts++;
-                    $round--;
-                    $messagesBefore = count($this->history->messages());
+                    // Context window overflow — compact or trim and retry
+                    if ($this->isContextOverflow($e) && $trimAttempts < 3) {
+                        $trimAttempts++;
+                        $round--;
+                        $messagesBefore = count($this->history->messages());
 
-                    if ($this->compactor !== null && $trimAttempts === 1) {
-                        [$cIn, $cOut] = $this->contextManager->performCompaction($this->history);
-                        $this->sessionTokensIn += $cIn;
-                        $this->sessionTokensOut += $cOut;
-                    } else {
-                        $this->history->trimOldest();
+                        if ($this->compactor !== null && $trimAttempts === 1) {
+                            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history);
+                            $this->sessionTokensIn += $cIn;
+                            $this->sessionTokensOut += $cOut;
+                        } else {
+                            $this->history->trimOldest();
+                        }
+
+                        $this->log->warning('Context overflow, compacted/trimmed', [
+                            'attempt' => $trimAttempts,
+                            'messages_before' => $messagesBefore,
+                            'messages_after' => count($this->history->messages()),
+                        ]);
+
+                        continue;
                     }
 
-                    $this->log->warning('Context overflow, compacted/trimmed', [
-                        'attempt' => $trimAttempts,
-                        'messages_before' => $messagesBefore,
-                        'messages_after' => count($this->history->messages()),
-                    ]);
+                    $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
+                    SafeDisplay::call(fn () => $this->ui->showError($e->getMessage()), $this->log);
+                    $this->history->addAssistant('Error: '.$e->getMessage());
+
+                    return;
+                }
+
+                if ($fullText !== '') {
+                    SafeDisplay::call(fn () => $this->ui->streamComplete(), $this->log);
+                }
+
+                // If there were tool calls, execute them and loop
+                if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
+                    $this->history->addAssistant($fullText, $toolCalls);
+                    $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
+
+                    try {
+                        $toolResults = $this->toolExecutor->executeToolCalls(
+                            $toolCalls, $this->tools, $this->allTools,
+                            $this->mode, $this->agentContext, $this->stats,
+                        );
+                    } catch (\Throwable $e) {
+                        $this->log->error('Tool execution failed', ['error' => $e->getMessage()]);
+                        SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+                        SafeDisplay::call(fn () => $this->ui->showError('Tool execution error: '.$e->getMessage()), $this->log);
+                        $toolResults = array_map(
+                            fn (ToolCall $tc) => new ToolResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
+                            $toolCalls,
+                        );
+                    }
+
+                    $this->history->addToolResults($toolResults);
+                    $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
+
+                    // Transition to Thinking early so the indicator appears immediately
+                    // (the guard in setPhase prevents double-entry when the loop continues)
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Thinking), $this->log);
+
+                    $this->injectPendingBackgroundResults();
+
+                    // Deduplicate superseded tool results (cheap, no LLM call)
+                    if ($this->deduplicator !== null) {
+                        $deduped = $this->deduplicator->deduplicate($this->history);
+                        if ($deduped > 0) {
+                            $this->log->debug('Deduplicated tool results', ['superseded' => $deduped]);
+                        }
+                    }
+
+                    // Prune old tool results (cheap, no LLM call)
+                    if ($this->pruner !== null) {
+                        $saved = $this->pruner->prune($this->history);
+                        if ($saved > 0) {
+                            $this->log->debug('Pruned old tool results', ['tokens_saved' => $saved]);
+                        }
+                    }
+
+                    $this->logMemoryUsage();
 
                     continue;
                 }
 
-                $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
-                $this->ui->showError($e->getMessage());
-                $this->history->addAssistant('Error: '.$e->getMessage());
-
-                return;
-            }
-
-            if ($fullText !== '') {
-                $this->ui->streamComplete();
-            }
-
-            // If there were tool calls, execute them and loop
-            if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
-                $this->history->addAssistant($fullText, $toolCalls);
+                // No tool calls — final response
+                $this->log->info('LLM response complete', [
+                    'model' => $this->contextManager->getModelName(),
+                    'tokens_in' => $tokensIn,
+                    'tokens_out' => $tokensOut,
+                    'rounds' => $round,
+                ]);
+                $this->history->addAssistant($fullText);
                 $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
-                $toolResults = $this->toolExecutor->executeToolCalls(
-                    $toolCalls, $this->tools, $this->allTools,
-                    $this->mode, $this->agentContext, $this->stats,
-                );
-                $this->history->addToolResults($toolResults);
-                $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
-
-                $this->injectPendingBackgroundResults();
-
-                // Deduplicate superseded tool results (cheap, no LLM call)
-                if ($this->deduplicator !== null) {
-                    $deduped = $this->deduplicator->deduplicate($this->history);
-                    if ($deduped > 0) {
-                        $this->log->debug('Deduplicated tool results', ['superseded' => $deduped]);
-                    }
-                }
-
-                // Prune old tool results (cheap, no LLM call)
-                if ($this->pruner !== null) {
-                    $saved = $this->pruner->prune($this->history);
-                    if ($saved > 0) {
-                        $this->log->debug('Pruned old tool results', ['tokens_saved' => $saved]);
-                    }
+                // Auto-compaction check
+                $modelName = $this->contextManager->getModelName();
+                if ($this->compactor !== null && $this->compactor->needsCompaction($tokensIn, $modelName)) {
+                    [$cIn, $cOut] = $this->contextManager->performCompaction($this->history);
+                    $this->sessionTokensIn += $cIn;
+                    $this->sessionTokensOut += $cOut;
                 }
 
                 $this->logMemoryUsage();
 
-                continue;
+                SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+
+                SafeDisplay::call(fn () => $this->ui->showStatus(
+                    $modelName,
+                    $tokensIn,
+                    $tokensOut,
+                    $this->getSessionCost(),
+                    $this->contextManager->getContextWindow(),
+                ), $this->log);
+
+                return;
             }
 
-            // No tool calls — final response
-            $this->log->info('LLM response complete', [
-                'model' => $this->contextManager->getModelName(),
-                'tokens_in' => $tokensIn,
-                'tokens_out' => $tokensOut,
-                'rounds' => $round,
-            ]);
-            $this->history->addAssistant($fullText);
-            $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
-            // Auto-compaction check
-            $modelName = $this->contextManager->getModelName();
-            if ($this->compactor !== null && $this->compactor->needsCompaction($tokensIn, $modelName)) {
-                [$cIn, $cOut] = $this->contextManager->performCompaction($this->history);
-                $this->sessionTokensIn += $cIn;
-                $this->sessionTokensOut += $cOut;
-            }
-
-            $this->logMemoryUsage();
-
-            $this->ui->setPhase(AgentPhase::Idle);
-
-            $this->ui->showStatus(
-                $modelName,
-                $tokensIn,
-                $tokensOut,
-                $this->getSessionCost(),
-                $this->contextManager->getContextWindow(),
-            );
-
-            return;
+            // Unreachable — loop exits via return
+        } finally {
+            // Guarantee phase resets to Idle when run() exits (idempotent if already Idle)
+            SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
         }
-
-        // Unreachable — loop exits via return
     }
 
     /**
@@ -346,10 +370,20 @@ class AgentLoop
 
             if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
                 $this->history->addAssistant($fullText, $toolCalls);
-                $toolResults = $this->toolExecutor->executeToolCalls(
-                    $toolCalls, $this->tools, $this->allTools,
-                    $this->mode, $this->agentContext, $this->stats,
-                );
+
+                try {
+                    $toolResults = $this->toolExecutor->executeToolCalls(
+                        $toolCalls, $this->tools, $this->allTools,
+                        $this->mode, $this->agentContext, $this->stats,
+                    );
+                } catch (\Throwable $e) {
+                    $this->log->error('Headless tool execution failed', ['error' => $e->getMessage()]);
+                    $toolResults = array_map(
+                        fn (ToolCall $tc) => new ToolResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
+                        $toolCalls,
+                    );
+                }
+
                 $this->history->addToolResults($toolResults);
 
                 $this->injectPendingBackgroundResults();
@@ -538,6 +572,9 @@ class AgentLoop
         $this->history->addUser(implode("\n\n---\n\n", $parts));
         $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
         $this->log->debug('Injected background results', ['count' => count($results)]);
+
+        // Free memory for completed agents whose results we just consumed
+        $this->agentContext->orchestrator->pruneCompleted();
     }
 
     private function logMemoryUsage(): void

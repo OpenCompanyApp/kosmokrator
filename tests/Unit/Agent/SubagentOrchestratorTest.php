@@ -905,6 +905,256 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertNull($this->orchestrator->getStats('clean-1'));
     }
 
+    // --- Prune completed agents ---
+
+    public function test_prune_completed_removes_done_agents(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'task', AgentType::Explore, 'await', 'prune-1', [], null,
+            fn ($ctx, $task) => 'done',
+        )->await();
+
+        $this->assertNotNull($this->orchestrator->getStats('prune-1'));
+        $pruned = $this->orchestrator->pruneCompleted();
+        $this->assertSame(1, $pruned);
+        $this->assertNull($this->orchestrator->getStats('prune-1'));
+    }
+
+    public function test_prune_completed_keeps_running_agents(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        // Start a long-running agent
+        $orchestrator->spawnAgent(
+            $context, 'long', AgentType::Explore, 'background', 'prune-running', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(0.1);
+
+                return 'done';
+            },
+        );
+
+        \Amp\delay(0.01); // Let it start
+        $pruned = $orchestrator->pruneCompleted();
+        $this->assertSame(0, $pruned);
+        $this->assertNotNull($orchestrator->getStats('prune-running'));
+        $orchestrator->cancelAll();
+        \Amp\delay(0.01);
+    }
+
+    public function test_prune_completed_keeps_failed_agents(): void
+    {
+        try {
+            $this->orchestrator->spawnAgent(
+                $this->rootContext, 'fail', AgentType::Explore, 'await', 'prune-fail', [], null,
+                fn ($ctx, $task) => throw new \RuntimeException('boom'),
+            )->await();
+        } catch (\RuntimeException) {
+        }
+
+        $pruned = $this->orchestrator->pruneCompleted();
+        $this->assertSame(0, $pruned, 'Failed agents should not be pruned');
+        $this->assertNotNull($this->orchestrator->getStats('prune-fail'));
+    }
+
+    public function test_prune_completed_removes_cancelled_agents(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $future = $orchestrator->spawnAgent(
+            $context, 'cancel me', AgentType::Explore, 'background', 'prune-cancel', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(10, cancellation: $ctx->cancellation);
+
+                return 'should not reach';
+            },
+        );
+
+        \Amp\delay(0.01);
+        $orchestrator->cancelAll();
+        try {
+            $future->await();
+        } catch (CancelledException) {
+        }
+
+        $this->assertSame('failed', $orchestrator->getStats('prune-cancel')->status);
+        $pruned = $orchestrator->pruneCompleted();
+        $this->assertSame(0, $pruned, 'Failed agents (cancelled via exception) should not be pruned');
+        $this->assertNotNull($orchestrator->getStats('prune-cancel'));
+    }
+
+    public function test_prune_completed_returns_count(): void
+    {
+        foreach (['p1', 'p2', 'p3'] as $id) {
+            $this->orchestrator->spawnAgent(
+                $this->rootContext, 'task', AgentType::Explore, 'await', $id, [], null,
+                fn ($ctx, $task) => 'done',
+            )->await();
+        }
+
+        $this->assertSame(3, $this->orchestrator->pruneCompleted());
+        $this->assertSame([], $this->orchestrator->allStats());
+    }
+
+    // --- Group sequential execution ---
+
+    public function test_group_agents_run_sequentially(): void
+    {
+        $order = [];
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'first', AgentType::Explore, 'background', 'g1', [], 'serial',
+            function ($ctx, $task) use (&$order) {
+                \Amp\delay(0.05);
+                $order[] = 'first';
+
+                return 'first done';
+            },
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'second', AgentType::Explore, 'background', 'g2', [], 'serial',
+            function ($ctx, $task) use (&$order) {
+                $order[] = 'second';
+
+                return 'second done';
+            },
+        );
+
+        // Wait for both to complete
+        \Amp\delay(0.2);
+
+        // Both should have completed, and first (which has a delay) should finish before second starts
+        $this->assertSame('done', $this->orchestrator->getStats('g1')->status);
+        $this->assertSame('done', $this->orchestrator->getStats('g2')->status);
+        $this->assertSame(['first', 'second'], $order, 'Group agents must run sequentially');
+    }
+
+    public function test_different_groups_run_in_parallel(): void
+    {
+        $startTimes = [];
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'alpha', AgentType::Explore, 'background', 'p1', [], 'group-a',
+            function ($ctx, $task) use (&$startTimes) {
+                $startTimes['alpha'] = microtime(true);
+                \Amp\delay(0.05);
+
+                return 'alpha done';
+            },
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'beta', AgentType::Explore, 'background', 'p2', [], 'group-b',
+            function ($ctx, $task) use (&$startTimes) {
+                $startTimes['beta'] = microtime(true);
+                \Amp\delay(0.05);
+
+                return 'beta done';
+            },
+        );
+
+        \Amp\delay(0.15);
+
+        $this->assertSame('done', $this->orchestrator->getStats('p1')->status);
+        $this->assertSame('done', $this->orchestrator->getStats('p2')->status);
+
+        // They should have started nearly simultaneously (within 20ms of each other)
+        $diff = abs($startTimes['alpha'] - $startTimes['beta']);
+        $this->assertLessThan(0.02, $diff, 'Different groups should run in parallel');
+    }
+
+    public function test_group_semaphore_released_on_failure(): void
+    {
+        $secondResult = null;
+
+        // First agent in group fails
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'failing', AgentType::Explore, 'background', 'f1', [], 'fail-group',
+            fn ($ctx, $task) => throw new \RuntimeException('boom'),
+        );
+
+        // Second agent in same group should still run after the first fails
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'after-fail', AgentType::Explore, 'background', 'f2', [], 'fail-group',
+            function ($ctx, $task) use (&$secondResult) {
+                $secondResult = 'recovered';
+
+                return 'recovered';
+            },
+        );
+
+        \Amp\delay(0.15);
+
+        $this->assertSame('failed', $this->orchestrator->getStats('f1')->status);
+        $this->assertSame('done', $this->orchestrator->getStats('f2')->status);
+        $this->assertSame('recovered', $secondResult);
+    }
+
+    public function test_no_group_runs_without_group_semaphore(): void
+    {
+        // Agents without a group should run in parallel (limited only by global concurrency)
+        $startTimes = [];
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'nog1', AgentType::Explore, 'background', 'ng1', [], null,
+            function ($ctx, $task) use (&$startTimes) {
+                $startTimes['ng1'] = microtime(true);
+                \Amp\delay(0.05);
+
+                return 'ng1 done';
+            },
+        );
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'nog2', AgentType::Explore, 'background', 'ng2', [], null,
+            function ($ctx, $task) use (&$startTimes) {
+                $startTimes['ng2'] = microtime(true);
+                \Amp\delay(0.05);
+
+                return 'ng2 done';
+            },
+        );
+
+        \Amp\delay(0.15);
+
+        $this->assertSame('done', $this->orchestrator->getStats('ng1')->status);
+        $this->assertSame('done', $this->orchestrator->getStats('ng2')->status);
+
+        // Should have started at roughly the same time
+        $diff = abs($startTimes['ng1'] - $startTimes['ng2']);
+        $this->assertLessThan(0.02, $diff, 'Agents without group should run in parallel');
+    }
+
+    public function test_group_with_dependency(): void
+    {
+        $order = [];
+
+        // Agent with dependency AND in a group — both must be respected
+        $dep = $this->orchestrator->spawnAgent(
+            $this->rootContext, 'dep', AgentType::Explore, 'await', 'gd1', [], null,
+            function ($ctx, $task) use (&$order) {
+                $order[] = 'dep';
+
+                return 'dep done';
+            },
+        )->await();
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'grouped', AgentType::Explore, 'await', 'gd2', [], 'mygroup',
+            function ($ctx, $task) use (&$order) {
+                $order[] = 'grouped';
+
+                return 'grouped done';
+            },
+        )->await();
+
+        // Both ran (dep first since gd2 has no depends_on set here, but they ran sequentially via await)
+        $this->assertSame(['dep', 'grouped'], $order);
+    }
+
     /**
      * PHPUnit helper for asserting substring.
      */

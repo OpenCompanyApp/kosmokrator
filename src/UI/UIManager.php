@@ -117,6 +117,21 @@ class UIManager implements RendererInterface
         $this->renderer->showAutoApproveIndicator($toolName);
     }
 
+    public function showToolExecuting(string $name): void
+    {
+        $this->renderer->showToolExecuting($name);
+    }
+
+    public function updateToolExecuting(string $output): void
+    {
+        $this->renderer->updateToolExecuting($output);
+    }
+
+    public function clearToolExecuting(): void
+    {
+        $this->renderer->clearToolExecuting();
+    }
+
     public function clearConversation(): void
     {
         $this->renderer->clearConversation();

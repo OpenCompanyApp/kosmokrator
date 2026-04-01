@@ -1,5 +1,7 @@
 # Design Patterns Worth Adopting from Laravel AI SDK
 
+> Status: Reference / proposal. This document records ideas worth borrowing; it is not a statement that KosmoKrator currently implements these patterns.
+
 Laravel AI SDK (`laravel/ai`) is a layer built on top of Prism-PHP. KosmoKrator uses Prism directly (lighter, no web-app assumptions), but several of laravel/ai's architectural patterns are worth adopting.
 
 ---

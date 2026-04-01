@@ -1,5 +1,7 @@
 # KosmoKrator Deep Audit Report
 
+> Status: Historical audit from 2026-03-30. Findings, code counts, and risk notes reflect that audit date and may not match the current repository state.
+
 **Date**: 2026-03-30
 **Scope**: Full codebase — 60+ source files, 576 tests, all configuration
 **Auditor**: KosmoKrator (self-audit)

@@ -1,5 +1,7 @@
 # Streaming LLM Responses
 
+> Status: Proposal. This document describes a streaming design that is not the current shipped runtime behavior.
+
 ## Context
 
 Both renderers currently buffer full LLM responses before displaying. The TUI renderer has live `MarkdownWidget` rendering ready (`streamChunk()` + `processRender()`), but `AgentLoop` always calls `chat()` which blocks until the complete response arrives. Streaming would improve perceived responsiveness in `/ask` and `/plan` modes where the LLM produces longer text output. Lower priority for tool-heavy `/edit` mode.

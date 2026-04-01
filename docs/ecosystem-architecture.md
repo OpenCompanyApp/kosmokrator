@@ -1,5 +1,7 @@
 # KosmoKrator Ecosystem Architecture
 
+> Status: Proposal. This document outlines a future ecosystem architecture around Lua, MCP, and shared integrations. These capabilities are not fully implemented in the current CLI.
+
 ## Overview
 
 KosmoKrator is not just a CLI coding agent — it's a runtime that can host any tool ecosystem via Lua code execution and MCP. It shares a tool ecosystem with OpenCompany, a self-hosted AI collaboration platform.

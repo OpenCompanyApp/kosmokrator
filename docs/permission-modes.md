@@ -1,105 +1,125 @@
 # Permission Modes & Agent Modes
 
-KosmoKrator has two orthogonal mode axes: **Agent Mode** controls which tools are available, **Permission Mode** controls how available tools get approved.
+KosmoKrator has two orthogonal control axes:
+
+- **Agent mode** decides which tools are available
+- **Permission mode** decides how governed tool calls are approved
 
 ## Agent Modes
 
-| Mode | Tools Available | Purpose |
-|------|----------------|---------|
-| **Edit** | All (read + write + bash + tasks) | Full code modification |
-| **Plan** | Read-only (file_read, glob, grep, tasks) | Research and planning |
-| **Ask** | Read-only (file_read, glob, grep, tasks) | Q&A, no modifications |
+| Mode | Available tool families | Purpose |
+|------|-------------------------|---------|
+| **Edit** | read, write, edit, search, bash, subagent, task, ask-user tools | Full coding access |
+| **Plan** | read, search, bash, subagent, task, ask-user tools | Research and planning without file edits |
+| **Ask** | read, search, bash, task, ask-user tools | Q&A without file edits or subagents |
+
+Important behavior:
+
+- `file_write` and `file_edit` are unavailable outside `Edit`
+- `subagent` is unavailable in `Ask`
+- `bash` is available in all three interactive modes
+- `Ask` adds an extra read-only guard: mutative bash commands are blocked even if permission mode is permissive
 
 ## Permission Modes
 
-| Mode | Symbol | Behavior | Use Case |
-|------|--------|----------|----------|
-| **Guardian** | ◈ | Auto-approve safe ops, ask for risky ones | Day-to-day work (default) |
-| **Argus** | ◉ | Ask for every write and bash command | Sensitive repos, first-time use |
-| **Prometheus** | ⚡ | Auto-approve everything | Long autonomous runs |
+| Mode | Symbol | Behavior |
+|------|--------|----------|
+| **Guardian** | ◈ | Auto-approve known-safe calls, ask for riskier governed calls |
+| **Argus** | ◉ | Ask for every governed call |
+| **Prometheus** | ⚡ | Auto-approve governed calls unless an absolute deny rule matches |
 
-Blocked paths and blocked commands are **always enforced** regardless of permission mode.
+Governed calls come from the configured approval rules. By default that includes `file_write`, `file_edit`, and `bash`.
 
-## Composition Matrix
+## How They Compose
 
-Permission mode only matters in Edit mode. In Plan/Ask, all available tools are read-only so no approval is needed.
-
-|  | **Guardian** ◈ | **Argus** ◉ | **Prometheus** ⚡ |
-|--|:-:|:-:|:-:|
-| **Edit** | Smart auto-approve: reads auto, project-local writes auto, safe bash auto, rest asks | Ask for every file_write, file_edit, bash | Auto-approve all tool calls |
-| **Plan** | *(no approval needed — read-only tools only)* | *(no approval needed)* | *(no approval needed)* |
-| **Ask** | *(no approval needed — read-only tools only)* | *(no approval needed)* | *(no approval needed)* |
+| Agent mode | Permission behavior |
+|-----------|---------------------|
+| **Edit** | Full permission system applies to writes and bash |
+| **Plan** | No file mutation tools exist, but bash still goes through permission evaluation |
+| **Ask** | No file mutation tools exist; bash still goes through permission evaluation, and mutative bash is denied by the mode guard |
 
 ## Guardian Heuristics
 
-Guardian mode uses deterministic static analysis (no LLM call) to score each tool call:
+Guardian uses static checks only. Current auto-approve rules are:
 
-| Tool | Auto-approve | Ask |
-|------|-------------|-----|
-| `file_read` | Always | Never |
-| `glob` | Always | Never |
-| `grep` | Always | Never |
-| `task_*` | Always | Never |
-| `file_write` | Path inside project root | Path outside project root |
-| `file_edit` | Path inside project root | Path outside project root |
-| `bash` | Command matches safe whitelist | Command not on whitelist |
+| Tool | Auto-approve behavior |
+|------|------------------------|
+| `file_read`, `glob`, `grep` | always auto-approved |
+| `task_*` | always auto-approved |
+| `file_write`, `file_edit` | auto-approved only when the resolved path is inside the project root |
+| `bash` | auto-approved only when the command matches the safe-command whitelist and contains no shell operators |
 
-### Safe Command Whitelist
+Blocked paths and blocked command patterns always win, regardless of permission mode.
 
-Configurable in `config/kosmokrator.yaml` under `tools.guardian_safe_commands`. Defaults:
+### Safe bash patterns
 
-```
-git *, ls *, pwd, cat *, head *, tail *, wc *, find *, which *, echo *,
-php vendor/bin/phpunit*, php vendor/bin/pint*, composer *, npm *, node *,
-python *, cargo *, go *, make *
-```
+Configured in `config/kosmokrator.yaml` under `tools.guardian_safe_commands`.
 
-## Deny Hierarchy
+Representative defaults:
 
-Regardless of permission mode, denials are absolute and follow this order:
-
-1. **Blocked paths** (`tools.blocked_paths`) — checked first, overrides everything
-2. **Blocked commands** (`tools.bash.blocked_commands`) — checked via PermissionRule deny patterns
-3. **Permission mode** — Guardian/Argus/Prometheus logic
-4. **Session grants** — per-tool "always allow" from user approval
-
-Deny results include reasons: `"Cannot access '.env' — matches blocked pattern '*.env'"`.
-
-## Approval Popup
-
-When a tool requires approval (Argus mode, or Guardian for risky ops), the popup offers mode escalation:
-
-```
-Allow?  ◉ file_edit  src/Foo.php
-
-  Allow              Execute this tool call
-  Always Allow       Allow this tool for the session
-  → Guardian ◈       Switch to smart auto-approve
-  → Prometheus ⚡     Switch to auto-approve all
-  Deny               Block and tell the LLM
+```text
+git *
+ls *
+pwd
+cat *
+head *
+tail *
+wc *
+find *
+which *
+echo *
+php vendor/bin/phpunit*
+php vendor/bin/pint*
+composer *
+npm *
+node *
+python *
+cargo *
+go *
+make *
 ```
 
-Selecting Guardian or Prometheus switches mode for the session AND approves the current call.
+Commands containing shell operators such as `;`, `&&`, `|`, redirection, command substitution, or embedded newlines are not treated as safe.
 
-## Commands
+## Evaluation Order
 
+The permission evaluator applies rules in this order:
+
+1. blocked paths
+2. blocked command patterns
+3. session grants for the tool name
+4. rule evaluation for `ask` or `deny`
+5. permission-mode override (`Guardian`, `Argus`, `Prometheus`)
+
+Implications:
+
+- session grants can bypass future `ask` results for the same tool
+- session grants do not bypass absolute deny rules
+- `Prometheus` only upgrades `ask` to `allow`; it does not override denies
+
+## Approval Flow
+
+When approval is required, the UI can:
+
+- allow just this call
+- allow this tool for the rest of the session
+- escalate to `Guardian`
+- escalate to `Prometheus`
+- deny the call
+
+Changing to `Guardian` or `Prometheus` applies to the current session immediately and approves the current prompt flow.
+
+## Related Commands
+
+```text
+/edit /plan /ask
+/guardian /argus /prometheus
 ```
-/edit, /plan, /ask           — switch agent mode
-/guardian, /argus, /prometheus — switch permission mode
-```
 
-## Status Bar
+## Implementation References
 
-```
-Edit · Guardian ◈ · z/GLM-5.1 · 12k/200k · $0.02
-Plan · z/GLM-5.1 · 12k/200k · $0.02          (permission mode hidden — irrelevant)
-```
-
-## Implementation
-
-- `src/Tool/Permission/PermissionMode.php` — Enum (Guardian/Argus/Prometheus)
-- `src/Tool/Permission/GuardianEvaluator.php` — Static risk analysis
-- `src/Tool/Permission/PermissionResult.php` — Value object (action + reason + autoApproved)
-- `src/Tool/Permission/PermissionEvaluator.php` — Core evaluation with mode-aware logic
-- `src/Tool/Permission/PermissionRule.php` — Glob matching via `matchesGlob()`
-- `config/kosmokrator.yaml` — `guardian_safe_commands`, `default_permission_mode`, `blocked_paths`
+- `src/Agent/AgentMode.php`
+- `src/Tool/Permission/PermissionMode.php`
+- `src/Tool/Permission/PermissionEvaluator.php`
+- `src/Tool/Permission/GuardianEvaluator.php`
+- `config/kosmokrator.yaml`

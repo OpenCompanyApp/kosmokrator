@@ -1,5 +1,7 @@
 # KosmoKrator Desktop App
 
+> Status: Proposal. This document describes a possible future desktop surface. The current shipped product is the terminal application.
+
 ## Concept
 
 KosmoKrator is one product with two surfaces: terminal and desktop. The desktop app is not a companion or wrapper — it runs the same engine (AgentLoop, PrismService, ToolRegistry, Lua bridge, MCP client) with a GUI renderer instead of ANSI/TUI.

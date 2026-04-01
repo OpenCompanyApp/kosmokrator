@@ -1,5 +1,7 @@
 # KosmoKrator Self-Audit
 
+> Status: Historical audit from 2026-03-30. Repository size, test counts, and implementation notes may no longer match the current tree.
+
 **Date:** 2026-03-30
 **Scope:** Full codebase — `src/`, `tests/`, `config/`
 **Stats:** ~13,700 lines PHP 8.4 across 68 source files, 6,200 lines of tests (498 tests, 1060 assertions)

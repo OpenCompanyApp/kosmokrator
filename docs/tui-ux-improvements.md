@@ -1,5 +1,7 @@
 # TUI UX Improvements
 
+> Status: Proposal. This document is a UX backlog / comparative design note, not a description of the current TUI.
+
 Comparative analysis of KosmoKrator vs OpenCode vs Claude Code terminal UIs, ranked by UX impact.
 
 ## Benchmark Comparison

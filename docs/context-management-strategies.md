@@ -1,5 +1,7 @@
 # Context Management Strategies
 
+> Status: Proposal. This document describes possible future improvements beyond the context-management pipeline that currently ships.
+
 Future improvements to KosmoKrator's context management beyond the current three-layer system (truncation → pruning → compaction).
 
 ## 1. Semantic Importance Scoring

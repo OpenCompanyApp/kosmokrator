@@ -1,5 +1,7 @@
 # Memory Leak Audit
 
+> Status: Historical audit. Counts, findings, and repository size reflect the audit date and may not match the current codebase.
+
 Comprehensive audit of the KosmoKrator codebase (131 PHP files, ~21k lines) for memory leaks, resource leaks, and unbounded growth patterns. Covers all subsystems: Agent loop, Subagent orchestrator, LLM/HTTP layer, Tools, TUI/ANSI rendering, Session persistence, and vendor dependencies.
 
 ---

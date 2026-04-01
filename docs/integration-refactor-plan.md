@@ -1,5 +1,7 @@
 # Integration Package Refactor Plan
 
+> Status: Proposal. This is a forward-looking refactor plan, not a description of shipped KosmoKrator behavior.
+
 ## Context
 
 The AI tool packages were originally built around `Laravel\Ai\Contracts\Tool` — each tool exposed `description()`, `schema(JsonSchema)`, and `handle(Request)` for direct LLM function calling. We then switched to Lua code mode where the LLM writes Lua scripts that call tools via `LuaBridge`, making the LLM-oriented interface unnecessary overhead.

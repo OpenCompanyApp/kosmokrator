@@ -42,7 +42,7 @@ SubagentStats               Per-agent metrics (status, tokens, tool calls, elaps
 2. `SubagentTool` validates the request against `AgentContext` (depth limit, allowed child types)
 3. `SubagentOrchestrator.spawnAgent()` handles the lifecycle:
    - Waits for dependencies (if `depends_on` specified)
-   - Acquires concurrency semaphore (default: 3 concurrent agents)
+   - Acquires concurrency semaphore (default: 10 concurrent agents)
    - Acquires group semaphore (if `group` specified — sequential within group)
    - Executes via `SubagentFactory.createAndRunAgent()` with retry logic
    - Stores result and updates stats
@@ -60,9 +60,16 @@ Failed agents are retried up to `max_retries` times (default: 2) with exponentia
 
 ### Concurrency Control
 
-- **Global semaphore**: Limits total concurrent agents (configurable via `kosmokrator.agents.concurrency`)
+- **Global semaphore**: Limits total concurrent agents (configurable via `agent.subagent_concurrency`)
 - **Group semaphore**: Agents with the same `group` value run sequentially
-- **Max depth**: Limits agent tree depth (default: 3, configurable via `kosmokrator.agents.max_depth`)
+- **Max depth**: Limits agent tree depth (default: 3, configurable via `agent.subagent_max_depth`)
+
+### Runtime Notes
+
+- `await` subagents block the parent tool call until completion.
+- `background` subagents return immediately and inject results back into the parent on the next LLM turn.
+- Parent and child agents share the same orchestrator tree, but child tool access is narrowed by agent type.
+- The interactive `/agents` command renders aggregated swarm status from orchestrator stats.
 
 ### Stuck Detection
 
@@ -111,9 +118,8 @@ The `/agents` command shows a live dashboard (`SwarmDashboardWidget` in TUI, `fo
 In `config/kosmokrator.yaml`:
 
 ```yaml
-kosmokrator:
-  agents:
-    max_depth: 3          # Maximum agent tree depth
-    concurrency: 3        # Maximum concurrent agents
-    max_retries: 2        # Retry attempts for failed agents
+agent:
+  subagent_max_depth: 3
+  subagent_concurrency: 10
+  subagent_max_retries: 2
 ```

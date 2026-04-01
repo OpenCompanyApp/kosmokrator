@@ -67,13 +67,15 @@ Session setup is handled by **AgentSessionBuilder**, which wires all dependencie
 
 ```bash
 composer install
-php vendor/bin/phpunit          # Run tests (~780 tests)
+php vendor/bin/phpunit
 php vendor/bin/pint             # Code style (Laravel Pint)
 ```
 
 ### Config
 
 Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/config.yaml` or `.kosmokrator.yaml` in the working directory.
+
+`README.md`, `docs/overview.md`, `docs/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/plans/` and several architecture/audit docs are proposals or historical notes unless explicitly marked otherwise.
 
 ### Building a PHAR
 
@@ -92,7 +94,4 @@ php vendor/bin/box compile      # Uses box.json config
 - TUI renderer uses Symfony TUI's MarkdownWidget with custom stylesheet
 - Extracted classes communicate via return values and closures, not back-references — no circular dependencies
 - Static utility classes (AgentDisplayFormatter, AgentTreeBuilder, PathResolver, SessionFormatter) are stateless and side-effect-free
-- PHPDoc on all public methods: `@param` with type + description, `@return` with type, one-line summary before params
-- PHPDoc on classes: one-line summary of purpose, longer description if non-obvious
-- No PHPDoc on trivial getters/setters or when signature is self-documenting
-- Use `@var` annotations on typed properties only when the type needs clarification (e.g., array shapes)
+- Prefer concise PHPDoc where it materially clarifies intent, array shapes, or non-obvious behavior

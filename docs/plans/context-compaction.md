@@ -1,5 +1,7 @@
 # Context Compaction
 
+> Status: Historical plan. Parts of this design are now implemented, but this document remains a design snapshot rather than the canonical current-state description.
+
 ## Context
 
 Long coding sessions hit the LLM context window limit. Currently `ConversationHistory::trimOldest()` silently drops complete turns — the agent loses context without knowing what was lost. We need intelligent compaction that summarizes old turns before discarding them, preserving critical context in a compressed form.

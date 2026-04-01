@@ -63,6 +63,8 @@ bin/kosmokrator --no-animation      # Skip the animated intro
 | `/settings` | Configure model, provider, temperature |
 | `/sessions` | List recent sessions |
 | `/resume` | Resume a previous session |
+| `/memories` | List stored memories |
+| `/forget` | Delete a memory by ID |
 | `/compact` | Force context compaction |
 | `/new` | Start a new session |
 | `/clear` | Clear the screen |
@@ -97,16 +99,21 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 
 ### Supported providers
 
-Configured via `bin/kosmokrator setup` or `~/.kosmokrator/config.yaml`:
+Built-in provider configs live in `config/prism.yaml`. The default setup supports:
 
-| Provider | Default model | Env var |
-|----------|--------------|---------|
-| Z.AI | GLM-5.1 | `ZAI_API_KEY` |
-| Anthropic | Claude Sonnet 4 | `ANTHROPIC_API_KEY` |
-| OpenAI | GPT-4o | `OPENAI_API_KEY` |
-| Ollama | (local) | — |
+- `z` / `z-api`
+- `anthropic`
+- `openai`
+- `gemini`
+- `deepseek`
+- `groq`
+- `mistral`
+- `xai`
+- `openrouter`
+- `perplexity`
+- `ollama`
 
-Any OpenAI-compatible API can be added to `config/prism.yaml`.
+You can also add other OpenAI-compatible endpoints in `config/prism.yaml`.
 
 ### Permission system
 
@@ -118,7 +125,7 @@ Three permission modes control tool approval:
 | **Argus** | Ask permission for every tool call |
 | **Prometheus** | Auto-approve everything until next prompt |
 
-Tools in `approval_required` (default: `file_write`, `file_edit`, `bash`) prompt before execution. Bash commands matching `blocked_commands` patterns are always denied. Session grants persist for the session duration.
+Tools in `approval_required` (default: `file_write`, `file_edit`, `bash`) prompt before execution. Blocked paths and blocked bash patterns are always denied. Session grants persist for the session duration.
 
 ### Subagent system
 
@@ -145,6 +152,15 @@ Long conversations are managed automatically:
 - **Deduplication** — detects and removes duplicate/stale tool outputs
 - **Trimming** — emergency fallback that drops oldest messages when context overflows
 
+### Persistence
+
+KosmoKrator persists state in SQLite under `~/.kosmokrator/data`:
+
+- Sessions and message history
+- Global and project-scoped settings
+- Compaction summaries and extracted memories
+- Session metadata for `/sessions` and `/resume`
+
 ## Configuration
 
 Config is loaded in layers (later overrides earlier):
@@ -158,18 +174,17 @@ Environment variables (`${VAR_NAME}`) are resolved in all YAML files.
 ### Agent configuration
 
 ```yaml
-kosmokrator:
-  agents:
-    max_depth: 3          # Maximum agent tree depth
-    concurrency: 3        # Maximum concurrent agents
-    max_retries: 2        # Retry attempts for failed agents
+agent:
+  subagent_max_depth: 3
+  subagent_concurrency: 10
+  subagent_max_retries: 2
 ```
 
 ## Development
 
 ```bash
 composer install
-php vendor/bin/phpunit          # Run tests (~780 tests)
+php vendor/bin/phpunit
 php vendor/bin/pint             # Code style (Laravel Pint)
 ```
 

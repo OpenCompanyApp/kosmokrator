@@ -14,11 +14,14 @@ use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
+use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
 use Prism\Prism\ValueObjects\ToolCall;
 
 class AsyncLlmClient implements LlmClientInterface
 {
     private HttpClient $httpClient;
+
+    private readonly ProviderCapabilities $capabilities;
 
     /** @var list<string> */
     private const OPENAI_COMPATIBLE_PROVIDERS = [
@@ -46,6 +49,7 @@ class AsyncLlmClient implements LlmClientInterface
         private string $provider = 'z',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
+        $this->capabilities = ProviderCapabilities::for($provider);
     }
 
     public static function supportsProvider(string $provider): bool
@@ -74,7 +78,7 @@ class AsyncLlmClient implements LlmClientInterface
             $payload['max_tokens'] = $this->maxTokens;
         }
 
-        if ($this->temperature !== null) {
+        if ($this->temperature !== null && $this->capabilities->supportsTemperature()) {
             $payload['temperature'] = $this->temperature;
         }
 

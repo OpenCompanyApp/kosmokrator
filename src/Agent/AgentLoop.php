@@ -136,6 +136,11 @@ class AgentLoop
             while (true) {
                 $round++;
 
+                // Yield to the event loop at the start of each iteration so
+                // stdin input, TUI rendering, and cancellation signals are
+                // processed even during long synchronous loops.
+                \Amp\delay(0);
+
                 [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history);
                 $this->sessionTokensIn += $compactIn;
                 $this->sessionTokensOut += $compactOut;
@@ -234,6 +239,10 @@ class AgentLoop
 
                     $this->injectPendingBackgroundResults();
                     $this->injectQueuedUserMessages();
+
+                    // Yield so queued stdin events are processed before the
+                    // next (potentially blocking) LLM call.
+                    \Amp\delay(0);
 
                     // Deduplicate superseded tool results (cheap, no LLM call)
                     if ($this->deduplicator !== null) {

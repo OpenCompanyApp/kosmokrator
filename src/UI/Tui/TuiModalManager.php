@@ -282,10 +282,19 @@ final class TuiModalManager
                 },
             ),
             new SettingItem(
+                id: 'api_key',
+                label: 'API Key',
+                currentValue: $currentSettings['api_key'] ?? '(not used)',
+                description: 'API key for providers that use key-based auth -- press Enter to edit directly',
+                submenu: function (string $current, callable $onDone) use (&$selectedProvider, $providerAuthModes) {
+                    return $this->buildApiKeySubmenu($selectedProvider, $onDone, $providerAuthModes);
+                },
+            ),
+            new SettingItem(
                 id: 'auth_action',
                 label: 'Auth',
                 currentValue: $currentSettings['auth_status'] ?? '',
-                description: 'Authentication status and actions for the selected provider',
+                description: 'Login actions for OAuth providers like Codex',
                 submenu: function (string $current, callable $onDone) use (&$selectedProvider, $providerStatuses, $providerAuthModes) {
                     return $this->buildAuthSubmenu($selectedProvider, $providerStatuses, $providerAuthModes);
                 },
@@ -562,6 +571,23 @@ final class TuiModalManager
      * @param  array<string, string>  $providerStatuses
      * @param  array<string, string>  $providerAuthModes
      */
+    private function buildApiKeySubmenu(string $provider, callable $onDone, array $providerAuthModes): InputWidget|SelectListWidget
+    {
+        $mode = $providerAuthModes[$provider] ?? 'api_key';
+
+        if ($mode !== 'api_key') {
+            return new SelectListWidget([
+                ['value' => '', 'label' => 'not_used', 'description' => 'This provider does not use an API key'],
+            ]);
+        }
+
+        return $this->buildInputSubmenu('', $onDone, 'API Key: ');
+    }
+
+    /**
+     * @param  array<string, string>  $providerStatuses
+     * @param  array<string, string>  $providerAuthModes
+     */
     private function buildAuthSubmenu(string $provider, array $providerStatuses, array $providerAuthModes): SelectListWidget
     {
         $status = $providerStatuses[$provider] ?? 'Unknown';
@@ -578,9 +604,7 @@ final class TuiModalManager
                 ['value' => 'status', 'label' => 'status', 'description' => $status],
             ],
             default => [
-                ['value' => 'edit_key', 'label' => 'edit_key', 'description' => "Set or replace API key · {$status}"],
                 ['value' => 'status', 'label' => 'status', 'description' => 'Show current key status'],
-                ['value' => 'clear_key', 'label' => 'clear_key', 'description' => 'Remove the stored API key'],
             ],
         };
 

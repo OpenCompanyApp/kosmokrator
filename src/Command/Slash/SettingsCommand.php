@@ -159,7 +159,9 @@ final class SettingsCommand implements SlashCommand
                 ?? $ctx->config->get('kosmokrator.agent.subagent_max_retries', 2)),
             'provider' => $currentProvider,
             'model' => $ctx->llm->getModel(),
-            'api_key' => $catalog->maskedCredential($currentProvider),
+            'api_key' => $catalog->authMode($currentProvider) === 'api_key'
+                ? $catalog->maskedCredential($currentProvider)
+                : '(not used)',
             'auth_status' => $catalog->authStatus($currentProvider),
             'provider_options' => $catalog->providerOptions(),
             'model_options_by_provider' => $catalog->modelOptionsByProvider(),

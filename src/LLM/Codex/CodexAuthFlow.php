@@ -36,7 +36,18 @@ final class CodexAuthFlow
         $state = bin2hex(random_bytes(16));
         $port = (int) $this->config->get('kosmokrator.codex.oauth_port', 9876);
         $redirectUri = "http://127.0.0.1:{$port}/auth/callback";
-        $authUrl = $this->oauth->buildAuthorizationUrl($pkce['challenge'], $state, $redirectUri);
+        // Build URL ourselves — the library's buildAuthorizationUrl() includes
+        // codex_cli_simplified_flow=true which makes OpenAI show a code on-screen
+        // instead of redirecting back to our callback server.
+        $authUrl = CodexOAuthService::ISSUER.'/oauth/authorize?'.http_build_query([
+            'client_id' => CodexOAuthService::CLIENT_ID,
+            'scope' => CodexOAuthService::SCOPES,
+            'response_type' => 'code',
+            'redirect_uri' => $redirectUri,
+            'code_challenge' => $pkce['challenge'],
+            'code_challenge_method' => 'S256',
+            'state' => $state,
+        ]);
 
         $this->emit($notify, 'Opening browser for ChatGPT login...');
         $this->emit($notify, "If it does not open, visit: {$authUrl}");

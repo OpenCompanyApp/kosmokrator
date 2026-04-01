@@ -41,7 +41,10 @@ final class CodexLoginCommand extends Command
         try {
             $token = $auth->browserLogin(fn (string $message) => $output->writeln($message));
         } catch (\Throwable $e) {
-            $output->writeln('<error>'.$e->getMessage().'</error>');
+            $output->writeln('');
+            $output->writeln('<error>  '.$e->getMessage().'</error>');
+            $output->writeln('');
+            $output->writeln('Try the device authorization flow instead: <info>php bin/kosmokrator codex:login --device</info>');
 
             return Command::FAILURE;
         }
@@ -56,7 +59,9 @@ final class CodexLoginCommand extends Command
         try {
             $token = $auth->deviceLogin(fn (string $message) => $output->writeln($message));
         } catch (\Throwable $e) {
-            $output->writeln('<error>'.$e->getMessage().'</error>');
+            $output->writeln('');
+            $output->writeln('<error>  '.$e->getMessage().'</error>');
+            $output->writeln('');
 
             return Command::FAILURE;
         }

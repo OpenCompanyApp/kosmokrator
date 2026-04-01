@@ -32,6 +32,29 @@ models:
     thinking: false
     streaming: true
 
+  # Kimi family
+  kimi-k2.5:
+    provider: kimi
+    context: 131072
+    max_output: 8192
+    thinking: true
+    streaming: true
+
+  moonshot-v1-128k:
+    provider: kimi
+    context: 131072
+    max_output: 8192
+    thinking: false
+    streaming: true
+
+  # MiniMax family
+  minimax-m1:
+    provider: minimax
+    context: 1000000
+    max_output: 131072
+    thinking: false
+    streaming: true
+
   # Anthropic Claude family
   claude-opus-4-20250514:
     provider: anthropic
@@ -70,6 +93,33 @@ models:
     thinking: false
     streaming: true
 
+  gpt-5.3-codex:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: true
+    streaming: true
+
+  gpt-5.2-codex:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: true
+    streaming: true
+
+  gpt-5.1-codex:
+    provider: codex
+    context: 128000
+    max_output: 16384
+    input_price: 0.00
+    output_price: 0.00
+    thinking: true
+    streaming: true
+
   gpt-4-turbo:
     provider: openai
     context: 128000
@@ -86,6 +136,64 @@ models:
     input_price: 10.00
     output_price: 40.00
     thinking: true
+    streaming: true
+
+  # Gemini family
+  gemini-2.5-pro:
+    provider: gemini
+    context: 1048576
+    max_output: 65536
+    input_price: 1.25
+    output_price: 10.00
+    thinking: true
+    streaming: true
+
+  # DeepSeek family
+  deepseek-chat:
+    provider: deepseek
+    context: 64000
+    max_output: 8192
+    input_price: 0.27
+    output_price: 1.10
+    thinking: false
+    streaming: true
+
+  # Groq defaults
+  llama-3.3-70b-versatile:
+    provider: groq
+    context: 128000
+    max_output: 32768
+    input_price: 0.59
+    output_price: 0.79
+    thinking: false
+    streaming: true
+
+  # Mistral defaults
+  mistral-large-latest:
+    provider: mistral
+    context: 128000
+    max_output: 8192
+    input_price: 2.00
+    output_price: 6.00
+    thinking: false
+    streaming: true
+
+  # xAI defaults
+  grok-3:
+    provider: xai
+    context: 131072
+    max_output: 16384
+    input_price: 3.00
+    output_price: 15.00
+    thinking: true
+    streaming: true
+
+  # Perplexity defaults
+  sonar-pro:
+    provider: perplexity
+    context: 200000
+    max_output: 8192
+    thinking: false
     streaming: true
 
 # Default fallback for unknown models

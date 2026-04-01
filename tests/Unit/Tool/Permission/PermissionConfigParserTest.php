@@ -57,6 +57,28 @@ class PermissionConfigParserTest extends TestCase
         $this->assertSame(['rm -rf /', 'rm -rf ~', 'mkfs*'], $rules[0]->denyPatterns);
     }
 
+    public function test_shell_start_and_shell_write_also_receive_blocked_command_patterns(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'approval_required' => ['shell_start', 'shell_write'],
+                    'bash' => [
+                        'blocked_commands' => ['rm -rf /', 'mkfs*'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser;
+        $result = $parser->parse($config);
+        $rules = $result['rules'];
+
+        $this->assertCount(2, $rules);
+        $this->assertSame(['rm -rf /', 'mkfs*'], $rules[0]->denyPatterns);
+        $this->assertSame(['rm -rf /', 'mkfs*'], $rules[1]->denyPatterns);
+    }
+
     public function test_empty_config_returns_no_rules(): void
     {
         $config = new Repository([]);

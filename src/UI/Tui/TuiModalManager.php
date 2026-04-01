@@ -8,6 +8,7 @@ use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
 use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
+use Kosmokrator\UI\Tui\Widget\PermissionPromptWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
 use Kosmokrator\UI\Tui\Widget\SwarmDashboardWidget;
 use Revolt\EventLoop;
@@ -52,55 +53,27 @@ final class TuiModalManager
      */
     public function askToolPermission(string $toolName, array $args): string
     {
-        $r = Theme::reset();
-        $gold = Theme::accent();
-        $dim = Theme::dim();
-        $icon = Theme::toolIcon($toolName);
-        $friendly = Theme::toolLabel($toolName);
+        $preview = (new PermissionPreviewBuilder)->build($toolName, $args);
+        $widget = new PermissionPromptWidget($toolName, $preview);
+        $widget->setId('permission-prompt');
 
-        // Build tool call summary for context
-        $summary = "{$gold}{$icon} {$friendly}{$r}";
-        if ($toolName === 'bash' && isset($args['command'])) {
-            $cmd = mb_strlen($args['command']) > 80
-                ? mb_substr($args['command'], 0, 77).'...'
-                : $args['command'];
-            $summary .= " {$dim}{$cmd}{$r}";
-        } elseif (isset($args['path'])) {
-            $summary .= " {$dim}".Theme::relativePath($args['path'])."{$r}";
-        }
-
-        $header = new TextWidget("{$gold}Allow?{$r}  {$summary}");
-        $header->addStyleClass('tool-call');
-
-        $selectList = new SelectListWidget([
-            ['value' => 'allow', 'label' => 'Allow', 'description' => 'Execute this tool call'],
-            ['value' => 'always', 'label' => 'Always Allow', 'description' => 'Allow this tool for the session'],
-            ['value' => 'guardian', 'label' => "\u{2192} Guardian \u{25C8}", 'description' => 'Switch to smart auto-approve'],
-            ['value' => 'prometheus', 'label' => "\u{2192} Prometheus \u{26A1}", 'description' => 'Switch to auto-approve all'],
-            ['value' => 'deny', 'label' => 'Deny', 'description' => 'Block and tell the LLM'],
-        ]);
-        $selectList->setId('permission-prompt');
-        $selectList->addStyleClass('permission-prompt');
-
-        $this->overlay->add($header);
-        $this->overlay->add($selectList);
-        $this->tui->setFocus($selectList);
+        $this->overlay->add($widget);
+        $this->tui->setFocus($widget);
         $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
 
-        $selectList->onSelect(function (SelectEvent $event) use ($suspension) {
-            $suspension->resume($event->getValue());
+        $widget->onConfirm(function (string $decision) use ($suspension) {
+            $suspension->resume($decision);
         });
 
-        $selectList->onCancel(function () use ($suspension) {
+        $widget->onDismiss(function () use ($suspension) {
             $suspension->resume('deny');
         });
 
         $decision = $suspension->suspend();
 
-        $this->overlay->remove($selectList);
-        $this->overlay->remove($header);
+        $this->overlay->remove($widget);
         $this->tui->setFocus($this->input);
         $this->forceRender();
 
@@ -528,6 +501,7 @@ final class TuiModalManager
         $providers = [
             ['value' => 'anthropic', 'label' => 'anthropic', 'description' => 'Anthropic (Claude)'],
             ['value' => 'openai', 'label' => 'openai', 'description' => 'OpenAI (GPT)'],
+            ['value' => 'codex', 'label' => 'codex', 'description' => 'OpenAI Codex via ChatGPT login'],
             ['value' => 'gemini', 'label' => 'gemini', 'description' => 'Google Gemini'],
             ['value' => 'deepseek', 'label' => 'deepseek', 'description' => 'DeepSeek'],
             ['value' => 'groq', 'label' => 'groq', 'description' => 'Groq'],
@@ -536,6 +510,10 @@ final class TuiModalManager
             ['value' => 'openrouter', 'label' => 'openrouter', 'description' => 'OpenRouter (multi-provider)'],
             ['value' => 'perplexity', 'label' => 'perplexity', 'description' => 'Perplexity'],
             ['value' => 'ollama', 'label' => 'ollama', 'description' => 'Ollama (local, no key needed)'],
+            ['value' => 'kimi', 'label' => 'kimi', 'description' => 'Kimi (Moonshot AI)'],
+            ['value' => 'kimi-coding', 'label' => 'kimi-coding', 'description' => 'Kimi coding plan'],
+            ['value' => 'minimax', 'label' => 'minimax', 'description' => 'MiniMax'],
+            ['value' => 'minimax-cn', 'label' => 'minimax-cn', 'description' => 'MiniMax China region'],
             ['value' => 'z', 'label' => 'z', 'description' => 'Z.AI coding plan'],
             ['value' => 'z-api', 'label' => 'z-api', 'description' => 'Z.AI standard API'],
         ];

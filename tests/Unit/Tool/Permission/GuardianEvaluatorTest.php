@@ -79,6 +79,14 @@ class GuardianEvaluatorTest extends TestCase
         $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => 'composer install']));
     }
 
+    public function test_shell_tools_follow_safe_command_heuristics(): void
+    {
+        $this->assertTrue($this->guardian->shouldAutoApprove('shell_start', ['command' => 'git status']));
+        $this->assertTrue($this->guardian->shouldAutoApprove('shell_write', ['input' => 'git status']));
+        $this->assertTrue($this->guardian->shouldAutoApprove('shell_read', ['session_id' => 'sh_1']));
+        $this->assertTrue($this->guardian->shouldAutoApprove('shell_kill', ['session_id' => 'sh_1']));
+    }
+
     #[DataProvider('safeCommandProvider')]
     public function test_safe_commands_still_auto_approved(string $command): void
     {

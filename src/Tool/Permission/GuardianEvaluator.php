@@ -14,6 +14,8 @@ class GuardianEvaluator
         'task_update',
         'task_list',
         'task_get',
+        'shell_read',
+        'shell_kill',
         'memory_save',
         'memory_search',
     ];
@@ -49,6 +51,14 @@ class GuardianEvaluator
 
         if ($toolName === 'bash') {
             return $this->isSafeCommand($args['command'] ?? '');
+        }
+
+        if ($toolName === 'shell_start') {
+            return $this->isSafeCommand($args['command'] ?? '');
+        }
+
+        if ($toolName === 'shell_write') {
+            return $this->isSafeCommand($args['input'] ?? '');
         }
 
         return false;

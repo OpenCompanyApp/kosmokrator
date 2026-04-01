@@ -5,6 +5,7 @@ namespace Kosmokrator\Command;
 use Illuminate\Container\Container;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\UI\Theme;
+use OpenCompany\PrismCodex\CodexOAuthService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -35,6 +36,7 @@ class SetupCommand extends Command
         $providers = [
             'anthropic' => 'Anthropic (Claude)',
             'openai' => 'OpenAI (GPT)',
+            'codex' => 'OpenAI Codex via ChatGPT login',
             'gemini' => 'Google Gemini',
             'deepseek' => 'DeepSeek',
             'groq' => 'Groq',
@@ -43,6 +45,10 @@ class SetupCommand extends Command
             'openrouter' => 'OpenRouter',
             'perplexity' => 'Perplexity',
             'ollama' => 'Ollama (local)',
+            'kimi' => 'Kimi',
+            'kimi-coding' => 'Kimi Coding',
+            'minimax' => 'MiniMax',
+            'minimax-cn' => 'MiniMax CN',
             'z' => 'Z.AI coding plan',
             'z-api' => 'Z.AI standard API',
         ];
@@ -62,6 +68,7 @@ class SetupCommand extends Command
         $defaultModels = [
             'anthropic' => 'claude-sonnet-4-20250514',
             'openai' => 'gpt-4o',
+            'codex' => 'gpt-5.3-codex',
             'gemini' => 'gemini-2.5-pro',
             'deepseek' => 'deepseek-chat',
             'groq' => 'llama-3.3-70b-versatile',
@@ -70,12 +77,31 @@ class SetupCommand extends Command
             'openrouter' => 'anthropic/claude-sonnet-4',
             'perplexity' => 'sonar-pro',
             'ollama' => 'llama3.1',
+            'kimi' => 'kimi-k2.5',
+            'kimi-coding' => 'kimi-k2.5',
+            'minimax' => 'MiniMax-M1',
+            'minimax-cn' => 'MiniMax-M1',
             'z' => 'GLM-5.1',
             'z-api' => 'GLM-5.1',
         ];
         $currentModel = $settings->get('global', 'agent.default_model') ?? ($defaultModels[$provider] ?? 'GLM-5.1');
         $model = readline("{$dim}  Model [{$currentModel}]: {$r}") ?: $currentModel;
         $model = trim($model);
+
+        if ($provider === 'codex') {
+            $settings->set('global', 'agent.default_provider', $provider);
+            $settings->set('global', 'agent.default_model', $model);
+
+            $oauth = $this->container->make(CodexOAuthService::class);
+
+            echo "\n{$accent}  ✓ Settings saved.{$r}\n";
+            if (! $oauth->isConfigured()) {
+                echo "{$dim}  Run {$white}kosmokrator codex:login{$dim} to authenticate ChatGPT for Codex.{$r}\n";
+            }
+            echo "{$dim}  Run {$white}php bin/kosmokrator{$dim} to start.{$r}\n\n";
+
+            return Command::SUCCESS;
+        }
 
         // API key
         $currentKey = $settings->get('global', "provider.{$provider}.api_key") ?? '';
@@ -91,7 +117,6 @@ class SetupCommand extends Command
             return Command::FAILURE;
         }
 
-        // Save to SQLite
         $settings->set('global', 'agent.default_provider', $provider);
         $settings->set('global', 'agent.default_model', $model);
         $settings->set('global', "provider.{$provider}.api_key", $apiKey);

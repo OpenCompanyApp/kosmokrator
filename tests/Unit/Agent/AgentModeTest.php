@@ -14,9 +14,14 @@ class AgentModeTest extends TestCase
         $this->assertContains('file_read', $tools);
         $this->assertContains('file_write', $tools);
         $this->assertContains('file_edit', $tools);
+        $this->assertContains('apply_patch', $tools);
         $this->assertContains('glob', $tools);
         $this->assertContains('grep', $tools);
         $this->assertContains('bash', $tools);
+        $this->assertContains('shell_start', $tools);
+        $this->assertContains('shell_write', $tools);
+        $this->assertContains('shell_read', $tools);
+        $this->assertContains('shell_kill', $tools);
         $this->assertContains('task_create', $tools);
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
@@ -26,7 +31,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('memory_search', $tools);
         $this->assertContains('memory_save', $tools);
         $this->assertContains('subagent', $tools);
-        $this->assertCount(15, $tools);
+        $this->assertCount(20, $tools);
     }
 
     public function test_plan_mode_has_read_only_tools(): void
@@ -36,6 +41,10 @@ class AgentModeTest extends TestCase
         $this->assertContains('file_read', $tools);
         $this->assertContains('glob', $tools);
         $this->assertContains('grep', $tools);
+        $this->assertContains('shell_start', $tools);
+        $this->assertContains('shell_write', $tools);
+        $this->assertContains('shell_read', $tools);
+        $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('task_create', $tools);
         $this->assertContains('task_update', $tools);
@@ -58,6 +67,10 @@ class AgentModeTest extends TestCase
         $this->assertContains('glob', $tools);
         $this->assertContains('grep', $tools);
         $this->assertContains('bash', $tools);
+        $this->assertContains('shell_start', $tools);
+        $this->assertContains('shell_write', $tools);
+        $this->assertContains('shell_read', $tools);
+        $this->assertContains('shell_kill', $tools);
         $this->assertContains('task_create', $tools);
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);

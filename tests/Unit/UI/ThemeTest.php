@@ -45,7 +45,12 @@ class ThemeTest extends TestCase
             'file_read' => ['file_read', '☽'],
             'file_write' => ['file_write', '☉'],
             'file_edit' => ['file_edit', '♅'],
+            'apply_patch' => ['apply_patch', '✎'],
             'bash' => ['bash', '⚡'],
+            'shell_start' => ['shell_start', '◌'],
+            'shell_write' => ['shell_write', '↦'],
+            'shell_read' => ['shell_read', '↤'],
+            'shell_kill' => ['shell_kill', '✕'],
             'grep' => ['grep', '⊛'],
             'glob' => ['glob', '✧'],
         ];

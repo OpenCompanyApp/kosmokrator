@@ -12,6 +12,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Facade;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\RetryableLlmClient;
@@ -28,12 +29,20 @@ use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
 use Kosmokrator\Task\Tool\TaskListTool;
 use Kosmokrator\Task\Tool\TaskUpdateTool;
+use Kosmokrator\Tool\Coding\ApplyPatchTool;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
+use Kosmokrator\Tool\Coding\Patch\PatchApplier;
+use Kosmokrator\Tool\Coding\Patch\PatchParser;
+use Kosmokrator\Tool\Coding\ShellKillTool;
+use Kosmokrator\Tool\Coding\ShellReadTool;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
+use Kosmokrator\Tool\Coding\ShellStartTool;
+use Kosmokrator\Tool\Coding\ShellWriteTool;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionConfigParser;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -42,7 +51,12 @@ use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Logger;
+use OpenCompany\PrismCodex\Codex;
+use OpenCompany\PrismCodex\CodexOAuthService;
+use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
 use Prism\Prism\PrismManager;
+use Prism\Prism\Providers\Anthropic\Anthropic;
+use Prism\Prism\Providers\DeepSeek\DeepSeek;
 use Prism\Prism\PrismServiceProvider;
 use Prism\Prism\Providers\Z\Z;
 use Psr\Log\LoggerInterface;
@@ -127,6 +141,13 @@ class Kernel
         $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase);
         $this->container->singleton(SettingsRepository::class, fn () => new SettingsRepository(
             $this->container->make(SessionDatabase::class),
+        ));
+        $this->container->singleton(CodexTokenStoreContract::class, fn () => new SettingsCodexTokenStore(
+            $this->container->make(SettingsRepository::class),
+        ));
+        $this->container->singleton(CodexOAuthService::class, fn () => new CodexOAuthService(
+            $this->container->make(CodexTokenStoreContract::class),
+            $this->container->make(HttpFactory::class),
         ));
     }
 
@@ -242,12 +263,57 @@ class Kernel
         $provider = new PrismServiceProvider($app);
         $provider->register();
 
+        $manager = $this->container->make(PrismManager::class);
+
+        $manager->extend(
+            'kimi',
+            fn ($app, array $config) => new DeepSeek(
+                apiKey: $config['api_key'] ?? '',
+                url: $config['url'] ?? 'https://api.moonshot.ai/v1',
+            ),
+        );
+
+        $manager->extend(
+            'kimi-coding',
+            fn ($app, array $config) => new DeepSeek(
+                apiKey: $config['api_key'] ?? '',
+                url: $config['url'] ?? 'https://api.moonshot.ai/v1',
+            ),
+        );
+
+        $manager->extend(
+            'minimax',
+            fn ($app, array $config) => new Anthropic(
+                apiKey: $config['api_key'] ?? '',
+                apiVersion: '2023-06-01',
+                url: $config['url'] ?? 'https://api.minimax.io/anthropic/v1',
+            ),
+        );
+
+        $manager->extend(
+            'minimax-cn',
+            fn ($app, array $config) => new Anthropic(
+                apiKey: $config['api_key'] ?? '',
+                apiVersion: '2023-06-01',
+                url: $config['url'] ?? 'https://api.minimaxi.com/anthropic/v1',
+            ),
+        );
+
         // Register z-api as alias of z provider (same class, different config/URL)
-        $this->container->make(PrismManager::class)->extend(
+        $manager->extend(
             'z-api',
             fn ($app, array $config) => new Z(
                 apiKey: $config['api_key'] ?? '',
                 url: $config['url'] ?? 'https://open.bigmodel.cn/api/paas/v4',
+            ),
+        );
+
+        $manager->extend(
+            'codex',
+            fn ($app, array $config) => new Codex(
+                oauthService: $this->container->make(CodexOAuthService::class),
+                url: $config['url'] ?? 'https://chatgpt.com/backend-api/codex',
+                accountId: $config['account_id'] ?? null,
             ),
         );
     }
@@ -295,17 +361,46 @@ class Kernel
         ));
 
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
+        $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
+        $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
 
         $this->container->singleton(TaskStore::class);
+        $this->container->singleton(PatchParser::class);
+        $this->container->singleton(PatchApplier::class, fn () => new PatchApplier(
+            $config->get('kosmokrator.tools.blocked_paths', []),
+        ));
+        $this->container->singleton(ShellSessionManager::class, fn () => new ShellSessionManager(
+            $this->container->make(LoggerInterface::class),
+            $shellWaitMs,
+            $bashTimeout,
+            $shellIdleTtl,
+        ));
 
         $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout) {
             $registry = new ToolRegistry;
             $registry->register(new FileReadTool);
             $registry->register(new FileWriteTool);
             $registry->register(new FileEditTool);
+            $registry->register(new ApplyPatchTool(
+                $this->container->make(PatchParser::class),
+                $this->container->make(PatchApplier::class),
+            ));
             $registry->register(new GlobTool);
             $registry->register(new GrepTool);
             $registry->register(new BashTool($bashTimeout));
+            $registry->register(new ShellStartTool(
+                $this->container->make(ShellSessionManager::class),
+            ));
+            $registry->register(new ShellWriteTool(
+                $this->container->make(ShellSessionManager::class),
+                $this->container->make(PermissionEvaluator::class),
+            ));
+            $registry->register(new ShellReadTool(
+                $this->container->make(ShellSessionManager::class),
+            ));
+            $registry->register(new ShellKillTool(
+                $this->container->make(ShellSessionManager::class),
+            ));
 
             $taskStore = $this->container->make(TaskStore::class);
             $registry->register(new TaskCreateTool($taskStore));

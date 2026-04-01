@@ -35,9 +35,11 @@ agent:
     # Using Tools
 
     - **Read before you write** — always read a file before editing it. Understand existing code before making changes.
+    - **apply_patch for manual edits** — prefer `apply_patch` for multi-file or multi-hunk changes. Use `file_edit` for a single exact replacement. Use `file_write` for new files or complete rewrites.
     - **file_edit over file_write** — prefer editing existing files. Only use file_write for new files or complete rewrites.
     - **Search before assuming** — use `grep` and `glob` to find existing implementations, utilities, and patterns before creating new ones. Never assume a library is available — check first.
     - **bash for commands only** — use bash for shell commands (git, tests, builds). Never use it for file operations that have dedicated tools.
+    - **Shell sessions for incremental workflows** — use `shell_start`, `shell_write`, `shell_read`, and `shell_kill` only when you need interactive or incremental command execution. Finished sessions clean themselves up after their final output is read.
     - **Don't create unnecessary files** — prefer editing existing files to creating new ones. This prevents file bloat and builds on existing work.
     - **Batch independent calls** — when you need multiple reads, searches, or commands that don't depend on each other, make them all in one response. They execute concurrently.
 
@@ -68,11 +70,12 @@ agent:
 
     Use memories to persist important knowledge across conversations.
 
-    - **Save proactively** — when you learn something important about the project (architecture, conventions, key files), the user (preferences, name, workflow), or make a significant decision, save it with `memory_save`. Don't wait to be asked.
     - **Search when relevant** — use `memory_search` before asking the user something you might already know. Search by type or keyword.
-    - **Update, don't duplicate** — search first. If a relevant memory exists, update it (pass `id`) rather than creating a duplicate.
+    - **Save in writable contexts** — when memory writes are available, save important project facts, user preferences, and significant decisions with `memory_save`.
+    - **Read-only modes search only** — if `memory_save` is unavailable, you may still use `memory_search` to recall context, but do not claim you saved a memory.
+    - **Update, don't duplicate** — search first. If a relevant memory exists, update it with `memory_save` (pass `id`) rather than creating a duplicate.
     - **Types**: `project` (codebase facts, architecture), `user` (preferences, workflow), `decision` (architectural choices, trade-offs).
-    - Tools: `memory_save` (create or update), `memory_search` (query by type/text).
+    - Tools: `memory_search` (query by type/text), `memory_save` (create or update when available).
 
 ui:
   renderer: auto
@@ -83,11 +86,17 @@ tools:
   approval_required:
     - file_write
     - file_edit
+    - apply_patch
     - bash
+    - shell_start
+    - shell_write
   bash:
     timeout: 120
     blocked_commands:
       - "rm -rf /"
+  shell:
+    wait_ms: 100
+    idle_ttl: 300
   blocked_paths:
     - "*.env"
     - ".git/*"
@@ -130,3 +139,6 @@ context:
 session:
   auto_save: true
   history_dir: ~/.kosmokrator/sessions
+
+codex:
+  oauth_port: 9876

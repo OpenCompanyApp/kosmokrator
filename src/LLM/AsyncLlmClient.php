@@ -20,6 +20,22 @@ class AsyncLlmClient implements LlmClientInterface
 {
     private HttpClient $httpClient;
 
+    /** @var list<string> */
+    private const OPENAI_COMPATIBLE_PROVIDERS = [
+        'openai',
+        'deepseek',
+        'groq',
+        'mistral',
+        'xai',
+        'openrouter',
+        'perplexity',
+        'ollama',
+        'z',
+        'z-api',
+        'kimi',
+        'kimi-coding',
+    ];
+
     public function __construct(
         private string $apiKey,
         private string $baseUrl,
@@ -30,6 +46,11 @@ class AsyncLlmClient implements LlmClientInterface
         private string $provider = 'z',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
+    }
+
+    public static function supportsProvider(string $provider): bool
+    {
+        return in_array($provider, self::OPENAI_COMPATIBLE_PROVIDERS, true);
     }
 
     public function setSystemPrompt(string $prompt): void

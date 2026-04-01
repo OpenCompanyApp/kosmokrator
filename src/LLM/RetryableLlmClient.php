@@ -165,6 +165,11 @@ class RetryableLlmClient implements LlmClientInterface
         $this->inner->setMaxTokens($maxTokens);
     }
 
+    public function inner(): LlmClientInterface
+    {
+        return $this->inner;
+    }
+
     /**
      * Forward non-interface methods (e.g. setApiKey, setBaseUrl) to the inner client.
      * This preserves method_exists() compatibility for dynamic dispatch in settings.

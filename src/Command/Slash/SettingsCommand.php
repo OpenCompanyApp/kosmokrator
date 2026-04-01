@@ -8,6 +8,9 @@ use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
+use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Tool\Permission\PermissionMode;
 
 class SettingsCommand implements SlashCommand
@@ -55,7 +58,9 @@ class SettingsCommand implements SlashCommand
                 ?? $ctx->config->get('kosmokrator.agent.subagent_max_retries', 2)),
             'provider' => $currentProvider,
             'model' => $ctx->llm->getModel(),
-            'api_key' => self::maskKey($ctx->config->get("prism.providers.{$currentProvider}.api_key", '')),
+            'api_key' => $currentProvider === 'codex'
+                ? '(managed by codex:login)'
+                : self::maskKey($ctx->config->get("prism.providers.{$currentProvider}.api_key", '')),
         ];
 
         $changes = $ctx->ui->showSettings($currentSettings);
@@ -100,26 +105,48 @@ class SettingsCommand implements SlashCommand
                 'subagent_concurrency' => $ctx->sessionManager->setSetting('subagent_concurrency', $value),
                 'subagent_max_retries' => $ctx->sessionManager->setSetting('subagent_max_retries', $value),
                 'provider' => (function () use ($ctx, $value) {
-                    $ctx->llm->setProvider($value);
-                    if (is_callable([$ctx->llm, 'setBaseUrl'])) {
-                        $ctx->llm->setBaseUrl(rtrim($ctx->config->get("prism.providers.{$value}.url", ''), '/'));
-                    }
-                    $key = $ctx->settings->get('global', "provider.{$value}.api_key")
-                        ?? $ctx->config->get("prism.providers.{$value}.api_key", '');
-                    if ($key !== '' && is_callable([$ctx->llm, 'setApiKey'])) {
-                        $ctx->llm->setApiKey($key);
-                    }
                     $ctx->settings->set('global', 'agent.default_provider', $value);
+
+                    if (self::requiresRestart($ctx->llm, $value)) {
+                        $ctx->ui->showNotice("Provider saved as {$value}. Restart session to switch runtime.");
+
+                        return;
+                    }
+
+                    $ctx->llm->setProvider($value);
+                    $inner = self::innerClient($ctx->llm);
+
+                    if ($value !== 'codex' && method_exists($inner, 'setBaseUrl')) {
+                        $inner->setBaseUrl(rtrim($ctx->config->get("prism.providers.{$value}.url", ''), '/'));
+                    }
+                    if ($value !== 'codex') {
+                        $key = $ctx->settings->get('global', "provider.{$value}.api_key")
+                            ?? $ctx->config->get("prism.providers.{$value}.api_key", '');
+                        if ($key !== '' && method_exists($inner, 'setApiKey')) {
+                            $inner->setApiKey($key);
+                        }
+                    }
                 })(),
-                'model' => (function () use ($ctx, $value) {
-                    $ctx->llm->setModel($value);
+                'model' => (function () use ($ctx, $value, $changes, $currentProvider) {
                     $ctx->settings->set('global', 'agent.default_model', $value);
+                    $provider = $changes['provider'] ?? $currentProvider;
+
+                    if (! self::requiresRestart($ctx->llm, $provider)) {
+                        $ctx->llm->setModel($value);
+                    }
                 })(),
                 'api_key' => (function () use ($ctx, $value, $currentProvider, &$changes) {
                     if ($value !== '') {
                         $provider = $changes['provider'] ?? $currentProvider;
-                        if (is_callable([$ctx->llm, 'setApiKey'])) {
-                            $ctx->llm->setApiKey($value);
+
+                        if ($provider === 'codex') {
+                            return;
+                        }
+
+                        $inner = self::innerClient($ctx->llm);
+
+                        if (! self::requiresRestart($ctx->llm, $provider) && method_exists($inner, 'setApiKey')) {
+                            $inner->setApiKey($value);
                         }
                         $ctx->settings->set('global', "provider.{$provider}.api_key", $value);
                     }
@@ -145,5 +172,17 @@ class SettingsCommand implements SlashCommand
         }
 
         return substr($key, 0, 8).'...'.substr($key, -4);
+    }
+
+    private static function requiresRestart(LlmClientInterface $llm, string $provider): bool
+    {
+        $inner = self::innerClient($llm);
+
+        return $inner instanceof AsyncLlmClient && ! AsyncLlmClient::supportsProvider($provider);
+    }
+
+    private static function innerClient(LlmClientInterface $llm): LlmClientInterface
+    {
+        return $llm instanceof RetryableLlmClient ? $llm->inner() : $llm;
     }
 }

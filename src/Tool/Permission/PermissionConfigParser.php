@@ -20,7 +20,7 @@ class PermissionConfigParser
         $defaultMode = $config->get('kosmokrator.tools.default_permission_mode', 'guardian');
 
         foreach ($approvalRequired as $toolName) {
-            $denyPatterns = ($toolName === 'bash') ? $blockedCommands : [];
+            $denyPatterns = in_array($toolName, ['bash', 'shell_start', 'shell_write'], true) ? $blockedCommands : [];
 
             $rules[] = new PermissionRule(
                 toolName: $toolName,

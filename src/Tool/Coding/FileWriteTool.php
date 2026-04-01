@@ -14,7 +14,7 @@ class FileWriteTool implements ToolInterface
 
     public function description(): string
     {
-        return 'Write content to a file. Creates the file and any parent directories if they do not exist. Overwrites existing files.';
+        return 'Write a whole file. Use for new files or full overwrites. Use file_edit or apply_patch for targeted edits.';
     }
 
     public function parameters(): array

@@ -29,6 +29,8 @@ use function Amp\async;
  */
 final class ToolExecutor
 {
+    private const ASK_TOOLS = ['ask_user', 'ask_choice'];
+
     public function __construct(
         private readonly RendererInterface $ui,
         private readonly LoggerInterface $log,
@@ -59,9 +61,23 @@ final class ToolExecutor
         $approved = [];
         $denied = [];
         $autoApproved = [];
+        $seenAskTool = false;
 
         foreach ($toolCalls as $toolCall) {
             $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $toolCall->arguments()]);
+
+            if ($this->isAskTool($toolCall->name)) {
+                if ($seenAskTool) {
+                    $output = 'Only one interactive question may be asked per response. Use a single ask_user or ask_choice call, wait for the answer, then continue.';
+                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                    SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
+                    $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+
+                    continue;
+                }
+
+                $seenAskTool = true;
+            }
 
             [$permDenied, $wasAutoApproved] = $this->checkPermission($toolCall);
             if ($permDenied !== null) {
@@ -83,9 +99,9 @@ final class ToolExecutor
                 continue;
             }
 
-            // Read-only mode bash write-guard
-            if (($mode === AgentMode::Ask || $mode === AgentMode::Plan) && $tool->name() === 'bash') {
-                $cmd = $toolCall->arguments()['command'] ?? '';
+            // Read-only mode shell write-guard
+            if (($mode === AgentMode::Ask || $mode === AgentMode::Plan) && $this->isReadOnlyShellTool($tool->name())) {
+                $cmd = $this->commandLikeInput($toolCall);
                 if ($this->permissions?->isMutativeCommand($cmd)) {
                     $output = "Command blocked in {$mode->label()} mode (read-only). Switch to Edit mode for write operations.";
                     SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
@@ -143,7 +159,7 @@ final class ToolExecutor
                     }
                 }
 
-                $result = $this->executeSingleTool($toolCall, $tool, $stats);
+                $result = $this->executeSingleTool($toolCall, $tool, $stats, $mode);
 
                 if ($toolCall->name === 'bash') {
                     BashTool::$progressCallback = null;
@@ -170,7 +186,7 @@ final class ToolExecutor
                 // Launch all futures concurrently
                 $futures = [];
                 foreach ($group as [$toolCall, $tool]) {
-                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $tool, $stats));
+                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $tool, $stats, $mode));
                 }
 
                 // Await and display each header+result pair in original order
@@ -258,10 +274,15 @@ final class ToolExecutor
     /**
      * Execute a single tool call with error handling and output truncation.
      */
-    private function executeSingleTool(ToolCall $toolCall, Tool $tool, ?SubagentStats $stats): ToolResult
+    private function executeSingleTool(ToolCall $toolCall, Tool $tool, ?SubagentStats $stats, AgentMode $mode): ToolResult
     {
         try {
-            $output = $tool->handle(...$toolCall->arguments());
+            $args = $toolCall->arguments();
+            if ($toolCall->name === 'shell_start') {
+                $args['read_only'] = $mode !== AgentMode::Edit;
+            }
+
+            $output = $tool->handle(...$args);
             $stats?->incrementToolCalls();
             $outputStr = match (true) {
                 is_string($output) => $output,
@@ -302,7 +323,16 @@ final class ToolExecutor
             return [$approved];
         }
 
-        $writeTools = ['file_write', 'file_edit'];
+        foreach ($approved as [$toolCall, $_]) {
+            if ($this->isAskTool($toolCall->name)) {
+                return array_map(fn ($item) => [$item], $approved);
+            }
+            if (str_starts_with($toolCall->name, 'shell_')) {
+                return array_map(fn ($item) => [$item], $approved);
+            }
+        }
+
+        $writeTools = ['file_write', 'file_edit', 'apply_patch'];
         $writePaths = [];
         $hasBash = false;
         $hasWrites = false;
@@ -316,7 +346,10 @@ final class ToolExecutor
                 $writePaths[$resolved][] = $i;
                 $hasWrites = true;
             }
-            if ($name === 'bash') {
+            if ($name === 'apply_patch') {
+                $hasWrites = true;
+            }
+            if ($name === 'bash' || str_starts_with($name, 'shell_')) {
                 $hasBash = true;
             }
         }
@@ -404,5 +437,20 @@ final class ToolExecutor
         }
 
         return null;
+    }
+
+    private function isAskTool(string $name): bool
+    {
+        return in_array($name, self::ASK_TOOLS, true);
+    }
+
+    private function isReadOnlyShellTool(string $name): bool
+    {
+        return in_array($name, ['bash', 'shell_start', 'shell_write'], true);
+    }
+
+    private function commandLikeInput(ToolCall $toolCall): string
+    {
+        return (string) ($toolCall->arguments()['command'] ?? $toolCall->arguments()['input'] ?? '');
     }
 }

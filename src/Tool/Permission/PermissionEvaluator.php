@@ -90,11 +90,10 @@ class PermissionEvaluator
                 continue;
             }
 
-            if (! isset($args['command'])) {
+            $command = trim((string) ($args['command'] ?? $args['input'] ?? ''));
+            if ($command === '') {
                 continue;
             }
-
-            $command = trim((string) $args['command']);
             foreach ($rule->denyPatterns as $pattern) {
                 if (PermissionRule::matchesGlob($command, $pattern)) {
                     return new PermissionResult(

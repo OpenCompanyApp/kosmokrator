@@ -7,6 +7,9 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\Tool\Permission\GuardianEvaluator;
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\UI\RendererInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -14,6 +17,7 @@ use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
+use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
 
@@ -119,6 +123,207 @@ class AgentLoopTest extends TestCase
             ->with('bash', $this->stringContains('Error'), false);
 
         $this->loop->run('Call failing tool');
+    }
+
+    public function test_only_one_ask_tool_is_allowed_per_response(): void
+    {
+        $first = new ToolCall(id: 'tc_1', name: 'ask_user', arguments: '{"question":"First question?"}');
+        $second = new ToolCall(id: 'tc_2', name: 'ask_user', arguments: '{"question":"Second question?"}');
+
+        $this->llm->method('chat')->willReturnOnConsecutiveCalls(
+            new LlmResponse('', FinishReason::ToolCalls, [$first, $second], 100, 20),
+            new LlmResponse('Done.', FinishReason::Stop, [], 150, 40),
+        );
+        $this->llm->method('getProvider')->willReturn('test');
+        $this->llm->method('getModel')->willReturn('model');
+
+        $tool = (new Tool)
+            ->as('ask_user')
+            ->for('Ask the user a question')
+            ->withStringParameter('question', 'Question')
+            ->using(fn (string $question) => $this->ui->askUser($question));
+        $this->loop->setTools([$tool]);
+
+        $this->ui->expects($this->once())
+            ->method('askUser')
+            ->with('First question?')
+            ->willReturn('yes');
+
+        $this->loop->run('Need clarification');
+
+        $messages = $this->loop->history()->messages();
+        $this->assertInstanceOf(ToolResultMessage::class, $messages[2]);
+        $this->assertCount(2, $messages[2]->toolResults);
+        $this->assertSame('yes', $messages[2]->toolResults[0]->result);
+        $this->assertStringContainsString(
+            'Only one interactive question may be asked per response',
+            (string) $messages[2]->toolResults[1]->result
+        );
+    }
+
+    public function test_plan_mode_blocks_mutative_bash(): void
+    {
+        $this->loop = new AgentLoop(
+            $this->llm,
+            $this->ui,
+            new NullLogger,
+            'You are a test assistant.',
+            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+        );
+        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Plan);
+
+        $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: '{"command":"touch tmp.txt"}');
+
+        $this->llm->method('chat')->willReturnOnConsecutiveCalls(
+            new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
+            new LlmResponse('Blocked', FinishReason::Stop, [], 100, 20),
+        );
+        $this->llm->method('getProvider')->willReturn('test');
+        $this->llm->method('getModel')->willReturn('model');
+
+        $executed = false;
+        $tool = (new Tool)
+            ->as('bash')
+            ->for('Run commands')
+            ->withStringParameter('command', 'Command')
+            ->using(function () use (&$executed) {
+                $executed = true;
+
+                return 'should not run';
+            });
+        $this->loop->setTools([$tool]);
+
+        $this->ui->expects($this->once())
+            ->method('showToolResult')
+            ->with('bash', $this->stringContains('Command blocked in Plan mode'), false);
+
+        $this->loop->run('Try to mutate in plan mode');
+
+        $this->assertFalse($executed);
+    }
+
+    public function test_ask_mode_blocks_mutative_bash(): void
+    {
+        $this->loop = new AgentLoop(
+            $this->llm,
+            $this->ui,
+            new NullLogger,
+            'You are a test assistant.',
+            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+        );
+        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Ask);
+
+        $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: '{"command":"git commit -m \\"x\\""}');
+
+        $this->llm->method('chat')->willReturnOnConsecutiveCalls(
+            new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
+            new LlmResponse('Blocked', FinishReason::Stop, [], 100, 20),
+        );
+        $this->llm->method('getProvider')->willReturn('test');
+        $this->llm->method('getModel')->willReturn('model');
+
+        $executed = false;
+        $tool = (new Tool)
+            ->as('bash')
+            ->for('Run commands')
+            ->withStringParameter('command', 'Command')
+            ->using(function () use (&$executed) {
+                $executed = true;
+
+                return 'should not run';
+            });
+        $this->loop->setTools([$tool]);
+
+        $this->ui->expects($this->once())
+            ->method('showToolResult')
+            ->with('bash', $this->stringContains('Command blocked in Ask mode'), false);
+
+        $this->loop->run('Try to mutate in ask mode');
+
+        $this->assertFalse($executed);
+    }
+
+    public function test_plan_mode_blocks_mutative_shell_start(): void
+    {
+        $this->loop = new AgentLoop(
+            $this->llm,
+            $this->ui,
+            new NullLogger,
+            'You are a test assistant.',
+            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+        );
+        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Plan);
+
+        $toolCall = new ToolCall(id: 'tc_1', name: 'shell_start', arguments: '{"command":"touch tmp.txt"}');
+
+        $this->llm->method('chat')->willReturnOnConsecutiveCalls(
+            new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
+            new LlmResponse('Blocked', FinishReason::Stop, [], 100, 20),
+        );
+        $this->llm->method('getProvider')->willReturn('test');
+        $this->llm->method('getModel')->willReturn('model');
+
+        $executed = false;
+        $tool = (new Tool)
+            ->as('shell_start')
+            ->for('Start shell')
+            ->withStringParameter('command', 'Command')
+            ->using(function () use (&$executed) {
+                $executed = true;
+
+                return 'should not run';
+            });
+        $this->loop->setTools([$tool]);
+
+        $this->ui->expects($this->once())
+            ->method('showToolResult')
+            ->with('shell_start', $this->stringContains('Command blocked in Plan mode'), false);
+
+        $this->loop->run('Try to start mutative shell in plan mode');
+
+        $this->assertFalse($executed);
+    }
+
+    public function test_ask_mode_blocks_mutative_shell_write(): void
+    {
+        $this->loop = new AgentLoop(
+            $this->llm,
+            $this->ui,
+            new NullLogger,
+            'You are a test assistant.',
+            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+        );
+        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Ask);
+
+        $toolCall = new ToolCall(id: 'tc_1', name: 'shell_write', arguments: '{"session_id":"sh_1","input":"git commit -m \\"x\\""}');
+
+        $this->llm->method('chat')->willReturnOnConsecutiveCalls(
+            new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 100, 20),
+            new LlmResponse('Blocked', FinishReason::Stop, [], 100, 20),
+        );
+        $this->llm->method('getProvider')->willReturn('test');
+        $this->llm->method('getModel')->willReturn('model');
+
+        $executed = false;
+        $tool = (new Tool)
+            ->as('shell_write')
+            ->for('Write shell')
+            ->withStringParameter('session_id', 'Session')
+            ->withStringParameter('input', 'Input')
+            ->using(function () use (&$executed) {
+                $executed = true;
+
+                return 'should not run';
+            });
+        $this->loop->setTools([$tool]);
+
+        $this->ui->expects($this->once())
+            ->method('showToolResult')
+            ->with('shell_write', $this->stringContains('Command blocked in Ask mode'), false);
+
+        $this->loop->run('Try to write mutative shell input in ask mode');
+
+        $this->assertFalse($executed);
     }
 
     public function test_cancelled_exception_returns_early(): void

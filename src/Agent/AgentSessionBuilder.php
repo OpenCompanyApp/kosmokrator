@@ -19,6 +19,7 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
+use OpenCompany\PrismCodex\CodexOAuthService;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -55,18 +56,27 @@ final class AgentSessionBuilder
 
         // Validate API key
         $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        $apiKey = $config->get("prism.providers.{$provider}.api_key", '');
+        if ($provider === 'codex') {
+            $oauth = $this->container->make(CodexOAuthService::class);
+            if (! $oauth->isConfigured()) {
+                throw new \RuntimeException('Codex is not authenticated. Run `kosmokrator codex:login`.');
+            }
+        } else {
+            $apiKey = $config->get("prism.providers.{$provider}.api_key", '');
 
-        if ($apiKey === '' || $apiKey === null) {
-            throw new \RuntimeException('No API key configured.');
+            if ($apiKey === '' || $apiKey === null) {
+                throw new \RuntimeException('No API key configured.');
+            }
         }
 
         $log = $this->container->make(LoggerInterface::class);
         $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
 
         // Create LLM client (async for TUI, sync for ANSI)
+        $useAsyncClient = $ui->getActiveRenderer() === 'tui' && AsyncLlmClient::supportsProvider($provider);
+
         /** @var LlmClientInterface $llm */
-        $llm = ($ui->getActiveRenderer() === 'tui')
+        $llm = $useAsyncClient
             ? $this->container->make(AsyncLlmClient::class)
             : $this->container->make(PrismService::class);
 
@@ -148,7 +158,7 @@ final class AgentSessionBuilder
         $orchestrator = new SubagentOrchestrator($log, $maxDepth, $concurrency, $subagentMaxRetries);
         $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
 
-        $llmClientClass = ($ui->getActiveRenderer() === 'tui') ? 'async' : 'prism';
+        $llmClientClass = $useAsyncClient ? 'async' : 'prism';
         $subagentFactory = new SubagentFactory(
             rootRegistry: $toolRegistry,
             log: $log,

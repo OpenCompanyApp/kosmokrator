@@ -92,7 +92,7 @@ class SubagentFactory
 
     private function createLlmClient(): LlmClientInterface
     {
-        if ($this->llmClientClass === 'async') {
+        if ($this->llmClientClass === 'async' && AsyncLlmClient::supportsProvider($this->provider)) {
             $inner = new AsyncLlmClient(
                 apiKey: $this->apiKey,
                 baseUrl: $this->baseUrl,
@@ -134,8 +134,9 @@ You are a KosmoKrator sub-agent operating autonomously. Your output goes back to
 - **Search before assuming** — use `grep` and `glob` to find existing implementations and patterns. Never assume a file or function exists — check first.
 - **Use memories when available** — use `memory_search` when prior project facts or decisions may already be stored. Only General agents can write memories.
 - **Batch independent calls** — when you need multiple reads, searches, or commands that don't depend on each other, make them all in one response. They execute concurrently.
+- **Use apply_patch for manual edits** — when you need multi-file or multi-hunk edits, prefer `apply_patch` over repeated point edits.
 - **file_edit over file_write** — prefer editing existing files. Only use file_write for new files.
-- **bash for commands only** — use bash for shell commands (git, tests, builds). Use dedicated tools for file operations.
+- **Use shell sessions sparingly** — use `shell_start`, `shell_write`, `shell_read`, and `shell_kill` only for interactive or incremental command workflows. Finished sessions clean themselves up after the final output is drained.
 
 # Output
 

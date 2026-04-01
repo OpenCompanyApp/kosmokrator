@@ -9,12 +9,20 @@ use Kosmokrator\Session\MemoryRepository;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Tool\Coding\ApplyPatchTool;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
+use Kosmokrator\Tool\Coding\Patch\PatchApplier;
+use Kosmokrator\Tool\Coding\Patch\PatchParser;
+use Kosmokrator\Tool\Coding\ShellKillTool;
+use Kosmokrator\Tool\Coding\ShellReadTool;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
+use Kosmokrator\Tool\Coding\ShellStartTool;
+use Kosmokrator\Tool\Coding\ShellWriteTool;
 use Kosmokrator\Tool\Coding\SubagentTool;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
@@ -34,9 +42,15 @@ class ToolRegistryScopedTest extends TestCase
         $this->registry->register(new FileReadTool);
         $this->registry->register(new FileWriteTool);
         $this->registry->register(new FileEditTool);
+        $this->registry->register(new ApplyPatchTool(new PatchParser, new PatchApplier));
         $this->registry->register(new GlobTool);
         $this->registry->register(new GrepTool);
         $this->registry->register(new BashTool);
+        $shells = new ShellSessionManager(new NullLogger, 10, 5, 5);
+        $this->registry->register(new ShellStartTool($shells));
+        $this->registry->register(new ShellWriteTool($shells));
+        $this->registry->register(new ShellReadTool($shells));
+        $this->registry->register(new ShellKillTool($shells));
         $sessionManager = new SessionManager(
             $this->createStub(SessionRepository::class),
             $this->createStub(\Kosmokrator\Session\MessageRepository::class),
@@ -65,7 +79,12 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('file_read', $names);
         $this->assertContains('file_write', $names);
         $this->assertContains('file_edit', $names);
+        $this->assertContains('apply_patch', $names);
         $this->assertContains('bash', $names);
+        $this->assertContains('shell_start', $names);
+        $this->assertContains('shell_write', $names);
+        $this->assertContains('shell_read', $names);
+        $this->assertContains('shell_kill', $names);
         $this->assertContains('memory_save', $names);
         $this->assertContains('memory_search', $names);
         // subagent is excluded by scoped(), added externally
@@ -81,7 +100,12 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('glob', $names);
         $this->assertContains('grep', $names);
         $this->assertContains('bash', $names);
+        $this->assertContains('shell_start', $names);
+        $this->assertContains('shell_write', $names);
+        $this->assertContains('shell_read', $names);
+        $this->assertContains('shell_kill', $names);
         $this->assertContains('memory_search', $names);
+        $this->assertNotContains('apply_patch', $names);
         $this->assertNotContains('file_write', $names);
         $this->assertNotContains('file_edit', $names);
         $this->assertNotContains('memory_save', $names);
@@ -95,6 +119,11 @@ class ToolRegistryScopedTest extends TestCase
 
         $this->assertNotContains('file_write', $names);
         $this->assertNotContains('file_edit', $names);
+        $this->assertNotContains('apply_patch', $names);
+        $this->assertContains('shell_start', $names);
+        $this->assertContains('shell_write', $names);
+        $this->assertContains('shell_read', $names);
+        $this->assertContains('shell_kill', $names);
         $this->assertContains('memory_search', $names);
         $this->assertNotContains('memory_save', $names);
     }

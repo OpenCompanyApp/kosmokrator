@@ -22,13 +22,18 @@ $kernel->boot();
 // Register commands
 $console = $kernel->getConsole();
 $console->addCommand(new Kosmokrator\Command\AgentCommand($kernel->getContainer()));
+$console->addCommand(new Kosmokrator\Command\CodexLoginCommand($kernel->getContainer()));
+$console->addCommand(new Kosmokrator\Command\CodexStatusCommand($kernel->getContainer()));
+$console->addCommand(new Kosmokrator\Command\CodexLogoutCommand($kernel->getContainer()));
 $console->addCommand(new Kosmokrator\Command\SetupCommand($kernel->getContainer()));
 
 // Run setup if explicitly requested, otherwise default to agent (single-command style)
 $args = $_SERVER['argv'] ?? [];
-$isSetup = in_array('setup', $args, true);
+$explicitCommands = ['agent', 'setup', 'codex:login', 'codex:status', 'codex:logout'];
+$requestedCommand = $args[1] ?? null;
+$isExplicitCommand = is_string($requestedCommand) && in_array($requestedCommand, $explicitCommands, true);
 
-if (! $isSetup) {
+if ($requestedCommand === null || str_starts_with($requestedCommand, '-') || ! $isExplicitCommand) {
     $console->setDefaultCommand('agent', true);
 }
 

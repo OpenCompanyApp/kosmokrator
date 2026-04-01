@@ -7,7 +7,7 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 
-class CollapsibleWidget extends AbstractWidget
+class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterface
 {
     private const PREVIEW_LINES = 3;
 

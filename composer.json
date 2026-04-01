@@ -14,7 +14,8 @@
         "amphp/amp": "^3.1",
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
-        "prism-php/prism": "^0.99",
+        "opencompany/prism-codex": "dev-main",
+        "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
         "sebastian/diff": "^7.0",
         "symfony/console": "^7.4|^8.0",
@@ -36,6 +37,13 @@
         {
             "type": "path",
             "url": "vendor-src/symfony/src/Symfony/Component/Tui",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../Sites/opencompany/tmp/prism-codex",
             "options": {
                 "symlink": true
             }

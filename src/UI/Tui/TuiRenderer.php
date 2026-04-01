@@ -14,9 +14,13 @@ use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
-use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
+use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
+use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
+use Kosmokrator\UI\Tui\Widget\DiscoveryBatchWidget;
+use Kosmokrator\UI\Tui\Widget\HistoryStatusWidget;
+use Kosmokrator\UI\Tui\Widget\ToggleableWidgetInterface;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
@@ -26,8 +30,10 @@ use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Event\ChangeEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
+use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
@@ -43,6 +49,8 @@ class TuiRenderer implements RendererInterface
     private ContainerWidget $session;
 
     private ContainerWidget $conversation;
+
+    private HistoryStatusWidget $historyStatus;
 
     private ProgressBarWidget $statusBar;
 
@@ -82,6 +90,8 @@ class TuiRenderer implements RendererInterface
     private bool $activeResponseIsAnsi = false;
 
     private ?DiffRenderer $diffRenderer = null;
+
+    private ?BashCommandWidget $activeBashWidget = null;
 
     private ?CancellableLoaderWidget $toolExecutingLoader = null;
 
@@ -130,6 +140,15 @@ class TuiRenderer implements RendererInterface
     /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
     private array $pendingQuestionRecap = [];
 
+    private ?DiscoveryBatchWidget $activeDiscoveryBatch = null;
+
+    /** @var list<array{name: string, label: string, detail: string, summary: string, status: 'pending'|'success'|'error'}> */
+    private array $activeDiscoveryItems = [];
+
+    private int $scrollOffset = 0;
+
+    private bool $hasHiddenActivityBelow = false;
+
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
@@ -149,6 +168,9 @@ class TuiRenderer implements RendererInterface
         $this->conversation = new ContainerWidget;
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
+
+        $this->historyStatus = new HistoryStatusWidget;
+        $this->historyStatus->setId('history-status');
 
         // Status bar at bottom — context progress bar
         $this->statusBar = new ProgressBarWidget(200_000, '%message%  %bar%');
@@ -200,6 +222,9 @@ class TuiRenderer implements RendererInterface
             'copy' => [],                                  // Free ctrl+c for cancel
             'new_line' => ['shift+enter', 'alt+enter'],    // Both work: shift+enter with kitty, alt+enter without
             'cycle_mode' => ['shift+tab'],                 // Cycle through edit → plan → ask
+            'history_up' => [Key::PAGE_UP],
+            'history_down' => [Key::PAGE_DOWN],
+            'history_end' => [Key::END],
         ]));
 
         // Modal manager — owns all overlay + Suspension dialogs
@@ -259,6 +284,24 @@ class TuiRenderer implements RendererInterface
                 if ($this->immediateCommandHandler !== null) {
                     ($this->immediateCommandHandler)('/agents');
                 }
+
+                return true;
+            }
+
+            if ($kb->matches($data, 'history_up')) {
+                $this->scrollHistoryUp();
+
+                return true;
+            }
+
+            if ($kb->matches($data, 'history_down')) {
+                $this->scrollHistoryDown();
+
+                return true;
+            }
+
+            if ($this->isBrowsingHistory() && $kb->matches($data, 'history_end')) {
+                $this->jumpToLiveOutput();
 
                 return true;
             }
@@ -347,6 +390,7 @@ class TuiRenderer implements RendererInterface
 
         // Assemble layout: conversation → overlay → taskBar → thinkingBar → input → statusBar
         $this->session->add($this->conversation);
+        $this->session->add($this->historyStatus);
         $this->session->add($this->overlay);
         $this->session->add($this->taskBar);
         $this->session->add($this->thinkingBar);
@@ -473,15 +517,15 @@ HELP;
 
         $header = new TextWidget("{$gold}⚡ KosmoKrator — Ruler of the Cosmos ⚡{$r}");
         $header->addStyleClass('subtitle');
-        $this->conversation->add($header);
+        $this->addConversationWidget($header);
 
         $orreryWidget = new TextWidget($orrery);
         $orreryWidget->addStyleClass('welcome');
-        $this->conversation->add($orreryWidget);
+        $this->addConversationWidget($orreryWidget);
 
         $tutorialWidget = new TextWidget($tutorial);
         $tutorialWidget->addStyleClass('welcome');
-        $this->conversation->add($tutorialWidget);
+        $this->addConversationWidget($tutorialWidget);
 
         $this->flushRender();
     }
@@ -517,7 +561,7 @@ HELP;
         $pad = max(0, $cols - $visible - 4);
         $widget = new TextWidget("{$bg}{$white}{$content}".str_repeat(' ', $pad)."{$r}");
         $widget->addStyleClass('user-message');
-        $this->conversation->add($widget);
+        $this->addConversationWidget($widget);
         $this->flushRender();
     }
 
@@ -579,6 +623,7 @@ HELP;
     public function streamChunk(string $text): void
     {
         $this->flushPendingQuestionRecap();
+        $this->finalizeDiscoveryBatch();
 
         if ($this->activeResponse === null) {
             $this->clearThinking();
@@ -593,7 +638,7 @@ HELP;
                 $this->activeResponseIsAnsi = false;
             }
 
-            $this->conversation->add($this->activeResponse);
+            $this->addConversationWidget($this->activeResponse);
         } elseif (! $this->activeResponseIsAnsi && $this->containsAnsiEscapes($text)) {
             // Mid-stream ANSI detection: swap MarkdownWidget → AnsiArtWidget
             $accumulated = $this->activeResponse->getText();
@@ -602,11 +647,12 @@ HELP;
             $this->activeResponse = new AnsiArtWidget($accumulated);
             $this->activeResponse->addStyleClass('ansi-art');
             $this->activeResponseIsAnsi = true;
-            $this->conversation->add($this->activeResponse);
+            $this->addConversationWidget($this->activeResponse);
         }
 
         $current = $this->activeResponse->getText();
         $this->activeResponse->setText($current.$text);
+        $this->markHiddenConversationActivity();
         $this->flushRender();
     }
 
@@ -614,6 +660,7 @@ HELP;
     {
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
+        $this->finalizeDiscoveryBatch();
         $this->flushRender();
     }
 
@@ -632,6 +679,7 @@ HELP;
 
         // Task tools: update task bar only, no conversation widget (task bar shows the tree)
         if ($this->isTaskTool($name)) {
+            $this->finalizeDiscoveryBatch();
             $this->refreshTaskBar();
             $this->flushRender();
 
@@ -640,13 +688,34 @@ HELP;
 
         // Ask tools: silent — the question is shown by the tool's UI method
         if (in_array($name, ['ask_user', 'ask_choice'], true)) {
+            $this->finalizeDiscoveryBatch();
+
             return;
         }
 
         // Subagent: handled by showSubagentSpawn/showSubagentBatch
         if ($name === 'subagent') {
+            $this->finalizeDiscoveryBatch();
+
             return;
         }
+
+        if ($name === 'bash') {
+            $this->finalizeDiscoveryBatch();
+            $this->beginBashCommand((string) ($args['command'] ?? ''));
+            $this->flushRender();
+
+            return;
+        }
+
+        if ($this->isDiscoveryTool($name)) {
+            $this->appendDiscoveryToolCall($name, $args);
+            $this->flushRender();
+
+            return;
+        }
+
+        $this->finalizeDiscoveryBatch();
 
         // Compact single-line display for file tools
         if (in_array($name, ['file_read', 'file_write', 'file_edit']) && isset($args['path'])) {
@@ -681,7 +750,7 @@ HELP;
             $widget->addStyleClass('tool-call');
         }
 
-        $this->conversation->add($widget);
+        $this->addConversationWidget($widget);
         $this->flushRender();
     }
 
@@ -716,6 +785,20 @@ HELP;
             return;
         }
 
+        if ($name === 'bash') {
+            $this->completeBashCommand($output, $success);
+            $this->flushRender();
+
+            return;
+        }
+
+        if ($this->isDiscoveryTool($name)) {
+            $this->completeDiscoveryToolResult($name, $output, $success);
+            $this->flushRender();
+
+            return;
+        }
+
         // Diff view for file_edit
         if ($name === 'file_edit' && $success && isset($this->lastToolArgs['old_string'])) {
             $content = $this->buildDiffView(
@@ -738,7 +821,7 @@ HELP;
         if ($name === 'file_edit' && $success) {
             $widget->setExpanded(true);
         }
-        $this->conversation->add($widget);
+        $this->addConversationWidget($widget);
         $this->flushRender();
     }
 
@@ -754,7 +837,10 @@ HELP;
 
     public function showToolExecuting(string $name): void
     {
-        if ($this->isTaskTool($name) || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
+        if ($this->isTaskTool($name)
+            || $name === 'bash'
+            || $this->isDiscoveryTool($name)
+            || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
             return;
         }
 
@@ -771,7 +857,7 @@ HELP;
         $this->toolExecutingStartTime = microtime(true);
         $this->toolExecutingBreathTick = 0;
 
-        $this->conversation->add($this->toolExecutingLoader);
+        $this->addConversationWidget($this->toolExecutingLoader);
 
         $this->toolExecutingTimerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {
             if ($this->toolExecutingLoader === null) {
@@ -869,9 +955,9 @@ HELP;
         return $result;
     }
 
-    private function highlightFileOutput(string $output): string
+    private function highlightFileOutput(string $output, ?string $path = null): string
     {
-        $path = $this->lastToolArgs['path'] ?? '';
+        $path ??= $this->lastToolArgs['path'] ?? '';
         $language = KosmokratorTerminalTheme::detectLanguage($path);
         if ($language === '') {
             return $output;
@@ -931,13 +1017,23 @@ HELP;
         $this->conversation->clear();
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
+        $this->activeBashWidget = null;
         $this->pendingQuestionRecap = [];
+        $this->activeDiscoveryBatch = null;
+        $this->activeDiscoveryItems = [];
+        $this->scrollOffset = 0;
+        $this->hasHiddenActivityBelow = false;
+        $this->historyStatus->hide();
+        $this->tui->setScrollOffset(0);
         $this->flushRender();
     }
 
     public function replayHistory(array $messages): void
     {
+        $this->activeBashWidget = null;
         $this->pendingQuestionRecap = [];
+        $this->activeDiscoveryBatch = null;
+        $this->activeDiscoveryItems = [];
         $r = Theme::reset();
         $dim = Theme::dim();
         $white = Theme::white();
@@ -963,12 +1059,24 @@ HELP;
                 $this->flushPendingQuestionRecap();
                 $widget = new TextWidget('⟡ '.$msg->content);
                 $widget->addStyleClass('user-message');
-                $this->conversation->add($widget);
+                $this->addConversationWidget($widget);
 
                 continue;
             }
 
             if ($msg instanceof AssistantMessage) {
+                $discoveryGroup = [];
+                $flushDiscoveryGroup = function () use (&$discoveryGroup): void {
+                    if ($discoveryGroup === []) {
+                        return;
+                    }
+
+                    $widget = new DiscoveryBatchWidget($discoveryGroup);
+                    $widget->addStyleClass('tool-batch');
+                    $this->addConversationWidget($widget);
+                    $discoveryGroup = [];
+                };
+
                 // Text content
                 if ($msg->content !== '') {
                     $this->flushPendingQuestionRecap();
@@ -979,7 +1087,7 @@ HELP;
                         $widget = new MarkdownWidget($msg->content);
                         $widget->addStyleClass('response');
                     }
-                    $this->conversation->add($widget);
+                    $this->addConversationWidget($widget);
                 }
 
                 // Tool calls — each paired with its result
@@ -989,6 +1097,7 @@ HELP;
                     $toolResult = $resultsByCallId[$toolCall->id] ?? null;
 
                     if ($name === 'ask_user') {
+                        $flushDiscoveryGroup();
                         $answer = $toolResult !== null
                             ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
                             : '';
@@ -1004,6 +1113,7 @@ HELP;
                     }
 
                     if ($name === 'ask_choice') {
+                        $flushDiscoveryGroup();
                         $answer = $toolResult !== null
                             ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
                             : 'dismissed';
@@ -1021,10 +1131,35 @@ HELP;
 
                     // Task tools: skip — task bar shows the tree
                     if ($this->isTaskTool($name)) {
+                        $flushDiscoveryGroup();
+
                         continue;
                     }
 
                     $this->flushPendingQuestionRecap();
+
+                    if ($this->isDiscoveryTool($name)) {
+                        $output = $toolResult !== null
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            : '';
+                        $discoveryGroup[] = $this->buildDiscoveryItem($name, $args, $output, $toolResult !== null);
+
+                        continue;
+                    }
+
+                    $flushDiscoveryGroup();
+
+                    if ($name === 'bash') {
+                        $bashWidget = new BashCommandWidget((string) ($args['command'] ?? ''));
+                        $bashWidget->addStyleClass('tool-shell');
+                        if ($toolResult !== null) {
+                            $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
+                            $bashWidget->setResult($output, true);
+                        }
+                        $this->addConversationWidget($bashWidget);
+
+                        continue;
+                    }
 
                     // Render tool call line
                     $icon = Theme::toolIcon($name);
@@ -1059,7 +1194,7 @@ HELP;
                         $w = new TextWidget($label);
                         $w->addStyleClass('tool-call');
                     }
-                    $this->conversation->add($w);
+                    $this->addConversationWidget($w);
 
                     // Render paired result immediately after the call
                     if ($toolResult !== null) {
@@ -1085,9 +1220,11 @@ HELP;
 
                         $rw = new CollapsibleWidget($resultHeader, $content, $lineCount);
                         $rw->addStyleClass('tool-result');
-                        $this->conversation->add($rw);
+                        $this->addConversationWidget($rw);
                     }
                 }
+
+                $flushDiscoveryGroup();
 
                 continue;
             }
@@ -1102,7 +1239,7 @@ HELP;
         $this->flushPendingQuestionRecap();
         $widget = new TextWidget($message);
         $widget->addStyleClass('subtitle');
-        $this->conversation->add($widget);
+        $this->addConversationWidget($widget);
         $this->flushRender();
     }
 
@@ -1121,7 +1258,7 @@ HELP;
         $this->flushPendingQuestionRecap();
         $widget = new TextWidget("✗ Error: {$message}");
         $widget->addStyleClass('tool-error');
-        $this->conversation->add($widget);
+        $this->addConversationWidget($widget);
         $this->flushRender();
     }
 
@@ -1251,7 +1388,7 @@ HELP;
             $lines[] = "  {$icon} {$type} \"{$task}\" · {$s->toolCalls} tools";
         }
 
-        $this->conversation->add(new TextWidget(implode("\n", $lines)));
+        $this->addConversationWidget(new TextWidget(implode("\n", $lines)));
     }
 
     public function clearSubagentStatus(): void
@@ -1367,7 +1504,7 @@ HELP;
     {
         $toggle = function (array $widgets) use (&$toggle): void {
             foreach ($widgets as $widget) {
-                if ($widget instanceof CollapsibleWidget) {
+                if ($widget instanceof ToggleableWidgetInterface) {
                     $widget->toggle();
                 }
                 if ($widget instanceof ContainerWidget) {
@@ -1379,9 +1516,259 @@ HELP;
         $this->flushRender();
     }
 
+    private function isDiscoveryTool(string $name): bool
+    {
+        return in_array($name, ['file_read', 'glob', 'grep'], true);
+    }
+
+    private function appendDiscoveryToolCall(string $name, array $args): void
+    {
+        if ($this->activeDiscoveryBatch === null) {
+            $this->activeDiscoveryBatch = new DiscoveryBatchWidget;
+            $this->activeDiscoveryBatch->addStyleClass('tool-batch');
+            $this->addConversationWidget($this->activeDiscoveryBatch);
+        }
+
+        $this->activeDiscoveryItems[] = $this->buildDiscoveryItem($name, $args);
+        $this->activeDiscoveryBatch->setItems($this->activeDiscoveryItems);
+    }
+
+    private function completeDiscoveryToolResult(string $name, string $output, bool $success): void
+    {
+        if ($this->activeDiscoveryItems === []) {
+            $this->appendDiscoveryToolCall($name, $this->lastToolArgs);
+        }
+
+        $lastIndex = array_key_last($this->activeDiscoveryItems);
+        if ($lastIndex === null) {
+            return;
+        }
+
+        $this->activeDiscoveryItems[$lastIndex] = $this->buildDiscoveryItem(
+            $name,
+            $this->lastToolArgs,
+            $output,
+            true,
+            $success,
+        );
+
+        $this->activeDiscoveryBatch?->setItems($this->activeDiscoveryItems);
+    }
+
+    private function finalizeDiscoveryBatch(): void
+    {
+        $this->activeDiscoveryBatch = null;
+        $this->activeDiscoveryItems = [];
+    }
+
+    private function beginBashCommand(string $command): void
+    {
+        $this->activeBashWidget = new BashCommandWidget($command);
+        $this->activeBashWidget->addStyleClass('tool-shell');
+        $this->addConversationWidget($this->activeBashWidget);
+    }
+
+    private function completeBashCommand(string $output, bool $success): void
+    {
+        if ($this->activeBashWidget === null) {
+            $this->beginBashCommand((string) ($this->lastToolArgs['command'] ?? ''));
+        }
+
+        $this->activeBashWidget?->setResult($output, $success);
+        $this->activeBashWidget = null;
+    }
+
+    /**
+     * @return array{name: string, label: string, detail: string, summary: string, status: 'pending'|'success'|'error'}
+     */
+    private function buildDiscoveryItem(
+        string $name,
+        array $args,
+        string $output = '',
+        bool $hasResult = false,
+        bool $success = true,
+    ): array {
+        $label = match ($name) {
+            'file_read' => $this->formatDiscoveryReadLabel($args),
+            'glob' => $this->formatDiscoveryGlobLabel($args),
+            'grep' => $this->formatDiscoveryGrepLabel($args),
+            default => Theme::toolLabel($name),
+        };
+
+        if (! $hasResult) {
+            return [
+                'name' => $name,
+                'label' => $label,
+                'detail' => '',
+                'summary' => '',
+                'status' => 'pending',
+            ];
+        }
+
+        return [
+            'name' => $name,
+            'label' => $label,
+            'detail' => $name === 'file_read'
+                ? $this->highlightFileOutput($output, (string) ($args['path'] ?? ''))
+                : $output,
+            'summary' => $this->summarizeDiscoveryResult($name, $output, $success),
+            'status' => $success ? 'success' : 'error',
+        ];
+    }
+
+    private function formatDiscoveryReadLabel(array $args): string
+    {
+        $path = Theme::relativePath((string) ($args['path'] ?? ''));
+
+        if (isset($args['offset'])) {
+            $path .= ':'.$args['offset'];
+        }
+
+        return $path;
+    }
+
+    private function formatDiscoveryGlobLabel(array $args): string
+    {
+        $pattern = (string) ($args['pattern'] ?? '');
+        $path = $this->normalizeDiscoveryPath((string) ($args['path'] ?? ''));
+
+        if ($path === '.' || $path === '') {
+            return $pattern;
+        }
+
+        return "{$pattern} in {$path}";
+    }
+
+    private function formatDiscoveryGrepLabel(array $args): string
+    {
+        $pattern = '"'.(string) ($args['pattern'] ?? '').'"';
+        $path = $this->normalizeDiscoveryPath((string) ($args['path'] ?? ''));
+        $glob = (string) ($args['glob'] ?? '');
+
+        $label = $path === '.' || $path === ''
+            ? $pattern
+            : "{$pattern} in {$path}";
+
+        if ($glob !== '') {
+            $label .= " ({$glob})";
+        }
+
+        return $label;
+    }
+
+    private function normalizeDiscoveryPath(string $path): string
+    {
+        if ($path === '' || $path === '.') {
+            return '.';
+        }
+
+        return Theme::relativePath($path);
+    }
+
+    private function summarizeDiscoveryResult(string $name, string $output, bool $success): string
+    {
+        if (! $success) {
+            return 'error';
+        }
+
+        return match ($name) {
+            'file_read' => $this->countNonEmptyLines($output).' lines',
+            'glob' => $this->summarizeCountedResult($output, 'file', 'files', 'No files matching'),
+            'grep' => $this->summarizeCountedResult($output, 'match', 'matches', 'No matches found'),
+            default => '',
+        };
+    }
+
+    private function summarizeCountedResult(string $output, string $singular, string $plural, string $emptyPrefix): string
+    {
+        $trimmed = trim($output);
+        if ($trimmed === '' || str_starts_with($trimmed, $emptyPrefix)) {
+            return "0 {$plural}";
+        }
+
+        $count = $this->countNonEmptyLines($output);
+
+        return $count.' '.($count === 1 ? $singular : $plural);
+    }
+
+    private function countNonEmptyLines(string $output): int
+    {
+        return count(array_filter(
+            explode("\n", $output),
+            static fn (string $line): bool => trim($line) !== '',
+        ));
+    }
+
     private function containsAnsiEscapes(string $text): bool
     {
         return str_contains($text, "\x1b[");
+    }
+
+    private function addConversationWidget(AbstractWidget $widget): void
+    {
+        $this->conversation->add($widget);
+        $this->markHiddenConversationActivity();
+    }
+
+    private function markHiddenConversationActivity(): void
+    {
+        if (! $this->isBrowsingHistory()) {
+            return;
+        }
+
+        $this->hasHiddenActivityBelow = true;
+        $this->refreshHistoryStatus();
+    }
+
+    private function scrollHistoryUp(): void
+    {
+        $this->scrollOffset += $this->historyScrollStep();
+        $this->applyScrollOffset();
+    }
+
+    private function scrollHistoryDown(): void
+    {
+        $this->scrollOffset = max(0, $this->scrollOffset - $this->historyScrollStep());
+        if ($this->scrollOffset === 0) {
+            $this->hasHiddenActivityBelow = false;
+        }
+
+        $this->applyScrollOffset();
+    }
+
+    private function jumpToLiveOutput(): void
+    {
+        $this->scrollOffset = 0;
+        $this->hasHiddenActivityBelow = false;
+        $this->applyScrollOffset();
+    }
+
+    private function applyScrollOffset(): void
+    {
+        $this->tui->setScrollOffset($this->scrollOffset);
+        $this->refreshHistoryStatus();
+        $this->flushRender();
+    }
+
+    private function refreshHistoryStatus(): void
+    {
+        if (! $this->isBrowsingHistory()) {
+            $this->historyStatus->hide();
+
+            return;
+        }
+
+        $this->historyStatus->show($this->hasHiddenActivityBelow);
+    }
+
+    private function isBrowsingHistory(): bool
+    {
+        return $this->scrollOffset > 0;
+    }
+
+    private function historyScrollStep(): int
+    {
+        return max(6, $this->tui->getTerminal()->getRows() - 10);
     }
 
     public function refreshTaskBar(): void
@@ -1443,7 +1830,7 @@ HELP;
             return;
         }
 
-        $this->conversation->add(new AnsweredQuestionsWidget($this->pendingQuestionRecap));
+        $this->addConversationWidget(new AnsweredQuestionsWidget($this->pendingQuestionRecap));
         $this->pendingQuestionRecap = [];
         $this->flushRender();
     }

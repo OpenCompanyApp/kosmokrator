@@ -65,6 +65,18 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertStringContainsString('rm -rf /', $result->reason);
     }
 
+    public function test_shell_write_blocked_input_returns_deny(): void
+    {
+        $rules = [
+            new PermissionRule('shell_write', PermissionAction::Ask, ['rm -rf /', 'rm -rf ~', 'mkfs*']),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+
+        $result = $evaluator->evaluate('shell_write', ['input' => 'rm -rf /']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+        $this->assertStringContainsString('rm -rf /', $result->reason);
+    }
+
     public function test_bash_safe_command_returns_ask_in_argus(): void
     {
         $rules = [

@@ -30,9 +30,14 @@ class AgentTypeTest extends TestCase
     public function test_general_allowed_tools_includes_write(): void
     {
         $tools = AgentType::General->allowedTools();
+        $this->assertContains('apply_patch', $tools);
         $this->assertContains('file_write', $tools);
         $this->assertContains('file_edit', $tools);
         $this->assertContains('bash', $tools);
+        $this->assertContains('shell_start', $tools);
+        $this->assertContains('shell_write', $tools);
+        $this->assertContains('shell_read', $tools);
+        $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
         $this->assertContains('memory_save', $tools);
@@ -45,8 +50,13 @@ class AgentTypeTest extends TestCase
         $this->assertContains('glob', $tools);
         $this->assertContains('grep', $tools);
         $this->assertContains('bash', $tools);
+        $this->assertContains('shell_start', $tools);
+        $this->assertContains('shell_write', $tools);
+        $this->assertContains('shell_read', $tools);
+        $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertNotContains('apply_patch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);
@@ -57,6 +67,11 @@ class AgentTypeTest extends TestCase
         $tools = AgentType::Plan->allowedTools();
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
+        $this->assertNotContains('apply_patch', $tools);
+        $this->assertContains('shell_start', $tools);
+        $this->assertContains('shell_write', $tools);
+        $this->assertContains('shell_read', $tools);
+        $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
         $this->assertNotContains('memory_save', $tools);

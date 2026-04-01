@@ -90,6 +90,16 @@ class KosmokratorStyleSheet
                 padding: new Padding(0, 3, 0, 3),
             ),
 
+            '.tool-batch' => new Style(
+                color: Color::hex('#a0a0a0'),
+                padding: new Padding(1, 2, 0, 2),
+            ),
+
+            '.tool-shell' => new Style(
+                color: Color::hex('#a0a0a0'),
+                padding: new Padding(1, 2, 0, 2),
+            ),
+
             '.tool-success' => new Style(
                 color: Color::hex('#50dc64'),
                 padding: new Padding(0, 3, 0, 3),

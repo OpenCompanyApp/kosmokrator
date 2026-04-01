@@ -183,7 +183,12 @@ class Theme
             'file_read' => '☽',   // Moon — illumination, revealing hidden text
             'file_write' => '☉',  // Sun — creation, bringing into being
             'file_edit' => '♅',   // Uranus — transformation, change
-            'bash' => '⚡',       // Lightning — raw power, execution
+            'apply_patch' => '✎', // Inscription — deliberate multi-file change
+            'bash' => '⚡︎',      // Lightning — force text presentation to avoid wide emoji spacing
+            'shell_start' => '◌', // Opening a live shell orbit
+            'shell_write' => '↦', // Sending input into a session
+            'shell_read' => '↤',  // Pulling output from a session
+            'shell_kill' => '✕',  // Terminating a live session
             'grep' => '⊛',       // Astral search — seeking through the cosmos
             'glob' => '✧',       // Star cluster — surveying many points of light
             'task_create' => '⊕', // Circled plus — bringing new labors into being
@@ -202,7 +207,12 @@ class Theme
             'file_read' => 'Read',
             'file_write' => 'Write',
             'file_edit' => 'Edit',
+            'apply_patch' => 'Patch',
             'bash' => 'Bash',
+            'shell_start' => 'Shell',
+            'shell_write' => 'Shell',
+            'shell_read' => 'Shell',
+            'shell_kill' => 'Shell',
             'grep' => 'Search',
             'glob' => 'Glob',
             'task_create' => 'Task',

@@ -35,9 +35,9 @@ enum AgentType: string
     public function allowedTools(): array
     {
         return match ($this) {
-            self::General => ['file_read', 'file_write', 'file_edit', 'glob', 'grep', 'bash', 'subagent', 'memory_search', 'memory_save'],
-            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'subagent', 'memory_search'],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'subagent', 'memory_search'],
+            self::General => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'memory_save'],
+            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search'],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search'],
         };
     }
 
@@ -57,7 +57,7 @@ enum AgentType: string
 
 # Role: General Agent (full access)
 
-You have full read/write access: read, search, create, edit files, run commands.
+You have full read/write access: read, search, create, patch, edit files, run commands, and manage shell sessions.
 
 - Execute the task directly — make changes, run tests, verify results.
 - Match the codebase style, patterns, and conventions.
@@ -68,8 +68,8 @@ PROMPT;
 
 # Role: Explore Agent (read-only)
 
-You have READ-ONLY access: read files, search the codebase, run read-only bash commands, and search saved memories.
-You MUST NOT create, modify, or delete any files. Do not use file_write, file_edit, or memory_save.
+You have READ-ONLY access: read files, search the codebase, run read-only shell commands, manage read-only shell sessions, and search saved memories.
+You MUST NOT create, modify, or delete any files. Do not use file_write, file_edit, apply_patch, or memory_save.
 
 - Cast a wide net — search broadly, then drill into relevant files.
 - Read the actual code, don't guess from file names alone.

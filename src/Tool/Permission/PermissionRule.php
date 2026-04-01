@@ -23,9 +23,9 @@ class PermissionRule
             return null;
         }
 
-        // Check deny patterns against the command argument (bash-specific)
-        if ($this->denyPatterns !== [] && isset($args['command'])) {
-            $command = trim((string) $args['command']);
+        // Check deny patterns against command-like input (bash/shell tools)
+        $command = trim((string) ($args['command'] ?? $args['input'] ?? ''));
+        if ($this->denyPatterns !== [] && $command !== '') {
             foreach ($this->denyPatterns as $pattern) {
                 if (self::matchesGlob($command, $pattern)) {
                     return new PermissionResult(

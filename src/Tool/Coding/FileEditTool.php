@@ -16,7 +16,7 @@ class FileEditTool implements ToolInterface
 
     public function description(): string
     {
-        return 'Perform a search-and-replace edit on a file. The old_string must match exactly (including whitespace and indentation). The old_string must be unique in the file.';
+        return 'One exact replacement in one existing file. Requires old_string to match exactly once. Use apply_patch for multi-hunk or multi-file edits.';
     }
 
     public function parameters(): array

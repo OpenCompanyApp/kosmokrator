@@ -11,6 +11,7 @@ use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionMode;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -171,6 +172,7 @@ class AgentCommand extends Command
         }
 
         $session->orchestrator?->cancelAll();
+        $this->container->make(ShellSessionManager::class)->killAll();
         $session->ui->teardown();
 
         return Command::SUCCESS;

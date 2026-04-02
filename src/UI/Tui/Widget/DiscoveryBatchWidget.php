@@ -74,7 +74,6 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
 
         $lines = [
             "{$gold}".Theme::toolIcon('file_read').' Reading the omens'."{$r}",
-            ' │',
             " │ {$dim}{$this->formatSummary()}{$r}",
         ];
 

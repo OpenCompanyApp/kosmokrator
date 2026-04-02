@@ -577,14 +577,9 @@ HELP;
 
         $this->animationManager->setPhase($phase, $this->requestCancellation);
 
-        // Update status detail based on phase
-        $dim = "\033[38;5;245m";
-        $r = "\033[0m";
-        match ($phase) {
-            AgentPhase::Thinking => $this->statusDetail = "{$dim}Thinking...{$r}",
-            AgentPhase::Tools => $this->statusDetail = "{$dim}Running tools...{$r}",
-            AgentPhase::Idle => null,
-        };
+        // The status bar always shows model/context/cost (set by showStatus()).
+        // Don't overwrite it with "Thinking..." / "Running tools..." — the thinking
+        // loader widget already conveys phase information.
         if ($phase !== AgentPhase::Idle) {
             $this->refreshStatusBar();
         }

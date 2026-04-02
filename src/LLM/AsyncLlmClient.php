@@ -21,8 +21,6 @@ class AsyncLlmClient implements LlmClientInterface
 {
     private HttpClient $httpClient;
 
-    private readonly ProviderCapabilities $capabilities;
-
     /** @var list<string> */
     private const OPENAI_COMPATIBLE_PROVIDERS = [
         'openai',
@@ -49,7 +47,6 @@ class AsyncLlmClient implements LlmClientInterface
         private string $provider = 'z',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
-        $this->capabilities = ProviderCapabilities::for($provider);
     }
 
     public static function supportsProvider(string $provider): bool
@@ -78,7 +75,7 @@ class AsyncLlmClient implements LlmClientInterface
             $payload['max_tokens'] = $this->maxTokens;
         }
 
-        if ($this->temperature !== null && $this->capabilities->supportsTemperature()) {
+        if ($this->temperature !== null && $this->supportsTemperature()) {
             $payload['temperature'] = $this->temperature;
         }
 
@@ -143,6 +140,11 @@ class AsyncLlmClient implements LlmClientInterface
     public function setMaxTokens(?int $maxTokens): void
     {
         $this->maxTokens = $maxTokens;
+    }
+
+    private function supportsTemperature(): bool
+    {
+        return ProviderCapabilities::for($this->provider)->supportsTemperature();
     }
 
     private function parseResponse(Response $response, ?Cancellation $cancellation): LlmResponse

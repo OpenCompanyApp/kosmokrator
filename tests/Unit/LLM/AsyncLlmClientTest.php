@@ -17,4 +17,23 @@ class AsyncLlmClientTest extends TestCase
         $this->assertFalse(AsyncLlmClient::supportsProvider('gemini'));
         $this->assertFalse(AsyncLlmClient::supportsProvider('minimax'));
     }
+
+    public function test_provider_switch_updates_temperature_support(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'glm-5.1',
+            systemPrompt: 'prompt',
+            temperature: 0.7,
+            provider: 'z',
+        );
+        $supportsTemperature = new \ReflectionMethod($client, 'supportsTemperature');
+
+        $this->assertFalse($supportsTemperature->invoke($client));
+
+        $client->setProvider('openai');
+
+        $this->assertTrue($supportsTemperature->invoke($client));
+    }
 }

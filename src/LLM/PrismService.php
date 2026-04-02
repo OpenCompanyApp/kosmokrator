@@ -14,17 +14,13 @@ use Prism\Prism\Tool;
 
 class PrismService implements LlmClientInterface
 {
-    private readonly ProviderCapabilities $capabilities;
-
     public function __construct(
         private string $provider,
         private string $model,
         private string $systemPrompt,
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
-    ) {
-        $this->capabilities = ProviderCapabilities::for($provider);
-    }
+    ) {}
 
     public function setSystemPrompt(string $prompt): void
     {
@@ -124,7 +120,7 @@ class PrismService implements LlmClientInterface
             $request->withMaxTokens($this->maxTokens);
         }
 
-        if ($this->temperature !== null && $this->capabilities->supportsTemperature()) {
+        if ($this->temperature !== null && $this->supportsTemperature()) {
             $request->usingTemperature($this->temperature);
         }
 
@@ -133,5 +129,10 @@ class PrismService implements LlmClientInterface
         }
 
         return $request;
+    }
+
+    private function supportsTemperature(): bool
+    {
+        return ProviderCapabilities::for($this->provider)->supportsTemperature();
     }
 }

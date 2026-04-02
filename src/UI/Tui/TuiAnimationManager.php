@@ -320,28 +320,19 @@ final class TuiAnimationManager
     }
 
     /**
-     * Transition from thinking to tools phase: remove loader, switch to amber palette.
+     * Transition from thinking to tools phase: keep loader alive, switch to amber palette.
+     *
+     * The loader continues animating throughout tool execution so the user sees
+     * activity. It is removed in enterIdle() or replaced in the next enterThinking().
      */
     private function enterTools(AgentPhase $previous): void
     {
-        // Remove the standalone loader (LLM response arrived)
-        if ($this->loader !== null) {
-            $this->loader->setFinishedIndicator('✓');
-            $this->loader->stop();
-            $this->thinkingBar->remove($this->loader);
-            $this->loader = null;
-        }
-
-        // Clear thinking phrase so it doesn't get embedded in the task bar during Tools phase.
-        // It gets set fresh in enterThinking() for the next round.
-        $this->thinkingPhrase = null;
-
-        // Keep breathing animation but switch to amber palette
+        // Switch breathing animation to amber palette (keep loader + phrase intact)
         if ($this->thinkingTimerId !== null) {
             EventLoop::cancel($this->thinkingTimerId);
             $this->thinkingTimerId = null;
         }
-        $this->startBreathingAnimation('', 'amber');
+        $this->startBreathingAnimation($this->thinkingPhrase ?? '', 'amber');
 
         ($this->renderCallback)();
     }

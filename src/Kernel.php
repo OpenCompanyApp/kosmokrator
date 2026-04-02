@@ -63,6 +63,7 @@ use Prism\Prism\Providers\Anthropic\Anthropic;
 use Prism\Prism\Providers\DeepSeek\DeepSeek;
 use Prism\Prism\Providers\Z\Z;
 use Psr\Log\LoggerInterface;
+use Revolt\EventLoop;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Yaml\Yaml;
 
@@ -91,6 +92,7 @@ class Kernel
         $this->registerFacades();
         $this->registerAgentServices();
         $this->buildConsole();
+        $this->registerRevoltErrorHandler();
     }
 
     public function getConsole(): Application
@@ -489,5 +491,25 @@ class Kernel
         }
 
         return $versionConfig;
+    }
+
+    /**
+     * Register a Revolt error handler to gracefully handle exceptions thrown
+     * inside event loop callbacks (e.g. stream read assertions during shutdown).
+     *
+     * Without this, Amp\ByteStream\ReadableResourceStream assertions about
+     * fclose'd resources become UncaughtThrowable fatalities that crash the
+     * process with a stack trace — even though the process was already exiting.
+     */
+    private function registerRevoltErrorHandler(): void
+    {
+        EventLoop::setErrorHandler(function (\Throwable $e): void {
+            // Silently ignore shutdown-time stream errors from Amp processes
+            if ($e instanceof \AssertionError && str_contains($e->getMessage(), 'fclose')) {
+                return;
+            }
+
+            throw $e;
+        });
     }
 }

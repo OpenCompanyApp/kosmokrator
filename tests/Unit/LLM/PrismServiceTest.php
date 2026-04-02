@@ -48,4 +48,16 @@ class PrismServiceTest extends TestCase
 
         $this->assertTrue($service->supportsStreaming());
     }
+
+    public function test_provider_switch_updates_temperature_support(): void
+    {
+        $service = new PrismService('z', 'glm-5.1', 'prompt', temperature: 0.7);
+        $supportsTemperature = new \ReflectionMethod($service, 'supportsTemperature');
+
+        $this->assertFalse($supportsTemperature->invoke($service));
+
+        $service->setProvider('openai');
+
+        $this->assertTrue($supportsTemperature->invoke($service));
+    }
 }

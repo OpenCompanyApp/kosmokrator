@@ -116,6 +116,27 @@ final class ShellSessionManager
         return $this->requireSession($id)->readOnly;
     }
 
+    /**
+     * Kill all running shell sessions. Called during teardown to prevent
+     * background reader fibers from racing with PHP's shutdown sequence.
+     */
+    public function killAll(): void
+    {
+        foreach ($this->sessions as $session) {
+            if ($session->isRunning()) {
+                $session->markKilled();
+                $session->process->kill();
+            }
+
+            if ($session->timeoutTimerId() !== null) {
+                EventLoop::cancel($session->timeoutTimerId());
+                $session->setTimeoutTimerId(null);
+            }
+        }
+
+        $this->sessions = [];
+    }
+
     private function requireSession(string $id): ShellSession
     {
         if (! isset($this->sessions[$id])) {

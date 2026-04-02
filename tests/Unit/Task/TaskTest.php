@@ -73,6 +73,16 @@ class TaskTest extends TestCase
         $this->assertNotNull($task->completedAt);
     }
 
+    public function test_transition_to_failed_sets_completed_at(): void
+    {
+        $task = new Task('Work');
+        $task->transitionTo(TaskStatus::InProgress);
+        $task->transitionTo(TaskStatus::Failed);
+
+        $this->assertSame(TaskStatus::Failed, $task->status);
+        $this->assertNotNull($task->completedAt);
+    }
+
     public function test_elapsed_returns_null_when_not_started(): void
     {
         $task = new Task('Work');

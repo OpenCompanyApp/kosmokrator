@@ -25,7 +25,7 @@ enum TaskStatus: string
 
     public function isTerminal(): bool
     {
-        return $this === self::Completed || $this === self::Cancelled;
+        return $this === self::Completed || $this === self::Cancelled || $this === self::Failed;
     }
 
     public function isActive(): bool
@@ -40,6 +40,7 @@ enum TaskStatus: string
             self::InProgress => 'In Progress',
             self::Completed => 'Completed',
             self::Cancelled => 'Cancelled',
+            self::Failed => 'Failed',
         };
     }
 

@@ -278,6 +278,8 @@ final class TuiAnimationManager
      */
     private function enterThinking(?DeferredCancellation $cancellation): void
     {
+        $this->clearThinkingLoader();
+
         $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
         $hasTasks = ($this->hasTasksProvider)();
 
@@ -348,10 +350,7 @@ final class TuiAnimationManager
         }
 
         if ($this->loader !== null) {
-            $this->loader->setFinishedIndicator('✓');
-            $this->loader->stop();
-            $this->thinkingBar->remove($this->loader);
-            $this->loader = null;
+            $this->clearThinkingLoader();
         }
 
         $this->thinkingPhrase = null;
@@ -411,5 +410,17 @@ final class TuiAnimationManager
 
             ($this->renderCallback)();
         });
+    }
+
+    private function clearThinkingLoader(): void
+    {
+        if ($this->loader === null) {
+            return;
+        }
+
+        $this->loader->setFinishedIndicator('✓');
+        $this->loader->stop();
+        $this->thinkingBar->remove($this->loader);
+        $this->loader = null;
     }
 }

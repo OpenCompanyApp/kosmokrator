@@ -24,6 +24,7 @@ class MemoryRepositoryTest extends TestCase
         $memory = $this->repo->find($id);
         $this->assertNotNull($memory);
         $this->assertSame('project', $memory['type']);
+        $this->assertSame('durable', $memory['memory_class']);
         $this->assertSame('Uses JWT auth', $memory['title']);
         $this->assertSame('Auth middleware uses JWT tokens', $memory['content']);
     }
@@ -135,6 +136,17 @@ class MemoryRepositoryTest extends TestCase
 
         $results = $this->repo->search('/proj');
         $this->assertCount(2, $results);
+    }
+
+    public function test_search_by_memory_class(): void
+    {
+        $this->repo->add('project', 'Priority fact', 'Important', '/proj', null, 'priority');
+        $this->repo->add('project', 'Working fact', 'Temporary', '/proj', null, 'working');
+
+        $results = $this->repo->search('/proj', null, null, 20, 'priority');
+
+        $this->assertCount(1, $results);
+        $this->assertSame('priority', $results[0]['memory_class']);
     }
 
     public function test_add_with_session_id(): void

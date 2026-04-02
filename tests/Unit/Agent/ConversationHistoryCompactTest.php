@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -54,6 +55,32 @@ class ConversationHistoryCompactTest extends TestCase
         $this->assertCount(2, $messages);
         $this->assertInstanceOf(SystemMessage::class, $messages[0]);
         $this->assertInstanceOf(UserMessage::class, $messages[1]);
+    }
+
+    public function test_apply_compaction_plan_uses_replacement_history(): void
+    {
+        $history = new ConversationHistory;
+        $history->addUser('First question');
+        $history->addAssistant('First answer');
+        $history->addUser('Second question');
+
+        $plan = new CompactionPlan(
+            keepFromMessageIndex: 2,
+            compactedMessageCount: 2,
+            summary: 'Summary',
+            replacementMessages: [
+                new SystemMessage('Protected Context'),
+                new SystemMessage('Summary'),
+                new UserMessage('Second question'),
+            ],
+        );
+
+        $history->applyCompactionPlan($plan);
+
+        $messages = $history->messages();
+        $this->assertCount(3, $messages);
+        $this->assertSame('Protected Context', $messages[0]->content);
+        $this->assertSame('Summary', $messages[1]->content);
     }
 
     public function test_count(): void

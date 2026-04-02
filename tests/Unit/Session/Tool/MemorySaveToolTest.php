@@ -34,7 +34,7 @@ class MemorySaveToolTest extends TestCase
     {
         $this->session->expects($this->once())
             ->method('addMemory')
-            ->with('project', 'JWT Auth', 'Uses JWT tokens')
+            ->with('project', 'JWT Auth', 'Uses JWT tokens', 'durable', false, null)
             ->willReturn(42);
 
         $result = $this->tool->execute([
@@ -57,7 +57,7 @@ class MemorySaveToolTest extends TestCase
 
         $this->session->expects($this->once())
             ->method('updateMemory')
-            ->with(5, 'New content', 'New title');
+            ->with(5, 'New content', 'New title', 'durable', false, null);
 
         $result = $this->tool->execute([
             'type' => 'project',
@@ -98,6 +98,19 @@ class MemorySaveToolTest extends TestCase
 
         $this->assertFalse($result->success);
         $this->assertStringContainsString('Invalid memory type', $result->output);
+    }
+
+    public function test_invalid_memory_class(): void
+    {
+        $result = $this->tool->execute([
+            'type' => 'project',
+            'class' => 'bogus',
+            'title' => 'Title',
+            'content' => 'Content',
+        ]);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('Invalid memory class', $result->output);
     }
 
     public function test_rejects_compaction_type(): void

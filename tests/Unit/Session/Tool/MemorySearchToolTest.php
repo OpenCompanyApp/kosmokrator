@@ -35,17 +35,17 @@ class MemorySearchToolTest extends TestCase
         $this->session->expects($this->once())
             ->method('searchMemories')
             ->willReturn([
-                ['id' => 5, 'type' => 'project', 'title' => 'JWT Auth', 'content' => 'Uses JWT tokens', 'created_at' => '2026-03-15T10:00:00+00:00'],
-                ['id' => 8, 'type' => 'decision', 'title' => 'DB Driver', 'content' => 'Chose SQLite', 'created_at' => '2026-03-20T10:00:00+00:00'],
+                ['id' => 5, 'type' => 'project', 'memory_class' => 'durable', 'title' => 'JWT Auth', 'content' => 'Uses JWT tokens', 'created_at' => '2026-03-15T10:00:00+00:00'],
+                ['id' => 8, 'type' => 'decision', 'memory_class' => 'working', 'title' => 'DB Driver', 'content' => 'Chose SQLite', 'created_at' => '2026-03-20T10:00:00+00:00'],
             ]);
 
         $result = $this->tool->execute([]);
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('Found 2 memories', $result->output);
-        $this->assertStringContainsString('#5 [project] JWT Auth (2026-03-15)', $result->output);
+        $this->assertStringContainsString('#5 [project/durable] JWT Auth (2026-03-15)', $result->output);
         $this->assertStringContainsString('Uses JWT tokens', $result->output);
-        $this->assertStringContainsString('#8 [decision] DB Driver (2026-03-20)', $result->output);
+        $this->assertStringContainsString('#8 [decision/working] DB Driver (2026-03-20)', $result->output);
     }
 
     public function test_search_empty(): void
@@ -64,7 +64,7 @@ class MemorySearchToolTest extends TestCase
     {
         $this->session->expects($this->once())
             ->method('searchMemories')
-            ->with('project', null);
+            ->with('project', null, 20, null);
 
         $this->tool->execute(['type' => 'project']);
     }
@@ -73,9 +73,34 @@ class MemorySearchToolTest extends TestCase
     {
         $this->session->expects($this->once())
             ->method('searchMemories')
-            ->with(null, 'JWT');
+            ->with(null, 'JWT', 20, null);
 
         $this->tool->execute(['query' => 'JWT']);
+    }
+
+    public function test_search_history_scope(): void
+    {
+        $this->session->expects($this->never())->method('searchMemories');
+        $this->session->expects($this->once())
+            ->method('searchSessionHistory')
+            ->with('JWT', 8)
+            ->willReturn([
+                ['session_id' => 'sess1', 'title' => 'Auth session', 'role' => 'assistant', 'content' => 'We decided to use JWT'],
+            ]);
+
+        $result = $this->tool->execute(['scope' => 'history', 'query' => 'JWT']);
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('Session history matches', $result->output);
+        $this->assertStringContainsString('Auth session [assistant]: We decided to use JWT', $result->output);
+    }
+
+    public function test_invalid_class_filter(): void
+    {
+        $result = $this->tool->execute(['class' => 'bogus']);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('Invalid memory class', $result->output);
     }
 
     public function test_invalid_type_filter(): void

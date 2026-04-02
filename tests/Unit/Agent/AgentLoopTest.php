@@ -7,6 +7,12 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\Session\Database;
+use Kosmokrator\Session\MemoryRepository;
+use Kosmokrator\Session\MessageRepository;
+use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\SessionRepository;
+use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\SessionGrants;
@@ -53,6 +59,45 @@ class AgentLoopTest extends TestCase
 
         $messages = $this->loop->history()->messages();
         $this->assertCount(2, $messages); // user + assistant
+    }
+
+    public function test_queued_user_messages_are_included_before_memory_selection_for_same_turn(): void
+    {
+        $db = new Database(':memory:');
+        $sessionManager = new SessionManager(
+            new SessionRepository($db),
+            new MessageRepository($db),
+            new SettingsRepository($db),
+            new MemoryRepository($db),
+            new NullLogger,
+        );
+        $sessionManager->setProject('/project');
+        $sessionManager->createSession('model');
+
+        $jwtMemoryId = $sessionManager->addMemory('project', 'JWT note', 'JWT auth is enabled');
+        $db->connection()->prepare('UPDATE memories SET created_at = :ts, updated_at = :ts WHERE id = :id')
+            ->execute(['ts' => '2000-01-01T00:00:00+00:00', 'id' => $jwtMemoryId]);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $sessionManager->addMemory('project', "Pinned {$i}", "Pinned filler {$i}", 'durable', true);
+        }
+        $sessionManager->addMemory('project', 'Recent filler', 'Recent filler memory');
+
+        $llm = $this->createMock(LlmClientInterface::class);
+        $llm->expects($this->once())
+            ->method('setSystemPrompt')
+            ->with($this->stringContains('JWT note'));
+        $llm->expects($this->once())
+            ->method('chat')
+            ->willReturn(new LlmResponse('Done.', FinishReason::Stop, [], 100, 50));
+        $llm->method('getProvider')->willReturn('test');
+        $llm->method('getModel')->willReturn('model');
+
+        $ui = $this->createMock(RendererInterface::class);
+        $ui->method('consumeQueuedMessage')->willReturnOnConsecutiveCalls('JWT', null);
+
+        $loop = new AgentLoop($llm, $ui, new NullLogger, 'You are a test assistant.', sessionManager: $sessionManager);
+        $loop->run('Unrelated request');
     }
 
     public function test_tool_call_round_then_final_response(): void

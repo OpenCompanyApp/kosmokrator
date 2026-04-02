@@ -8,7 +8,7 @@ use OpenCompany\PrismRelay\Meta\ProviderMeta;
 
 class ModelCatalog
 {
-    /** @var array<string, array{context: int, input_price: float, output_price: float}> */
+    /** @var array<string, array<string, mixed>> */
     private array $models;
 
     private array $default;
@@ -40,13 +40,50 @@ class ModelCatalog
         return (int) ($spec['context'] ?? $this->default['context']);
     }
 
-    public function estimateCost(string $model, int $tokensIn, int $tokensOut): float
+    public function estimateCost(
+        string $model,
+        int $tokensIn,
+        int $tokensOut,
+        int $cacheReadInputTokens = 0,
+        int $cacheWriteInputTokens = 0,
+    ): float
     {
         $spec = $this->resolve($model);
         $inRate = (float) ($spec['input_price'] ?? $this->default['input_price']);
         $outRate = (float) ($spec['output_price'] ?? $this->default['output_price']);
+        $cachedReadRate = (float) ($spec['cached_input_price'] ?? $inRate);
+        $cachedWriteRate = (float) ($spec['cached_write_price'] ?? $inRate);
+        $uncachedInputTokens = max(0, $tokensIn - $cacheReadInputTokens - $cacheWriteInputTokens);
 
-        return round(($tokensIn * $inRate / 1_000_000) + ($tokensOut * $outRate / 1_000_000), 4);
+        return round(
+            ($uncachedInputTokens * $inRate / 1_000_000)
+            + ($cacheReadInputTokens * $cachedReadRate / 1_000_000)
+            + ($cacheWriteInputTokens * $cachedWriteRate / 1_000_000)
+            + ($tokensOut * $outRate / 1_000_000),
+            4,
+        );
+    }
+
+    public function estimateCacheSavings(
+        string $model,
+        int $tokensIn,
+        int $cacheReadInputTokens = 0,
+        int $cacheWriteInputTokens = 0,
+    ): float {
+        if ($cacheReadInputTokens === 0 && $cacheWriteInputTokens === 0) {
+            return 0.0;
+        }
+
+        $spec = $this->resolve($model);
+        $inRate = (float) ($spec['input_price'] ?? $this->default['input_price']);
+        $cachedReadRate = (float) ($spec['cached_input_price'] ?? $inRate);
+        $cachedWriteRate = (float) ($spec['cached_write_price'] ?? $inRate);
+        $baseline = $tokensIn * $inRate / 1_000_000;
+        $actual = max(0, $tokensIn - $cacheReadInputTokens - $cacheWriteInputTokens) * $inRate / 1_000_000
+            + $cacheReadInputTokens * $cachedReadRate / 1_000_000
+            + $cacheWriteInputTokens * $cachedWriteRate / 1_000_000;
+
+        return round(max(0.0, $baseline - $actual), 4);
     }
 
     public function supportsThinking(string $model): bool
@@ -186,6 +223,8 @@ class ModelCatalog
                         'max_output' => $info->maxOutput,
                         'input_price' => $info->inputPricePerMillion ?? $this->default['input_price'],
                         'output_price' => $info->outputPricePerMillion ?? $this->default['output_price'],
+                        'cached_input_price' => $info->cachedInputPricePerMillion,
+                        'cached_write_price' => $info->cachedWritePricePerMillion,
                         'thinking' => $info->thinking,
                         'streaming' => true,
                     ];

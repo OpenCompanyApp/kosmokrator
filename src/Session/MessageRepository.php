@@ -44,8 +44,6 @@ class MessageRepository
     }
 
     /**
-     * Load active (non-compacted) messages as Prism Message objects.
-     *
      * @return Message[]
      */
     public function loadActive(string $sessionId): array
@@ -68,9 +66,7 @@ class MessageRepository
     }
 
     /**
-     * Load raw message rows (for compaction, display, etc.)
-     *
-     * @return array[]
+     * @return array<int, array<string, mixed>>
      */
     public function loadRaw(string $sessionId, bool $includeCompacted = false): array
     {
@@ -94,6 +90,54 @@ class MessageRepository
         $stmt->execute(['session_id' => $sessionId, 'before_id' => $beforeId]);
     }
 
+    /**
+     * @param  int[]  $messageIds
+     */
+    public function markCompactedIds(array $messageIds): void
+    {
+        if ($messageIds === []) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+        $stmt = $this->db->connection()->prepare(
+            "UPDATE messages SET compacted = 1 WHERE id IN ({$placeholders})"
+        );
+        $stmt->execute($messageIds);
+    }
+
+    /**
+     * @param  int[]  $messageIds
+     */
+    public function compactWithSummary(string $sessionId, array $messageIds, string $summary): void
+    {
+        $pdo = $this->db->connection();
+        $startedTransaction = ! $pdo->inTransaction();
+
+        if ($startedTransaction) {
+            $pdo->beginTransaction();
+        }
+
+        try {
+            $this->markCompactedIds($messageIds);
+            $this->append(
+                sessionId: $sessionId,
+                role: 'system',
+                content: $summary,
+            );
+
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($startedTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
     public function count(string $sessionId): int
     {
         $stmt = $this->db->connection()->prepare(
@@ -105,8 +149,6 @@ class MessageRepository
     }
 
     /**
-     * Sum all token usage for a session (including compacted messages).
-     *
      * @return array{tokens_in: int, tokens_out: int}
      */
     public function sumTokens(string $sessionId): array
@@ -126,8 +168,41 @@ class MessageRepository
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function searchProjectHistory(string $project, string $query, ?string $excludeSessionId = null, int $limit = 5): array
+    {
+        $sql = '
+            SELECT m.session_id, m.role, m.content, m.created_at, s.title, s.updated_at
+            FROM messages m
+            INNER JOIN sessions s ON s.id = m.session_id
+            WHERE s.project = :project
+              AND m.compacted = 0
+              AND m.content IS NOT NULL
+              AND m.content LIKE :query ESCAPE \'\\\'
+        ';
+        $params = [
+            'project' => $project,
+            'query' => '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query).'%',
+        ];
+
+        if ($excludeSessionId !== null) {
+            $sql .= ' AND m.session_id != :exclude_session_id';
+            $params['exclude_session_id'] = $excludeSessionId;
+        }
+
+        $sql .= ' ORDER BY s.updated_at DESC, m.id DESC LIMIT :limit';
+        $params['limit'] = $limit;
+
+        $stmt = $this->db->connection()->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
+
+    /**
      * @param  ToolCall[]  $toolCalls
-     * @return array[]
+     * @return array<int, array<string, mixed>>
      */
     private function serializeToolCalls(array $toolCalls): array
     {
@@ -140,7 +215,7 @@ class MessageRepository
 
     /**
      * @param  ToolResult[]  $toolResults
-     * @return array[]
+     * @return array<int, array<string, mixed>>
      */
     private function serializeToolResults(array $toolResults): array
     {

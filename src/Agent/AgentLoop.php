@@ -34,6 +34,14 @@ class AgentLoop
 
     private int $sessionTokensOut = 0;
 
+    private int $sessionCacheReadInputTokens = 0;
+
+    private int $sessionCacheWriteInputTokens = 0;
+
+    private int $lastCacheReadInputTokens = 0;
+
+    private int $lastCacheWriteInputTokens = 0;
+
     private ?AgentContext $agentContext = null;
 
     private ?SubagentStats $stats = null;
@@ -57,6 +65,8 @@ class AgentLoop
         private readonly ?OutputTruncator $truncator = null,
         private readonly ?ContextPruner $pruner = null,
         private readonly ?ToolResultDeduplicator $deduplicator = null,
+        private readonly ?ContextBudget $budget = null,
+        private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
     ) {
         $this->history = new ConversationHistory;
@@ -65,6 +75,7 @@ class AgentLoop
         $this->contextManager = new ContextManager(
             $llm, $ui, $log, $baseSystemPrompt,
             $compactor, $pruner, $models, $sessionManager, $taskStore,
+            $budget, $protectedContextBuilder,
         );
     }
 
@@ -141,12 +152,12 @@ class AgentLoop
                 // processed even during long synchronous loops.
                 \Amp\delay(0);
 
-                [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history);
+                [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history, $this->mode, $this->agentContext);
                 $this->sessionTokensIn += $compactIn;
                 $this->sessionTokensOut += $compactOut;
-                $this->contextManager->refreshSystemPrompt($this->mode);
                 $this->injectPendingBackgroundResults();
                 $this->injectQueuedUserMessages();
+                $this->contextManager->refreshSystemPrompt($this->mode, $this->history, $this->agentContext);
                 SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Thinking), $this->log);
 
                 try {
@@ -160,10 +171,16 @@ class AgentLoop
                     $finishReason = $response->finishReason;
                     $tokensIn = $response->promptTokens;
                     $tokensOut = $response->completionTokens;
+                    $cacheReadInputTokens = $response->cacheReadInputTokens;
+                    $cacheWriteInputTokens = $response->cacheWriteInputTokens;
 
                     // Accumulate session-level token usage
                     $this->sessionTokensIn += $tokensIn;
                     $this->sessionTokensOut += $tokensOut;
+                    $this->sessionCacheReadInputTokens += $cacheReadInputTokens;
+                    $this->sessionCacheWriteInputTokens += $cacheWriteInputTokens;
+                    $this->lastCacheReadInputTokens = $cacheReadInputTokens;
+                    $this->lastCacheWriteInputTokens = $cacheWriteInputTokens;
 
                     if ($fullText !== '') {
                         SafeDisplay::call(fn () => $this->ui->streamChunk($fullText), $this->log);
@@ -183,9 +200,12 @@ class AgentLoop
                         $messagesBefore = count($this->history->messages());
 
                         if ($this->compactor !== null && $trimAttempts === 1) {
-                            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history);
+                            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
                             $this->sessionTokensIn += $cIn;
                             $this->sessionTokensOut += $cOut;
+                            if ($cIn > 0 || $cOut > 0) {
+                                $this->resetToolCachesAfterCompaction();
+                            }
                         } else {
                             $this->history->trimOldest();
                         }
@@ -270,16 +290,20 @@ class AgentLoop
                     'model' => $this->contextManager->getModelName(),
                     'tokens_in' => $tokensIn,
                     'tokens_out' => $tokensOut,
+                    'cache_read_input_tokens' => $cacheReadInputTokens,
+                    'cache_write_input_tokens' => $cacheWriteInputTokens,
                     'rounds' => $round,
                 ]);
                 $this->history->addAssistant($fullText);
                 $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
-                // Auto-compaction check
                 $modelName = $this->contextManager->getModelName();
-                if ($this->compactor !== null && $this->compactor->needsCompaction($tokensIn, $modelName)) {
-                    [$cIn, $cOut] = $this->contextManager->performCompaction($this->history);
+                if ($this->compactor !== null && $this->contextManager->shouldCompactHistory($this->history, $this->mode, $this->agentContext)) {
+                    [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
                     $this->sessionTokensIn += $cIn;
                     $this->sessionTokensOut += $cOut;
+                    if ($cIn > 0 || $cOut > 0) {
+                        $this->resetToolCachesAfterCompaction();
+                    }
                 }
 
                 $this->logMemoryUsage();
@@ -287,7 +311,7 @@ class AgentLoop
                 SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
 
                 SafeDisplay::call(fn () => $this->ui->showStatus(
-                    $modelName,
+                    $this->formatStatusModelLabel($modelName),
                     $tokensIn,
                     $tokensOut,
                     $this->getSessionCost(),
@@ -308,8 +332,7 @@ class AgentLoop
      * Run the agent headlessly on a single task until completion.
      * Returns the final assistant response text.
      *
-     * Used by subagents — no interactive UI, no session persistence,
-     * no compaction, no dynamic system prompt refresh.
+     * Used by subagents — no interactive UI or session persistence.
      */
     public function runHeadless(string $task): string
     {
@@ -331,8 +354,11 @@ class AgentLoop
                 'history_messages' => count($this->history->messages()),
             ]);
 
-            $this->contextManager->headlessPreFlightCheck($this->history);
+            [$compactIn, $compactOut] = $this->contextManager->headlessPreFlightCheck($this->history, $this->mode, $this->agentContext);
+            $this->sessionTokensIn += $compactIn;
+            $this->sessionTokensOut += $compactOut;
             $this->injectPendingBackgroundResults();
+            $this->contextManager->refreshSystemPrompt($this->mode, $this->history, $this->agentContext);
 
             try {
                 $cancellation = $this->ui->getCancellation();
@@ -364,7 +390,13 @@ class AgentLoop
                     $trimAttempts++;
                     $round--;
                     $messagesBefore = count($this->history->messages());
-                    $this->history->trimOldest();
+                    if ($this->compactor !== null && $trimAttempts === 1) {
+                        [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
+                        $this->sessionTokensIn += $cIn;
+                        $this->sessionTokensOut += $cOut;
+                    } else {
+                        $this->history->trimOldest();
+                    }
                     $this->log->warning('Headless context overflow, trimmed', [
                         'attempt' => $trimAttempts,
                         'messages_before' => $messagesBefore,
@@ -471,7 +503,13 @@ class AgentLoop
             $tokensOut += $sub['out'];
         }
 
-        return $this->estimateCost($this->contextManager->getModelName(), $tokensIn, $tokensOut);
+        return $this->estimateCost(
+            $this->contextManager->getModelName(),
+            $tokensIn,
+            $tokensOut,
+            $this->sessionCacheReadInputTokens,
+            $this->sessionCacheWriteInputTokens,
+        );
     }
 
     public function getSessionTokensIn(): int
@@ -501,6 +539,10 @@ class AgentLoop
     {
         $this->sessionTokensIn = 0;
         $this->sessionTokensOut = 0;
+        $this->sessionCacheReadInputTokens = 0;
+        $this->sessionCacheWriteInputTokens = 0;
+        $this->lastCacheReadInputTokens = 0;
+        $this->lastCacheWriteInputTokens = 0;
     }
 
     /**
@@ -520,14 +562,70 @@ class AgentLoop
         return AgentTreeBuilder::buildTree($this->agentContext->orchestrator);
     }
 
-    private function estimateCost(string $model, int $tokensIn, int $tokensOut): float
+    private function estimateCost(
+        string $model,
+        int $tokensIn,
+        int $tokensOut,
+        int $cacheReadInputTokens = 0,
+        int $cacheWriteInputTokens = 0,
+    ): float
     {
         if ($this->models !== null) {
-            return $this->models->estimateCost($model, $tokensIn, $tokensOut);
+            return $this->models->estimateCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
         }
 
         // Fallback: Sonnet-like pricing
         return round(($tokensIn * 3 / 1_000_000) + ($tokensOut * 15 / 1_000_000), 4);
+    }
+
+    private function formatStatusModelLabel(string $modelName): string
+    {
+        if ($this->lastCacheReadInputTokens === 0 && $this->lastCacheWriteInputTokens === 0) {
+            return $modelName;
+        }
+
+        $suffix = sprintf(
+            'cache r%s w%s',
+            $this->formatTokenCount($this->lastCacheReadInputTokens),
+            $this->formatTokenCount($this->lastCacheWriteInputTokens),
+        );
+
+        if ($this->models !== null) {
+            $savings = $this->models->estimateCacheSavings(
+                $modelName,
+                $this->sessionTokensIn,
+                $this->sessionCacheReadInputTokens,
+                $this->sessionCacheWriteInputTokens,
+            );
+
+            if ($savings > 0) {
+                $suffix .= sprintf(' save $%.4f', $savings);
+            }
+        }
+
+        return $modelName.' · '.$suffix;
+    }
+
+    private function formatTokenCount(int $tokens): string
+    {
+        if ($tokens >= 1_000_000) {
+            return round($tokens / 1_000_000, 1).'M';
+        }
+
+        if ($tokens >= 1_000) {
+            return round($tokens / 1_000, 1).'k';
+        }
+
+        return (string) $tokens;
+    }
+
+    private function resetToolCachesAfterCompaction(): void
+    {
+        foreach ($this->allTools as $tool) {
+            if (method_exists($tool, 'resetCache')) {
+                $tool->resetCache();
+            }
+        }
     }
 
     private function isContextOverflow(\Throwable $e): bool

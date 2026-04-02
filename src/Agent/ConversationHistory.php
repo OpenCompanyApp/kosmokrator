@@ -86,11 +86,41 @@ class ConversationHistory
             return;
         }
 
-        // Count recent complete turns from the end
+        $keepFrom = $this->findKeepBoundary($keepRecent);
+
+        if ($keepFrom <= 0 || $keepFrom >= $total) {
+            return;
+        }
+
+        $recent = array_slice($this->messages, $keepFrom);
+        $this->messages = [new SystemMessage($summary), ...$recent];
+    }
+
+    public function applyCompactionPlan(CompactionPlan $plan): void
+    {
+        if ($plan->isEmpty()) {
+            return;
+        }
+
+        $this->messages = $plan->replacementMessages;
+    }
+
+    public function findKeepBoundary(int $keepRecent = 3): int
+    {
+        return self::findKeepBoundaryInMessages($this->messages, $keepRecent);
+    }
+
+    /**
+     * @param  Message[]  $messages
+     */
+    public static function findKeepBoundaryInMessages(array $messages, int $keepRecent = 3): int
+    {
+        $total = count($messages);
         $keepFrom = $total;
         $turnsFound = 0;
+
         for ($i = $total - 1; $i >= 0; $i--) {
-            if ($this->messages[$i] instanceof UserMessage) {
+            if ($messages[$i] instanceof UserMessage) {
                 $turnsFound++;
                 if ($turnsFound >= $keepRecent) {
                     $keepFrom = $i;
@@ -99,12 +129,34 @@ class ConversationHistory
             }
         }
 
-        if ($keepFrom <= 0 || $keepFrom >= $total) {
-            return;
+        return $keepFrom;
+    }
+
+    public function latestUserContext(int $turns = 3, int $maxChars = 1200): string
+    {
+        $chunks = [];
+        $userTurns = 0;
+
+        for ($i = count($this->messages) - 1; $i >= 0; $i--) {
+            if (! $this->messages[$i] instanceof UserMessage) {
+                continue;
+            }
+
+            $chunks[] = $this->messages[$i]->content;
+            $userTurns++;
+
+            if ($userTurns >= $turns) {
+                break;
+            }
         }
 
-        $recent = array_slice($this->messages, $keepFrom);
-        $this->messages = [new SystemMessage($summary), ...$recent];
+        if ($chunks === []) {
+            return '';
+        }
+
+        $text = implode("\n", array_reverse($chunks));
+
+        return mb_strlen($text) <= $maxChars ? $text : mb_substr($text, 0, $maxChars);
     }
 
     /**
@@ -115,6 +167,34 @@ class ConversationHistory
     public function pruneToolResults(array $targets, string $placeholder): void
     {
         foreach ($targets as [$msgIdx, $resultIdx, $_]) {
+            $msg = $this->messages[$msgIdx] ?? null;
+            if (! $msg instanceof ToolResultMessage) {
+                continue;
+            }
+
+            $results = $msg->toolResults;
+            if (! isset($results[$resultIdx])) {
+                continue;
+            }
+
+            $old = $results[$resultIdx];
+            $results[$resultIdx] = new ToolResult(
+                toolCallId: $old->toolCallId,
+                toolName: $old->toolName,
+                args: $old->args,
+                result: $placeholder,
+            );
+
+            $this->messages[$msgIdx] = new ToolResultMessage($results);
+        }
+    }
+
+    /**
+     * @param  array<array{0:int,1:int,2:string}>  $targets
+     */
+    public function pruneToolResultsWithPlaceholders(array $targets): void
+    {
+        foreach ($targets as [$msgIdx, $resultIdx, $placeholder]) {
             $msg = $this->messages[$msgIdx] ?? null;
             if (! $msg instanceof ToolResultMessage) {
                 continue;

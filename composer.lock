@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "16b9685ddb1901c0f119c341e746c461",
+    "content-hash": "dd19c2cde39116720f84ec1115227f16",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3621,16 +3621,23 @@
         {
             "name": "opencompanyapp/prism-relay",
             "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/OpenCompanyApp/prism-relay.git",
+                "reference": "081e1e55bd30a8d613caa2f6493b753021bbd1e1"
+            },
             "dist": {
-                "type": "path",
-                "url": "../../Sites/opencompany/tmp/prism-relay",
-                "reference": "0126bda0e558679c90cba4455bce300837839ea8"
+                "type": "zip",
+                "url": "https://api.github.com/repos/OpenCompanyApp/prism-relay/zipball/081e1e55bd30a8d613caa2f6493b753021bbd1e1",
+                "reference": "081e1e55bd30a8d613caa2f6493b753021bbd1e1",
+                "shasum": ""
             },
             "require": {
                 "php": "^8.2",
                 "prism-php/prism": "^0.99 || ^0.100 || ^1.0",
                 "psr/log": "^3.0"
             },
+            "default-branch": true,
             "type": "library",
             "extra": {
                 "laravel": {
@@ -3648,10 +3655,11 @@
                 "MIT"
             ],
             "description": "Provider normalizer and registry for Prism PHP — custom providers, error categorization, tool call sanitization, caching strategy",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "source": "https://github.com/OpenCompanyApp/prism-relay/tree/main",
+                "issues": "https://github.com/OpenCompanyApp/prism-relay/issues"
+            },
+            "time": "2026-04-02T21:28:36+00:00"
         },
         {
             "name": "phpoption/phpoption",

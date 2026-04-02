@@ -15,7 +15,7 @@
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
         "opencompany/prism-codex": "dev-main",
-        "opencompanyapp/prism-relay": "dev-main",
+        "opencompanyapp/prism-relay": "dev-main#081e1e55bd30a8d613caa2f6493b753021bbd1e1",
         "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
         "sebastian/diff": "^7.0",
@@ -50,11 +50,8 @@
             }
         },
         {
-            "type": "path",
-            "url": "../../Sites/opencompany/tmp/prism-relay",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/OpenCompanyApp/prism-relay.git"
         }
     ],
     "autoload": {

@@ -6,6 +6,7 @@ namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
 use Amp\Http\Client\HttpException;
+use OpenCompany\PrismRelay\Errors\ProviderError;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
 use Prism\Prism\Exceptions\PrismRateLimitedException;
 use Prism\Prism\Exceptions\PrismServerException;
@@ -74,6 +75,10 @@ class RetryableLlmClient implements LlmClientInterface
             return true;
         }
 
+        if ($e instanceof ProviderError) {
+            return $e->retryable;
+        }
+
         // Amp network errors
         if ($e instanceof HttpException) {
             return true;
@@ -97,6 +102,10 @@ class RetryableLlmClient implements LlmClientInterface
         // Honor retry-after from HTTP response headers
         if ($e instanceof RetryableHttpException && $e->retryAfterSeconds !== null) {
             return min($e->retryAfterSeconds, 60.0);
+        }
+
+        if ($e instanceof ProviderError && $e->retryAfterSeconds !== null) {
+            return min((float) $e->retryAfterSeconds, 60.0);
         }
 
         // Exponential backoff with jitter: ~2s, ~4s, ~8s, ~16s, ~32s, ~60s, ~60s, ...

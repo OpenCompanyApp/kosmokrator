@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\Agent;
+
+use Kosmokrator\Task\TaskStore;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
+
+final class ProtectedContextBuilder
+{
+    public function __construct(?TaskStore $taskStore = null) {}
+
+    /**
+     * @return list<SystemMessage>
+     */
+    public function build(AgentMode $mode, ?AgentContext $agentContext = null): array
+    {
+        $cwd = getcwd() ?: '.';
+        $lines = [
+            '## Protected Context',
+            '- Mode: '.$mode->label(),
+            '- Working directory: '.$cwd,
+        ];
+
+        $gitRoot = InstructionLoader::gitRoot();
+        if ($gitRoot !== null && $gitRoot !== $cwd) {
+            $lines[] = '- Repository root: '.$gitRoot;
+        }
+
+        $branch = $this->gitBranch($cwd);
+        if ($branch !== null) {
+            $lines[] = '- Git branch: '.$branch;
+        }
+
+        if ($agentContext !== null) {
+            $lines[] = '- Agent type: '.$agentContext->type->value;
+            $lines[] = '- Agent depth: '.$agentContext->depth.'/'.$agentContext->maxDepth;
+        }
+
+        return [new SystemMessage(implode("\n", $lines))];
+    }
+
+    private function gitBranch(string $cwd): ?string
+    {
+        $head = @shell_exec('git -C '.escapeshellarg($cwd).' rev-parse --abbrev-ref HEAD 2>/dev/null');
+        $branch = is_string($head) ? trim($head) : '';
+
+        return $branch !== '' ? $branch : null;
+    }
+}

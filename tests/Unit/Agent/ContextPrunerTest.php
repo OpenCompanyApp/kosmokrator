@@ -17,6 +17,11 @@ class ContextPrunerTest extends TestCase
         return new ToolResult(toolCallId: $id, toolName: 'bash', args: [], result: $content);
     }
 
+    private function bashPlaceholder(): string
+    {
+        return '[Old shell output cleared; inspect truncation storage or rerun targeted commands if needed]';
+    }
+
     public function test_prune_does_nothing_with_few_messages(): void
     {
         $history = new ConversationHistory;
@@ -55,7 +60,7 @@ class ContextPrunerTest extends TestCase
         $this->assertGreaterThan(0, $saved);
 
         // Turn 1 tool result should be cleared
-        $this->assertSame(ContextPruner::PLACEHOLDER, $history->messages()[2]->toolResults[0]->result);
+        $this->assertSame($this->bashPlaceholder(), $history->messages()[2]->toolResults[0]->result);
 
         // Turn 2 and 3 tool results should be untouched
         $this->assertSame(str_repeat('y', 400), $history->messages()[5]->toolResults[0]->result);
@@ -87,7 +92,7 @@ class ContextPrunerTest extends TestCase
         // All 3 old tool results should be cleared
         for ($i = 0; $i < 3; $i++) {
             $msgIdx = ($i * 3) + 2;
-            $this->assertSame(ContextPruner::PLACEHOLDER, $history->messages()[$msgIdx]->toolResults[0]->result);
+            $this->assertSame($this->bashPlaceholder(), $history->messages()[$msgIdx]->toolResults[0]->result);
         }
     }
 

@@ -12,15 +12,13 @@ use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
 use Psr\Log\LoggerInterface;
 
-/**
- * Manages context window health: pre-flight checks, LLM-based compaction,
- * and system prompt refresh.
- *
- * All methods that modify conversation history receive it as a parameter
- * and return token costs rather than mutating shared state.
- */
 final class ContextManager
 {
+    private int $consecutiveCompactionFailures = 0;
+
+    /** @var array<string, int|float|string|bool> */
+    private array $lastBudgetSnapshot = [];
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -31,44 +29,63 @@ final class ContextManager
         private readonly ?ModelCatalog $models,
         private readonly ?SessionManager $sessionManager,
         private readonly ?TaskStore $taskStore,
+        private readonly ?ContextBudget $budget = null,
+        private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
+        private readonly int $memoryInjectLimit = 6,
+        private readonly int $sessionRecallLimit = 3,
     ) {}
 
     /**
-     * Check if context is approaching limits and compact/trim proactively.
-     *
-     * @return array{int, int} [tokensIn, tokensOut] consumed by compaction (zero if no action taken)
+     * @return array{int, int}
      */
-    public function preFlightCheck(ConversationHistory $history): array
+    public function preFlightCheck(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
     {
         if ($this->compactor === null && $this->pruner === null) {
             return [0, 0];
         }
 
         try {
-            $estimated = TokenEstimator::estimateMessages($history->messages());
-            $modelName = $this->getModelName();
+            $snapshot = $this->snapshot($history, $mode, $agentContext);
+            if (! $snapshot['is_above_warning']) {
+                $this->resetCircuitBreakerIfHealthy();
 
-            // Use compactor's configurable threshold; fall back to 80% for pruner-only mode
-            if ($this->compactor !== null) {
-                $threshold = $this->compactor->getThresholdTokens($modelName);
-            } else {
-                $threshold = (int) ($this->getContextWindow() * 0.8);
-            }
-
-            if ($estimated < $threshold) {
                 return [0, 0];
             }
 
-            $this->log->info('Pre-flight context check: estimated tokens exceed threshold', [
-                'estimated' => $estimated,
-                'threshold' => $threshold,
-            ]);
+            $this->log->info('Pre-flight context warning', $snapshot);
 
-            if ($this->compactor !== null) {
-                return $this->performCompaction($history);
+            if ($this->pruner !== null) {
+                $saved = $this->pruner->prune($history);
+                if ($saved > 0) {
+                    $this->log->info('Pre-flight micro-prune applied', ['tokens_saved' => $saved]);
+                    $snapshot = $this->snapshot($history, $mode, $agentContext);
+                }
             }
 
-            $history->trimOldest();
+            if (! $snapshot['is_above_warning']) {
+                $this->resetCircuitBreakerIfHealthy();
+
+                return [0, 0];
+            }
+
+            if ($this->consecutiveCompactionFailures >= 3) {
+                $this->log->warning('Auto-compaction circuit breaker active', [
+                    'consecutive_failures' => $this->consecutiveCompactionFailures,
+                ]);
+                if ($snapshot['is_at_blocking_limit']) {
+                    $history->trimOldest();
+                }
+
+                return [0, 0];
+            }
+
+            if ($this->compactor !== null && ($snapshot['is_above_auto_compact'] || $snapshot['is_at_blocking_limit'])) {
+                return $this->performCompaction($history, $mode, $agentContext);
+            }
+
+            if ($snapshot['is_at_blocking_limit']) {
+                $history->trimOldest();
+            }
 
             return [0, 0];
         } catch (\Throwable $e) {
@@ -79,35 +96,17 @@ final class ContextManager
     }
 
     /**
-     * Simplified pre-flight check for headless mode — only trim, never compact.
+     * @return array{int, int}
      */
-    public function headlessPreFlightCheck(ConversationHistory $history): void
+    public function headlessPreFlightCheck(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
     {
-        if ($this->pruner === null) {
-            return;
-        }
-
-        $estimated = TokenEstimator::estimateMessages($history->messages());
-        $threshold = (int) ($this->getContextWindow() * 0.8);
-
-        if ($estimated >= $threshold) {
-            $messagesBefore = count($history->messages());
-            $history->trimOldest();
-            $this->log->info('Headless pre-flight trim', [
-                'estimated_tokens' => $estimated,
-                'threshold' => $threshold,
-                'messages_before' => $messagesBefore,
-                'messages_after' => count($history->messages()),
-            ]);
-        }
+        return $this->preFlightCheck($history, $mode, $agentContext);
     }
 
     /**
-     * Run LLM-based compaction, persist result, extract memories.
-     *
-     * @return array{int, int} [tokensIn, tokensOut] consumed by compaction + extraction
+     * @return array{int, int}
      */
-    public function performCompaction(ConversationHistory $history): array
+    public function performCompaction(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
     {
         if ($this->compactor === null) {
             $this->log->warning('Compaction requested but no compactor configured');
@@ -119,93 +118,124 @@ final class ContextManager
         SafeDisplay::call(fn () => $this->ui->showCompacting(), $this->log);
 
         try {
-            $result = $this->compactor->compact($history);
-            $summary = $result['summary'];
+            $protectedMessages = $this->protectedContextBuilder?->build($mode, $agentContext) ?? [];
+            $plan = $this->compactor->buildPlan($history, $protectedMessages);
+            $tokensIn = $plan->tokensIn;
+            $tokensOut = $plan->tokensOut;
 
-            $tokensIn = $result['tokens_in'];
-            $tokensOut = $result['tokens_out'];
-
-            if ($summary === '') {
+            if ($plan->isEmpty()) {
                 SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
                 SafeDisplay::call(fn () => $this->ui->showNotice('Nothing to compact.'), $this->log);
 
                 return [$tokensIn, $tokensOut];
             }
 
-            // Persist compaction to database
-            $this->sessionManager?->persistCompaction($summary);
+            $this->sessionManager?->persistCompactionPlan($plan);
+            $history->applyCompactionPlan($plan);
 
-            // In-memory: replace old messages with summary
-            $history->compact($summary);
-
-            // Save compaction summary as memory
             if ($this->sessionManager !== null) {
-                $title = mb_substr($summary, 0, 80);
-                $this->sessionManager->addMemory('compaction', $title, $summary);
+                $title = mb_substr($plan->summary, 0, 80);
+                $expiresAt = date('c', time() + (14 * 86400));
+                $this->sessionManager->addMemory('compaction', $title, $plan->summary, 'working', false, $expiresAt);
             }
 
-            // Extract durable memories from summary (best-effort)
-            $extraction = $this->compactor->extractMemories($summary);
-
+            $extraction = $this->compactor->extractMemories($plan->summary);
             $tokensIn += $extraction['tokens_in'];
             $tokensOut += $extraction['tokens_out'];
 
             if ($this->sessionManager !== null) {
                 foreach ($extraction['memories'] as $item) {
-                    $this->sessionManager->addMemory($item['type'], $item['title'], $item['content']);
+                    $this->sessionManager->addMemory(
+                        $item['type'],
+                        $item['title'],
+                        $item['content'],
+                        $item['memory_class'] ?? 'durable',
+                        (bool) ($item['pinned'] ?? false),
+                    );
                 }
+                $this->sessionManager->consolidateMemories();
             }
+
+            $this->consecutiveCompactionFailures = 0;
 
             SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
             SafeDisplay::call(fn () => $this->ui->showNotice('Context compacted.'), $this->log);
             $this->log->info('Compaction complete', [
                 'memories_extracted' => count($extraction['memories']),
                 'messages_after' => count($history->messages()),
-                'compaction_tokens_in' => $result['tokens_in'],
-                'compaction_tokens_out' => $result['tokens_out'],
-                'summary_length' => strlen($summary),
+                'compaction_tokens_in' => $plan->tokensIn,
+                'compaction_tokens_out' => $plan->tokensOut,
+                'summary_length' => strlen($plan->summary),
+                'protected_messages' => count($plan->protectedMessages),
             ]);
 
             return [$tokensIn, $tokensOut];
         } catch (\Throwable $e) {
             SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
+            $this->consecutiveCompactionFailures++;
             $messagesBefore = count($history->messages());
             $history->trimOldest();
             $this->log->error('Compaction failed, falling back to trimOldest', [
                 'error' => $e->getMessage(),
                 'messages_before' => $messagesBefore,
                 'messages_after' => count($history->messages()),
+                'consecutive_failures' => $this->consecutiveCompactionFailures,
             ]);
 
             return [0, 0];
         }
     }
 
-    /**
-     * Rebuild the system prompt with mode suffix and task tree.
-     */
-    public function refreshSystemPrompt(AgentMode $mode): void
+    public function refreshSystemPrompt(AgentMode $mode, ?ConversationHistory $history = null, ?AgentContext $agentContext = null): void
     {
-        $prompt = $this->baseSystemPrompt.$mode->systemPromptSuffix();
+        $this->llm->setSystemPrompt($this->buildSystemPrompt($mode, $history, $agentContext));
+    }
+
+    public function buildSystemPrompt(
+        AgentMode $mode,
+        ?ConversationHistory $history = null,
+        ?AgentContext $agentContext = null,
+        bool $markSurfacedMemories = true,
+    ): string
+    {
+        $query = $history?->latestUserContext();
+        $prompt = $this->baseSystemPrompt;
+
+        if ($this->sessionManager !== null && ($this->sessionManager->getSetting('memories') ?? 'on') !== 'off') {
+            $memories = $this->sessionManager->selectRelevantMemories($query, $this->memoryInjectLimit, $markSurfacedMemories);
+            $prompt .= MemoryInjector::format($memories);
+
+            if ($query !== '') {
+                $recall = $this->sessionManager->searchSessionHistory($query, $this->sessionRecallLimit);
+                $prompt .= MemoryInjector::formatSessionRecall($recall);
+            }
+        }
+
+        $prompt .= $mode->systemPromptSuffix();
+
+        if ($agentContext !== null && $agentContext->task !== '') {
+            $prompt .= "\n\n## Parent Brief\n".$agentContext->task;
+        }
 
         if ($this->taskStore !== null && ! $this->taskStore->isEmpty()) {
             $prompt .= "\n\n## Current Tasks\n".$this->taskStore->renderTree();
         }
 
-        $this->llm->setSystemPrompt($prompt);
+        return $prompt;
     }
 
-    /**
-     * Get the combined provider/model name.
-     */
+    public function shouldCompactHistory(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): bool
+    {
+        $snapshot = $this->snapshot($history, $mode, $agentContext);
+
+        return $snapshot['is_above_auto_compact'];
+    }
+
     public function getModelName(): string
     {
         return $this->llm->getProvider().'/'.$this->llm->getModel();
     }
 
-    /**
-     * Get the context window size for the current model.
-     */
     public function getContextWindow(): int
     {
         if ($this->models !== null) {
@@ -223,5 +253,62 @@ final class ContextManager
     public function getPruner(): ?ContextPruner
     {
         return $this->pruner;
+    }
+
+    /**
+     * @return array<string, int|float|string|bool>
+     */
+    public function getLastBudgetSnapshot(): array
+    {
+        return $this->lastBudgetSnapshot;
+    }
+
+    /**
+     * @return array<string, int|float|string|bool>
+     */
+    private function snapshot(ConversationHistory $history, AgentMode $mode, ?AgentContext $agentContext): array
+    {
+        $estimated = $this->estimateContextTokens($history, $mode, $agentContext);
+        $model = $this->getModelName();
+        if ($this->budget !== null) {
+            $snapshot = $this->budget->snapshot($estimated, $model);
+        } else {
+            $threshold = $this->compactor?->getThresholdTokens($model) ?? (int) ($this->getContextWindow() * 0.8);
+            $snapshot = [
+                'estimated_tokens' => $estimated,
+                'context_window' => $this->getContextWindow(),
+                'effective_window' => $this->getContextWindow(),
+                'warning_threshold' => $threshold,
+                'auto_compact_threshold' => $threshold,
+                'blocking_threshold' => $this->getContextWindow(),
+                'percent_left' => max(0, (int) round((($this->getContextWindow() - $estimated) / $this->getContextWindow()) * 100)),
+                'is_above_warning' => $estimated >= $threshold,
+                'is_above_auto_compact' => $estimated >= $threshold,
+                'is_at_blocking_limit' => false,
+            ];
+        }
+        $snapshot['consecutive_failures'] = $this->consecutiveCompactionFailures;
+        $this->lastBudgetSnapshot = $snapshot;
+
+        return $snapshot;
+    }
+
+    private function estimateContextTokens(ConversationHistory $history, AgentMode $mode, ?AgentContext $agentContext): int
+    {
+        $prompt = $this->buildSystemPrompt($mode, $history, $agentContext, false);
+
+        return TokenEstimator::estimate($prompt) + TokenEstimator::estimateMessages($history->messages());
+    }
+
+    private function resetCircuitBreakerIfHealthy(): void
+    {
+        if ($this->consecutiveCompactionFailures <= 0) {
+            return;
+        }
+
+        $this->log->info('Reset auto-compaction circuit breaker after context pressure dropped', [
+            'previous_failures' => $this->consecutiveCompactionFailures,
+        ]);
+        $this->consecutiveCompactionFailures = 0;
     }
 }

@@ -17,6 +17,18 @@ class ContextPruner
 
     public const PLACEHOLDER = '[Old tool result content cleared]';
 
+    private const TOOL_WEIGHTS = [
+        'bash' => 70,
+        'shell_read' => 65,
+        'file_read' => 30,
+        'grep' => 50,
+        'glob' => 10,
+        'web_fetch' => 55,
+        'web_search' => 40,
+        'file_edit' => 20,
+        'file_write' => 20,
+    ];
+
     public function __construct(
         private int $protectTokens = self::DEFAULT_PROTECT_TOKENS,
         private int $minSavings = self::DEFAULT_MIN_SAVINGS,
@@ -65,7 +77,7 @@ class ContextPruner
         // Protect $protectTokens worth of the most recent tool output (before boundary).
         // Mark everything older for pruning.
         $tokensSeen = 0;
-        $toPrune = [];
+        $candidates = [];
 
         for ($i = $protectFrom - 1; $i >= 0; $i--) {
             // Stop at a compaction summary (SystemMessage)
@@ -81,7 +93,11 @@ class ContextPruner
                 if (! is_string($result->result)) {
                     continue;
                 }
-                if ($result->result === self::PLACEHOLDER || str_starts_with($result->result, '[Superseded')) {
+                if (
+                    $result->result === self::PLACEHOLDER
+                    || str_starts_with($result->result, '[Superseded')
+                    || str_starts_with($result->result, '[Old ')
+                ) {
                     continue;
                 }
 
@@ -89,19 +105,29 @@ class ContextPruner
                 $tokensSeen += $tokens;
 
                 if ($tokensSeen > $this->protectTokens) {
-                    $toPrune[] = [$i, $rIdx, $tokens];
+                    $candidates[] = [
+                        'msgIdx' => $i,
+                        'resultIdx' => $rIdx,
+                        'tokens' => $tokens,
+                        'placeholder' => $this->placeholderFor($result->toolName, $result->args),
+                        'score' => $this->importanceScore($messages, $i, $protectFrom, $result->toolName, $result->args, $result->result),
+                    ];
                 }
             }
         }
 
-        // Check if savings meet minimum threshold
-        $totalSavings = array_sum(array_column($toPrune, 2));
+        usort($candidates, fn (array $a, array $b): int => $a['score'] <=> $b['score']);
+
+        $totalSavings = array_sum(array_column($candidates, 'tokens'));
 
         if ($totalSavings < $this->minSavings) {
             return 0;
         }
 
-        $history->pruneToolResults($toPrune, self::PLACEHOLDER);
+        $history->pruneToolResultsWithPlaceholders(array_map(
+            fn (array $candidate): array => [$candidate['msgIdx'], $candidate['resultIdx'], $candidate['placeholder']],
+            $candidates,
+        ));
 
         return $totalSavings;
     }
@@ -125,5 +151,56 @@ class ContextPruner
         }
 
         return 0;
+    }
+
+    /**
+     * @param  array<int, Message>  $messages
+     */
+    private function importanceScore(array $messages, int $messageIndex, int $protectFrom, string $toolName, array $args, string $result): int
+    {
+        $score = self::TOOL_WEIGHTS[$toolName] ?? 25;
+        $path = (string) ($args['path'] ?? '');
+        $basename = $path !== '' ? basename($path) : '';
+
+        for ($i = $messageIndex + 1; $i < $protectFrom; $i++) {
+            if (! isset($messages[$i])) {
+                continue;
+            }
+
+            $message = $messages[$i];
+            if ($message instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+                $content = mb_strtolower($message->content);
+                if ($basename !== '' && str_contains($content, mb_strtolower($basename))) {
+                    $score += 15;
+                }
+                if (str_contains($content, 'based on') || str_contains($content, "i'll use") || str_contains($content, 'the issue is')) {
+                    $score += 10;
+                }
+                if ($result !== '' && mb_strlen($result) > 20 && str_contains($content, mb_strtolower(mb_substr($result, 0, 20)))) {
+                    $score += 15;
+                }
+            }
+        }
+
+        return $score;
+    }
+
+    private function placeholderFor(string $toolName, array $args): string
+    {
+        $path = (string) ($args['path'] ?? '');
+        if ($toolName === 'file_read' && $path !== '') {
+            return "[Old file_read output cleared for {$path}]";
+        }
+        if ($toolName === 'grep' && $path !== '') {
+            return "[Old grep output cleared for {$path}]";
+        }
+        if ($toolName === 'glob') {
+            return '[Old glob output cleared]';
+        }
+        if ($toolName === 'bash' || $toolName === 'shell_read') {
+            return '[Old shell output cleared; inspect truncation storage or rerun targeted commands if needed]';
+        }
+
+        return self::PLACEHOLDER;
     }
 }

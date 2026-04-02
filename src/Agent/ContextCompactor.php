@@ -60,6 +60,7 @@ PROMPT;
         private readonly ModelCatalog $models,
         private readonly LoggerInterface $log,
         private int $compactThresholdPercent = self::DEFAULT_COMPACT_THRESHOLD_PERCENT,
+        private readonly ?ContextBudget $budget = null,
     ) {}
 
     public function needsCompaction(int $promptTokens, string $model): bool
@@ -70,8 +71,13 @@ PROMPT;
     public function getThresholdTokens(string $model): int
     {
         $contextWindow = $this->models->contextWindow($model);
+        $percentThreshold = (int) ($contextWindow * $this->compactThresholdPercent / 100);
 
-        return (int) ($contextWindow * $this->compactThresholdPercent / 100);
+        if ($this->budget === null) {
+            return $percentThreshold;
+        }
+
+        return min($percentThreshold, $this->budget->autoCompactThreshold($model));
     }
 
     public function getCompactThresholdPercent(): int
@@ -91,31 +97,33 @@ PROMPT;
      */
     public function compact(ConversationHistory $history, int $keepRecent = 3): array
     {
+        $plan = $this->buildPlan($history, keepRecent: $keepRecent);
+
+        return [
+            'summary' => $plan->summary,
+            'tokens_in' => $plan->tokensIn,
+            'tokens_out' => $plan->tokensOut,
+        ];
+    }
+
+    /**
+     * @param  Message[]  $protectedMessages
+     */
+    public function buildPlan(ConversationHistory $history, array $protectedMessages = [], int $keepRecent = 3): CompactionPlan
+    {
         $messages = $history->messages();
         $total = count($messages);
 
         if ($total <= $keepRecent) {
-            return ['summary' => '', 'tokens_in' => 0, 'tokens_out' => 0];
+            return new CompactionPlan($total, 0, '', $messages);
         }
 
-        // Find the boundary: keep N recent user turns
-        $keepFrom = $total;
-        $turnsFound = 0;
-        for ($i = $total - 1; $i >= 0; $i--) {
-            if ($messages[$i] instanceof UserMessage) {
-                $turnsFound++;
-                if ($turnsFound >= $keepRecent) {
-                    $keepFrom = $i;
-                    break;
-                }
-            }
-        }
+        $keepFrom = ConversationHistory::findKeepBoundaryInMessages($messages, $keepRecent);
 
         if ($keepFrom <= 0) {
-            return ['summary' => '', 'tokens_in' => 0, 'tokens_out' => 0];
+            return new CompactionPlan($keepFrom, 0, '', $messages);
         }
 
-        // Format old messages for summarization
         $oldMessages = array_slice($messages, 0, $keepFrom);
         $formatted = $this->formatMessages($oldMessages);
 
@@ -130,11 +138,28 @@ PROMPT;
             new UserMessage(sprintf(self::COMPACTION_USER_PROMPT, $formatted)),
         ]);
 
-        return [
-            'summary' => trim($response->text),
-            'tokens_in' => $response->promptTokens,
-            'tokens_out' => $response->completionTokens,
-        ];
+        $summary = trim($response->text);
+        $recent = array_slice($messages, $keepFrom);
+        $replacement = [...$protectedMessages];
+        if ($summary !== '') {
+            $replacement[] = new SystemMessage($summary);
+        }
+        $replacement = [...$replacement, ...$recent];
+
+        return new CompactionPlan(
+            keepFromMessageIndex: $keepFrom,
+            compactedMessageCount: $keepFrom,
+            summary: $summary,
+            replacementMessages: $replacement,
+            protectedMessages: $protectedMessages,
+            tokensIn: $response->promptTokens,
+            tokensOut: $response->completionTokens,
+            stats: [
+                'old_messages' => count($oldMessages),
+                'kept_messages' => count($recent),
+                'protected_messages' => count($protectedMessages),
+            ],
+        );
     }
 
     /**
@@ -156,6 +181,12 @@ PROMPT;
                 $memories = array_values(array_filter($data, fn ($item) => isset($item['type'], $item['title'], $item['content'])
                     && in_array($item['type'], ['project', 'user', 'decision'], true)
                 ));
+                $memories = array_map(function (array $item): array {
+                    $item['memory_class'] = $item['memory_class'] ?? 'durable';
+                    $item['pinned'] = (bool) ($item['pinned'] ?? false);
+
+                    return $item;
+                }, $memories);
             }
 
             return [

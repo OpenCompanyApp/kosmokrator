@@ -21,6 +21,7 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
 use OpenCompany\PrismCodex\CodexOAuthService;
+use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -118,12 +119,8 @@ final class AgentSessionBuilder
         $permMode = $permissions->getPermissionMode();
         $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
 
-        // Build system prompt: base + memories + instructions + environment
-        $memoriesEnabled = ($sessionManager->getSetting('memories') ?? 'on') !== 'off';
-        $memories = $memoriesEnabled ? $sessionManager->getMemories() : [];
-
+        // Build system prompt: base + instructions + environment. Memories are selected dynamically per turn.
         $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
-            .MemoryInjector::format($memories)
             .InstructionLoader::gather()
             .EnvironmentContext::gather();
 
@@ -135,7 +132,18 @@ final class AgentSessionBuilder
         $autoCompactEnabled = ($sessionManager->getSetting('auto_compact') ?? 'on') !== 'off';
         $compactThreshold = (int) ($sessionManager->getSetting('compact_threshold')
             ?? $config->get('kosmokrator.context.compact_threshold', 60));
-        $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log, $compactThreshold) : null;
+        $contextBudget = new ContextBudget(
+            models: $models,
+            reserveOutputTokens: (int) ($sessionManager->getSetting('context_reserve_output_tokens')
+                ?? $config->get('kosmokrator.context.reserve_output_tokens', 16_000)),
+            warningBufferTokens: (int) ($sessionManager->getSetting('context_warning_buffer_tokens')
+                ?? $config->get('kosmokrator.context.warning_buffer_tokens', 24_000)),
+            autoCompactBufferTokens: (int) ($sessionManager->getSetting('context_auto_compact_buffer_tokens')
+                ?? $config->get('kosmokrator.context.auto_compact_buffer_tokens', 12_000)),
+            blockingBufferTokens: (int) ($sessionManager->getSetting('context_blocking_buffer_tokens')
+                ?? $config->get('kosmokrator.context.blocking_buffer_tokens', 3_000)),
+        );
+        $compactor = $autoCompactEnabled ? new ContextCompactor($llm, $models, $log, $compactThreshold, $contextBudget) : null;
 
         $truncator = new OutputTruncator(
             maxLines: (int) $config->get('kosmokrator.context.max_output_lines', 2000),
@@ -146,11 +154,12 @@ final class AgentSessionBuilder
         $pruneMinSavings = (int) ($sessionManager->getSetting('prune_min_savings') ?? $config->get('kosmokrator.context.prune_min_savings', 20_000));
         $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
         $deduplicator = new ToolResultDeduplicator;
+        $protectedContextBuilder = new ProtectedContextBuilder($taskStore);
 
         $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
 
         // Create AgentLoop
-        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $deduplicator, $memoryWarningThreshold);
+        $agentLoop = new AgentLoop($llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager, $compactor, $truncator, $pruner, $deduplicator, $contextBudget, $protectedContextBuilder, $memoryWarningThreshold);
 
         // Subagent system
         $maxDepth = (int) ($sessionManager->getSetting('subagent_max_depth')
@@ -177,6 +186,9 @@ final class AgentSessionBuilder
             maxTokens: $llm->getMaxTokens(),
             temperature: $llm->getTemperature(),
             provider: $provider,
+            budget: $contextBudget,
+            protectedContextBuilder: $protectedContextBuilder,
+            relay: $this->container->make(Relay::class),
         );
 
         $toolRegistry->register(new SubagentTool(

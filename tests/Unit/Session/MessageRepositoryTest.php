@@ -193,4 +193,16 @@ class MessageRepositoryTest extends TestCase
         $this->assertSame(0, $totals['tokens_in']);
         $this->assertSame(0, $totals['tokens_out']);
     }
+
+    public function test_search_project_history_finds_matching_messages(): void
+    {
+        $otherSession = (new SessionRepository($this->db))->create('/project', 'model-1');
+        $this->messages->append($otherSession, 'assistant', 'JWT auth is enabled');
+        $this->messages->append($this->sessionId, 'assistant', 'Current session mention');
+
+        $results = $this->messages->searchProjectHistory('/project', 'JWT', $this->sessionId, 5);
+
+        $this->assertCount(1, $results);
+        $this->assertSame('JWT auth is enabled', $results[0]['content']);
+    }
 }

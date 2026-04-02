@@ -9,6 +9,11 @@ class FileReadTool implements ToolInterface
 {
     private const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
 
+    private const UNCHANGED_RESULT_TEMPLATE = '[Unchanged since last file_read of %s (lines %d-%d); content omitted to save tokens]';
+
+    /** @var array<string, true> */
+    private array $readCache = [];
+
     public function name(): string
     {
         return 'file_read';
@@ -51,9 +56,19 @@ class FileReadTool implements ToolInterface
             return ToolResult::error("Path is a directory, not a file: {$path}");
         }
 
+        $cacheKey = $this->buildCacheKey($path, $offset, $limit);
+        if (isset($this->readCache[$cacheKey])) {
+            return ToolResult::success($this->formatUnchangedResult($path, $offset, $limit));
+        }
+
         $fileSize = filesize($path);
         if ($fileSize !== false && $fileSize > self::LARGE_FILE_THRESHOLD) {
-            return $this->readLargeFile($path, $offset, $limit);
+            $result = $this->readLargeFile($path, $offset, $limit);
+            if ($result->success) {
+                $this->readCache[$cacheKey] = true;
+            }
+
+            return $result;
         }
 
         $lines = file($path);
@@ -75,7 +90,14 @@ class FileReadTool implements ToolInterface
             $output .= "\n... {$remaining} more lines";
         }
 
+        $this->readCache[$cacheKey] = true;
+
         return ToolResult::success(rtrim($output));
+    }
+
+    public function resetCache(): void
+    {
+        $this->readCache = [];
     }
 
     /**
@@ -113,5 +135,26 @@ class FileReadTool implements ToolInterface
         }
 
         return ToolResult::success(rtrim($output));
+    }
+
+    private function buildCacheKey(string $path, int $offset, int $limit): string
+    {
+        $resolvedPath = realpath($path) ?: $path;
+        $mtime = filemtime($path);
+
+        return implode(':', [
+            $resolvedPath,
+            $mtime === false ? '0' : (string) $mtime,
+            (string) $offset,
+            (string) $limit,
+        ]);
+    }
+
+    private function formatUnchangedResult(string $path, int $offset, int $limit): string
+    {
+        $resolvedPath = realpath($path) ?: $path;
+        $endLine = $offset + $limit - 1;
+
+        return sprintf(self::UNCHANGED_RESULT_TEMPLATE, $resolvedPath, $offset, $endLine);
     }
 }

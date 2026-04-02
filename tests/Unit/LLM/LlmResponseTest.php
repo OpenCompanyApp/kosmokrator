@@ -68,4 +68,22 @@ class LlmResponseTest extends TestCase
         $this->assertSame(0, $response->promptTokens);
         $this->assertSame(0, $response->completionTokens);
     }
+
+    public function test_cache_metrics_are_assigned(): void
+    {
+        $response = new LlmResponse(
+            text: 'cached',
+            finishReason: FinishReason::Stop,
+            toolCalls: [],
+            promptTokens: 100,
+            completionTokens: 25,
+            cacheWriteInputTokens: 80,
+            cacheReadInputTokens: 20,
+            thoughtTokens: 5,
+        );
+
+        $this->assertSame(80, $response->cacheWriteInputTokens);
+        $this->assertSame(20, $response->cacheReadInputTokens);
+        $this->assertSame(5, $response->thoughtTokens);
+    }
 }

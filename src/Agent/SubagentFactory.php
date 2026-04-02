@@ -14,6 +14,7 @@ use Kosmokrator\Tool\Coding\SubagentTool;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\NullRenderer;
+use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -38,6 +39,9 @@ class SubagentFactory
         private readonly ?int $maxTokens,
         private readonly int|float|null $temperature,
         private readonly string $provider,
+        private readonly ?ContextBudget $budget = null,
+        private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
+        private readonly ?Relay $relay = null,
     ) {}
 
     /**
@@ -66,6 +70,9 @@ class SubagentFactory
         };
 
         $pruner = new ContextPruner(20_000, 10_000);
+        $compactor = $this->models !== null
+            ? new ContextCompactor($llm, $this->models, $this->log, 50, $this->budget)
+            : null;
 
         $loop = new AgentLoop(
             llm: $llm,
@@ -74,9 +81,12 @@ class SubagentFactory
             baseSystemPrompt: $systemPrompt,
             permissions: $this->permissions,
             models: $this->models,
+            compactor: $compactor,
             truncator: $this->truncator,
             pruner: $pruner,
             deduplicator: new ToolResultDeduplicator,
+            budget: $this->budget,
+            protectedContextBuilder: $this->protectedContextBuilder,
         );
         $loop->setMode($mode);
         $loop->setTools($scopedRegistry->toPrismTools());
@@ -101,6 +111,7 @@ class SubagentFactory
                 maxTokens: $this->maxTokens,
                 temperature: $this->temperature,
                 provider: $this->provider,
+                relay: $this->relay,
             );
         } else {
             $inner = new PrismService(
@@ -109,6 +120,7 @@ class SubagentFactory
                 systemPrompt: '',
                 maxTokens: $this->maxTokens,
                 temperature: $this->temperature,
+                relay: $this->relay,
             );
         }
 

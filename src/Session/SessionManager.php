@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\Agent\MemorySelector;
+use Kosmokrator\Agent\ToolResultDeduplicator;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -43,8 +46,6 @@ class SessionManager
     {
         return $this->projectScope;
     }
-
-    // --- Session lifecycle ---
 
     public function createSession(string $model): string
     {
@@ -85,7 +86,6 @@ class SessionManager
 
         $this->sessions->touch($this->currentSessionId);
 
-        // Auto-title from first user message
         $session = $this->sessions->find($this->currentSessionId);
         if ($session !== null && $session['title'] === null && $role === 'user' && $content !== null) {
             $title = mb_substr($content, 0, 80);
@@ -102,6 +102,8 @@ class SessionManager
             $history->addMessage($message);
         }
 
+        (new ToolResultDeduplicator)->deduplicate($history);
+
         return $history;
     }
 
@@ -112,9 +114,6 @@ class SessionManager
         return $session ? $session['id'] : null;
     }
 
-    /**
-     * Find a session by full or partial ID.
-     */
     public function findSession(string $idOrPrefix): ?array
     {
         $session = $this->sessions->find($idOrPrefix);
@@ -122,9 +121,6 @@ class SessionManager
         return $session ?? $this->sessions->findByPrefix($idOrPrefix);
     }
 
-    /**
-     * Resume a session: set it as current and load its history.
-     */
     public function resumeSession(string $sessionId): ConversationHistory
     {
         $this->currentSessionId = $sessionId;
@@ -134,14 +130,12 @@ class SessionManager
     }
 
     /**
-     * @return array[]
+     * @return array<int, array<string, mixed>>
      */
     public function listSessions(int $limit = 20): array
     {
         return $this->sessions->listByProject($this->project ?? getcwd(), $limit);
     }
-
-    // --- Settings ---
 
     public function getSetting(string $key): ?string
     {
@@ -161,24 +155,33 @@ class SessionManager
         $this->settings->set($resolvedScope, $key, $value);
     }
 
-    // --- Memories ---
-
     /**
-     * @return array[]
+     * @return array<int, array<string, mixed>>
      */
     public function getMemories(): array
     {
+        $this->memories->pruneExpired($this->project);
+
         return $this->memories->forProject($this->project);
     }
 
-    public function addMemory(string $type, string $title, string $content): int
-    {
+    public function addMemory(
+        string $type,
+        string $title,
+        string $content,
+        string $memoryClass = 'durable',
+        bool $pinned = false,
+        ?string $expiresAt = null,
+    ): int {
         return $this->memories->add(
             type: $type,
             title: $title,
             content: $content,
             project: $this->project,
             sessionId: $this->currentSessionId,
+            memoryClass: $memoryClass,
+            pinned: $pinned,
+            expiresAt: $expiresAt,
         );
     }
 
@@ -187,17 +190,23 @@ class SessionManager
         return $this->memories->find($id);
     }
 
-    public function updateMemory(int $id, string $content, ?string $title = null): void
-    {
-        $this->memories->update($id, $content, $title);
+    public function updateMemory(
+        int $id,
+        string $content,
+        ?string $title = null,
+        ?string $memoryClass = null,
+        ?bool $pinned = null,
+        ?string $expiresAt = null,
+    ): void {
+        $this->memories->update($id, $content, $title, $memoryClass, $pinned, $expiresAt);
     }
 
     /**
-     * @return array[]
+     * @return array<int, array<string, mixed>>
      */
-    public function searchMemories(?string $type = null, ?string $query = null, int $limit = 20): array
+    public function searchMemories(?string $type = null, ?string $query = null, int $limit = 20, ?string $memoryClass = null): array
     {
-        return $this->memories->search($this->project, $type, $query, $limit);
+        return $this->memories->search($this->project, $type, $query, $limit, $memoryClass);
     }
 
     public function deleteMemory(int $id): void
@@ -205,11 +214,50 @@ class SessionManager
         $this->memories->delete($id);
     }
 
-    // --- Token totals ---
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getRelevantMemories(?string $query = null, int $limit = 6): array
+    {
+        return $this->selectRelevantMemories($query, $limit, true);
+    }
 
     /**
-     * Get cumulative token usage for the current session.
-     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function selectRelevantMemories(?string $query = null, int $limit = 6, bool $markSurfaced = true): array
+    {
+        $selector = new MemorySelector;
+        $selected = $selector->select($this->getMemories(), $query, $limit);
+        if ($markSurfaced) {
+            $ids = array_map(fn (array $memory): int => (int) $memory['id'], $selected);
+            $this->memories->touchSurfaced($ids);
+        }
+
+        return $selected;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function searchSessionHistory(string $query, int $limit = 5): array
+    {
+        if ($this->project === null || trim($query) === '') {
+            return [];
+        }
+
+        return $this->messages->searchProjectHistory($this->project, $query, $this->currentSessionId, $limit);
+    }
+
+    public function consolidateMemories(): int
+    {
+        $removed = $this->memories->pruneExpired($this->project);
+        $removed += $this->memories->trimCompactionMemories($this->project, 10);
+
+        return $removed;
+    }
+
+    /**
      * @return array{tokens_in: int, tokens_out: int}
      */
     public function getSessionTokenTotals(): array
@@ -221,23 +269,17 @@ class SessionManager
         return $this->messages->sumTokens($this->currentSessionId);
     }
 
-    // --- Compaction ---
-
-    /**
-     * Persist compaction: mark old messages as compacted, insert summary.
-     */
     public function persistCompaction(string $summary, int $keepRecentTurns = 3): void
     {
-        if ($this->currentSessionId === null) {
+        if ($summary === '' || $this->currentSessionId === null) {
             return;
         }
 
         $raw = $this->messages->loadRaw($this->currentSessionId);
-        if (count($raw) === 0) {
+        if ($raw === []) {
             return;
         }
 
-        // Find the boundary: count keepRecentTurns user messages from the end
         $turnsFound = 0;
         $boundaryId = null;
         for ($i = count($raw) - 1; $i >= 0; $i--) {
@@ -254,18 +296,37 @@ class SessionManager
             return;
         }
 
-        $this->messages->markCompacted($this->currentSessionId, $boundaryId);
-
-        // Insert summary as a system message
-        $this->messages->append(
-            sessionId: $this->currentSessionId,
-            role: 'system',
-            content: $summary,
+        $ids = array_map(
+            fn (array $row): int => (int) $row['id'],
+            array_values(array_filter($raw, fn (array $row): bool => (int) $row['id'] < $boundaryId))
         );
+        $this->messages->compactWithSummary($this->currentSessionId, $ids, $summary);
 
         $this->log->info('Compaction persisted', [
             'session' => $this->currentSessionId,
             'boundary_id' => $boundaryId,
+        ]);
+    }
+
+    public function persistCompactionPlan(CompactionPlan $plan): void
+    {
+        if ($this->currentSessionId === null || $plan->isEmpty()) {
+            return;
+        }
+
+        $raw = $this->messages->loadRaw($this->currentSessionId);
+        if ($raw === []) {
+            return;
+        }
+
+        $rowsToCompact = array_slice($raw, 0, $plan->compactedMessageCount);
+        $ids = array_map(fn (array $row): int => (int) $row['id'], $rowsToCompact);
+        $this->messages->compactWithSummary($this->currentSessionId, $ids, $plan->summary);
+
+        $this->log->info('Compaction plan persisted', [
+            'session' => $this->currentSessionId,
+            'compacted_messages' => count($ids),
+            'summary_length' => strlen($plan->summary),
         ]);
     }
 

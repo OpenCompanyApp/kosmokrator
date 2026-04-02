@@ -10,17 +10,20 @@ class OutputTruncator
 
     private const DEFAULT_MAX_BYTES = 50_000;
 
+    private const DEFAULT_RETENTION_SECONDS = 604800;
+
     public function __construct(
         private int $maxLines = self::DEFAULT_MAX_LINES,
         private int $maxBytes = self::DEFAULT_MAX_BYTES,
         private ?string $storagePath = null,
+        private int $retentionSeconds = self::DEFAULT_RETENTION_SECONDS,
     ) {
         if ($this->storagePath === null) {
             $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
             $this->storagePath = $home.'/.kosmokrator/data/truncations';
         }
 
-        $this->cleanupOldFiles();
+        $this->cleanupOldFiles($this->retentionSeconds);
     }
 
     /**
@@ -69,7 +72,7 @@ class OutputTruncator
             $output = substr($output, 0, $this->maxBytes);
         }
 
-        return $output."\n[truncated — full output at {$fullPath}]";
+        return $output."\n\n[truncated - full output saved to {$fullPath}; inspect with targeted grep/file_read rather than pasting it back into context]";
     }
 
     private function saveFull(string $output, string $toolCallId): string

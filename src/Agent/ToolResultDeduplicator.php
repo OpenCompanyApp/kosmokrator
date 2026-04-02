@@ -184,6 +184,7 @@ class ToolResultDeduplicator
         }
 
         return str_starts_with($result, '[Superseded')
-            || $result === ContextPruner::PLACEHOLDER;
+            || $result === ContextPruner::PLACEHOLDER
+            || str_starts_with($result, '[Old ');
     }
 }

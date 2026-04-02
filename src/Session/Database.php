@@ -8,7 +8,7 @@ class Database
 {
     private \PDO $pdo;
 
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
 
     public function __construct(?string $path = null)
     {
@@ -102,8 +102,12 @@ class Database
                 project     TEXT,
                 session_id  TEXT REFERENCES sessions(id),
                 type        TEXT NOT NULL,
+                memory_class TEXT NOT NULL DEFAULT \'durable\',
                 title       TEXT NOT NULL,
                 content     TEXT NOT NULL,
+                pinned      INTEGER NOT NULL DEFAULT 0,
+                expires_at  TEXT,
+                last_surfaced_at TEXT,
                 created_at  TEXT,
                 updated_at  TEXT
             )
@@ -114,7 +118,24 @@ class Database
 
     private function migrate(int $from): void
     {
-        // Future migrations go here
-        // if ($from < 2) { ... }
+        if ($from < 2) {
+            $this->addColumnIfMissing('memories', 'memory_class', "TEXT NOT NULL DEFAULT 'durable'");
+            $this->addColumnIfMissing('memories', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
+            $this->addColumnIfMissing('memories', 'expires_at', 'TEXT');
+            $this->addColumnIfMissing('memories', 'last_surfaced_at', 'TEXT');
+        }
+    }
+
+    private function addColumnIfMissing(string $table, string $column, string $definition): void
+    {
+        $stmt = $this->pdo->query("PRAGMA table_info({$table})");
+        $rows = $stmt->fetchAll();
+        foreach ($rows as $row) {
+            if (($row['name'] ?? null) === $column) {
+                return;
+            }
+        }
+
+        $this->pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
     }
 }

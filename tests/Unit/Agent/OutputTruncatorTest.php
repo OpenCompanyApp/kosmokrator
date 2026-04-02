@@ -85,6 +85,6 @@ class OutputTruncatorTest extends TestCase
         $result = $truncator->truncate($output, 'tc4');
 
         $this->assertStringContainsString($this->tmpDir, $result);
-        $this->assertStringContainsString('[truncated — full output at', $result);
+        $this->assertStringContainsString('[truncated - full output saved to', $result);
     }
 }

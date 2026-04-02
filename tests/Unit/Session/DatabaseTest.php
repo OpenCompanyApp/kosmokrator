@@ -32,7 +32,7 @@ class DatabaseTest extends TestCase
 
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
         $this->assertNotFalse($version);
-        $this->assertEquals(1, $version['version']);
+        $this->assertEquals(2, $version['version']);
     }
 
     public function test_idempotent_schema_creation(): void
@@ -42,7 +42,7 @@ class DatabaseTest extends TestCase
 
         // Creating a second Database on the same connection shouldn't fail
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
-        $this->assertEquals(1, $version['version']);
+        $this->assertEquals(2, $version['version']);
     }
 
     public function test_foreign_keys_enabled(): void

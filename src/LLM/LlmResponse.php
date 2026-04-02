@@ -16,5 +16,8 @@ readonly class LlmResponse
         public array $toolCalls,
         public int $promptTokens,
         public int $completionTokens,
+        public int $cacheWriteInputTokens = 0,
+        public int $cacheReadInputTokens = 0,
+        public int $thoughtTokens = 0,
     ) {}
 }

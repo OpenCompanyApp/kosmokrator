@@ -7,6 +7,7 @@ use Amp\Http\Client\HttpClient;
 use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
+use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
@@ -20,6 +21,8 @@ use Prism\Prism\ValueObjects\ToolCall;
 class AsyncLlmClient implements LlmClientInterface
 {
     private HttpClient $httpClient;
+
+    private readonly Relay $relay;
 
     /** @var list<string> */
     private const OPENAI_COMPATIBLE_PROVIDERS = [
@@ -45,8 +48,10 @@ class AsyncLlmClient implements LlmClientInterface
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
         private string $provider = 'z',
+        ?Relay $relay = null,
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
+        $this->relay = $relay ?? new Relay;
     }
 
     public static function supportsProvider(string $provider): bool
@@ -61,10 +66,18 @@ class AsyncLlmClient implements LlmClientInterface
 
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
+        $cachePlan = $this->buildPromptCachePlan($messages);
+
+        $allMessages = [...$cachePlan->systemPrompts, ...$cachePlan->messages];
+
         $payload = [
             'model' => $this->model,
-            'messages' => $this->mapMessages($messages),
+            'messages' => $this->relay->mapOpenAiCompatibleMessages($this->provider, $allMessages),
         ];
+
+        if ($cachePlan->providerOptions !== []) {
+            $payload = array_merge($payload, $cachePlan->providerOptions);
+        }
 
         if (! empty($tools)) {
             $payload['tools'] = $this->mapTools($tools);
@@ -87,6 +100,7 @@ class AsyncLlmClient implements LlmClientInterface
         $request->setInactivityTimeout(300);
 
         // This suspends the fiber — Revolt event loop ticks freely
+        $this->relay->beforeRequest($this->provider, $this->model);
         $response = $this->httpClient->request($request, $cancellation);
 
         return $this->parseResponse($response, $cancellation);
@@ -157,14 +171,22 @@ class AsyncLlmClient implements LlmClientInterface
             $message = $error['error']['message'] ?? $body;
 
             if ($status === 429 || $status >= 500) {
-                throw new RetryableHttpException(
-                    $status,
-                    "API error ({$status}): {$message}",
-                    $this->parseRetryAfter($response),
+                throw $this->relay->normalizeError(
+                    new RetryableHttpException(
+                        $status,
+                        "API error ({$status}): {$message}",
+                        $this->parseRetryAfter($response),
+                    ),
+                    $this->provider,
+                    $this->model,
                 );
             }
 
-            throw new \RuntimeException("API error ({$status}): {$message}");
+            throw $this->relay->normalizeError(
+                new \RuntimeException("API error ({$status}): {$message}"),
+                $this->provider,
+                $this->model,
+            );
         }
 
         // Non-blocking body read
@@ -191,6 +213,13 @@ class AsyncLlmClient implements LlmClientInterface
             toolCalls: $toolCalls,
             promptTokens: $usage['prompt_tokens'] ?? 0,
             completionTokens: $usage['completion_tokens'] ?? 0,
+            cacheWriteInputTokens: (int) ($usage['cache_creation_input_tokens'] ?? 0),
+            cacheReadInputTokens: (int) (($usage['prompt_tokens_details']['cached_tokens'] ?? null)
+                ?? ($usage['input_tokens_details']['cached_tokens'] ?? null)
+                ?? 0),
+            thoughtTokens: (int) (($usage['completion_tokens_details']['reasoning_tokens'] ?? null)
+                ?? ($usage['output_tokens_details']['reasoning_tokens'] ?? null)
+                ?? 0),
         );
     }
 
@@ -225,65 +254,14 @@ class AsyncLlmClient implements LlmClientInterface
      * @param  Message[]  $messages
      * @return array<int, array<string, mixed>>
      */
-    private function mapMessages(array $messages): array
+    private function buildPromptCachePlan(array $messages): \OpenCompany\PrismRelay\Caching\PromptCachePlan
     {
-        $mapped = [];
-
-        // Prepend system prompt
-        if ($this->systemPrompt !== '') {
-            $mapped[] = ['role' => 'system', 'content' => $this->systemPrompt];
-        }
-
-        foreach ($messages as $message) {
-            match ($message::class) {
-                SystemMessage::class => $mapped[] = [
-                    'role' => 'system',
-                    'content' => $message->content,
-                ],
-                UserMessage::class => $mapped[] = [
-                    'role' => 'user',
-                    'content' => $message->text(),
-                ],
-                AssistantMessage::class => $this->mapAssistantMessage($message, $mapped),
-                ToolResultMessage::class => $this->mapToolResultMessage($message, $mapped),
-                default => throw new \InvalidArgumentException('Unsupported message type: '.$message::class),
-            };
-        }
-
-        return $mapped;
-    }
-
-    private function mapAssistantMessage(AssistantMessage $message, array &$mapped): void
-    {
-        $entry = [
-            'role' => 'assistant',
-            'content' => $message->content,
-        ];
-
-        // Include tool_calls so subsequent tool result messages are properly linked
-        if (! empty($message->toolCalls)) {
-            $entry['tool_calls'] = array_map(fn (ToolCall $tc) => [
-                'id' => $tc->id,
-                'type' => 'function',
-                'function' => [
-                    'name' => $tc->name,
-                    'arguments' => is_string($tc->arguments) ? $tc->arguments : json_encode($tc->arguments),
-                ],
-            ], $message->toolCalls);
-        }
-
-        $mapped[] = $entry;
-    }
-
-    private function mapToolResultMessage(ToolResultMessage $message, array &$mapped): void
-    {
-        foreach ($message->toolResults as $result) {
-            $mapped[] = [
-                'role' => 'tool',
-                'tool_call_id' => $result->toolCallId,
-                'content' => is_string($result->result) ? $result->result : json_encode($result->result),
-            ];
-        }
+        return $this->relay->planPromptCache(
+            provider: $this->provider,
+            model: $this->model,
+            systemPrompts: PromptFrameBuilder::splitSystemPrompt($this->systemPrompt),
+            messages: $messages,
+        );
     }
 
     /**

@@ -56,7 +56,10 @@ use Monolog\Logger;
 use OpenCompany\PrismCodex\Codex;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
+use OpenCompany\PrismRelay\Caching\GeminiCacheStore;
+use OpenCompany\PrismRelay\Caching\PromptCacheOrchestrator;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
+use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\PrismManager;
 use Prism\Prism\PrismServiceProvider;
 use Prism\Prism\Providers\Anthropic\Anthropic;
@@ -347,6 +350,14 @@ class Kernel
         $config = $this->container->make('config');
 
         $log = $this->container->make(LoggerInterface::class);
+        $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
+
+        $this->container->singleton(Relay::class, fn () => new Relay(
+            promptCacheOrchestrator: new PromptCacheOrchestrator(
+                prismManager: $this->container->make(PrismManager::class),
+                geminiCacheStore: new GeminiCacheStore($home.'/.kosmokrator/cache/gemini-cache.json'),
+            ),
+        ));
 
         $this->container->singleton(PrismService::class, fn () => new RetryableLlmClient(
             new PrismService(
@@ -355,6 +366,7 @@ class Kernel
                 systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
                 maxTokens: $config->get('kosmokrator.agent.max_tokens'),
                 temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+                relay: $this->container->make(Relay::class),
             ),
             $log,
         ));
@@ -369,6 +381,7 @@ class Kernel
                 maxTokens: $config->get('kosmokrator.agent.max_tokens'),
                 temperature: $config->get('kosmokrator.agent.temperature', 0.0),
                 provider: $provider,
+                relay: $this->container->make(Relay::class),
             ),
             $log,
         ));

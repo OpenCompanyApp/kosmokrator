@@ -5,6 +5,7 @@ namespace Kosmokrator\LLM;
 use Amp\Cancellation;
 use Generator;
 use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
+use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Prism;
 use Prism\Prism\Streaming\Events\StreamEvent;
@@ -14,13 +15,18 @@ use Prism\Prism\Tool;
 
 class PrismService implements LlmClientInterface
 {
+    private readonly Relay $relay;
+
     public function __construct(
         private string $provider,
         private string $model,
         private string $systemPrompt,
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
-    ) {}
+        ?Relay $relay = null,
+    ) {
+        $this->relay = $relay ?? new Relay;
+    }
 
     public function setSystemPrompt(string $prompt): void
     {
@@ -77,6 +83,9 @@ class PrismService implements LlmClientInterface
             toolCalls: $response->toolCalls,
             promptTokens: $response->usage->promptTokens,
             completionTokens: $response->usage->completionTokens,
+            cacheWriteInputTokens: $response->usage->cacheWriteInputTokens ?? 0,
+            cacheReadInputTokens: $response->usage->cacheReadInputTokens ?? 0,
+            thoughtTokens: $response->usage->thoughtTokens ?? 0,
         );
     }
 
@@ -87,7 +96,15 @@ class PrismService implements LlmClientInterface
      */
     public function stream(array $messages, array $tools = []): Generator
     {
-        return $this->buildRequest($messages, $tools)->asStream();
+        return (function () use ($messages, $tools): Generator {
+            $this->relay->beforeRequest($this->provider, $this->model);
+
+            try {
+                yield from $this->buildRequest($messages, $tools)->asStream();
+            } catch (\Throwable $e) {
+                throw $this->relay->normalizeError($e, $this->provider, $this->model);
+            }
+        })();
     }
 
     /**
@@ -98,7 +115,15 @@ class PrismService implements LlmClientInterface
      */
     public function text(array $messages, array $tools = []): Response
     {
-        return $this->buildRequest($messages, $tools)->asText();
+        $this->relay->beforeRequest($this->provider, $this->model);
+
+        try {
+            $response = $this->buildRequest($messages, $tools)->asText();
+        } catch (\Throwable $e) {
+            throw $this->relay->normalizeError($e, $this->provider, $this->model);
+        }
+
+        return $this->relay->normalizeResponse($this->provider, $this->model, $response);
     }
 
     public function supportsStreaming(): bool
@@ -111,10 +136,18 @@ class PrismService implements LlmClientInterface
 
     private function buildRequest(array $messages, array $tools = []): PendingRequest
     {
+        $cachePlan = $this->relay->planPromptCache(
+            provider: $this->provider,
+            model: $this->model,
+            systemPrompts: PromptFrameBuilder::splitSystemPrompt($this->systemPrompt),
+            messages: $messages,
+        );
+
         $request = (new Prism)->text()
             ->using($this->provider, $this->model)
-            ->withSystemPrompt($this->systemPrompt)
-            ->withMessages($messages);
+            ->withSystemPrompts($cachePlan->systemPrompts)
+            ->withMessages($cachePlan->messages)
+            ->withProviderOptions($cachePlan->providerOptions);
 
         if ($this->maxTokens !== null) {
             $request->withMaxTokens($this->maxTokens);

@@ -8,12 +8,9 @@ use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\MemorySelector;
 use Kosmokrator\Agent\ToolResultDeduplicator;
+use Kosmokrator\LLM\MessageSerializer;
 use Kosmokrator\Settings\SettingsManager;
 use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -30,6 +27,8 @@ class SessionManager
 
     private ?string $projectScope = null;
 
+    private readonly MessageSerializer $serializer;
+
     public function __construct(
         private readonly SessionRepositoryInterface $sessions,
         private readonly MessageRepositoryInterface $messages,
@@ -37,7 +36,9 @@ class SessionManager
         private readonly MemoryRepositoryInterface $memories,
         private readonly LoggerInterface $log,
         private readonly ?SettingsManager $configSettings = null,
-    ) {}
+    ) {
+        $this->serializer = new MessageSerializer;
+    }
 
     /**
      * Set the active project directory and derive its settings scope.
@@ -115,7 +116,11 @@ class SessionManager
             return;
         }
 
-        [$role, $content, $toolCalls, $toolResults] = $this->decomposeMessage($message);
+        $decomposed = $this->serializer->decompose($message);
+        $role = $decomposed['role'];
+        $content = $decomposed['content'];
+        $toolCalls = $decomposed['toolCalls'];
+        $toolResults = $decomposed['toolResults'];
 
         $this->messages->append(
             sessionId: $this->currentSessionId,
@@ -512,26 +517,5 @@ class SessionManager
             'compacted_messages' => count($ids),
             'summary_length' => strlen($plan->summary),
         ]);
-    }
-
-    /**
-     * Decompose a Prism Message into a storable tuple of role, content, tool calls, and tool results.
-     *
-     * @return array{string, ?string, ?array, ?array}
-     */
-    private function decomposeMessage(Message $message): array
-    {
-        return match (true) {
-            $message instanceof UserMessage => ['user', $message->content, null, null],
-            $message instanceof AssistantMessage => [
-                'assistant',
-                $message->content,
-                $message->toolCalls !== [] ? $message->toolCalls : null,
-                null,
-            ],
-            $message instanceof ToolResultMessage => ['tool_result', null, null, $message->toolResults],
-            $message instanceof SystemMessage => ['system', $message->content, null, null],
-            default => ['unknown', null, null, null],
-        };
     }
 }

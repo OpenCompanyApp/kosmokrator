@@ -16,6 +16,10 @@ use Kosmokrator\UI\Theme;
  */
 final class AnsiSubagentRenderer implements SubagentRendererInterface
 {
+    public function __construct(
+        private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
+    ) {}
+
     public function showSubagentStatus(array $stats): void
     {
         if (empty($stats)) {
@@ -102,14 +106,14 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
         $border = Theme::borderTask();
 
         $count = count($entries);
-        $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
+        $types = $this->formatter->summarizeAgentTypes($entries);
         $isBg = ($entries[0]['args']['mode'] ?? 'await') === 'background';
         $bgTag = $isBg ? " {$dim}(background){$r}" : '';
 
         // Single agent: compact one-liner
         if ($count === 1) {
             $e = $entries[0];
-            [$label, $typeColor] = AgentDisplayFormatter::formatAgentLabel($e['args']);
+            [$label, $typeColor] = $this->formatter->formatAgentLabel($e['args']);
             echo "\n{$border}  {$cyan}⏺{$r} {$label}{$bgTag}\n";
 
             return;
@@ -121,8 +125,8 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
         $last = $count - 1;
         foreach ($entries as $i => $entry) {
             $connector = $i === $last ? '└─' : '├─';
-            [$label, $typeColor] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
-            $coord = AgentDisplayFormatter::formatCoordinationTags($entry['args']);
+            [$label, $typeColor] = $this->formatter->formatAgentLabel($entry['args']);
+            $coord = $this->formatter->formatCoordinationTags($entry['args']);
 
             echo "{$border}  {$connector} {$typeColor}●{$r} {$label}{$coord}\n";
         }
@@ -150,20 +154,20 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
         $count = count($entries);
         $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
         $failed = $count - $succeeded;
-        $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
+        $types = $this->formatter->summarizeAgentTypes($entries);
 
         // Single agent: compact
         if ($count === 1) {
             $e = $entries[0];
             $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            [$label, $_] = AgentDisplayFormatter::formatAgentLabel($e['args']);
-            $stats = AgentDisplayFormatter::formatAgentStats($e);
-            $preview = AgentDisplayFormatter::extractResultPreview($e['result']);
+            [$label, $_] = $this->formatter->formatAgentLabel($e['args']);
+            $stats = $this->formatter->formatAgentStats($e);
+            $preview = $this->formatter->extractResultPreview($e['result']);
             $children = $e['children'] ?? [];
 
             echo "\n{$border}  {$icon} {$label}{$stats}\n";
             if ($children !== []) {
-                echo AgentDisplayFormatter::renderChildTree($children, "{$border}     ");
+                echo $this->formatter->renderChildTree($children, "{$border}     ");
             }
             if ($preview !== '') {
                 echo "{$border}     {$dim}⎿ {$preview}{$r}\n";
@@ -181,14 +185,14 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
             $connector = $i === $last ? '└─' : '├─';
             $continuation = $i === $last ? '  ' : '│ ';
             $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            [$label, $_] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
-            $stats = AgentDisplayFormatter::formatAgentStats($entry);
-            $preview = AgentDisplayFormatter::extractResultPreview($entry['result']);
+            [$label, $_] = $this->formatter->formatAgentLabel($entry['args']);
+            $stats = $this->formatter->formatAgentStats($entry);
+            $preview = $this->formatter->extractResultPreview($entry['result']);
             $children = $entry['children'] ?? [];
 
             echo "{$border}  {$connector} {$icon} {$label}{$stats}\n";
             if ($children !== []) {
-                echo AgentDisplayFormatter::renderChildTree($children, "{$border}  {$continuation}  ");
+                echo $this->formatter->renderChildTree($children, "{$border}  {$continuation}  ");
             }
             if ($preview !== '') {
                 echo "{$border}  {$continuation}  {$dim}⎿ {$preview}{$r}\n";
@@ -278,12 +282,12 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
         $avgCost = Theme::formatCost($s['avgCost']);
         $out .= $pad("{$dim}Cost      {$white}{$cost}{$dim}   ·  avg {$white}{$avgCost}{$dim}/agent{$r}");
 
-        $elapsed = AgentDisplayFormatter::formatElapsed($s['elapsed']);
+        $elapsed = $this->formatter->formatElapsed($s['elapsed']);
         $rate = $s['rate'] > 0 ? number_format($s['rate'], 1).' agents/min' : 'N/A';
         $out .= $pad("{$dim}Elapsed   {$white}{$elapsed}{$dim}  ·  rate {$white}{$rate}{$r}");
 
         if ($s['eta'] > 0) {
-            $eta = '~'.AgentDisplayFormatter::formatElapsed($s['eta']).' remaining';
+            $eta = '~'.$this->formatter->formatElapsed($s['eta']).' remaining';
             $out .= $pad("{$dim}ETA       {$gold}{$eta}{$r}");
         }
         $out .= $blank;

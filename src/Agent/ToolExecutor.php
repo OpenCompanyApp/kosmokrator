@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -13,8 +14,6 @@ use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolError;
-use Prism\Prism\ValueObjects\ToolOutput;
 use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
@@ -32,16 +31,17 @@ final class ToolExecutor
     private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
     /**
-     * @param RendererInterface      $ui           Terminal UI renderer for tool call/result display
-     * @param LoggerInterface        $log          Logger for tool execution events
-     * @param PermissionEvaluator|null $permissions Permission policy evaluator (null = no restrictions)
-     * @param OutputTruncator|null   $truncator    Truncates oversized tool output to fit context
+     * @param  RendererInterface  $ui  Terminal UI renderer for tool call/result display
+     * @param  LoggerInterface  $log  Logger for tool execution events
+     * @param  PermissionEvaluator|null  $permissions  Permission policy evaluator (null = no restrictions)
+     * @param  OutputTruncator|null  $truncator  Truncates oversized tool output to fit context
      */
     public function __construct(
         private readonly RendererInterface $ui,
         private readonly LoggerInterface $log,
         private readonly ?PermissionEvaluator $permissions,
         private readonly ?OutputTruncator $truncator,
+        private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
     ) {}
 
     /**
@@ -77,7 +77,7 @@ final class ToolExecutor
                     $output = 'Only one interactive question may be asked per response. Use a single ask_user or ask_choice call, wait for the answer, then continue.';
                     SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
                     SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
-                    $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                    $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
 
                     continue;
                 }
@@ -100,7 +100,7 @@ final class ToolExecutor
                     : "Tool '{$toolCall->name}' not found.";
                 SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
                 SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
-                $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
 
                 continue;
             }
@@ -112,7 +112,7 @@ final class ToolExecutor
                     $output = "Command blocked in {$mode->label()} mode (read-only). Switch to Edit mode for write operations.";
                     SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
                     SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
-                    $denied[$toolCall->id] = new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                    $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
 
                     continue;
                 }
@@ -244,7 +244,7 @@ final class ToolExecutor
             SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
             SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
-            return [new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
+            return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
         }
 
         if ($permResult->action === PermissionAction::Ask) {
@@ -256,7 +256,7 @@ final class ToolExecutor
                 $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
                 SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
-                return [new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
+                return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
             }
 
             if ($decision === 'always') {
@@ -290,12 +290,7 @@ final class ToolExecutor
 
             $output = $tool->handle(...$args);
             $stats?->incrementToolCalls();
-            $outputStr = match (true) {
-                is_string($output) => $output,
-                $output instanceof ToolOutput => $output->output,
-                $output instanceof ToolError => "Error: {$output->message}",
-                default => (string) $output,
-            };
+            $outputStr = ToolCallMapper::normalizeToolOutput($output);
 
             if ($this->truncator !== null) {
                 $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
@@ -306,11 +301,11 @@ final class ToolExecutor
                 'output_length' => strlen($outputStr),
             ]);
 
-            return new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $outputStr);
+            return ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $outputStr);
         } catch (\Throwable $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
-            return new ToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), "Error: {$e->getMessage()}");
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $toolCall->arguments(), "Error: {$e->getMessage()}");
         }
     }
 
@@ -411,7 +406,7 @@ final class ToolExecutor
                 'args' => $toolCall->arguments(),
                 'result' => $result->result,
                 'success' => $success,
-                'children' => $orchestrator !== null ? AgentTreeBuilder::buildSubtree($orchestrator, $agentId) : [],
+                'children' => $orchestrator !== null ? $this->treeBuilder->buildSubtree($orchestrator, $agentId) : [],
                 'stats' => $orchestrator?->getStats($agentId),
             ];
             $results[] = $result;

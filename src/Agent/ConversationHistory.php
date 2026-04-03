@@ -2,6 +2,7 @@
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -230,15 +231,7 @@ class ConversationHistory
                 continue;
             }
 
-            // Rebuild the ToolResult with the same metadata but swapped content
-            $old = $results[$resultIdx];
-            $results[$resultIdx] = new ToolResult(
-                toolCallId: $old->toolCallId,
-                toolName: $old->toolName,
-                args: $old->args,
-                result: $placeholder,
-            );
-
+            $results[$resultIdx] = ToolCallMapper::withReplacedContent($results[$resultIdx], $placeholder);
             $this->messages[$msgIdx] = new ToolResultMessage($results);
         }
     }
@@ -261,14 +254,7 @@ class ConversationHistory
                 continue;
             }
 
-            $old = $results[$resultIdx];
-            $results[$resultIdx] = new ToolResult(
-                toolCallId: $old->toolCallId,
-                toolName: $old->toolName,
-                args: $old->args,
-                result: $placeholder,
-            );
-
+            $results[$resultIdx] = ToolCallMapper::withReplacedContent($results[$resultIdx], $placeholder);
             $this->messages[$msgIdx] = new ToolResultMessage($results);
         }
     }
@@ -288,18 +274,11 @@ class ConversationHistory
         }
 
         $results = $msg->toolResults;
-        if (! isset($results[$resultIndex]) ) {
+        if (! isset($results[$resultIndex])) {
             return;
         }
 
-        $old = $results[$resultIndex];
-        $results[$resultIndex] = new ToolResult(
-            toolCallId: $old->toolCallId,
-            toolName: $old->toolName,
-            args: $old->args,
-            result: $placeholder,
-        );
-
+        $results[$resultIndex] = ToolCallMapper::withReplacedContent($results[$resultIndex], $placeholder);
         $this->messages[$messageIndex] = new ToolResultMessage($results);
     }
 

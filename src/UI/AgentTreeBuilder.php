@@ -23,7 +23,7 @@ final class AgentTreeBuilder
      * @param  array<int, array{args: array, id?: string}>  $entries
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array, toolCalls: int}>
      */
-    public static function buildSpawnTree(array $entries): array
+    public function buildSpawnTree(array $entries): array
     {
         $nodes = [];
 
@@ -52,9 +52,9 @@ final class AgentTreeBuilder
      *
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
      */
-    public static function buildTree(SubagentOrchestrator $orchestrator): array
+    public function buildTree(SubagentOrchestrator $orchestrator): array
     {
-        return self::buildSubtree($orchestrator, 'root');
+        return $this->buildSubtree($orchestrator, 'root');
     }
 
     /**
@@ -62,7 +62,7 @@ final class AgentTreeBuilder
      *
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
      */
-    public static function buildSubtree(SubagentOrchestrator $orchestrator, string $parentId): array
+    public function buildSubtree(SubagentOrchestrator $orchestrator, string $parentId): array
     {
         $children = [];
         foreach ($orchestrator->allStats() as $stats) {
@@ -76,7 +76,7 @@ final class AgentTreeBuilder
                     'toolCalls' => $stats->toolCalls,
                     'success' => $stats->status === 'done',
                     'error' => $stats->error,
-                    'children' => self::buildSubtree($orchestrator, $stats->id),
+                    'children' => $this->buildSubtree($orchestrator, $stats->id),
                 ];
             }
         }

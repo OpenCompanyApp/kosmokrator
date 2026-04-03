@@ -8,7 +8,9 @@ use Kosmokrator\Agent\Event\ContextCompacted;
 use Kosmokrator\Agent\Event\LlmResponseReceived;
 use Kosmokrator\Agent\Event\MessagePersisted;
 use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\MessageMapper;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -18,11 +20,7 @@ use Kosmokrator\UI\SafeDisplay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -86,10 +84,11 @@ class AgentLoop
         private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
         private readonly ?Dispatcher $events = null,
+        private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
     ) {
         $this->history = new ConversationHistory;
         $this->stuckDetector = new StuckDetector;
-        $this->toolExecutor = new ToolExecutor($ui, $log, $permissions, $truncator);
+        $this->toolExecutor = new ToolExecutor($ui, $log, $permissions, $truncator, $treeBuilder);
         $this->contextManager = new ContextManager(
             $llm, $ui, $log, $baseSystemPrompt,
             $compactor, $pruner, $models, $sessionManager, $taskStore,
@@ -280,7 +279,7 @@ class AgentLoop
                         SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
                         SafeDisplay::call(fn () => $this->ui->showError('Tool execution error: '.$e->getMessage()), $this->log);
                         $toolResults = array_map(
-                            fn (ToolCall $tc) => new ToolResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
+                            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
                             $toolCalls,
                         );
                     }
@@ -486,7 +485,7 @@ class AgentLoop
                 } catch (\Throwable $e) {
                     $this->log->error('Headless tool execution failed', ['error' => $e->getMessage()]);
                     $toolResults = array_map(
-                        fn (ToolCall $tc) => new ToolResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
+                        fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
                         $toolCalls,
                     );
                 }
@@ -654,7 +653,7 @@ class AgentLoop
             return [];
         }
 
-        return AgentTreeBuilder::buildTree($this->agentContext->orchestrator);
+        return $this->treeBuilder->buildTree($this->agentContext->orchestrator);
     }
 
     private function estimateCost(
@@ -810,13 +809,9 @@ class AgentLoop
         $this->sessionManager?->saveMessage($message, $tokensIn, $tokensOut);
 
         if ($this->sessionManager !== null) {
-            $role = match (true) {
-                $message instanceof UserMessage => 'user',
-                $message instanceof AssistantMessage => 'assistant',
-                $message instanceof ToolResultMessage => 'tool',
-                default => 'system',
-            };
-            $this->events?->dispatch(new MessagePersisted($role, $tokensIn, $tokensOut));
+            $this->events?->dispatch(new MessagePersisted(
+                MessageMapper::roleOf($message), $tokensIn, $tokensOut,
+            ));
         }
     }
 

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+use Kosmokrator\LLM\MessageSerializer;
 use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 
@@ -16,12 +13,17 @@ use Prism\Prism\ValueObjects\ToolResult;
  * Persists and retrieves conversation messages for sessions via SQLite.
  *
  * Part of the Session subsystem alongside SessionManager and Database.
- * Handles serialization of Prism message types (including tool calls/results)
- * to and from the `messages` table, and supports compacting old messages.
+ * Delegates Prism message serialization/deserialization to MessageSerializer,
+ * keeping Prism type knowledge at the boundary.
  */
 class MessageRepository implements MessageRepositoryInterface
 {
-    public function __construct(private Database $db) {}
+    private readonly MessageSerializer $serializer;
+
+    public function __construct(private Database $db)
+    {
+        $this->serializer = new MessageSerializer;
+    }
 
     /**
      * Persist a new message and return its auto-incremented row ID.
@@ -52,9 +54,9 @@ class MessageRepository implements MessageRepositoryInterface
             'session_id' => $sessionId,
             'role' => $role,
             'content' => $content,
-            // Tool calls/results are JSON-serialized for storage
-            'tool_calls' => $toolCalls !== null ? json_encode($this->serializeToolCalls($toolCalls), JSON_INVALID_UTF8_SUBSTITUTE) : null,
-            'tool_results' => $toolResults !== null ? json_encode($this->serializeToolResults($toolResults), JSON_INVALID_UTF8_SUBSTITUTE) : null,
+            // Tool calls/results are JSON-serialized for storage via MessageSerializer
+            'tool_calls' => $toolCalls !== null ? json_encode($this->serializer->serializeToolCalls($toolCalls), JSON_INVALID_UTF8_SUBSTITUTE) : null,
+            'tool_results' => $toolResults !== null ? json_encode($this->serializer->serializeToolResults($toolResults), JSON_INVALID_UTF8_SUBSTITUTE) : null,
             'tokens_in' => $tokensIn,
             'tokens_out' => $tokensOut,
             'now' => date('c'),
@@ -79,7 +81,7 @@ class MessageRepository implements MessageRepositoryInterface
 
         $messages = [];
         foreach ($rows as $row) {
-            $message = $this->deserializeMessage($row);
+            $message = $this->serializer->deserializeMessage($row);
             if ($message !== null) {
                 $messages[] = $message;
             }
@@ -255,92 +257,5 @@ class MessageRepository implements MessageRepositoryInterface
         $stmt->execute($params);
 
         return $stmt->fetchAll();
-    }
-
-    /**
-     * Convert ToolCall objects to plain arrays for JSON storage.
-     *
-     * @param  ToolCall[]  $toolCalls
-     * @return array<int, array<string, mixed>>
-     */
-    private function serializeToolCalls(array $toolCalls): array
-    {
-        return array_map(fn (ToolCall $tc) => [
-            'id' => $tc->id,
-            'name' => $tc->name,
-            'arguments' => $tc->arguments(),
-        ], $toolCalls);
-    }
-
-    /**
-     * Convert ToolResult objects to plain arrays for JSON storage.
-     *
-     * @param  ToolResult[]  $toolResults
-     * @return array<int, array<string, mixed>>
-     */
-    private function serializeToolResults(array $toolResults): array
-    {
-        return array_map(fn (ToolResult $tr) => [
-            'toolCallId' => $tr->toolCallId,
-            'toolName' => $tr->toolName,
-            'args' => $tr->args,
-            'result' => $tr->result,
-        ], $toolResults);
-    }
-
-    /** Reconstruct a Prism Message value object from a database row. */
-    private function deserializeMessage(array $row): ?Message
-    {
-        return match ($row['role']) {
-            'user' => new UserMessage($row['content'] ?? ''),
-            'assistant' => new AssistantMessage(
-                content: $row['content'] ?? '',
-                toolCalls: $row['tool_calls'] ? $this->deserializeToolCalls($row['tool_calls']) : [],
-            ),
-            'tool_result' => $row['tool_results']
-                ? new ToolResultMessage($this->deserializeToolResults($row['tool_results']))
-                : null,
-            'system' => new SystemMessage($row['content'] ?? ''),
-            default => null,
-        };
-    }
-
-    /**
-     * Parse a JSON string back into ToolCall objects.
-     *
-     * @return ToolCall[]
-     */
-    private function deserializeToolCalls(string $json): array
-    {
-        $data = json_decode($json, true);
-        if (! is_array($data)) {
-            return [];
-        }
-
-        return array_map(fn (array $tc) => new ToolCall(
-            id: $tc['id'],
-            name: $tc['name'],
-            arguments: $tc['arguments'],
-        ), $data);
-    }
-
-    /**
-     * Parse a JSON string back into ToolResult objects.
-     *
-     * @return ToolResult[]
-     */
-    private function deserializeToolResults(string $json): array
-    {
-        $data = json_decode($json, true);
-        if (! is_array($data)) {
-            return [];
-        }
-
-        return array_map(fn (array $tr) => new ToolResult(
-            toolCallId: $tr['toolCallId'],
-            toolName: $tr['toolName'] ?? '',
-            args: $tr['args'] ?? [],
-            result: $tr['result'],
-        ), $data);
     }
 }

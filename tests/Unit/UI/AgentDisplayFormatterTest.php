@@ -11,7 +11,15 @@ use PHPUnit\Framework\TestCase;
 
 class AgentDisplayFormatterTest extends TestCase
 {
-    // ── summarizeAgentTypes ──────────────────────────────────────────
+    private AgentDisplayFormatter $formatter;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->formatter = new AgentDisplayFormatter;
+    }
+
+    // ── summarizeAgentTypes ─────────��────────────────────��───────────
 
     public function test_summarize_single_type_single_entry(): void
     {
@@ -19,7 +27,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['args' => ['type' => 'explore']],
         ];
 
-        $this->assertSame('Explore agent', AgentDisplayFormatter::summarizeAgentTypes($entries));
+        $this->assertSame('Explore agent', $this->formatter->summarizeAgentTypes($entries));
     }
 
     public function test_summarize_single_type_multiple_entries(): void
@@ -29,7 +37,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['args' => ['type' => 'explore']],
         ];
 
-        $this->assertSame('Explore agents', AgentDisplayFormatter::summarizeAgentTypes($entries));
+        $this->assertSame('Explore agents', $this->formatter->summarizeAgentTypes($entries));
     }
 
     public function test_summarize_multiple_types(): void
@@ -40,7 +48,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['args' => ['type' => 'general']],
         ];
 
-        $this->assertSame('2 Explore + 1 General agents', AgentDisplayFormatter::summarizeAgentTypes($entries));
+        $this->assertSame('2 Explore + 1 General agents', $this->formatter->summarizeAgentTypes($entries));
     }
 
     public function test_summarize_defaults_to_explore_when_type_missing(): void
@@ -49,7 +57,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['args' => []],
         ];
 
-        $this->assertSame('Explore agent', AgentDisplayFormatter::summarizeAgentTypes($entries));
+        $this->assertSame('Explore agent', $this->formatter->summarizeAgentTypes($entries));
     }
 
     // ── extractResultPreview ─────────────────────────────────────────
@@ -57,13 +65,13 @@ class AgentDisplayFormatterTest extends TestCase
     public function test_extract_preview_skips_headers_and_empty_lines(): void
     {
         $output = "# Title\n\n---\n\nSome actual content";
-        $this->assertSame('Some actual content', AgentDisplayFormatter::extractResultPreview($output));
+        $this->assertSame('Some actual content', $this->formatter->extractResultPreview($output));
     }
 
     public function test_extract_preview_truncates_at_80_chars(): void
     {
         $longLine = str_repeat('x', 100);
-        $result = AgentDisplayFormatter::extractResultPreview($longLine);
+        $result = $this->formatter->extractResultPreview($longLine);
 
         $this->assertSame(83, strlen($result)); // 80 chars + '...'
         $this->assertStringEndsWith('...', $result);
@@ -72,21 +80,21 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_extract_preview_returns_empty_for_empty_input(): void
     {
-        $this->assertSame('', AgentDisplayFormatter::extractResultPreview(''));
-        $this->assertSame('', AgentDisplayFormatter::extractResultPreview('   '));
-        $this->assertSame('', AgentDisplayFormatter::extractResultPreview("\n\n"));
+        $this->assertSame('', $this->formatter->extractResultPreview(''));
+        $this->assertSame('', $this->formatter->extractResultPreview('   '));
+        $this->assertSame('', $this->formatter->extractResultPreview("\n\n"));
     }
 
     public function test_extract_preview_strips_leading_list_markers(): void
     {
-        $this->assertSame('item text', AgentDisplayFormatter::extractResultPreview('- item text'));
-        $this->assertSame('item text', AgentDisplayFormatter::extractResultPreview('* item text'));
+        $this->assertSame('item text', $this->formatter->extractResultPreview('- item text'));
+        $this->assertSame('item text', $this->formatter->extractResultPreview('* item text'));
     }
 
     public function test_extract_preview_skips_horizontal_rules(): void
     {
-        $this->assertSame('', AgentDisplayFormatter::extractResultPreview('---'));
-        $this->assertSame('after rule', AgentDisplayFormatter::extractResultPreview("---\nafter rule"));
+        $this->assertSame('', $this->formatter->extractResultPreview('---'));
+        $this->assertSame('after rule', $this->formatter->extractResultPreview("---\nafter rule"));
     }
 
     // ── renderChildTree ──────────────────────────────────────────────
@@ -97,7 +105,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['type' => 'explore', 'task' => 'find files', 'success' => true, 'elapsed' => 5.0],
         ];
 
-        $result = AgentDisplayFormatter::renderChildTree($children, '');
+        $result = $this->formatter->renderChildTree($children, '');
 
         $this->assertStringContainsString('└─', $result);
         $this->assertStringContainsString('✓', $result);
@@ -113,7 +121,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['type' => 'general', 'task' => 'task b', 'success' => false, 'elapsed' => 10.0],
         ];
 
-        $result = AgentDisplayFormatter::renderChildTree($children, '');
+        $result = $this->formatter->renderChildTree($children, '');
 
         $this->assertStringContainsString('├─', $result);
         $this->assertStringContainsString('└─', $result);
@@ -135,7 +143,7 @@ class AgentDisplayFormatterTest extends TestCase
             ],
         ];
 
-        $result = AgentDisplayFormatter::renderChildTree($children, '');
+        $result = $this->formatter->renderChildTree($children, '');
 
         $this->assertStringContainsString('parent task', $result);
         $this->assertStringContainsString('child task', $result);
@@ -163,7 +171,7 @@ class AgentDisplayFormatterTest extends TestCase
             ],
         ];
 
-        $result = AgentDisplayFormatter::renderChildTree($children, '');
+        $result = $this->formatter->renderChildTree($children, '');
 
         // First child uses ├─ so continuation should contain │ for its nested children
         $this->assertStringContainsString('│', $result);
@@ -177,14 +185,14 @@ class AgentDisplayFormatterTest extends TestCase
             ['type' => 'explore', 'task' => $longTask, 'success' => true, 'elapsed' => 0.0],
         ];
 
-        $result = AgentDisplayFormatter::renderChildTree($children, '');
+        $result = $this->formatter->renderChildTree($children, '');
         // Task should be truncated to 40 chars + '…'
         $this->assertStringContainsString('…', $result);
     }
 
     public function test_render_child_tree_empty_children(): void
     {
-        $this->assertSame('', AgentDisplayFormatter::renderChildTree([], ''));
+        $this->assertSame('', $this->formatter->renderChildTree([], ''));
     }
 
     public function test_render_child_tree_no_elapsed_when_zero(): void
@@ -193,7 +201,7 @@ class AgentDisplayFormatterTest extends TestCase
             ['type' => 'explore', 'task' => 'task', 'success' => true, 'elapsed' => 0.0],
         ];
 
-        $result = AgentDisplayFormatter::renderChildTree($children, '');
+        $result = $this->formatter->renderChildTree($children, '');
         // Should not contain parenthetical time when elapsed is 0
         $this->assertStringNotContainsString('(0s)', $result);
     }
@@ -202,7 +210,7 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_agent_label_with_all_args(): void
     {
-        $result = AgentDisplayFormatter::formatAgentLabel([
+        $result = $this->formatter->formatAgentLabel([
             'type' => 'general',
             'id' => 'agent-1',
             'task' => 'do something',
@@ -221,7 +229,7 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_agent_label_without_id(): void
     {
-        $result = AgentDisplayFormatter::formatAgentLabel([
+        $result = $this->formatter->formatAgentLabel([
             'type' => 'explore',
             'task' => 'search code',
         ]);
@@ -237,7 +245,7 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_agent_label_plan_type_color(): void
     {
-        [, $typeColor] = AgentDisplayFormatter::formatAgentLabel([
+        [, $typeColor] = $this->formatter->formatAgentLabel([
             'type' => 'plan',
             'task' => 'plan task',
         ]);
@@ -248,7 +256,7 @@ class AgentDisplayFormatterTest extends TestCase
     public function test_format_agent_label_truncates_long_task(): void
     {
         $longTask = str_repeat('z', 60);
-        [$label] = AgentDisplayFormatter::formatAgentLabel([
+        [$label] = $this->formatter->formatAgentLabel([
             'type' => 'explore',
             'task' => $longTask,
         ]);
@@ -258,7 +266,7 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_agent_label_defaults_to_explore(): void
     {
-        [$label] = AgentDisplayFormatter::formatAgentLabel([]);
+        [$label] = $this->formatter->formatAgentLabel([]);
         $this->assertStringContainsString('Explore', $label);
     }
 
@@ -266,21 +274,21 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_elapsed_seconds_only(): void
     {
-        $this->assertSame('42s', AgentDisplayFormatter::formatElapsed(42.0));
-        $this->assertSame('0s', AgentDisplayFormatter::formatElapsed(0.0));
-        $this->assertSame('59s', AgentDisplayFormatter::formatElapsed(59.9));
+        $this->assertSame('42s', $this->formatter->formatElapsed(42.0));
+        $this->assertSame('0s', $this->formatter->formatElapsed(0.0));
+        $this->assertSame('59s', $this->formatter->formatElapsed(59.9));
     }
 
     public function test_format_elapsed_minutes_and_seconds(): void
     {
-        $this->assertSame('1m 30s', AgentDisplayFormatter::formatElapsed(90.0));
-        $this->assertSame('5m 0s', AgentDisplayFormatter::formatElapsed(300.0));
+        $this->assertSame('1m 30s', $this->formatter->formatElapsed(90.0));
+        $this->assertSame('5m 0s', $this->formatter->formatElapsed(300.0));
     }
 
     public function test_format_elapsed_hours_and_minutes(): void
     {
-        $this->assertSame('1h 5m', AgentDisplayFormatter::formatElapsed(3900.0));
-        $this->assertSame('2h 0m', AgentDisplayFormatter::formatElapsed(7200.0));
+        $this->assertSame('1h 5m', $this->formatter->formatElapsed(3900.0));
+        $this->assertSame('2h 0m', $this->formatter->formatElapsed(7200.0));
     }
 
     // ── formatAgentStats ─────────────────────────────────────────────
@@ -292,7 +300,7 @@ class AgentDisplayFormatterTest extends TestCase
         $stats->startTime = 100.0;
         $stats->endTime = 142.0; // elapsed = 42s
 
-        $result = AgentDisplayFormatter::formatAgentStats(['stats' => $stats]);
+        $result = $this->formatter->formatAgentStats(['stats' => $stats]);
 
         $this->assertStringContainsString('42s', $result);
         $this->assertStringContainsString('5 tools', $result);
@@ -305,7 +313,7 @@ class AgentDisplayFormatterTest extends TestCase
         $stats->startTime = 100.0;
         $stats->endTime = 105.0;
 
-        $result = AgentDisplayFormatter::formatAgentStats(['stats' => $stats]);
+        $result = $this->formatter->formatAgentStats(['stats' => $stats]);
 
         $this->assertStringContainsString('1 tool', $result);
         $this->assertStringNotContainsString('1 tools', $result);
@@ -313,15 +321,15 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_agent_stats_without_stats_returns_empty(): void
     {
-        $this->assertSame('', AgentDisplayFormatter::formatAgentStats([]));
-        $this->assertSame('', AgentDisplayFormatter::formatAgentStats(['stats' => null]));
+        $this->assertSame('', $this->formatter->formatAgentStats([]));
+        $this->assertSame('', $this->formatter->formatAgentStats(['stats' => null]));
     }
 
     // ── formatCoordinationTags ───────────────────────────────────────
 
     public function test_format_coordination_tags_with_depends_on(): void
     {
-        $result = AgentDisplayFormatter::formatCoordinationTags([
+        $result = $this->formatter->formatCoordinationTags([
             'depends_on' => ['id1', 'id2'],
         ]);
 
@@ -330,7 +338,7 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_coordination_tags_with_group(): void
     {
-        $result = AgentDisplayFormatter::formatCoordinationTags([
+        $result = $this->formatter->formatCoordinationTags([
             'group' => 'writers',
         ]);
 
@@ -339,7 +347,7 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_coordination_tags_both_depends_and_group(): void
     {
-        $result = AgentDisplayFormatter::formatCoordinationTags([
+        $result = $this->formatter->formatCoordinationTags([
             'depends_on' => ['alpha'],
             'group' => 'writers',
         ]);
@@ -351,8 +359,8 @@ class AgentDisplayFormatterTest extends TestCase
 
     public function test_format_coordination_tags_empty_returns_empty(): void
     {
-        $this->assertSame('', AgentDisplayFormatter::formatCoordinationTags([]));
-        $this->assertSame('', AgentDisplayFormatter::formatCoordinationTags(['depends_on' => [], 'group' => '']));
+        $this->assertSame('', $this->formatter->formatCoordinationTags([]));
+        $this->assertSame('', $this->formatter->formatCoordinationTags(['depends_on' => [], 'group' => '']));
     }
 
     // ── countNodes ───────────────────────────────────────────────────
@@ -365,12 +373,12 @@ class AgentDisplayFormatterTest extends TestCase
             ['type' => 'c'],
         ];
 
-        $this->assertSame(3, AgentDisplayFormatter::countNodes($nodes));
+        $this->assertSame(3, $this->formatter->countNodes($nodes));
     }
 
     public function test_count_nodes_empty(): void
     {
-        $this->assertSame(0, AgentDisplayFormatter::countNodes([]));
+        $this->assertSame(0, $this->formatter->countNodes([]));
     }
 
     public function test_count_nodes_nested(): void
@@ -386,7 +394,7 @@ class AgentDisplayFormatterTest extends TestCase
         ];
 
         // a, b, c, d, e = 5
-        $this->assertSame(5, AgentDisplayFormatter::countNodes($nodes));
+        $this->assertSame(5, $this->formatter->countNodes($nodes));
     }
 
     // ── countByStatus ────────────────────────────────────────────────
@@ -399,9 +407,9 @@ class AgentDisplayFormatterTest extends TestCase
             ['status' => 'completed'],
         ];
 
-        $this->assertSame(2, AgentDisplayFormatter::countByStatus($nodes, 'completed'));
-        $this->assertSame(1, AgentDisplayFormatter::countByStatus($nodes, 'running'));
-        $this->assertSame(0, AgentDisplayFormatter::countByStatus($nodes, 'failed'));
+        $this->assertSame(2, $this->formatter->countByStatus($nodes, 'completed'));
+        $this->assertSame(1, $this->formatter->countByStatus($nodes, 'running'));
+        $this->assertSame(0, $this->formatter->countByStatus($nodes, 'failed'));
     }
 
     public function test_count_by_status_nested(): void
@@ -416,12 +424,12 @@ class AgentDisplayFormatterTest extends TestCase
             ['status' => 'failed'],
         ];
 
-        $this->assertSame(3, AgentDisplayFormatter::countByStatus($nodes, 'completed'));
-        $this->assertSame(2, AgentDisplayFormatter::countByStatus($nodes, 'failed'));
+        $this->assertSame(3, $this->formatter->countByStatus($nodes, 'completed'));
+        $this->assertSame(2, $this->formatter->countByStatus($nodes, 'failed'));
     }
 
     public function test_count_by_status_empty_nodes(): void
     {
-        $this->assertSame(0, AgentDisplayFormatter::countByStatus([], 'completed'));
+        $this->assertSame(0, $this->formatter->countByStatus([], 'completed'));
     }
 }

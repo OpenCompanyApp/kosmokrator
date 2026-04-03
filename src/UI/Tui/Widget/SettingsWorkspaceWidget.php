@@ -24,20 +24,6 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     use FocusableTrait;
     use KeybindingsTrait;
 
-    protected static function getDefaultKeybindings(): array
-    {
-        return [
-            'up' => [Key::UP],
-            'down' => [Key::DOWN],
-            'left' => [Key::LEFT],
-            'right' => [Key::RIGHT],
-            'confirm' => [Key::ENTER],
-            'cancel' => [Key::ESCAPE],
-            'backspace' => [Key::BACKSPACE],
-            'save' => ['ctrl+s'],
-        ];
-    }
-
     private int $categoryIndex = 0;
 
     /** Index of the currently selected field within the visible fields list. */

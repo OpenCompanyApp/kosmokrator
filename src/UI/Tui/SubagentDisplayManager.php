@@ -64,6 +64,8 @@ final class SubagentDisplayManager
         private readonly \Closure $renderCallback,
         private readonly \Closure $ensureSpinners,
         private readonly ?LoggerInterface $log = null,
+        private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
+        private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
     ) {}
 
     /**
@@ -135,7 +137,7 @@ final class SubagentDisplayManager
 
         $container = $this->container;
 
-        $text = $this->renderLiveTree(AgentTreeBuilder::buildSpawnTree($entries));
+        $text = $this->renderLiveTree($this->treeBuilder->buildSpawnTree($entries));
 
         if ($this->treeWidget !== null) {
             $container->remove($this->treeWidget);
@@ -226,8 +228,8 @@ final class SubagentDisplayManager
                 try {
                     $tree = ($this->treeProvider)();
                     if ($tree !== []) {
-                        $total = AgentDisplayFormatter::countNodes($tree);
-                        $done = AgentDisplayFormatter::countByStatus($tree, 'done');
+                        $total = $this->formatter->countNodes($tree);
+                        $done = $this->formatter->countByStatus($tree, 'done');
                         if ($done > 0) {
                             $this->cachedLoaderLabel = $this->formatRunningSummary($total, $done);
                         } else {
@@ -300,11 +302,11 @@ final class SubagentDisplayManager
             $e = $entries[0];
             $icon = $e['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
             $label = $e['success'] ? 'Done' : 'Failed';
-            $stats = AgentDisplayFormatter::formatAgentStats($e);
+            $stats = $this->formatter->formatAgentStats($e);
             $children = $e['children'] ?? [];
 
             if ($children !== []) {
-                $tree = AgentDisplayFormatter::renderChildTree($children, '   ');
+                $tree = $this->formatter->renderChildTree($children, '   ');
                 $treeWidget = new TextWidget(rtrim($tree));
                 $treeWidget->addStyleClass('tool-result');
                 $container->add($treeWidget);
@@ -320,7 +322,7 @@ final class SubagentDisplayManager
 
         // Multiple: summary as TextWidget with child trees, full details as CollapsibleWidget
         $succeeded = count(array_filter($entries, fn ($e) => $e['success']));
-        $types = AgentDisplayFormatter::summarizeAgentTypes($entries);
+        $types = $this->formatter->summarizeAgentTypes($entries);
 
         $lines = ["{$green}✓{$r} {$succeeded}/{$count} {$types} finished"];
         foreach ($entries as $entry) {
@@ -329,15 +331,15 @@ final class SubagentDisplayManager
             $type = ucfirst((string) ($args['type'] ?? 'explore'));
             $primary = $id !== null ? $id : $type;
             $icon = $entry['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
-            $stats = AgentDisplayFormatter::formatAgentStats($entry);
+            $stats = $this->formatter->formatAgentStats($entry);
 
-            $preview = AgentDisplayFormatter::extractResultPreview($entry['result']);
+            $preview = $this->formatter->extractResultPreview($entry['result']);
             $previewSuffix = $preview !== '' ? " {$dim}· {$preview}{$r}" : '';
             $lines[] = "  {$icon} {$primary}{$stats}{$previewSuffix}";
 
             $children = $entry['children'] ?? [];
             if ($children !== []) {
-                $lines[] = rtrim(AgentDisplayFormatter::renderChildTree($children, '     '));
+                $lines[] = rtrim($this->formatter->renderChildTree($children, '     '));
             }
         }
 
@@ -432,10 +434,10 @@ final class SubagentDisplayManager
         $gray = "\033[38;5;240m";
         $cyan = "\033[38;2;100;200;220m";
 
-        $total = AgentDisplayFormatter::countNodes($nodes);
-        $running = AgentDisplayFormatter::countByStatus($nodes, 'running');
-        $waiting = AgentDisplayFormatter::countByStatus($nodes, 'waiting');
-        $done = AgentDisplayFormatter::countByStatus($nodes, 'done');
+        $total = $this->formatter->countNodes($nodes);
+        $running = $this->formatter->countByStatus($nodes, 'running');
+        $waiting = $this->formatter->countByStatus($nodes, 'waiting');
+        $done = $this->formatter->countByStatus($nodes, 'done');
         $parts = [];
         if ($running > 0) {
             $parts[] = "{$running} running";
@@ -476,7 +478,7 @@ final class SubagentDisplayManager
             $type = ucfirst($node['type']);
             $id = $node['id'];
             $task = mb_strlen($node['task']) > 50 ? mb_substr($node['task'], 0, 50).'…' : $node['task'];
-            $elapsed = $node['elapsed'] > 0 ? AgentDisplayFormatter::formatElapsed($node['elapsed']) : '';
+            $elapsed = $node['elapsed'] > 0 ? $this->formatter->formatElapsed($node['elapsed']) : '';
             $tools = $node['toolCalls'] ?? 0;
 
             if ($node['status'] === 'done') {

@@ -34,6 +34,7 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
     public function __construct(
         private array $summary,
         private array $allStats,
+        private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
     ) {}
 
     /** Update the dashboard data (called on each refresh cycle). */
@@ -68,7 +69,7 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
      * Render the bordered dashboard with progress bar, status counts, resources, active agents, failures, and type breakdown.
      *
      * @param  RenderContext  $context  Terminal dimensions
-     * @return list<string>  ANSI-formatted lines
+     * @return list<string> ANSI-formatted lines
      */
     public function render(RenderContext $context): array
     {
@@ -140,12 +141,12 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         $avgCost = Theme::formatCost($s['avgCost']);
         $lines[] = $pad("{$dim}Cost      {$white}{$cost}{$dim}   ·  avg {$white}{$avgCost}{$dim}/agent{$r}");
 
-        $elapsed = AgentDisplayFormatter::formatElapsed($s['elapsed']);
+        $elapsed = $this->formatter->formatElapsed($s['elapsed']);
         $rate = $s['rate'] > 0 ? number_format($s['rate'], 1).' agents/min' : 'N/A';
         $lines[] = $pad("{$dim}Elapsed   {$white}{$elapsed}{$dim}  ·  rate {$white}{$rate}{$r}");
 
         if ($s['eta'] > 0) {
-            $eta = '~'.AgentDisplayFormatter::formatElapsed($s['eta']).' remaining';
+            $eta = '~'.$this->formatter->formatElapsed($s['eta']).' remaining';
             $lines[] = $pad("{$dim}ETA       {$gold}{$eta}{$r}");
         }
         $lines[] = $blank;

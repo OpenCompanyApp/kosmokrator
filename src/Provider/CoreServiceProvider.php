@@ -14,6 +14,8 @@ use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
+use Kosmokrator\UI\AgentDisplayFormatter;
+use Kosmokrator\UI\AgentTreeBuilder;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
@@ -94,5 +96,9 @@ class CoreServiceProvider extends ServiceProvider
             $this->container->make('config'),
             $this->container->make(CodexTokenStoreContract::class),
         ));
+
+        // UI display utilities (stateless singletons)
+        $this->container->singleton(AgentDisplayFormatter::class, fn () => new AgentDisplayFormatter);
+        $this->container->singleton(AgentTreeBuilder::class, fn () => new AgentTreeBuilder);
     }
 }

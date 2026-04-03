@@ -9,8 +9,8 @@ use Kosmokrator\Agent\SubagentStats;
 /**
  * Shared formatting utilities for agent display across TUI and ANSI renderers.
  *
- * All methods are static and stateless — they transform agent data into
- * formatted ANSI strings used by both renderer implementations.
+ * Stateless injectable service — transforms agent data into formatted ANSI
+ * strings used by both renderer implementations.
  */
 final class AgentDisplayFormatter
 {
@@ -20,7 +20,7 @@ final class AgentDisplayFormatter
      * @param  array<int, array{args: array}>  $entries
      * @return string E.g. "Explore agents", "2 Explore + 1 General agents"
      */
-    public static function summarizeAgentTypes(array $entries): string
+    public function summarizeAgentTypes(array $entries): string
     {
         $types = [];
         foreach ($entries as $entry) {
@@ -48,7 +48,7 @@ final class AgentDisplayFormatter
      * Skips empty lines, markdown headers (#), and horizontal rules (---).
      * Strips leading list markers (- or *). Truncates at 80 characters.
      */
-    public static function extractResultPreview(string $output): string
+    public function extractResultPreview(string $output): string
     {
         foreach (explode("\n", trim($output)) as $line) {
             $stripped = trim($line);
@@ -74,7 +74,7 @@ final class AgentDisplayFormatter
      *
      * @param  array<int, array{type: string, task: string, success: bool, elapsed: float, children?: array}>  $children
      */
-    public static function renderChildTree(array $children, string $indent): string
+    public function renderChildTree(array $children, string $indent): string
     {
         $r = Theme::reset();
         $dim = Theme::dim();
@@ -89,12 +89,12 @@ final class AgentDisplayFormatter
             $icon = $child['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
             $type = ucfirst($child['type']);
             $task = mb_strlen($child['task']) > 40 ? mb_substr($child['task'], 0, 40).'…' : $child['task'];
-            $elapsed = $child['elapsed'] > 0 ? " {$dim}(".self::formatElapsed($child['elapsed'])."){$r}" : '';
+            $elapsed = $child['elapsed'] > 0 ? " {$dim}(".$this->formatElapsed($child['elapsed'])."){$r}" : '';
 
             $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$task}{$elapsed}\n";
 
             if (($child['children'] ?? []) !== []) {
-                $output .= self::renderChildTree($child['children'], "{$indent}{$continuation}");
+                $output .= $this->renderChildTree($child['children'], "{$indent}{$continuation}");
             }
         }
 
@@ -107,7 +107,7 @@ final class AgentDisplayFormatter
      * @param  array{type?: string, id?: string, task?: string}  $args
      * @return array{string, string} [formatted label, type ANSI color code]
      */
-    public static function formatAgentLabel(array $args): array
+    public function formatAgentLabel(array $args): array
     {
         $r = Theme::reset();
         $dim = Theme::dim();
@@ -134,7 +134,7 @@ final class AgentDisplayFormatter
      *
      * @return string E.g. "42s", "1m 30s", "1h 5m"
      */
-    public static function formatElapsed(float $seconds): string
+    public function formatElapsed(float $seconds): string
     {
         $s = (int) $seconds;
         if ($s < 60) {
@@ -152,7 +152,7 @@ final class AgentDisplayFormatter
      *
      * @param  array{stats?: ?SubagentStats}  $entry  Batch entry with optional stats
      */
-    public static function formatAgentStats(array $entry): string
+    public function formatAgentStats(array $entry): string
     {
         $stats = $entry['stats'] ?? null;
         if (! $stats instanceof SubagentStats) {
@@ -161,7 +161,7 @@ final class AgentDisplayFormatter
 
         $dim = Theme::dim();
         $r = Theme::reset();
-        $elapsed = self::formatElapsed($stats->elapsed());
+        $elapsed = $this->formatElapsed($stats->elapsed());
         $tools = $stats->toolCalls.' tool'.($stats->toolCalls !== 1 ? 's' : '');
 
         return " {$dim}· {$elapsed} · {$tools}{$r}";
@@ -172,7 +172,7 @@ final class AgentDisplayFormatter
      *
      * @return string E.g. " → depends on: id1, id2 · group: writers"
      */
-    public static function formatCoordinationTags(array $args): string
+    public function formatCoordinationTags(array $args): string
     {
         $dim = Theme::dim();
         $r = Theme::reset();
@@ -199,11 +199,11 @@ final class AgentDisplayFormatter
      *
      * @param  array<int, array{children?: array}>  $nodes
      */
-    public static function countNodes(array $nodes): int
+    public function countNodes(array $nodes): int
     {
         $count = count($nodes);
         foreach ($nodes as $node) {
-            $count += self::countNodes($node['children'] ?? []);
+            $count += $this->countNodes($node['children'] ?? []);
         }
 
         return $count;
@@ -214,14 +214,14 @@ final class AgentDisplayFormatter
      *
      * @param  array<int, array{status: string, children?: array}>  $nodes
      */
-    public static function countByStatus(array $nodes, string $status): int
+    public function countByStatus(array $nodes, string $status): int
     {
         $count = 0;
         foreach ($nodes as $node) {
             if ($node['status'] === $status) {
                 $count++;
             }
-            $count += self::countByStatus($node['children'] ?? [], $status);
+            $count += $this->countByStatus($node['children'] ?? [], $status);
         }
 
         return $count;

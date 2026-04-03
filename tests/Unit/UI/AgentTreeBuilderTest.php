@@ -9,7 +9,8 @@ class AgentTreeBuilderTest extends TestCase
 {
     public function test_build_spawn_tree_seeds_queued_nodes_from_subagent_entries(): void
     {
-        $tree = AgentTreeBuilder::buildSpawnTree([
+        $builder = new AgentTreeBuilder;
+        $tree = $builder->buildSpawnTree([
             [
                 'id' => 'fallback-id',
                 'args' => [

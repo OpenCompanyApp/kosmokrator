@@ -74,11 +74,11 @@ interface CoreRendererInterface
     /**
      * Display token usage stats and cost in the status bar.
      *
-     * @param string $model      Active model identifier
-     * @param int    $tokensIn   Input tokens consumed
-     * @param int    $tokensOut  Output tokens generated
-     * @param float  $cost       Accumulated API cost in USD
-     * @param int    $maxContext Maximum context window size
+     * @param  string  $model  Active model identifier
+     * @param  int  $tokensIn  Input tokens consumed
+     * @param  int  $tokensOut  Output tokens generated
+     * @param  float  $cost  Accumulated API cost in USD
+     * @param  int  $maxContext  Maximum context window size
      */
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void;
 

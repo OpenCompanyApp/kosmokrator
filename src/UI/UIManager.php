@@ -5,6 +5,7 @@ namespace Kosmokrator\UI;
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\Ansi\AnsiAnimation;
 use Kosmokrator\UI\Ansi\AnsiRenderer;
 use Kosmokrator\UI\Tui\TuiRenderer;
 use Symfony\Component\Tui\Tui;
@@ -21,7 +22,7 @@ class UIManager implements RendererInterface
     private RendererInterface $renderer;
 
     /**
-     * @param string $preference Renderer preference: 'auto', 'tui', or 'ansi'
+     * @param  string  $preference  Renderer preference: 'auto', 'tui', or 'ansi'
      */
     public function __construct(string $preference = 'auto')
     {
@@ -355,10 +356,16 @@ class UIManager implements RendererInterface
         $this->renderer->playUnleash();
     }
 
+    /** {@inheritDoc} */
+    public function playAnimation(AnsiAnimation $animation): void
+    {
+        $this->renderer->playAnimation($animation);
+    }
+
     /**
      * Resolve the preference string to a concrete renderer instance.
      *
-     * @param string $preference 'auto', 'tui', or 'ansi'
+     * @param  string  $preference  'auto', 'tui', or 'ansi'
      * @return RendererInterface The resolved renderer
      */
     private function resolveRenderer(string $preference): RendererInterface

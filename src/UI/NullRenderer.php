@@ -7,6 +7,7 @@ namespace Kosmokrator\UI;
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\Ansi\AnsiAnimation;
 
 /**
  * No-op renderer for headless subagents.
@@ -152,4 +153,6 @@ class NullRenderer implements RendererInterface
     public function playPrometheus(): void {}
 
     public function playUnleash(): void {}
+
+    public function playAnimation(AnsiAnimation $animation): void {}
 }

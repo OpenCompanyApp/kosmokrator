@@ -8,6 +8,7 @@ use Amp\Cancellation;
 use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\Ansi\AnsiAnimation;
 use Kosmokrator\UI\Ansi\AnsiIntro;
 use Kosmokrator\UI\Ansi\AnsiPrometheus;
 use Kosmokrator\UI\Ansi\AnsiTheogony;
@@ -27,13 +28,13 @@ use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
-use Symfony\Component\Tui\Widget\AbstractWidget;
 
 /**
  * TUI implementation of core lifecycle and display methods.
@@ -131,37 +132,88 @@ final class TuiCoreRenderer implements CoreRendererInterface
         ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
         ['value' => '/agents', 'label' => '/agents', 'description' => 'Show swarm progress dashboard'],
         ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
-        ['value' => '/unleash', 'label' => '/unleash', 'description' => 'Unleash a massive swarm of agents on a task'],
         ['value' => '/update', 'label' => '/update', 'description' => 'Check for and install updates'],
         ['value' => '/feedback', 'label' => '/feedback', 'description' => 'Submit feedback or a bug report'],
         ['value' => '/rename', 'label' => '/rename', 'description' => 'Rename the current session'],
     ];
 
+    private const POWER_COMMANDS = [
+        ['value' => ':unleash', 'label' => ':unleash', 'description' => 'Unleash a massive swarm of agents on a task'],
+        ['value' => ':trace', 'label' => ':trace', 'description' => 'Evidence-driven deep trace analysis'],
+        ['value' => ':autopilot', 'label' => ':autopilot', 'description' => 'Full autonomous pipeline from idea to verified code'],
+        ['value' => ':deslop', 'label' => ':deslop', 'description' => 'Regression-safe cleanup of AI-generated bloat'],
+        ['value' => ':deepinit', 'label' => ':deepinit', 'description' => 'Deep codebase documentation and knowledge map'],
+        ['value' => ':ralph', 'label' => ':ralph', 'description' => 'Persistent retry loop — the boulder never stops'],
+        ['value' => ':team', 'label' => ':team', 'description' => 'Staged pipeline with specialized agent roles'],
+        ['value' => ':ultraqa', 'label' => ':ultraqa', 'description' => 'Autonomous QA cycling until all tests pass'],
+        ['value' => ':interview', 'label' => ':interview', 'description' => 'Socratic requirements gathering'],
+        ['value' => ':doctor', 'label' => ':doctor', 'description' => 'Self-diagnostic check of environment and project'],
+        ['value' => ':learner', 'label' => ':learner', 'description' => 'Extract a reusable pattern from this conversation'],
+        ['value' => ':cancel', 'label' => ':cancel', 'description' => 'Gracefully cancel any active workflow or swarm'],
+        ['value' => ':replay', 'label' => ':replay', 'description' => 'Replay and modify a previous workflow'],
+    ];
+
     // ── Public accessors for shared state ───────────────────────────────
 
-    public function getTui(): Tui { return $this->tui; }
+    public function getTui(): Tui
+    {
+        return $this->tui;
+    }
 
-    public function getConversation(): ContainerWidget { return $this->conversation; }
+    public function getConversation(): ContainerWidget
+    {
+        return $this->conversation;
+    }
 
-    public function getOverlay(): ContainerWidget { return $this->overlay; }
+    public function getOverlay(): ContainerWidget
+    {
+        return $this->overlay;
+    }
 
-    public function getSession(): ContainerWidget { return $this->session; }
+    public function getSession(): ContainerWidget
+    {
+        return $this->session;
+    }
 
-    public function getInput(): EditorWidget { return $this->input; }
+    public function getInput(): EditorWidget
+    {
+        return $this->input;
+    }
 
-    public function getAnimationManager(): TuiAnimationManager { return $this->animationManager; }
+    public function getAnimationManager(): TuiAnimationManager
+    {
+        return $this->animationManager;
+    }
 
-    public function getSubagentDisplay(): SubagentDisplayManager { return $this->subagentDisplay; }
+    public function getSubagentDisplay(): SubagentDisplayManager
+    {
+        return $this->subagentDisplay;
+    }
 
-    public function getModalManager(): TuiModalManager { return $this->modalManager; }
+    public function getModalManager(): TuiModalManager
+    {
+        return $this->modalManager;
+    }
 
-    public function getRequestCancellation(): ?DeferredCancellation { return $this->requestCancellation; }
+    public function getRequestCancellation(): ?DeferredCancellation
+    {
+        return $this->requestCancellation;
+    }
 
-    public function getCurrentModeLabel(): string { return $this->currentModeLabel; }
+    public function getCurrentModeLabel(): string
+    {
+        return $this->currentModeLabel;
+    }
 
-    public function getLastToolArgs(): array { return []; } // Placeholder — tool args live in TuiToolRenderer
+    public function getLastToolArgs(): array
+    {
+        return [];
+    } // Placeholder — tool args live in TuiToolRenderer
 
-    public function getTaskStore(): ?TaskStore { return $this->taskStore; }
+    public function getTaskStore(): ?TaskStore
+    {
+        return $this->taskStore;
+    }
 
     // ��─ CoreRendererInterface ───────────────────────────────────���───────
 
@@ -835,10 +887,13 @@ HELP;
         return $next;
     }
 
-    private function showSlashCompletion(string $filter): void
+    /**
+     * @param  array<array{value: string, label: string, description: string}>  $commands
+     */
+    private function showCommandCompletion(string $filter, array $commands): void
     {
         $filtered = array_values(array_filter(
-            self::SLASH_COMMANDS,
+            $commands,
             fn (array $cmd) => $filter === '' || str_starts_with($cmd['value'], $filter),
         ));
 
@@ -901,6 +956,11 @@ HELP;
                     $selected = $this->slashCompletion->getSelectedItem();
                     if ($selected !== null) {
                         $command = $selected['value'];
+                        // For combined power commands, replace only the last :segment
+                        $currentText = $this->input->getText();
+                        if (str_starts_with($command, ':') && ($lastColon = strrpos($currentText, ':')) > 0) {
+                            $command = substr($currentText, 0, $lastColon).$command;
+                        }
                         $this->input->setText('');
                         $this->hideSlashCompletion();
                         if ($this->promptSuspension !== null) {
@@ -915,7 +975,13 @@ HELP;
                 if ($data === "\t") {
                     $selected = $this->slashCompletion->getSelectedItem();
                     if ($selected !== null) {
-                        $this->input->setText($selected['value']);
+                        $tabValue = $selected['value'];
+                        // For combined power commands, replace only the last :segment
+                        $currentText = $this->input->getText();
+                        if (str_starts_with($tabValue, ':') && ($lastColon = strrpos($currentText, ':')) > 0) {
+                            $tabValue = substr($currentText, 0, $lastColon).$tabValue;
+                        }
+                        $this->input->setText($tabValue.' ');
                     }
                     $this->hideSlashCompletion();
 
@@ -1024,9 +1090,14 @@ HELP;
             $value = $event->getValue();
 
             if (str_starts_with($value, '/') && $value !== '/') {
-                $this->showSlashCompletion($value);
+                $this->showCommandCompletion($value, self::SLASH_COMMANDS);
             } elseif ($value === '/') {
-                $this->showSlashCompletion('');
+                $this->showCommandCompletion('', self::SLASH_COMMANDS);
+            } elseif (str_starts_with($value, ':')) {
+                // For combined commands, complete only the last :segment
+                $lastColon = strrpos($value, ':');
+                $filter = substr($value, $lastColon);
+                $this->showCommandCompletion($filter === ':' ? '' : $filter, self::POWER_COMMANDS);
             } else {
                 $this->hideSlashCompletion();
             }

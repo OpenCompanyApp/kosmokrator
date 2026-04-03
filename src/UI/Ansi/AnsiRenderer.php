@@ -193,6 +193,11 @@ class AnsiRenderer implements RendererInterface
         $this->core->playUnleash();
     }
 
+    public function playAnimation(AnsiAnimation $animation): void
+    {
+        $this->core->playAnimation($animation);
+    }
+
     // ── ToolRendererInterface ───────────────────────────────────────────
 
     public function showToolCall(string $name, array $args): void

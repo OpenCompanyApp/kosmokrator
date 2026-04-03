@@ -14,7 +14,7 @@ use Kosmokrator\UI\Theme;
  * impacts with a blinding flash, shatters Prometheus's chains, and unleashes
  * the titan's power.
  */
-class AnsiPrometheus
+class AnsiPrometheus implements AnsiAnimation
 {
     private int $termWidth;
 

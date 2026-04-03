@@ -13,7 +13,7 @@ use Kosmokrator\UI\Theme;
  * a swarm of agent glyphs that scatter across the terminal like stars
  * being born from a cosmic explosion.
  */
-class AnsiUnleash
+class AnsiUnleash implements AnsiAnimation
 {
     private int $termWidth;
 

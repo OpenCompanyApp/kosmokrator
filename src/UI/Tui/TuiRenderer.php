@@ -7,8 +7,9 @@ namespace Kosmokrator\UI\Tui;
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\Ansi\AnsiAnimation;
 use Kosmokrator\UI\RendererInterface;
-use Kosmokrator\UI\Theme;
+use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
  * Main TUI renderer implementing the full-screen terminal interface.
@@ -178,6 +179,11 @@ class TuiRenderer implements RendererInterface
         $this->core->playUnleash();
     }
 
+    public function playAnimation(AnsiAnimation $animation): void
+    {
+        $this->core->playAnimation($animation);
+    }
+
     // ── ToolRendererInterface ───────────────────────────────────────────
 
     public function showToolCall(string $name, array $args): void
@@ -306,7 +312,7 @@ class TuiRenderer implements RendererInterface
             $lines[] = "  {$icon} {$type} \"{$task}\" · {$s->toolCalls} tools";
         }
 
-        $this->core->addConversationWidget(new \Symfony\Component\Tui\Widget\TextWidget(implode("\n", $lines)));
+        $this->core->addConversationWidget(new TextWidget(implode("\n", $lines)));
     }
 
     public function clearSubagentStatus(): void

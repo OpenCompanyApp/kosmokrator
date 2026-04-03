@@ -110,6 +110,7 @@ class AgentCommand extends Command
         $providers = $this->container->make(ProviderCatalog::class);
 
         $registry = $this->buildSlashCommandRegistry();
+        $powerRegistry = $this->buildPowerCommandRegistry();
         $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models, $providers);
         $nextInput = null;
         $nextInputShown = false;
@@ -136,6 +137,48 @@ class AgentCommand extends Command
             $nextInputShown = false;
 
             if ($input === '') {
+                continue;
+            }
+
+            // User skill dispatch — '$' prefix (future).
+            if (str_starts_with($input, '$')) {
+                $session->ui->showNotice('User skills ($) coming soon.');
+
+                continue;
+            }
+
+            // Power command dispatch — ':' prefix, combinable chains.
+            if ($powerRegistry->isPowerInput($input)) {
+                $chain = $powerRegistry->parse($input);
+                if ($chain === null) {
+                    $session->ui->showNotice('Unknown power command. Type : to see available commands.');
+
+                    continue;
+                }
+
+                // Validate all args before playing any animation.
+                foreach ($chain as [$cmd, $cmdArgs]) {
+                    if ($cmd->requiresArgs() && trim($cmdArgs) === '') {
+                        $session->ui->showNotice("Usage: {$cmd->name()} <description>");
+
+                        continue 2;
+                    }
+                }
+
+                // Play animations sequentially.
+                $chainCount = count($chain);
+                foreach ($chain as $i => [$cmd, $cmdArgs]) {
+                    $animClass = $cmd->animationClass();
+                    $session->ui->playAnimation(new $animClass);
+                    if ($i < $chainCount - 1) {
+                        usleep(300_000);
+                    }
+                }
+
+                // Inject combined prompt.
+                $prompts = array_map(fn (array $pair) => $pair[0]->buildPrompt($pair[1]), $chain);
+                $nextInput = implode("\n\n---\n\n", $prompts);
+
                 continue;
             }
 
@@ -262,7 +305,35 @@ class AgentCommand extends Command
         $registry->register(new Slash\UpdateCommand($version));
         $registry->register(new Slash\FeedbackCommand($version));
         $registry->register(new Slash\RenameCommand);
-        $registry->register(new Slash\UnleashCommand);
+
+        return $registry;
+    }
+
+    /**
+     * Registers all power workflow commands into a new registry.
+     */
+    private function buildPowerCommandRegistry(): PowerCommandRegistry
+    {
+        $registry = new PowerCommandRegistry;
+
+        // Ship now
+        $registry->register(new Power\UnleashCommand);
+        $registry->register(new Power\TraceCommand);
+        $registry->register(new Power\AutopilotCommand);
+        $registry->register(new Power\DeslopCommand);
+        $registry->register(new Power\DeepInitCommand);
+
+        // Next wave
+        $registry->register(new Power\RalphCommand);
+        $registry->register(new Power\TeamCommand);
+        $registry->register(new Power\UltraQaCommand);
+        $registry->register(new Power\InterviewCommand);
+
+        // Future
+        $registry->register(new Power\DoctorCommand);
+        $registry->register(new Power\LearnerCommand);
+        $registry->register(new Power\CancelCommand);
+        $registry->register(new Power\ReplayCommand);
 
         return $registry;
     }

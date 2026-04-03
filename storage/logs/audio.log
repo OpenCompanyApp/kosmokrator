@@ -204,3 +204,41 @@
 [2026-04-03 19:47:45] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1658}
 [2026-04-03 19:47:45] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d01961b8c2c.py","instrument":"Banjo"}
 [2026-04-03 19:47:45] INFO: Worker finished
+[2026-04-03 22:23:07] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 22:23:07] INFO: Completion sound worker booted
+[2026-04-03 22:23:07] INFO: Worker starting composition {"instrument":105,"message_preview":"Error: API error (401): token expired or incorrect"}
+[2026-04-03 22:23:08] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"API error (401): token expired or incorrect"}
+[2026-04-03 22:23:08] INFO: Completion sound: retrying composition {"attempt":1}
+[2026-04-03 22:23:09] WARNING: Completion sound: LLM call failed {"attempt":1,"error":"API error (401): token expired or incorrect"}
+[2026-04-03 22:23:09] ERROR: Completion sound: all attempts exhausted {"last_error":"API error (401): token expired or incorrect","attempts":2}
+[2026-04-03 22:23:10] WARNING: Completion sound: using fallback composition {"reason":"API error (401): token expired or incorrect"}
+[2026-04-03 22:23:10] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d03dce01cb7.py","instrument":"Banjo"}
+[2026-04-03 22:23:10] INFO: Worker finished
+[2026-04-03 22:23:58] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 22:23:58] INFO: Completion sound worker booted
+[2026-04-03 22:23:58] INFO: Worker starting composition {"instrument":105,"message_preview":"Error: API error (401): token expired or incorrect"}
+[2026-04-03 22:24:00] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"API error (401): token expired or incorrect"}
+[2026-04-03 22:24:00] INFO: Completion sound: retrying composition {"attempt":1}
+[2026-04-03 22:24:01] WARNING: Completion sound: LLM call failed {"attempt":1,"error":"API error (401): token expired or incorrect"}
+[2026-04-03 22:24:01] ERROR: Completion sound: all attempts exhausted {"last_error":"API error (401): token expired or incorrect","attempts":2}
+[2026-04-03 22:24:02] WARNING: Completion sound: using fallback composition {"reason":"API error (401): token expired or incorrect"}
+[2026-04-03 22:24:02] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d03e020354c.py","instrument":"Banjo"}
+[2026-04-03 22:24:02] INFO: Worker finished
+[2026-04-03 22:38:12] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 22:38:12] INFO: Completion sound worker booted
+[2026-04-03 22:38:12] INFO: Worker starting composition {"instrument":41,"message_preview":"**Swarm launched:** 20 Phase 1 investigators → 4 Phase 2 synthesizers → 1 Phase 3 compiler. All 25 a"}
+[2026-04-03 22:38:18] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1411}
+[2026-04-03 22:38:18] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d0415a3217d.py","instrument":"Violin"}
+[2026-04-03 22:38:18] INFO: Worker finished
+[2026-04-03 22:48:43] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 22:48:43] INFO: Completion sound worker booted
+[2026-04-03 22:48:43] INFO: Worker starting composition {"instrument":41,"message_preview":"**Swarm mission complete.** All 25 agents executed in parallel across 20 investigation dimensions, p"}
+[2026-04-03 22:48:59] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":2046}
+[2026-04-03 22:48:59] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d043dbbaeb7.py","instrument":"Violin"}
+[2026-04-03 22:48:59] INFO: Worker finished
+[2026-04-03 22:52:36] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 22:52:36] INFO: Completion sound worker booted
+[2026-04-03 22:52:36] INFO: Worker starting composition {"instrument":112,"message_preview":"## Swarm Launched Successfully\n\n**28 agents deployed** across 3 phases:\n\n**Phase 1 (20 exploration a"}
+[2026-04-03 22:52:59] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1547}
+[2026-04-03 22:52:59] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d044cbc553b.py","instrument":"Fiddle"}
+[2026-04-03 22:52:59] INFO: Worker finished

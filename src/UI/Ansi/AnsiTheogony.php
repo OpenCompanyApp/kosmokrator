@@ -13,7 +13,7 @@ use Kosmokrator\UI\Theme;
  * Eight chapters tracing the birth of the cosmos from primordial Chaos
  * to the enthronement of the Ruler.
  */
-class AnsiTheogony
+class AnsiTheogony implements AnsiAnimation
 {
     private int $termWidth = 120;
 

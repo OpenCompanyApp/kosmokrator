@@ -2,30 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\Command\Slash;
+namespace Kosmokrator\Command\Power;
 
-use Kosmokrator\Command\SlashCommand;
-use Kosmokrator\Command\SlashCommandContext;
-use Kosmokrator\Command\SlashCommandResult;
+use Kosmokrator\Command\PowerCommand;
+use Kosmokrator\UI\Ansi\AnsiUnleash;
 
-/**
- * Unleash a massive strategic swarm of agents on a task.
- *
- * The axe-to-cut-a-carrot command: analyzes the user's request and injects
- * a prompt that instructs the LLM to spawn an exaggerated number of subagents
- * with sub-sub-agents, dependency chains, and phased execution.
- */
-class UnleashCommand implements SlashCommand
+class UnleashCommand implements PowerCommand
 {
     public function name(): string
     {
-        return '/unleash';
+        return ':unleash';
     }
 
-    /** @return string[] */
     public function aliases(): array
     {
-        return ['/swarm', '/nuke'];
+        return [':swarm', ':nuke'];
     }
 
     public function description(): string
@@ -33,26 +24,22 @@ class UnleashCommand implements SlashCommand
         return 'Unleash a massive swarm of agents on a task';
     }
 
-    public function immediate(): bool
+    public function requiresArgs(): bool
     {
-        return false;
+        return true;
     }
 
-    public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
+    public function animationClass(): string
     {
-        $task = trim($args);
-        if ($task === '') {
-            $ctx->ui->showNotice('Usage: /unleash <describe what you need>');
+        return AnsiUnleash::class;
+    }
 
-            return SlashCommandResult::continue();
-        }
-
-        $ctx->ui->playUnleash();
-
-        $prompt = <<<PROMPT
+    public function buildPrompt(string $args): string
+    {
+        return <<<PROMPT
             You have been UNLEASHED. The user needs maximum coverage on this task:
 
-            "{$task}"
+            "{$args}"
 
             Execute a massive parallel swarm attack:
 
@@ -75,7 +62,5 @@ class UnleashCommand implements SlashCommand
 
             This is the nuclear option. Overwhelm the problem. Leave no stone unturned.
             PROMPT;
-
-        return SlashCommandResult::inject(trim($prompt));
     }
 }

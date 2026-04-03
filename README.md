@@ -16,8 +16,9 @@
 </p>
 
 <p align="center">
-    <img src="https://img.shields.io/packagist/php-v/kosmokrator/kosmokrator.svg?label=php" alt="PHP Version" />
-    <img src="https://img.shields.io/packagist/l/kosmokrator/kosmokrator.svg" alt="License" />
+    <img src="https://img.shields.io/badge/php-%3E%3D8.4-8892BF?logo=php&logoColor=white" alt="PHP 8.4+" />
+    <img src="https://img.shields.io/github/license/OpenCompanyApp/kosmokrator" alt="License" />
+    <img src="https://img.shields.io/github/v/release/OpenCompanyApp/kosmokrator?label=latest" alt="Latest Release" />
 </p>
 
 ---
@@ -564,6 +565,10 @@ php vendor/bin/box compile          # Uses box.json config
 - Extracted classes communicate via return values and closures — no circular dependencies
 - Static utility classes are stateless and side-effect-free
 - Markdown responses rendered with league/commonmark and tempest/highlight
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=OpenCompanyApp/kosmokrator&type=Date)](https://star-history.com/#OpenCompanyApp/kosmokrator&Date)
 
 ## License
 

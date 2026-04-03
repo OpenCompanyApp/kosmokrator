@@ -10,3 +10,7 @@
 /docs/confidential
 /.playwright-cli
 /builds
+/.kosmokrator
+/storage/logs
+tui_err.log
+tui_error.log

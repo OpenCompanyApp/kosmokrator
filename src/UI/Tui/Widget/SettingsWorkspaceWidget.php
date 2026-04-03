@@ -245,7 +245,18 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return;
         }
 
-        if ($kb->matches($data, 'cancel') || $data === 'q') {
+        if ($data === 'q') {
+            // q = save-and-close (most natural "I'm done" gesture)
+            if ($this->values !== $this->originalValues && $this->onSaveCallback !== null) {
+                ($this->onSaveCallback)($this->buildResult());
+            } elseif ($this->onCancelCallback !== null) {
+                ($this->onCancelCallback)();
+            }
+
+            return;
+        }
+
+        if ($kb->matches($data, 'cancel')) {
             if ($this->onCancelCallback !== null) {
                 ($this->onCancelCallback)();
             }
@@ -1108,12 +1119,12 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /** Build the keybinding footer line appropriate for the current mode. */
     private function footer(int $width): string
     {
-        $dim = Theme::dim();
+        $dim = Theme::text();
         $r = Theme::reset();
 
         if ($this->isModelsCategory()) {
             return AnsiUtils::truncateToWidth(
-                "{$dim}Tab/Shift+Tab category  ↑↓ browse providers/models  Enter select default  s save  q cancel  g/p scope{$r}",
+                "{$dim}Tab/Shift+Tab category  ↑↓ browse providers/models  Enter select default  s/q save+close  Esc discard  g/p scope{$r}",
                 $width,
                 '',
             );
@@ -1122,21 +1133,21 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         if ($this->isProviderSetupCategory()) {
             if (! $this->providerSetupEditing) {
                 return AnsiUtils::truncateToWidth(
-                    "{$dim}Tab/Shift+Tab category  ↑↓ browse providers  Enter configure  s save  q cancel  g/p scope  a new custom{$r}",
+                    "{$dim}Tab/Shift+Tab category  ↑↓ browse providers  Enter configure  s/q save+close  Esc discard  g/p scope  a new custom{$r}",
                     $width,
                     '',
                 );
             }
 
             return AnsiUtils::truncateToWidth(
-                "{$dim}Tab/Shift+Tab category  ↑↓ fields  ← back to providers  → open list  Enter select/edit  Esc clear/back  s save  q cancel  g/p scope  r reset{$r}",
+                "{$dim}Tab/Shift+Tab category  ↑↓ fields  ← back to providers  → open list  Enter select/edit  Esc clear/back  s/q save+close  Esc discard  g/p scope  r reset{$r}",
                 $width,
                 '',
             );
         }
 
         return AnsiUtils::truncateToWidth(
-            "{$dim}Tab/Shift+Tab category  ↑↓ fields/list  → open list  type to filter  Enter select/edit  Esc clear/back  s save  q cancel  g/p scope  r reset{$r}",
+            "{$dim}Tab/Shift+Tab category  ↑↓ fields/list  → open list  type to filter  Enter select/edit  Esc clear/back  s/q save+close  Esc discard  g/p scope  r reset{$r}",
             $width,
             '',
         );

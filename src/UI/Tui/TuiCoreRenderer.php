@@ -131,6 +131,10 @@ final class TuiCoreRenderer implements CoreRendererInterface
         ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
         ['value' => '/agents', 'label' => '/agents', 'description' => 'Show swarm progress dashboard'],
         ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
+        ['value' => '/unleash', 'label' => '/unleash', 'description' => 'Unleash a massive swarm of agents on a task'],
+        ['value' => '/update', 'label' => '/update', 'description' => 'Check for and install updates'],
+        ['value' => '/feedback', 'label' => '/feedback', 'description' => 'Submit feedback or a bug report'],
+        ['value' => '/rename', 'label' => '/rename', 'description' => 'Rename the current session'],
     ];
 
     // ── Public accessors for shared state ───────────────────────────────

@@ -219,6 +219,11 @@ final class ToolExecutor
         // Flush remaining subagent batch
         if ($subagentBatch !== []) {
             SafeDisplay::call(fn () => $this->ui->showSubagentBatch($subagentBatch), $this->log);
+
+            // Yield to the event loop so background agent fibers can start and
+            // acquire concurrency slots in parallel, rather than being starved
+            // until the parent's next async operation (e.g. LLM HTTP request).
+            \Amp\delay(0);
         }
 
         return $results;

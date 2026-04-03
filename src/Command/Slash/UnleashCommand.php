@@ -66,10 +66,12 @@ class UnleashCommand implements SlashCommand
 
             Rules:
             - Spawn ALL Phase 1 agents in a SINGLE response (one tool call per agent, all in parallel).
+            - Spawn Phase 2 and Phase 3 in the SAME response as Phase 1 — use depends_on to sequence them. Do NOT wait between phases.
             - Use background mode for ALL agents across ALL phases.
             - Be extremely specific in each agent's task — don't say "investigate X", say exactly what files to look at, what patterns to search for, and what format to return findings in.
             - Phase 1 agents MUST each spawn their own sub-agents for thorough coverage.
-            - After spawning all phases, monitor progress and compile the final output when everything completes.
+            - Do NOT poll, sleep, or check for results. Background agent results are automatically injected into your conversation when they complete. Just spawn everything and wait — the system handles delivery.
+            - When all results have been delivered, compile the final output.
 
             This is the nuclear option. Overwhelm the problem. Leave no stone unturned.
             PROMPT;

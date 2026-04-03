@@ -183,6 +183,11 @@ class AnsiRenderer implements RendererInterface
         $this->core->playPrometheus();
     }
 
+    public function playUnleash(): void
+    {
+        $this->core->playUnleash();
+    }
+
     // ── ToolRendererInterface ───────────────────────────────────────────
 
     public function showToolCall(string $name, array $args): void

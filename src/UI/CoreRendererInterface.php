@@ -112,4 +112,7 @@ interface CoreRendererInterface
 
     /** Play the Prometheus mode animation. */
     public function playPrometheus(): void;
+
+    /** Play the Unleash swarm animation. */
+    public function playUnleash(): void;
 }

@@ -1,0 +1,79 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\Command\Slash;
+
+use Kosmokrator\Command\SlashCommand;
+use Kosmokrator\Command\SlashCommandContext;
+use Kosmokrator\Command\SlashCommandResult;
+
+/**
+ * Unleash a massive strategic swarm of agents on a task.
+ *
+ * The axe-to-cut-a-carrot command: analyzes the user's request and injects
+ * a prompt that instructs the LLM to spawn an exaggerated number of subagents
+ * with sub-sub-agents, dependency chains, and phased execution.
+ */
+class UnleashCommand implements SlashCommand
+{
+    public function name(): string
+    {
+        return '/unleash';
+    }
+
+    /** @return string[] */
+    public function aliases(): array
+    {
+        return ['/swarm', '/nuke'];
+    }
+
+    public function description(): string
+    {
+        return 'Unleash a massive swarm of agents on a task';
+    }
+
+    public function immediate(): bool
+    {
+        return false;
+    }
+
+    public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
+    {
+        $task = trim($args);
+        if ($task === '') {
+            $ctx->ui->showNotice('Usage: /unleash <describe what you need>');
+
+            return SlashCommandResult::continue();
+        }
+
+        $ctx->ui->playUnleash();
+
+        $prompt = <<<PROMPT
+            You have been UNLEASHED. The user needs maximum coverage on this task:
+
+            "{$task}"
+
+            Execute a massive parallel swarm attack:
+
+            1. DECOMPOSE the task into 15-25 independent dimensions, angles, or areas that can be investigated or worked on in parallel.
+
+            2. SPAWN Phase 1: one background agent per dimension. Use explore type for research tasks, general type for tasks that need to write files. Give each a descriptive id (e.g. "auth-security", "db-perf", "api-contracts"). In each agent's task description, instruct it to spawn 3-5 sub-agents of its own to go even deeper — specify exactly what each sub-agent should investigate.
+
+            3. SPAWN Phase 2 (depends_on Phase 1): 3-5 synthesis agents that each consume a cluster of related Phase 1 results and produce structured findings. Give them ids like "synthesis-security", "synthesis-architecture", etc.
+
+            4. SPAWN Phase 3 (depends_on Phase 2): one final agent id "compiler" that depends on all synthesis agents and compiles everything into a single comprehensive deliverable document.
+
+            Rules:
+            - Spawn ALL Phase 1 agents in a SINGLE response (one tool call per agent, all in parallel).
+            - Use background mode for ALL agents across ALL phases.
+            - Be extremely specific in each agent's task — don't say "investigate X", say exactly what files to look at, what patterns to search for, and what format to return findings in.
+            - Phase 1 agents MUST each spawn their own sub-agents for thorough coverage.
+            - After spawning all phases, monitor progress and compile the final output when everything completes.
+
+            This is the nuclear option. Overwhelm the problem. Leave no stone unturned.
+            PROMPT;
+
+        return SlashCommandResult::inject(trim($prompt));
+    }
+}

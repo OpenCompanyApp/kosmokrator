@@ -316,6 +316,12 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         $prometheus->animate();
     }
 
+    public function playUnleash(): void
+    {
+        $unleash = new AnsiUnleash;
+        $unleash->animate();
+    }
+
     /** Returns the current mode label for use by other sub-renderers. */
     public function getCurrentModeLabel(): string
     {

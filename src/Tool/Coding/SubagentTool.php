@@ -131,7 +131,14 @@ class SubagentTool extends AbstractTool
         );
 
         if ($mode === 'await') {
-            $result = $future->await();
+            // Yield parent's concurrency slot while waiting — prevents deadlock when
+            // all slots are held by parents waiting for children that can't start.
+            $orchestrator->yieldSlot($this->parentContext->id);
+            try {
+                $result = $future->await();
+            } finally {
+                $orchestrator->reclaimSlot($this->parentContext->id);
+            }
 
             return ToolResult::success($result);
         }

@@ -148,4 +148,6 @@ class NullRenderer implements RendererInterface
     public function playTheogony(): void {}
 
     public function playPrometheus(): void {}
+
+    public function playUnleash(): void {}
 }

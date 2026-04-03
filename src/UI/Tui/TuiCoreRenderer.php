@@ -11,6 +11,7 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiIntro;
 use Kosmokrator\UI\Ansi\AnsiPrometheus;
 use Kosmokrator\UI\Ansi\AnsiTheogony;
+use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
@@ -594,6 +595,19 @@ HELP;
 
         $prometheus = new AnsiPrometheus;
         $prometheus->animate();
+
+        echo "\033[2J\033[H";
+        $this->tui->start();
+        $this->forceRender();
+    }
+
+    public function playUnleash(): void
+    {
+        $this->tui->stop();
+        echo "\033[2J\033[H";
+
+        $unleash = new AnsiUnleash;
+        $unleash->animate();
 
         echo "\033[2J\033[H";
         $this->tui->start();

@@ -36,6 +36,9 @@ class SubagentOrchestrator
     /** @var array<string, DeferredCancellation> Dedicated subagent cancellation tokens */
     private array $cancellations = [];
 
+    /** @var array<string, \Amp\Sync\Lock> Active global semaphore locks keyed by agent ID (for slot yielding) */
+    private array $globalLocks = [];
+
     private int $autoIdCounter = 0;
 
     private ?LocalSemaphore $globalSemaphore;
@@ -181,6 +184,7 @@ class SubagentOrchestrator
                     $stats->status = 'queued_global';
                     $this->log->debug("Agent '{$id}' waiting for global semaphore", ['concurrency' => $this->concurrency]);
                     $globalLock = $this->globalSemaphore->acquire();
+                    $this->globalLocks[$id] = $globalLock;
                     $this->log->debug("Agent '{$id}' acquired global semaphore");
                 }
 
@@ -332,6 +336,7 @@ class SubagentOrchestrator
                 }
                 if ($globalLock !== null) {
                     $globalLock->release();
+                    unset($this->globalLocks[$id]);
                     $this->log->debug("Agent '{$id}' released global semaphore");
                 }
                 unset($this->cancellations[$id]);
@@ -425,6 +430,37 @@ class SubagentOrchestrator
         $this->pendingResults = [];
 
         return $all;
+    }
+
+    /**
+     * Temporarily release this agent's global semaphore slot so children can use it.
+     * Call reclaimSlot() after the wait completes to re-acquire before resuming work.
+     */
+    public function yieldSlot(string $agentId): void
+    {
+        $lock = $this->globalLocks[$agentId] ?? null;
+        if ($lock === null) {
+            return;
+        }
+
+        $lock->release();
+        unset($this->globalLocks[$agentId]);
+        $this->log->debug("Agent '{$agentId}' yielded global semaphore slot");
+    }
+
+    /**
+     * Re-acquire a global semaphore slot after yielding. Blocks until a slot is available.
+     */
+    public function reclaimSlot(string $agentId): void
+    {
+        if ($this->globalSemaphore === null) {
+            return;
+        }
+
+        $this->log->debug("Agent '{$agentId}' reclaiming global semaphore slot");
+        $lock = $this->globalSemaphore->acquire();
+        $this->globalLocks[$agentId] = $lock;
+        $this->log->debug("Agent '{$agentId}' reclaimed global semaphore slot");
     }
 
     /**

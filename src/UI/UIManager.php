@@ -343,6 +343,12 @@ class UIManager implements RendererInterface
         $this->renderer->playPrometheus();
     }
 
+    /** {@inheritDoc} */
+    public function playUnleash(): void
+    {
+        $this->renderer->playUnleash();
+    }
+
     /**
      * Resolve the preference string to a concrete renderer instance.
      *

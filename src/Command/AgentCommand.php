@@ -262,6 +262,7 @@ class AgentCommand extends Command
         $registry->register(new Slash\UpdateCommand($version));
         $registry->register(new Slash\FeedbackCommand($version));
         $registry->register(new Slash\RenameCommand);
+        $registry->register(new Slash\UnleashCommand);
 
         return $registry;
     }

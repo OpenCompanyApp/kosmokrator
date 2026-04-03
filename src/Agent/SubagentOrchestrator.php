@@ -46,6 +46,7 @@ class SubagentOrchestrator
      * @param int $concurrency      Max parallel agents (0 = unlimited)
      * @param int $maxRetries       Retry attempts per agent on transient failures
      * @param int|float $watchdogSeconds Idle watchdog threshold for an individual running agent (0 = disabled)
+     * @param (\Closure(int): float)|null $retryDelayFunction Override for retry delay calculation (useful in tests)
      */
     public function __construct(
         private readonly LoggerInterface $log,
@@ -53,6 +54,7 @@ class SubagentOrchestrator
         private readonly int $concurrency = 10,
         private readonly int $maxRetries = 2,
         private readonly int|float $watchdogSeconds = 600,
+        private readonly ?\Closure $retryDelayFunction = null,
     ) {
         // LocalSemaphore requires maxLocks >= 1, so 0 = unlimited (no semaphore)
         $this->globalSemaphore = $concurrency > 0 ? new LocalSemaphore($concurrency) : null;
@@ -573,6 +575,10 @@ class SubagentOrchestrator
      */
     private function retryDelay(int $attempt): float
     {
+        if ($this->retryDelayFunction !== null) {
+            return ($this->retryDelayFunction)($attempt);
+        }
+
         $base = min((int) pow(2, $attempt), 30);
 
         return (float) ($base + random_int(0, max(1, (int) ($base * 0.3))));

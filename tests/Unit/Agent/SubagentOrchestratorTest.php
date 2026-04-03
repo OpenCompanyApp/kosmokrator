@@ -384,7 +384,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_retry_succeeds_on_second_attempt(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -411,7 +411,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_non_retryable_result_skips_retry(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -433,7 +433,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_max_retries_exhausted(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -457,7 +457,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_stats_track_retry_count(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 3);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 3, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -483,7 +483,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_exception_retry_succeeds(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 1);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 1, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -507,7 +507,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_non_retryable_exception_skips_retry(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -530,7 +530,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_auth_error_401_not_retried(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -551,7 +551,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_auth_error_403_not_retried(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -572,7 +572,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_type_error_not_retried(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -592,7 +592,7 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_retryable_http_exception_is_retried(): void
     {
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $attempt = 0;
@@ -712,7 +712,7 @@ class SubagentOrchestratorTest extends TestCase
     public function test_watchdog_runtime_exception_is_not_retried(): void
     {
         $attempts = 0;
-        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 3);
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 3, retryDelayFunction: fn () => 0.0);
 
         $future = $orchestrator->spawnAgent(
             $this->rootContext,

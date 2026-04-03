@@ -516,6 +516,50 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             ));
         }
 
+        if (in_array($id, ['agent.subagent_provider', 'agent.subagent_depth2_provider', 'agent.audio_provider'], true)) {
+            $options = array_values(array_map(
+                static fn (array $item): array => [
+                    'value' => (string) ($item['value'] ?? ''),
+                    'label' => (string) ($item['label'] ?? $item['value'] ?? ''),
+                    'description' => (string) ($item['description'] ?? ''),
+                ],
+                $this->view['provider_options'] ?? [],
+            ));
+            array_unshift($options, ['value' => '', 'label' => '(inherit from default)', 'description' => 'Use the main agent provider.']);
+
+            return $options;
+        }
+
+        if ($id === 'agent.subagent_model') {
+            $provider = $this->values['agent.subagent_provider'] ?? '';
+            if ($provider === '') {
+                $provider = $this->values['agent.default_provider'] ?? '';
+            }
+
+            return $this->buildInheritableModelOptions($provider, 'Use the main agent model.');
+        }
+
+        if ($id === 'agent.subagent_depth2_model') {
+            $provider = $this->values['agent.subagent_depth2_provider'] ?? '';
+            if ($provider === '') {
+                $provider = $this->values['agent.subagent_provider'] ?? '';
+            }
+            if ($provider === '') {
+                $provider = $this->values['agent.default_provider'] ?? '';
+            }
+
+            return $this->buildInheritableModelOptions($provider, 'Use the subagent model, or the main agent model.');
+        }
+
+        if ($id === 'agent.audio_model') {
+            $provider = $this->values['agent.audio_provider'] ?? '';
+            if ($provider === '') {
+                $provider = $this->values['agent.default_provider'] ?? '';
+            }
+
+            return $this->buildInheritableModelOptions($provider, 'Use the main agent model.');
+        }
+
         return array_values(array_map(
             static fn (mixed $item): array => [
                 'value' => (string) $item,
@@ -635,6 +679,18 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             $this->fieldIndex = 0;
             $this->invalidate();
         }
+
+        if ($fieldId === 'agent.subagent_provider') {
+            $this->resetModelIfInvalid('agent.subagent_model');
+        }
+
+        if ($fieldId === 'agent.subagent_depth2_provider') {
+            $this->resetModelIfInvalid('agent.subagent_depth2_model');
+        }
+
+        if ($fieldId === 'agent.audio_provider') {
+            $this->resetModelIfInvalid('agent.audio_model');
+        }
     }
 
     /** Jump to the provider_setup category and pre-fill values for a new custom provider. */
@@ -683,6 +739,37 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $this->syncProviderSetupListIndex();
         $this->fieldIndex = 0;
         $this->invalidate();
+    }
+
+    /** Build model options for an inheritable field, prepended with an "(inherit)" entry. */
+    private function buildInheritableModelOptions(string $provider, string $inheritDescription): array
+    {
+        $options = array_values(array_map(
+            static fn (array $item): array => [
+                'value' => (string) ($item['value'] ?? ''),
+                'label' => (string) ($item['label'] ?? $item['value'] ?? ''),
+                'description' => (string) ($item['description'] ?? ''),
+            ],
+            $this->view['model_options_by_provider'][$provider] ?? [],
+        ));
+        array_unshift($options, ['value' => '', 'label' => '(inherit from default)', 'description' => $inheritDescription]);
+
+        return $options;
+    }
+
+    /** Reset a model field to empty if its current value is not in the available options. */
+    private function resetModelIfInvalid(string $modelFieldId): void
+    {
+        $current = $this->values[$modelFieldId] ?? '';
+        if ($current === '') {
+            return;
+        }
+
+        $models = $this->optionsForField(['id' => $modelFieldId]);
+        $modelValues = array_map(static fn (array $item): string => $item['value'], $models);
+        if (! in_array($current, $modelValues, true)) {
+            $this->values[$modelFieldId] = '';
+        }
     }
 
     /**

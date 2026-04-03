@@ -10,12 +10,15 @@ use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 
 /**
- * Shows a bash command and its captured output in a collapsible block. Displayed during
- * task execution whenever the agent runs a shell command.
+ * Shows a bash command and its captured output in a collapsible block.
+ *
+ * Collapsed (default): icon + truncated command on one line, up to 2 output preview lines.
+ * Expanded: full command in a │ box with all output visible.
+ * Failures auto-expand to ensure errors are visible.
  */
 class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterface
 {
-    private const PREVIEW_LINES = 3;
+    private const PREVIEW_LINES = 2;
 
     /** Whether the output section is fully expanded. */
     private bool $expanded = false;
@@ -52,29 +55,96 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
 
     /**
      * Store the command result after execution completes.
+     * Failures auto-expand so errors are immediately visible.
      */
     public function setResult(string $output, bool $success): void
     {
         $this->output = str_replace("\t", '   ', $output);
         $this->success = $success;
+        if (! $success) {
+            $this->expanded = true;
+        }
         $this->invalidate();
     }
 
     /**
-     * Render the command header, wrapped command text, and (optionally truncated) output.
+     * Render the bash block: compact when collapsed, full layout when expanded.
      */
     public function render(RenderContext $context): array
     {
+        $cols = $context->getColumns();
         $gold = Theme::accent();
         $r = Theme::reset();
         $dim = Theme::dim();
         $text = Theme::text();
-        $output = Theme::rgb(155, 155, 165);
-        $cols = $context->getColumns();
+        $outputColor = Theme::rgb(155, 155, 165);
+        $icon = Theme::toolIcon('bash');
+
+        if ($this->expanded) {
+            return $this->renderExpanded($cols, $gold, $r, $dim, $text, $outputColor, $icon);
+        }
+
+        return $this->renderCollapsed($cols, $gold, $r, $dim, $text, $outputColor, $icon);
+    }
+
+    /**
+     * Compact view: icon + truncated command, then 2 output preview lines.
+     *
+     * @return string[]
+     */
+    private function renderCollapsed(int $cols, string $gold, string $r, string $dim, string $text, string $outputColor, string $icon): array
+    {
+        $command = $this->stripCwdPrefix($this->command);
+        $headerWidth = max(20, $cols - 3); // icon + space + command
+
+        if ($command === '') {
+            $headerLine = "{$gold}{$icon}{$r} {$dim}(shell){$r}";
+        } elseif (mb_strlen($command) > $headerWidth) {
+            $headerLine = "{$gold}{$icon}{$r} ".mb_substr($command, 0, $headerWidth - 1)."…";
+        } else {
+            $headerLine = "{$gold}{$icon}{$r} {$command}";
+        }
+
+        $lines = [$headerLine];
+
+        if ($this->output === null) {
+            $lines[] = "└ {$dim}running...{$r}";
+
+            return $this->truncateLines($lines, $cols);
+        }
+
+        $outputLines = explode("\n", $this->output);
+        if ($outputLines === ['']) {
+            $outputLines = [$this->success ? "{$dim}(no output){$r}" : Theme::error().'command failed'.$r];
+        }
+
+        $previewLines = array_slice($outputLines, 0, self::PREVIEW_LINES);
+        $statusPrefix = $this->success ? '' : Theme::error().'✗ '.$r;
+
+        foreach ($previewLines as $index => $outputLine) {
+            $prefix = $index === 0 ? '└ ' : '  ';
+            $lines[] = $prefix.$statusPrefix."{$outputColor}{$outputLine}{$r}";
+        }
+
+        if (count($outputLines) > self::PREVIEW_LINES) {
+            $remaining = count($outputLines) - self::PREVIEW_LINES;
+            $lines[] = "  {$dim}⊛ +{$remaining} lines (ctrl+o to reveal){$r}";
+        }
+
+        return $this->truncateLines($lines, $cols);
+    }
+
+    /**
+     * Full expanded view: icon + label header, command in │ box, all output, collapse hint.
+     *
+     * @return string[]
+     */
+    private function renderExpanded(int $cols, string $gold, string $r, string $dim, string $text, string $outputColor, string $icon): array
+    {
         $contentWidth = max(20, $cols - 4);
 
         $lines = [
-            "{$gold}".Theme::toolIcon('bash').' Bash'."{$r}",
+            "{$gold}{$icon} Bash{$r}",
         ];
 
         foreach ($this->wrapCommand($contentWidth) as $commandLine) {
@@ -91,24 +161,43 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
         if ($outputLines === ['']) {
             $outputLines = [$this->success ? "{$dim}(no output){$r}" : Theme::error().'command failed'.$r];
         }
-        $previewLines = $this->expanded ? $outputLines : array_slice($outputLines, 0, self::PREVIEW_LINES);
-        // Prepend a failure marker on the first output line when the command failed
         $statusPrefix = $this->success ? '' : Theme::error().'✗ '.$r;
 
-        foreach ($previewLines as $index => $outputLine) {
+        foreach ($outputLines as $index => $outputLine) {
             $prefix = $index === 0 ? '└ ' : '  ';
-            $line = $statusPrefix."{$output}{$outputLine}{$r}";
-            $lines[] = $prefix.$line;
+            $lines[] = $prefix.$statusPrefix."{$outputColor}{$outputLine}{$r}";
         }
 
-        if (! $this->expanded && count($outputLines) > self::PREVIEW_LINES) {
-            // Hint to expand when output is truncated
-            $lines[] = "  {$dim}⊛ +".(count($outputLines) - self::PREVIEW_LINES)." lines (ctrl+o to reveal){$r}";
-        } elseif ($this->expanded && count($outputLines) > self::PREVIEW_LINES) {
-            $lines[] = "  {$dim}⊛ (ctrl+o to collapse){$r}";
-        }
+        $lines[] = "  {$dim}⊛ (ctrl+o to collapse){$r}";
 
         return $this->truncateLines($lines, $cols);
+    }
+
+    /**
+     * Strip leading `cd /absolute/path && ` prefix from the command for display.
+     * The agent already operates in the working directory, so this is pure noise.
+     */
+    private function stripCwdPrefix(string $command): string
+    {
+        $cwd = getcwd();
+        if ($cwd === false) {
+            return $command;
+        }
+
+        $prefix = "cd {$cwd} && ";
+        if (str_starts_with($command, $prefix)) {
+            return substr($command, strlen($prefix));
+        }
+
+        // Also handle quoted variant: cd "/path" && or cd '/path' &&
+        foreach (['"', "'"] as $quote) {
+            $quotedPrefix = "cd {$quote}{$cwd}{$quote} && ";
+            if (str_starts_with($command, $quotedPrefix)) {
+                return substr($command, strlen($quotedPrefix));
+            }
+        }
+
+        return $command;
     }
 
     /**

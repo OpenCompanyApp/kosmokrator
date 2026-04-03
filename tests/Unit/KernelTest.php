@@ -26,93 +26,83 @@ use Symfony\Component\Console\Application;
 
 class KernelTest extends TestCase
 {
-    private string $basePath;
+    private static string $basePath;
 
-    private ?string $originalHome = null;
+    private static ?string $originalHome = null;
 
-    protected function setUp(): void
+    private static string $fakeHome;
+
+    private static Kernel $sharedKernel;
+
+    public static function setUpBeforeClass(): void
     {
-        $this->basePath = dirname(__DIR__, 2); // project root
+        self::$basePath = dirname(__DIR__, 2); // project root
 
         // Isolate HOME so Kernel's logger writes to a temp dir, not real home
-        $this->originalHome = getenv('HOME') ?: null;
-        $fakeHome = sys_get_temp_dir().'/kosmokrator_kernel_test_'.uniqid();
-        mkdir($fakeHome.'/.kosmokrator/logs', 0755, true);
-        putenv("HOME={$fakeHome}");
-        $_ENV['HOME'] = $fakeHome;
+        self::$originalHome = getenv('HOME') ?: null;
+        self::$fakeHome = sys_get_temp_dir().'/kosmokrator_kernel_test_'.uniqid();
+        mkdir(self::$fakeHome.'/.kosmokrator/logs', 0755, true);
+        putenv("HOME=".self::$fakeHome);
+        $_ENV['HOME'] = self::$fakeHome;
+
+        self::$sharedKernel = new Kernel(self::$basePath);
+        self::$sharedKernel->boot();
     }
 
-    protected function tearDown(): void
+    public static function tearDownAfterClass(): void
     {
         // Restore HOME
-        if ($this->originalHome !== null) {
-            putenv("HOME={$this->originalHome}");
-            $_ENV['HOME'] = $this->originalHome;
+        if (self::$originalHome !== null) {
+            putenv("HOME=".self::$originalHome);
+            $_ENV['HOME'] = self::$originalHome;
         } else {
             putenv('HOME');
             unset($_ENV['HOME']);
         }
 
         // Clean up the temp home
-        $home = getenv('HOME') ?: '';
-        if (str_contains($home, 'kosmokrator_kernel_test_')) {
-            $this->removeDir($home);
+        if (is_dir(self::$fakeHome)) {
+            $items = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator(self::$fakeHome, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
+            );
+            foreach ($items as $item) {
+                $item->isDir() ? rmdir($item->getRealPath()) : unlink($item->getRealPath());
+            }
+            rmdir(self::$fakeHome);
         }
 
-        // Reset the Laravel container instance so tests don't pollute each other
+        // Reset the Laravel container instance
         Container::setInstance(null);
     }
 
     public function test_boot_sets_up_container(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $container = $kernel->getContainer();
-
-        $this->assertInstanceOf(Container::class, $container);
+        $this->assertInstanceOf(Container::class, self::$sharedKernel->getContainer());
     }
 
     public function test_boot_sets_up_console(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $console = $kernel->getConsole();
-
-        $this->assertInstanceOf(Application::class, $console);
+        $this->assertInstanceOf(Application::class, self::$sharedKernel->getConsole());
     }
 
     public function test_console_has_app_name_from_config(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $console = $kernel->getConsole();
-
         // config/app.yaml has: name: KosmoKrator
-        $this->assertSame('KosmoKrator', $console->getName());
+        $this->assertSame('KosmoKrator', self::$sharedKernel->getConsole()->getName());
     }
 
     public function test_console_has_version(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $console = $kernel->getConsole();
-
         // config/app.yaml has: version: git — Kernel falls back to 'dev' if git describe fails
-        $version = $console->getVersion();
+        $version = self::$sharedKernel->getConsole()->getVersion();
         $this->assertIsString($version);
         $this->assertNotEmpty($version);
     }
 
     public function test_container_has_config_binding(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $config = $kernel->getContainer()->make('config');
+        $config = self::$sharedKernel->getContainer()->make('config');
 
         $this->assertNotNull($config);
         $this->assertSame('KosmoKrator', $config->get('app.name'));
@@ -120,10 +110,7 @@ class KernelTest extends TestCase
 
     public function test_container_has_logger_binding(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $container = $kernel->getContainer();
+        $container = self::$sharedKernel->getContainer();
 
         $log = $container->make('log');
         $this->assertInstanceOf(Logger::class, $log);
@@ -134,10 +121,7 @@ class KernelTest extends TestCase
 
     public function test_container_has_events_binding(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $container = $kernel->getContainer();
+        $container = self::$sharedKernel->getContainer();
 
         $events = $container->make('events');
         $this->assertInstanceOf(Dispatcher::class, $events);
@@ -148,120 +132,81 @@ class KernelTest extends TestCase
 
     public function test_container_has_filesystem_binding(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $files = $kernel->getContainer()->make('files');
+        $files = self::$sharedKernel->getContainer()->make('files');
         $this->assertInstanceOf(Filesystem::class, $files);
     }
 
     public function test_container_has_http_binding(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $http = $kernel->getContainer()->make('http');
+        $http = self::$sharedKernel->getContainer()->make('http');
         $this->assertInstanceOf(HttpFactory::class, $http);
     }
 
     public function test_container_has_path_bindings(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
+        $container = self::$sharedKernel->getContainer();
 
-        $container = $kernel->getContainer();
-
-        $this->assertSame($this->basePath, $container->make('path.base'));
-        $this->assertSame($this->basePath.'/config', $container->make('path.config'));
+        $this->assertSame(self::$basePath, $container->make('path.base'));
+        $this->assertSame(self::$basePath.'/config', $container->make('path.config'));
     }
 
     public function test_container_has_session_database(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $sessionDb = $kernel->getContainer()->make(SessionDatabase::class);
+        $sessionDb = self::$sharedKernel->getContainer()->make(SessionDatabase::class);
         $this->assertInstanceOf(SessionDatabase::class, $sessionDb);
     }
 
     public function test_container_has_session_repository(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $repo = $kernel->getContainer()->make(SessionRepository::class);
+        $repo = self::$sharedKernel->getContainer()->make(SessionRepository::class);
         $this->assertInstanceOf(SessionRepository::class, $repo);
     }
 
     public function test_container_has_session_manager(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $manager = $kernel->getContainer()->make(SessionManager::class);
+        $manager = self::$sharedKernel->getContainer()->make(SessionManager::class);
         $this->assertInstanceOf(SessionManager::class, $manager);
     }
 
     public function test_container_has_settings_manager(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $manager = $kernel->getContainer()->make(SettingsManager::class);
+        $manager = self::$sharedKernel->getContainer()->make(SettingsManager::class);
         $this->assertInstanceOf(SettingsManager::class, $manager);
     }
 
     public function test_container_has_task_store(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $store = $kernel->getContainer()->make(TaskStore::class);
+        $store = self::$sharedKernel->getContainer()->make(TaskStore::class);
         $this->assertInstanceOf(TaskStore::class, $store);
     }
 
     public function test_container_has_tool_registry(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $registry = $kernel->getContainer()->make(ToolRegistry::class);
+        $registry = self::$sharedKernel->getContainer()->make(ToolRegistry::class);
         $this->assertInstanceOf(ToolRegistry::class, $registry);
     }
 
     public function test_container_has_model_catalog(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $catalog = $kernel->getContainer()->make(ModelCatalog::class);
+        $catalog = self::$sharedKernel->getContainer()->make(ModelCatalog::class);
         $this->assertInstanceOf(ModelCatalog::class, $catalog);
     }
 
     public function test_container_has_provider_catalog(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $catalog = $kernel->getContainer()->make(ProviderCatalog::class);
+        $catalog = self::$sharedKernel->getContainer()->make(ProviderCatalog::class);
         $this->assertInstanceOf(ProviderCatalog::class, $catalog);
     }
 
     public function test_container_binds_llm_client_interface(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $llm = $kernel->getContainer()->make(LlmClientInterface::class);
+        $llm = self::$sharedKernel->getContainer()->make(LlmClientInterface::class);
         $this->assertInstanceOf(LlmClientInterface::class, $llm);
     }
 
     public function test_container_resolves_singletons_consistently(): void
     {
-        $kernel = new Kernel($this->basePath);
-        $kernel->boot();
-
-        $container = $kernel->getContainer();
+        $container = self::$sharedKernel->getContainer();
 
         // Singletons should resolve to the same instance
         $db1 = $container->make(SessionDatabase::class);
@@ -275,31 +220,12 @@ class KernelTest extends TestCase
 
     public function test_boot_can_be_called_once(): void
     {
-        $kernel = new Kernel($this->basePath);
+        // Use a fresh kernel for this specific test since it tests re-booting
+        $kernel = new Kernel(self::$basePath);
         $kernel->boot();
-
-        // Calling boot again should work (overwrite container/console)
         $kernel->boot();
 
         $this->assertInstanceOf(Application::class, $kernel->getConsole());
         $this->assertInstanceOf(Container::class, $kernel->getContainer());
-    }
-
-    private function removeDir(string $dir): void
-    {
-        if (! is_dir($dir)) {
-            return;
-        }
-
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-
-        foreach ($items as $item) {
-            $item->isDir() ? rmdir($item->getRealPath()) : unlink($item->getRealPath());
-        }
-
-        rmdir($dir);
     }
 }

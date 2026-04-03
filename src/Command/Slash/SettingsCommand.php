@@ -12,6 +12,7 @@ use Kosmokrator\Command\SlashCommandResult;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
@@ -137,6 +138,12 @@ final class SettingsCommand implements SlashCommand
                 'custom_provider.output_modalities' => null,
                 default => $ctx->sessionManager->setSetting($id, $stringValue, $scope),
             };
+        }
+
+        // Refresh the status bar immediately so the user sees the new model/provider
+        if (isset($changes['agent.default_provider']) || isset($changes['agent.default_model'])) {
+            $modelCatalog = $ctx->models ?? $this->container->make(ModelCatalog::class);
+            $ctx->ui->refreshRuntimeSelection($targetProvider, $targetModel, $modelCatalog->contextWindow($targetModel));
         }
 
         // Codex requires OAuth; prompt the user to authenticate if credentials are missing

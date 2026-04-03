@@ -228,6 +228,20 @@ class AnsiRenderer implements RendererInterface
             return;
         }
 
+        // Bash: compact inline header — icon + truncated command on one line
+        if ($name === 'bash') {
+            $command = $this->stripCwdPrefix(trim((string) ($args['command'] ?? '')));
+            $maxCmdLen = 110;
+            if ($command === '') {
+                $command = '(shell)';
+            } elseif (mb_strlen($command) > $maxCmdLen) {
+                $command = mb_substr($command, 0, $maxCmdLen - 1).'…';
+            }
+            echo "\n{$border}  ┃ {$gold}{$icon}{$r} {$dim}{$command}{$r}\n";
+
+            return;
+        }
+
         $skipKeys = ['content', 'old_string', 'new_string'];
 
         echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
@@ -307,6 +321,29 @@ class AnsiRenderer implements RendererInterface
                 echo "{$border}  ┃ {$dim}⊛ +".(count($diffLines) - $maxLines)." more lines{$r}\n";
             }
             echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
+
+            return;
+        }
+
+        // Bash: compact output — 2 preview lines on success, full output on failure
+        if ($name === 'bash') {
+            $outputLines = explode("\n", $output);
+            $maxPreview = $success ? 2 : PHP_INT_MAX;
+
+            if ($outputLines === ['']) {
+                $label = $success ? '(no output)' : Theme::error().'command failed'.$r;
+                echo "{$border}  ┃ {$status}{$r} {$dim}{$label}{$r}\n";
+                return;
+            }
+
+            foreach (array_slice($outputLines, 0, $maxPreview) as $line) {
+                echo "{$border}  ┃{$r} {$text}{$line}{$r}\n";
+            }
+
+            $remaining = count($outputLines) - $maxPreview;
+            if ($remaining > 0) {
+                echo "{$border}  ┃ {$dim}⊛ +{$remaining} lines{$r}\n";
+            }
 
             return;
         }
@@ -1656,5 +1693,31 @@ class AnsiRenderer implements RendererInterface
             echo "{$border}  │{$r} {$line}{$r}\n";
         }
         echo "{$border}  └{$r}\n";
+    }
+
+    /**
+     * Strip leading `cd /absolute/path && ` prefix from a bash command for display.
+     * The agent already operates in the working directory, so this is pure noise.
+     */
+    private function stripCwdPrefix(string $command): string
+    {
+        $cwd = getcwd();
+        if ($cwd === false) {
+            return $command;
+        }
+
+        $prefix = "cd {$cwd} && ";
+        if (str_starts_with($command, $prefix)) {
+            return substr($command, strlen($prefix));
+        }
+
+        foreach (['"', "'"] as $quote) {
+            $quotedPrefix = "cd {$quote}{$cwd}{$quote} && ";
+            if (str_starts_with($command, $quotedPrefix)) {
+                return substr($command, strlen($quotedPrefix));
+            }
+        }
+
+        return $command;
     }
 }

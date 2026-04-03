@@ -122,3 +122,31 @@
 [2026-04-03 19:05:06] INFO: Completion sound: script composed successfully {"attempt":1,"script_length":845}
 [2026-04-03 19:05:06] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d00f6248414.py","instrument":"Crystal Pad"}
 [2026-04-03 19:05:06] INFO: Worker finished
+[2026-04-03 19:05:56] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:05:56] INFO: Completion sound worker booted
+[2026-04-03 19:05:56] INFO: Worker starting composition {"instrument":24,"message_preview":"Committed and pushed as `def408d`. The UTF-8 fix specifically addresses the \"Malformed UTF-8 charact"}
+[2026-04-03 19:06:43] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1125}
+[2026-04-03 19:06:43] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d00fc352f9f.py","instrument":"Guitar"}
+[2026-04-03 19:06:43] INFO: Worker finished
+[2026-04-03 19:12:46] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:12:47] INFO: Completion sound worker booted
+[2026-04-03 19:12:47] INFO: Worker starting composition {"instrument":105,"message_preview":"Now I have a clear picture. Let me analyze the problem and propose solutions.\n\nThe current bash tool"}
+[2026-04-03 19:13:47] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"Completion sound LLM timed out after 60s"}
+[2026-04-03 19:13:47] ERROR: Completion sound: all attempts exhausted {"last_error":"Completion sound LLM timed out after 60s","attempts":2}
+[2026-04-03 19:13:47] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
+[2026-04-03 19:13:47] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d0116b6a027.py","instrument":"Banjo"}
+[2026-04-03 19:13:47] INFO: Worker finished
+[2026-04-03 19:15:27] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:15:27] INFO: Completion sound worker booted
+[2026-04-03 19:15:27] INFO: Worker starting composition {"instrument":105,"message_preview":"## Option A — Detailed mockups across different scenarios\n\n### 1. Git diff (short output)\n\n```\nCURRE"}
+[2026-04-03 19:15:54] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1630}
+[2026-04-03 19:15:54] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d011eaa10dc.py","instrument":"Banjo"}
+[2026-04-03 19:15:54] INFO: Worker finished
+[2026-04-03 19:19:28] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:19:28] INFO: Completion sound worker booted
+[2026-04-03 19:19:28] INFO: Worker starting composition {"instrument":105,"message_preview":"The plan is ready. Two files to change:\n\n1. **`BashCommandWidget.php`** — Rewrite `render()` to prod"}
+[2026-04-03 19:20:29] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"Completion sound LLM timed out after 60s"}
+[2026-04-03 19:20:29] ERROR: Completion sound: all attempts exhausted {"last_error":"Completion sound LLM timed out after 60s","attempts":2}
+[2026-04-03 19:20:29] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
+[2026-04-03 19:20:29] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d012fd4708c.py","instrument":"Banjo"}
+[2026-04-03 19:20:29] INFO: Worker finished

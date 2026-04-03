@@ -112,6 +112,7 @@ Built-in provider configs live in `config/prism.yaml`. The default setup support
 - `openrouter`
 - `perplexity`
 - `ollama`
+- `stepfun` / `stepfun-plan`
 
 You can also add other OpenAI-compatible endpoints in `config/prism.yaml`.
 

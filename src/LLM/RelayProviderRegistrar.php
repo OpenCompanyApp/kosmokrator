@@ -70,6 +70,16 @@ final class RelayProviderRegistrar
                         apiKey: $config['api_key'] ?? '',
                         url: $url,
                     ),
+                    'minimax' => new Anthropic(
+                        apiKey: $config['api_key'] ?? '',
+                        apiVersion: $config['version'] ?? '2023-06-01',
+                        url: $url ?: 'https://api.minimax.io/anthropic/v1',
+                    ),
+                    'minimax-cn' => new Anthropic(
+                        apiKey: $config['api_key'] ?? '',
+                        apiVersion: $config['version'] ?? '2023-06-01',
+                        url: $url ?: 'https://api.minimaxi.com/anthropic/v1',
+                    ),
                     'mistral' => new Mistral(
                         apiKey: $config['api_key'] ?? '',
                         url: $url,

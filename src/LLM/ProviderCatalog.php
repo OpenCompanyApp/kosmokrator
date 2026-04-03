@@ -38,6 +38,8 @@ final class ProviderCatalog
         'minimax-cn' => ['label' => 'MiniMax CN', 'description' => 'MiniMax China-region endpoint via API key', 'auth' => 'api_key'],
         'z' => ['label' => 'Z.AI', 'description' => 'Z.AI coding endpoint via API key', 'auth' => 'api_key'],
         'z-api' => ['label' => 'Z.AI API', 'description' => 'Z.AI standard API endpoint via API key', 'auth' => 'api_key'],
+        'stepfun' => ['label' => 'StepFun', 'description' => 'StepFun models via API key', 'auth' => 'api_key'],
+        'stepfun-plan' => ['label' => 'StepFun Plan', 'description' => 'StepFun Step Plan subscription endpoint via API key', 'auth' => 'api_key'],
     ];
 
     /** @var list<string> */
@@ -61,6 +63,8 @@ final class ProviderCatalog
         'minimax-cn',
         'z',
         'z-api',
+        'stepfun',
+        'stepfun-plan',
     ];
 
     public function __construct(

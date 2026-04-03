@@ -57,5 +57,11 @@ providers:
     url: https://api.minimaxi.com/anthropic/v1
   ollama:
     url: http://localhost:11434/v1
+  stepfun:
+    api_key: ${STEPFUN_API_KEY}
+    url: https://api.stepfun.ai/v1
+  stepfun-plan:
+    api_key: ${STEPFUN_API_KEY}
+    url: https://api.stepfun.ai/step_plan/v1
 
 request_timeout: 120

@@ -48,6 +48,8 @@ class AsyncLlmClient implements LlmClientInterface
         'kimi-coding',
         'mimo',
         'mimo-api',
+        'stepfun',
+        'stepfun-plan',
     ];
 
     /**

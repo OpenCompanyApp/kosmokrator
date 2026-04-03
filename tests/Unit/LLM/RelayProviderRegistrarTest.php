@@ -106,11 +106,12 @@ final class RelayProviderRegistrarTest extends TestCase
         $this->assertInstanceOf(\Prism\Prism\Providers\Gemini\Gemini::class, $result);
     }
 
-    public function test_deepseek_driver_creates_deepseek_instance(): void
+    public function test_deepseek_driver_creates_openai_instance(): void
     {
+        // deepseek now uses 'openai-compatible' driver from upstream
         $result = $this->invokeFactoryForProvider('deepseek', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\DeepSeek\DeepSeek::class, $result);
+        $this->assertInstanceOf(\Prism\Prism\Providers\OpenAI\OpenAI::class, $result);
     }
 
     public function test_groq_driver_creates_groq_instance(): void

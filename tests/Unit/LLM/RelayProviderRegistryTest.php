@@ -74,7 +74,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertSame('openai', $this->registry->driver('openai'));
         $this->assertSame('anthropic', $this->registry->driver('anthropic'));
         $this->assertSame('codex', $this->registry->driver('codex'));
-        $this->assertSame('deepseek', $this->registry->driver('deepseek'));
+        $this->assertSame('openai-compatible', $this->registry->driver('deepseek'));
         $this->assertSame('groq', $this->registry->driver('groq'));
         $this->assertSame('mistral', $this->registry->driver('mistral'));
         $this->assertSame('ollama', $this->registry->driver('ollama'));
@@ -84,6 +84,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertSame('perplexity', $this->registry->driver('perplexity'));
         $this->assertSame('glm-coding', $this->registry->driver('z'));
         $this->assertSame('glm', $this->registry->driver('z-api'));
+        $this->assertSame('openai-compatible', $this->registry->driver('stepfun-plan'));
     }
 
     public function test_driver_returns_openai_compatible_for_unknown_provider(): void

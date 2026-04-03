@@ -9,6 +9,7 @@ use Illuminate\Contracts\Events\Dispatcher as DispatcherContract;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\Database as SessionDatabase;
@@ -244,6 +245,15 @@ class KernelTest extends TestCase
 
         $catalog = $kernel->getContainer()->make(ProviderCatalog::class);
         $this->assertInstanceOf(ProviderCatalog::class, $catalog);
+    }
+
+    public function test_container_binds_llm_client_interface(): void
+    {
+        $kernel = new Kernel($this->basePath);
+        $kernel->boot();
+
+        $llm = $kernel->getContainer()->make(LlmClientInterface::class);
+        $this->assertInstanceOf(LlmClientInterface::class, $llm);
     }
 
     public function test_container_resolves_singletons_consistently(): void

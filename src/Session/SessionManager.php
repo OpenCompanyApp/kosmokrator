@@ -138,6 +138,20 @@ class SessionManager
     }
 
     /**
+     * Rename the current session for easy identification later.
+     *
+     * @param string $title New title for the session
+     */
+    public function renameSession(string $title): void
+    {
+        if ($this->currentSessionId === null) {
+            return;
+        }
+
+        $this->sessions->updateTitle($this->currentSessionId, $title);
+    }
+
+    /**
      * Reconstruct the conversation history for a session, with deduplication.
      *
      * @param string $sessionId Session ID to load history from

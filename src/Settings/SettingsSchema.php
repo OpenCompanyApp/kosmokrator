@@ -27,7 +27,7 @@ final class SettingsSchema
     }
 
     /**
-     * @param  string $id Setting identifier (canonical or alias)
+     * @param  string  $id  Setting identifier (canonical or alias)
      * @return SettingDefinition|null The matching definition, or null if unknown
      */
     public function definition(string $id): ?SettingDefinition
@@ -38,7 +38,7 @@ final class SettingsSchema
     }
 
     /**
-     * @param  string $id A setting ID, possibly an alias
+     * @param  string  $id  A setting ID, possibly an alias
      * @return string The canonical dot-path ID
      */
     public function canonicalId(string $id): string
@@ -61,6 +61,7 @@ final class SettingsSchema
             'permissions',
             'subagents',
             'advanced',
+            'audio',
         ];
     }
 
@@ -79,11 +80,12 @@ final class SettingsSchema
             'permissions' => 'Permissions',
             'subagents' => 'Subagents',
             'advanced' => 'Advanced',
+            'audio' => 'Audio',
         ];
     }
 
     /**
-     * @param  string $category Category identifier to filter by
+     * @param  string  $category  Category identifier to filter by
      * @return list<SettingDefinition> Definitions belonging to the given category
      */
     public function definitionsForCategory(string $category): array
@@ -119,6 +121,17 @@ final class SettingsSchema
             'subagent_concurrency' => 'agent.subagent_concurrency',
             'subagent_max_retries' => 'agent.subagent_max_retries',
             'subagent_idle_watchdog_seconds' => 'agent.subagent_idle_watchdog_seconds',
+            'completion_sound' => 'audio.completion_sound',
+            'soundfont' => 'audio.soundfont',
+            'sound_llm_timeout' => 'audio.llm_timeout',
+            'sound_max_duration' => 'audio.max_duration',
+            'sound_max_retries' => 'audio.max_retries',
+            'subagent_provider' => 'agent.subagent_provider',
+            'subagent_model' => 'agent.subagent_model',
+            'subagent_depth2_provider' => 'agent.subagent_depth2_provider',
+            'subagent_depth2_model' => 'agent.subagent_depth2_model',
+            'audio_provider' => 'agent.audio_provider',
+            'audio_model' => 'agent.audio_model',
         ];
 
         $definitions = [
@@ -174,6 +187,66 @@ final class SettingsSchema
                 type: 'dynamic_choice',
                 effect: 'next_session',
                 default: 'GLM-5.1',
+            ),
+            new SettingDefinition(
+                id: 'agent.subagent_provider',
+                path: 'kosmokrator.agent.subagent_provider',
+                label: 'Subagent provider',
+                description: 'Provider for depth-1 subagents. Leave empty to inherit the main agent provider.',
+                category: 'models',
+                type: 'dynamic_choice',
+                effect: 'next_session',
+                default: null,
+            ),
+            new SettingDefinition(
+                id: 'agent.subagent_model',
+                path: 'kosmokrator.agent.subagent_model',
+                label: 'Subagent model',
+                description: 'Model for depth-1 subagents. Leave empty to inherit the main agent model.',
+                category: 'models',
+                type: 'dynamic_choice',
+                effect: 'next_session',
+                default: null,
+            ),
+            new SettingDefinition(
+                id: 'agent.subagent_depth2_provider',
+                path: 'kosmokrator.agent.subagent_depth2_provider',
+                label: 'Sub-subagent provider',
+                description: 'Provider for depth-2+ subagents. Falls back to subagent provider, then main agent provider.',
+                category: 'models',
+                type: 'dynamic_choice',
+                effect: 'next_session',
+                default: null,
+            ),
+            new SettingDefinition(
+                id: 'agent.subagent_depth2_model',
+                path: 'kosmokrator.agent.subagent_depth2_model',
+                label: 'Sub-subagent model',
+                description: 'Model for depth-2+ subagents. Falls back to subagent model, then main agent model.',
+                category: 'models',
+                type: 'dynamic_choice',
+                effect: 'next_session',
+                default: null,
+            ),
+            new SettingDefinition(
+                id: 'agent.audio_provider',
+                path: 'kosmokrator.agent.audio_provider',
+                label: 'Audio provider',
+                description: 'Provider for completion sound music composition. Leave empty to inherit the main agent provider.',
+                category: 'models',
+                type: 'dynamic_choice',
+                effect: 'next_session',
+                default: null,
+            ),
+            new SettingDefinition(
+                id: 'agent.audio_model',
+                path: 'kosmokrator.agent.audio_model',
+                label: 'Audio model',
+                description: 'Model for completion sound music composition. Leave empty to inherit the main agent model.',
+                category: 'models',
+                type: 'dynamic_choice',
+                effect: 'next_session',
+                default: null,
             ),
             new SettingDefinition(
                 id: 'agent.mode',
@@ -358,6 +431,57 @@ final class SettingsSchema
                 type: 'number',
                 effect: 'next_session',
                 default: 900,
+            ),
+            new SettingDefinition(
+                id: 'audio.completion_sound',
+                path: 'kosmokrator.audio.completion_sound',
+                label: 'Play completion sound',
+                description: 'Compose and play a short musical piece after each agent response. The music reflects what happened.',
+                category: 'audio',
+                type: 'toggle',
+                options: ['on', 'off'],
+                effect: 'applies_now',
+                default: 'off',
+            ),
+            new SettingDefinition(
+                id: 'audio.soundfont',
+                path: 'kosmokrator.audio.soundfont',
+                label: 'Soundfont path',
+                description: 'Path to the SoundFont (.sf2) file for MIDI playback.',
+                category: 'audio',
+                type: 'text',
+                effect: 'applies_now',
+                default: '~/.kosmokrator/soundfonts/FluidR3_GM.sf2',
+            ),
+            new SettingDefinition(
+                id: 'audio.llm_timeout',
+                path: 'kosmokrator.audio.llm_timeout',
+                label: 'Composition timeout (seconds)',
+                description: 'Seconds to wait for AI music composition before falling back to a built-in omen.',
+                category: 'audio',
+                type: 'number',
+                effect: 'applies_now',
+                default: 60,
+            ),
+            new SettingDefinition(
+                id: 'audio.max_duration',
+                path: 'kosmokrator.audio.max_duration',
+                label: 'Max duration (seconds)',
+                description: 'Maximum length of the composed musical piece.',
+                category: 'audio',
+                type: 'number',
+                effect: 'applies_now',
+                default: 8,
+            ),
+            new SettingDefinition(
+                id: 'audio.max_retries',
+                path: 'kosmokrator.audio.max_retries',
+                label: 'Composition retries',
+                description: 'Number of times to retry if the LLM fails to generate a valid music script.',
+                category: 'audio',
+                type: 'number',
+                effect: 'applies_now',
+                default: 1,
             ),
         ];
 

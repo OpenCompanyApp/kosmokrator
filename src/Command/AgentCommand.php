@@ -6,6 +6,7 @@ use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
+use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepository;
@@ -150,6 +151,30 @@ class AgentCommand extends Command
                 $session->ui->showUserMessage($input);
             }
             $session->agentLoop->run($input);
+
+            // Completion sound: compose and play a musical piece reflecting what happened
+            try {
+                $sound = $this->container->make(CompletionSound::class);
+                if ($sound->isEnabled()) {
+                    $history = $session->agentLoop->history();
+                    $messages = $history->messages();
+                    // Find the last assistant message for content analysis
+                    for ($i = count($messages) - 1; $i >= 0; $i--) {
+                        if ($messages[$i] instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage
+                            && $messages[$i]->content !== '') {
+                            $sound->play(
+                                $messages[$i]->content,
+                                roundCount: 1,
+                                projectName: basename(getcwd()),
+                            );
+                            break;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Never let the sound system break the REPL — but log it
+                error_log('[CompletionSound] Hook failed: ' . $e->getMessage());
+            }
 
             // Plan mode: show approval dialog after run completes
             if ($session->agentLoop->getMode() === AgentMode::Plan) {

@@ -594,7 +594,7 @@ HELP;
                 if (in_array($key, $skipKeys, true)) {
                     continue;
                 }
-                $display = is_string($value) ? $value : json_encode($value);
+                $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
                 $parts[] = "{$key}: {$display}";
             }
             $label = "{$icon} {$friendly}  ".implode('  ', $parts);
@@ -1020,7 +1020,7 @@ HELP;
                     if ($name === 'ask_user') {
                         $flushDiscoveryGroup();
                         $answer = $toolResult !== null
-                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE))
                             : '';
                         $trimmed = trim($answer);
 
@@ -1036,7 +1036,7 @@ HELP;
                     if ($name === 'ask_choice') {
                         $flushDiscoveryGroup();
                         $answer = $toolResult !== null
-                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE))
                             : 'dismissed';
                         $selected = $this->findChoiceFromArgs($args, $answer);
 
@@ -1061,7 +1061,7 @@ HELP;
 
                     if ($this->isOmensTool($name, $args)) {
                         $output = $toolResult !== null
-                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE))
                             : '';
                         $discoveryGroup[] = $this->buildDiscoveryItem(
                             $name,
@@ -1080,7 +1080,7 @@ HELP;
                         $bashWidget = new BashCommandWidget((string) ($args['command'] ?? ''));
                         $bashWidget->addStyleClass('tool-shell');
                         if ($toolResult !== null) {
-                            $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
+                            $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE);
                             $bashWidget->setResult($output, $this->inferHistoricToolSuccess($name, $toolResult));
                         }
                         $this->addConversationWidget($bashWidget);
@@ -1105,7 +1105,7 @@ HELP;
                             if (in_array($key, $skipKeys, true)) {
                                 continue;
                             }
-                            $display = is_string($value) ? $value : json_encode($value);
+                            $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
                             $parts[] = "{$key}: {$display}";
                         }
                         $label = "{$icon} {$friendly}  ".implode('  ', $parts);
@@ -1126,7 +1126,7 @@ HELP;
                     // Render paired result immediately after the call
                     if ($toolResult !== null) {
                         $this->lastToolArgs = $toolResult->args;
-                        $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
+                        $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE);
                         $statusColor = Theme::success();
                         $resultHeader = "{$statusColor}✓{$r}";
 

@@ -79,6 +79,7 @@ final class SettingsSchemaTest extends TestCase
             'permissions',
             'subagents',
             'advanced',
+            'audio',
         ], $categories);
     }
 

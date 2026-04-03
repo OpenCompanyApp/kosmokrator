@@ -235,7 +235,7 @@ class AnsiRenderer implements RendererInterface
             if (in_array($key, $skipKeys, true)) {
                 continue;
             }
-            $display = is_string($value) ? $value : json_encode($value);
+            $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
             if ($key === 'path' || $key === 'file_path') {
                 $display = Theme::relativePath($display);
             }
@@ -440,7 +440,7 @@ class AnsiRenderer implements RendererInterface
 
                     if ($name === 'ask_user') {
                         $answer = $toolResult !== null
-                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE))
                             : '';
                         $trimmed = trim($answer);
 
@@ -455,7 +455,7 @@ class AnsiRenderer implements RendererInterface
 
                     if ($name === 'ask_choice') {
                         $answer = $toolResult !== null
-                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
+                            ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE))
                             : 'dismissed';
                         $selected = $this->findChoiceFromArgs($args, $answer);
 
@@ -490,7 +490,7 @@ class AnsiRenderer implements RendererInterface
                     // Render paired result immediately after
                     if ($toolResult !== null) {
                         $this->lastToolArgs = $toolResult->args;
-                        $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
+                        $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result, JSON_INVALID_UTF8_SUBSTITUTE);
                         $this->showToolResult($name, $output, true);
                     }
                 }

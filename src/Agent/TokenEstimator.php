@@ -13,17 +13,24 @@ use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 
 /**
- * Rough token estimation using a 4-chars-per-token heuristic.
+ * Rough character-based token counter for estimating context usage.
  *
- * Used by ContextManager, ContextPruner, and OutputTruncator for fast local estimates
- * without requiring an external tokenizer. Assumes ~4 characters per token (reasonable for English/code).
+ * Uses a fixed chars-per-token ratio (≈4) to avoid pulling in a real
+ * tokenizer. Good enough for budget-threshold checks against ContextBudget.
+ * Not suitable for exact billing or API parameter sizing.
+ *
+ * @see ContextBudget Which consumes these estimates for threshold decisions
  */
 class TokenEstimator
 {
+    /** Approximate characters per token for English/code text. */
     private const CHARS_PER_TOKEN = 4;
 
     /**
-     * Estimate token count for a plain string using the chars-per-token ratio.
+     * Estimate the token count for a plain-text string.
+     *
+     * @param  string  $text  Raw text to estimate
+     * @return int Estimated token count (always ≥ 0)
      */
     public static function estimate(string $text): int
     {
@@ -31,7 +38,10 @@ class TokenEstimator
     }
 
     /**
-     * Estimate token count for a single Prism Message (dispatches by type).
+     * Estimate tokens consumed by a single Prism message.
+     *
+     * @param  Message  $message  Any supported Prism message type
+     * @return int Estimated token count for this message
      */
     public static function estimateMessage(Message $message): int
     {
@@ -46,9 +56,10 @@ class TokenEstimator
     }
 
     /**
-     * Sum token estimates across an array of Prism Messages.
+     * Sum token estimates across an array of messages.
      *
-     * @param  Message[]  $messages
+     * @param  Message[]  $messages  Ordered message list (e.g. from ConversationHistory)
+     * @return int Total estimated tokens
      */
     public static function estimateMessages(array $messages): int
     {
@@ -61,7 +72,7 @@ class TokenEstimator
     }
 
     /**
-     * Estimate tokens consumed by serialized tool call names + arguments.
+     * Estimate tokens for a set of tool calls (name + serialized arguments).
      *
      * @param  ToolCall[]  $toolCalls
      */
@@ -69,14 +80,14 @@ class TokenEstimator
     {
         $total = 0;
         foreach ($toolCalls as $tc) {
-            $total += self::estimate($tc->name.json_encode($tc->arguments()));
+            $total += self::estimate($tc->name.json_encode($tc->arguments(), JSON_INVALID_UTF8_SUBSTITUTE));
         }
 
         return $total;
     }
 
     /**
-     * Estimate tokens consumed by serialized tool results.
+     * Estimate tokens for tool result payloads.
      *
      * @param  ToolResult[]  $toolResults
      */
@@ -84,7 +95,8 @@ class TokenEstimator
     {
         $total = 0;
         foreach ($toolResults as $tr) {
-            $result = is_string($tr->result) ? $tr->result : json_encode($tr->result);
+            // Result may be a structured value; JSON-encode for estimation
+            $result = is_string($tr->result) ? $tr->result : json_encode($tr->result, JSON_INVALID_UTF8_SUBSTITUTE);
             $total += self::estimate($result);
         }
 

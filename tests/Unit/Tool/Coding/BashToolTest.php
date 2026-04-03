@@ -110,7 +110,7 @@ class BashToolTest extends TestCase
 
     public function test_custom_timeout_parameter(): void
     {
-        $result = $this->tool->execute(['command' => 'sleep 1', 'timeout' => 5]);
+        $result = $this->tool->execute(['command' => 'sleep 0.01', 'timeout' => 5]);
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('Exit code: 0', $result->output);

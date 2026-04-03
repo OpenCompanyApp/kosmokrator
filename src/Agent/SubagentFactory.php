@@ -22,26 +22,24 @@ use Psr\Log\LoggerInterface;
  *
  * Cannot clone LLM clients (readonly properties + HttpClient state),
  * so each subagent gets a fresh instance with the same configuration.
+ * Supports per-depth model/provider overrides via SubagentModelConfig.
  */
 class SubagentFactory
 {
     /**
-     * @param ToolRegistry                    $rootRegistry          Tool set inherited from the root agent
-     * @param LoggerInterface                 $log                   Logger for factory lifecycle events
-     * @param ModelCatalog|null               $models                LLM model catalog for compaction model selection
-     * @param OutputTruncator|null            $truncator             Truncates oversized tool output
-     * @param PermissionEvaluator|null        $permissions           Permission policy evaluator
-     * @param Closure|Cancellation|null       $rootCancellation      Cancellation token from the root session
-     * @param string                          $llmClientClass        'async' or 'prism' — determines client type
-     * @param string                          $apiKey                LLM API key
-     * @param string                          $baseUrl               LLM API base URL
-     * @param string                          $model                 LLM model identifier
-     * @param int|null                        $maxTokens             Maximum response tokens
-     * @param int|float|null                  $temperature           LLM sampling temperature
-     * @param string                          $provider              LLM provider name (e.g. 'openai', 'anthropic')
-     * @param ContextBudget|null              $budget                Token budget for context compaction
-     * @param ProtectedContextBuilder|null    $protectedContextBuilder  Builds immutable context sections
-     * @param Relay|null                      $relay                 Prism relay for LLM communication
+     * @param  ToolRegistry  $rootRegistry  Tool set inherited from the root agent
+     * @param  LoggerInterface  $log  Logger for factory lifecycle events
+     * @param  ModelCatalog|null  $models  LLM model catalog for compaction model selection
+     * @param  OutputTruncator|null  $truncator  Truncates oversized tool output
+     * @param  PermissionEvaluator|null  $permissions  Permission policy evaluator
+     * @param  Closure|Cancellation|null  $rootCancellation  Cancellation token from the root session
+     * @param  string  $llmClientClass  'async' or 'prism' — determines client type
+     * @param  SubagentModelConfig  $modelConfig  Per-depth model/provider configuration
+     * @param  int|null  $maxTokens  Maximum response tokens
+     * @param  int|float|null  $temperature  LLM sampling temperature
+     * @param  ContextBudget|null  $budget  Token budget for context compaction
+     * @param  ProtectedContextBuilder|null  $protectedContextBuilder  Builds immutable context sections
+     * @param  Relay|null  $relay  Prism relay for LLM communication
      */
     public function __construct(
         private readonly ToolRegistry $rootRegistry,
@@ -51,12 +49,9 @@ class SubagentFactory
         private readonly ?PermissionEvaluator $permissions,
         private readonly \Closure|Cancellation|null $rootCancellation,
         private readonly string $llmClientClass,
-        private readonly string $apiKey,
-        private readonly string $baseUrl,
-        private readonly string $model,
+        private readonly SubagentModelConfig $modelConfig,
         private readonly ?int $maxTokens,
         private readonly int|float|null $temperature,
-        private readonly string $provider,
         private readonly ?ContextBudget $budget = null,
         private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
         private readonly ?Relay $relay = null,
@@ -67,7 +62,7 @@ class SubagentFactory
      */
     public function createAndRunAgent(AgentContext $context, string $task): string
     {
-        $llm = $this->createLlmClient();
+        $llm = $this->createLlmClient($context);
         $ui = new NullRenderer($context->cancellation ?? $this->rootCancellation);
         $systemPrompt = $this->buildSystemPrompt($context);
         $llm->setSystemPrompt($systemPrompt);
@@ -119,25 +114,30 @@ class SubagentFactory
     }
 
     /**
-     * Instantiate a fresh LLM client with the same config as the root agent.
+     * Instantiate a fresh LLM client resolved by agent depth.
      */
-    private function createLlmClient(): LlmClientInterface
+    private function createLlmClient(AgentContext $context): LlmClientInterface
     {
+        $provider = $this->modelConfig->resolveProvider($context->depth);
+        $model = $this->modelConfig->resolveModel($context->depth);
+        $apiKey = $this->modelConfig->resolveApiKey($context->depth);
+        $baseUrl = $this->modelConfig->resolveBaseUrl($context->depth);
+
         if ($this->llmClientClass === 'async') {
             $inner = new AsyncLlmClient(
-                apiKey: $this->apiKey,
-                baseUrl: $this->baseUrl,
-                model: $this->model,
+                apiKey: $apiKey,
+                baseUrl: $baseUrl,
+                model: $model,
                 systemPrompt: '',
                 maxTokens: $this->maxTokens,
                 temperature: $this->temperature,
-                provider: $this->provider,
+                provider: $provider,
                 relay: $this->relay,
             );
         } else {
             $inner = new PrismService(
-                provider: $this->provider,
-                model: $this->model,
+                provider: $provider,
+                model: $model,
                 systemPrompt: '',
                 maxTokens: $this->maxTokens,
                 temperature: $this->temperature,

@@ -151,8 +151,9 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
                 return;
             }
 
-            if ($data !== '' && ! str_starts_with($data, "\033")) {
-                $this->editBuffer .= $data;
+            $text = $this->normalizeEditInput($data);
+            if ($text !== '') {
+                $this->editBuffer .= $text;
                 $this->invalidate();
             }
 
@@ -853,7 +854,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             $cursor = $selected ? '› ' : '  ';
             $label = (string) ($field['label'] ?? $field['id']);
             $value = $selected && $this->editing
-                ? $this->editBuffer.'▏'
+                ? ($this->usesWideEditor($field) ? 'editing below' : $this->editBuffer.'▏')
                 : $this->displayValueForField($field);
             if ($this->fieldSupportsPicker($field)) {
                 $value .= '  ▾';
@@ -922,6 +923,19 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $providerInfo = $this->view['providers_by_id'][$provider] ?? [];
 
         if ($field !== null) {
+            if ($this->editing) {
+                $label = (string) ($field['label'] ?? $field['id']);
+                $lines[] = $this->boxLine('Editing: '.$label, $width, Theme::accent());
+                $lines[] = $this->boxLine('Enter saves · Esc cancels · paste supported', $width);
+                $lines[] = $this->boxLine('', $width);
+
+                foreach ($this->wrapForBox($this->editBuffer === '' ? ' ' : $this->editBuffer, max(8, $width - 2)) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
+
+                $lines[] = $this->boxLine('', $width);
+            }
+
             foreach ($this->wrap((string) ($field['description'] ?? ''), $width - 2) as $line) {
                 $lines[] = $this->boxLine($line, $width);
             }
@@ -1065,13 +1079,25 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $prefixWidth = AnsiUtils::visibleWidth($prefix);
         $rightWidth = AnsiUtils::visibleWidth($right);
         $gap = $right !== '' ? 1 : 0;
+        $minLeft = min(24, max(12, (int) floor($innerWidth * 0.4)));
 
         if ($prefixWidth >= $innerWidth) {
             return $this->truncateVisible($prefix, $innerWidth);
         }
 
         if ($prefixWidth + $rightWidth + $gap >= $innerWidth) {
-            return $prefix.$this->truncateVisible($right, $innerWidth - $prefixWidth);
+            $availableRight = max(0, $innerWidth - $prefixWidth - $minLeft - $gap);
+            if ($availableRight <= 0) {
+                return $prefix.$this->truncateVisible($left, $innerWidth - $prefixWidth);
+            }
+
+            $left = $this->truncateVisible($left, max(0, $innerWidth - $prefixWidth - $availableRight - $gap));
+            $leftWidth = AnsiUtils::visibleWidth($left);
+            $right = $this->truncateVisible($right, $availableRight);
+            $rightWidth = AnsiUtils::visibleWidth($right);
+            $padding = max(0, $innerWidth - $prefixWidth - $leftWidth - $rightWidth);
+
+            return $prefix.$left.str_repeat(' ', $padding).$right;
         }
 
         $availableLeft = max(0, $innerWidth - $prefixWidth - $rightWidth - $gap);
@@ -1641,6 +1667,37 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
     }
 
+    private function usesWideEditor(array $field): bool
+    {
+        $type = (string) ($field['type'] ?? 'text');
+        if (! in_array($type, ['text', 'number'], true)) {
+            return false;
+        }
+
+        $id = (string) ($field['id'] ?? '');
+
+        return str_contains($id, 'api_key')
+            || str_contains($id, '.url')
+            || str_contains($id, '.modalities')
+            || str_contains($id, '.label')
+            || str_contains($id, '.model_id')
+            || str_contains($id, '.default_model');
+    }
+
+    private function normalizeEditInput(string $data): string
+    {
+        if ($data === '') {
+            return '';
+        }
+
+        $text = str_replace(["\033[200~", "\033[201~"], '', $data);
+        $text = preg_replace('/\e\[[0-9;?]*[ -\/]*[@-~]/u', '', $text) ?? $text;
+        $text = str_replace(["\r\n", "\r", "\n"], '', $text);
+        $text = str_replace("\t", ' ', $text);
+
+        return preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/u', '', $text) ?? '';
+    }
+
     /** Generate the next available default ID for a new custom provider draft. */
     private function nextCustomProviderId(): string
     {
@@ -1721,5 +1778,27 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
 
         return $lines;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function wrapForBox(string $text, int $width): array
+    {
+        $lines = [];
+
+        foreach (preg_split("/\r\n|\r|\n/", $text) ?: [''] as $segment) {
+            $segment = $segment === '' ? ' ' : $segment;
+
+            while (mb_strwidth($segment) > $width) {
+                $slice = mb_strimwidth($segment, 0, $width, '', 'UTF-8');
+                $lines[] = $slice;
+                $segment = mb_substr($segment, mb_strlen($slice));
+            }
+
+            $lines[] = $segment;
+        }
+
+        return $lines === [] ? [' '] : $lines;
     }
 }

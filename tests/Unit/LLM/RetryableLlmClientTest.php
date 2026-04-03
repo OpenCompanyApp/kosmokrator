@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\LLM;
 
+use Amp\Cancellation;
 use Amp\CancelledException;
 use Amp\DeferredCancellation;
 use Kosmokrator\LLM\LlmClientInterface;
@@ -35,7 +36,7 @@ class RetryableLlmClientTest extends TestCase
     {
         $log = $this->createStub(LoggerInterface::class);
 
-        return new RetryableLlmClient($inner, $log, $maxAttempts);
+        return new RetryableLlmClient($inner, $log, $maxAttempts, sleepFunction: function () {});
     }
 
     public function test_delegates_successful_call(): void
@@ -330,7 +331,10 @@ class RetryableLlmClientTest extends TestCase
             ->method('chat')
             ->willThrowException(new PrismServerException('Server error'));
 
-        $client = $this->makeClient($inner, maxAttempts: 3);
+        $log = $this->createStub(LoggerInterface::class);
+        $client = new RetryableLlmClient($inner, $log, maxAttempts: 3, sleepFunction: function (float $delay, ?Cancellation $cancellation) {
+            $cancellation?->throwIfRequested();
+        });
 
         // Create a pre-cancelled cancellation token
         $deferred = new DeferredCancellation;

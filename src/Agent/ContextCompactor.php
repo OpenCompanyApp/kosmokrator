@@ -14,11 +14,11 @@ use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Psr\Log\LoggerInterface;
 
 /**
- * LLM-based context compaction: summarizes old conversation turns into a structured summary,
- * then extracts durable memories (project facts, user preferences, technical decisions).
+ * Summarizes old conversation turns via LLM to keep the context window within budget.
  *
- * Used by ContextManager when the conversation approaches the context window limit.
- * Produces a CompactionPlan that ConversationHistory applies by replacing old messages with the summary.
+ * Used by the agent loop (see Agent class) when needsCompaction() returns true.
+ * Produces a CompactionPlan that replaces older messages with a structured summary,
+ * and can extract durable knowledge into memories via extractMemories().
  */
 class ContextCompactor
 {
@@ -71,10 +71,10 @@ PROMPT;
     ) {}
 
     /**
-     * Check whether the given prompt token count exceeds the compaction threshold for this model.
+     * Check whether the current prompt size exceeds the compaction threshold for the given model.
      *
-     * @param  int  $promptTokens  Estimated tokens already in context
-     * @param  string  $model  Model identifier (e.g. "claude-3-opus")
+     * @param  int     $promptTokens  Current token count of the prompt to be sent
+     * @param  string  $model         Model identifier used to look up context window size
      */
     public function needsCompaction(int $promptTokens, string $model): bool
     {
@@ -82,10 +82,12 @@ PROMPT;
     }
 
     /**
-     * Calculate the absolute token count at which compaction should trigger.
-     * Takes the lower of the percentage-based threshold and ContextBudget's auto-compact threshold.
+     * Calculate the token count at which compaction should trigger.
      *
-     * @param  string  $model  Model identifier used to look up the context window
+     * Uses the lower of the percentage-based threshold and the ContextBudget limit (if provided).
+     *
+     * @param  string  $model  Model identifier used to look up context window size
+     * @return int     Token count threshold
      */
     public function getThresholdTokens(string $model): int
     {
@@ -110,11 +112,12 @@ PROMPT;
     }
 
     /**
-     * Summarize old messages in the conversation history and return the raw result.
+     * Summarize old messages in the conversation history.
      *
-     * @param  ConversationHistory  $history  The conversation to summarize
-     * @param  int  $keepRecent  Number of recent user turns to preserve unchanged
-     * @return array{summary: string, tokens_in: int, tokens_out: int}
+     * @param  ConversationHistory  $history     Full conversation to compact
+     * @param  int                   $keepRecent  Number of most-recent messages to preserve unchanged
+     *
+     * @return array{summary: string, tokens_in: int, tokens_out: int} Compaction result with LLM token usage
      */
     public function compact(ConversationHistory $history, int $keepRecent = 3): array
     {
@@ -128,10 +131,13 @@ PROMPT;
     }
 
     /**
-     * Build a CompactionPlan: identify old messages, summarize via LLM, assemble replacement message list.
+     * Build a CompactionPlan describing how to replace old messages with a summary.
      *
-     * @param  Message[]  $protectedMessages  Messages that must be preserved verbatim (system prompts, instructions)
-     * @param  int  $keepRecent  Number of recent user turns to keep un-summarized
+     * @param  ConversationHistory  $history             Full conversation to compact
+     * @param  Message[]            $protectedMessages   Messages that must appear at the top of the replacement list
+     * @param  int                  $keepRecent          Number of most-recent messages to preserve unchanged
+     *
+     * @return CompactionPlan Plan with replacement messages, summary, and token usage
      */
     public function buildPlan(ConversationHistory $history, array $protectedMessages = [], int $keepRecent = 3): CompactionPlan
     {
@@ -164,6 +170,7 @@ PROMPT;
 
         $summary = trim($response->text);
         $recent = array_slice($messages, $keepFrom);
+        // Rebuild message list: protected → summary → recent
         $replacement = [...$protectedMessages];
         if ($summary !== '') {
             $replacement[] = new SystemMessage($summary);
@@ -189,6 +196,8 @@ PROMPT;
     /**
      * Extract durable memories from a compaction summary.
      *
+     * @param  string  $summary  The compaction summary produced by compact() or buildPlan()
+     *
      * @return array{memories: array<array{type: string, title: string, content: string}>, tokens_in: int, tokens_out: int}
      */
     public function extractMemories(string $summary): array
@@ -202,9 +211,11 @@ PROMPT;
             $data = json_decode($response->text, true);
             $memories = [];
             if (is_array($data)) {
+                // Only keep well-formed items with a recognized type
                 $memories = array_values(array_filter($data, fn ($item) => isset($item['type'], $item['title'], $item['content'])
                     && in_array($item['type'], ['project', 'user', 'decision'], true)
                 ));
+                // Apply defaults for optional fields
                 $memories = array_map(function (array $item): array {
                     $item['memory_class'] = $item['memory_class'] ?? 'durable';
                     $item['pinned'] = (bool) ($item['pinned'] ?? false);
@@ -219,15 +230,26 @@ PROMPT;
                 'tokens_out' => $response->completionTokens,
             ];
         } catch (\Throwable $e) {
+            // Fail gracefully — memory extraction is best-effort, never fatal
             $this->log->warning('Memory extraction failed', ['error' => $e->getMessage()]);
 
             return ['memories' => [], 'tokens_in' => 0, 'tokens_out' => 0];
         }
     }
 
-    /** Format an array of Prism messages into a plain-text transcript for the summarization LLM. */
+    /**
+     * Cap formatted output at ~100K chars (~25K tokens) to prevent memory blowup
+     * on very long conversations. Older messages are dropped first.
+     */
     private const MAX_FORMAT_CHARS = 100_000;
 
+    /**
+     * Render an array of Message objects into a plain-text transcript for the LLM.
+     *
+     * Each message type is labeled with its role. Output is capped at MAX_FORMAT_CHARS.
+     *
+     * @param  Message[]  $messages
+     */
     private function formatMessages(array $messages): string
     {
         $lines = [];
@@ -251,7 +273,7 @@ PROMPT;
                 }
             } elseif ($message instanceof ToolResultMessage) {
                 foreach ($message->toolResults as $tr) {
-                    $result = is_string($tr->result) ? $tr->result : json_encode($tr->result);
+                    $result = is_string($tr->result) ? $tr->result : json_encode($tr->result, JSON_INVALID_UTF8_SUBSTITUTE);
                     $newLines[] = '[tool_result]: '.$this->truncate($result, 200);
                 }
             } elseif ($message instanceof SystemMessage) {
@@ -273,18 +295,19 @@ PROMPT;
     }
 
     /**
-     * Render tool-call arguments as a compact key-value string, hiding large fields.
+     * Format tool-call arguments as a compact key: value string, eliding large content fields.
      */
     private function formatToolArgs(array $args): string
     {
         $parts = [];
         foreach ($args as $key => $value) {
+            // Omit potentially large content payloads from the transcript
             if (in_array($key, ['content', 'old_string', 'new_string'], true)) {
                 $parts[] = "{$key}: [...]";
 
                 continue;
             }
-            $display = is_string($value) ? $value : json_encode($value);
+            $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
             $parts[] = "{$key}: {$this->truncate($display, 100)}";
         }
 
@@ -292,7 +315,7 @@ PROMPT;
     }
 
     /**
-     * Truncate text to $maxLength characters, appending a length note when truncated.
+     * Truncate text to $maxLength characters, appending a length hint when truncated.
      */
     private function truncate(string $text, int $maxLength): string
     {

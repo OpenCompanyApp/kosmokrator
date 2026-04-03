@@ -54,8 +54,8 @@ class MessageRepository
             'role' => $role,
             'content' => $content,
             // Tool calls/results are JSON-serialized for storage
-            'tool_calls' => $toolCalls !== null ? json_encode($this->serializeToolCalls($toolCalls)) : null,
-            'tool_results' => $toolResults !== null ? json_encode($this->serializeToolResults($toolResults)) : null,
+            'tool_calls' => $toolCalls !== null ? json_encode($this->serializeToolCalls($toolCalls), JSON_INVALID_UTF8_SUBSTITUTE) : null,
+            'tool_results' => $toolResults !== null ? json_encode($this->serializeToolResults($toolResults), JSON_INVALID_UTF8_SUBSTITUTE) : null,
             'tokens_in' => $tokensIn,
             'tokens_out' => $tokensOut,
             'now' => date('c'),

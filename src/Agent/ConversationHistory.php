@@ -10,31 +10,45 @@ use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolResult;
 
 /**
- * Manages the conversation message list: adding, compacting, pruning, and restoring messages.
+ * Manages the ordered list of messages exchanged between user, assistant, and tools.
  *
- * Wraps an array of Prism Message objects (UserMessage, AssistantMessage, ToolResultMessage, SystemMessage).
- * Supports compaction (replace old messages with a summary), pruning (replace tool results with placeholders),
- * superseding (mark cached reads as stale), and trimming (drop oldest turns as a last resort).
+ * Provides convenience builders for appending typed messages, compaction strategies
+ * (compact, trimOldest, applyCompactionPlan), and surgical pruning of tool results
+ * to stay within the limits defined by ContextBudget.
+ *
+ * @see ContextBudget For the thresholds that trigger compaction
+ * @see CompactionPlan For LLM-produced compaction results
  */
 class ConversationHistory
 {
     /** @var array<int, Message> */
     private array $messages = [];
 
-    /** Append a user message to the conversation. */
+    /**
+     * Append a user message to the history.
+     *
+     * @param  string  $content  The user's raw text input
+     */
     public function addUser(string $content): void
     {
         $this->messages[] = new UserMessage($content);
     }
 
-    /** Append an assistant message, optionally with tool calls. */
+    /**
+     * Append an assistant message, optionally carrying tool calls.
+     *
+     * @param  string  $content  The assistant's text response
+     * @param  array  $toolCalls  Structured tool-call payloads from the LLM
+     */
     public function addAssistant(string $content, array $toolCalls = []): void
     {
         $this->messages[] = new AssistantMessage($content, $toolCalls);
     }
 
     /**
-     * @param  ToolResult[]  $results
+     * Append a tool-result message wrapping one or more tool outputs.
+     *
+     * @param  ToolResult[]  $results  Results returned by executed tools
      */
     public function addToolResults(array $results): void
     {
@@ -73,6 +87,7 @@ class ConversationHistory
      */
     public function clearKeepingLast(): void
     {
+        // Scan backwards so we keep the most recent assistant message
         for ($i = count($this->messages) - 1; $i >= 0; $i--) {
             if ($this->messages[$i] instanceof AssistantMessage) {
                 $this->messages = [$this->messages[$i]];
@@ -87,6 +102,9 @@ class ConversationHistory
 
     /**
      * Replace old messages with a summary, keeping the most recent turns.
+     *
+     * @param  string  $summary  Compacted summary text, inserted as a SystemMessage
+     * @param  int  $keepRecent  Number of recent user turns to preserve after the summary
      */
     public function compact(string $summary, int $keepRecent = 3): void
     {
@@ -101,12 +119,15 @@ class ConversationHistory
             return;
         }
 
+        // Prepend summary as a SystemMessage so the LLM treats it as context, not a turn
         $recent = array_slice($this->messages, $keepFrom);
         $this->messages = [new SystemMessage($summary), ...$recent];
     }
 
     /**
-     * Replace the entire message list with the plan's pre-built replacement messages.
+     * Replace the entire message list with the contents of a CompactionPlan.
+     *
+     * @param  CompactionPlan  $plan  The compaction result to apply
      */
     public function applyCompactionPlan(CompactionPlan $plan): void
     {
@@ -118,7 +139,10 @@ class ConversationHistory
     }
 
     /**
-     * Find the message index where the Nth-to-last user turn starts (used by ContextCompactor).
+     * Find the message index where the Nth-most-recent user turn begins.
+     *
+     * @param  int  $keepRecent  Number of recent user turns to count back
+     * @return int Index of the oldest UserMessage to keep
      */
     public function findKeepBoundary(int $keepRecent = 3): int
     {
@@ -126,11 +150,11 @@ class ConversationHistory
     }
 
     /**
-     * Find the message index where the Nth-from-last user turn starts.
-     * Used by compaction to determine which messages to summarize vs. keep.
+     * Stateless version of findKeepBoundary() that works on any message array.
      *
-     * @param  Message[]  $messages  Flat message array to scan
-     * @param  int  $keepRecent  Number of recent user turns to locate
+     * @param  Message[]  $messages
+     * @param  int  $keepRecent  Number of recent user turns to count back
+     * @return int Index of the oldest UserMessage in the keep window
      */
     public static function findKeepBoundaryInMessages(array $messages, int $keepRecent = 3): int
     {
@@ -138,6 +162,7 @@ class ConversationHistory
         $keepFrom = $total;
         $turnsFound = 0;
 
+        // Walk backwards counting UserMessages to find the turn boundary
         for ($i = $total - 1; $i >= 0; $i--) {
             if ($messages[$i] instanceof UserMessage) {
                 $turnsFound++;
@@ -152,11 +177,11 @@ class ConversationHistory
     }
 
     /**
-     * Collect the text of the last N user messages for memory-relevance queries.
+     * Collect the text of the most recent user turns for a quick context snippet.
      *
      * @param  int  $turns  Number of user turns to include
-     * @param  int  $maxChars  Hard character limit on the concatenated result
-     * @return string Concatenated user text (oldest first), truncated to $maxChars
+     * @param  int  $maxChars  Maximum character length of the result
+     * @return string Concatenated user messages, truncated to maxChars
      */
     public function latestUserContext(int $turns = 3, int $maxChars = 1200): string
     {
@@ -180,6 +205,7 @@ class ConversationHistory
             return '';
         }
 
+        // Reverse to restore chronological order
         $text = implode("\n", array_reverse($chunks));
 
         return mb_strlen($text) <= $maxChars ? $text : mb_substr($text, 0, $maxChars);
@@ -189,6 +215,7 @@ class ConversationHistory
      * Replace specific tool results with a placeholder string.
      *
      * @param  array<array{int, int, int}>  $targets  [[messageIndex, resultIndex, tokensSaved], ...]
+     * @param  string  $placeholder  Text to substitute into each targeted result
      */
     public function pruneToolResults(array $targets, string $placeholder): void
     {
@@ -203,6 +230,7 @@ class ConversationHistory
                 continue;
             }
 
+            // Rebuild the ToolResult with the same metadata but swapped content
             $old = $results[$resultIdx];
             $results[$resultIdx] = new ToolResult(
                 toolCallId: $old->toolCallId,
@@ -216,7 +244,9 @@ class ConversationHistory
     }
 
     /**
-     * @param  array<array{0:int,1:int,2:string}>  $targets
+     * Replace specific tool results, each with its own placeholder string.
+     *
+     * @param  array<array{0:int,1:int,2:string}>  $targets  [[messageIndex, resultIndex, placeholder], ...]
      */
     public function pruneToolResultsWithPlaceholders(array $targets): void
     {
@@ -245,6 +275,10 @@ class ConversationHistory
 
     /**
      * Replace a single tool result with a custom placeholder string.
+     *
+     * @param  int  $messageIndex  Index of the ToolResultMessage in the history
+     * @param  int  $resultIndex  Index of the individual result within that message
+     * @param  string  $placeholder  Replacement text
      */
     public function supersedeToolResult(int $messageIndex, int $resultIndex, string $placeholder): void
     {
@@ -254,7 +288,7 @@ class ConversationHistory
         }
 
         $results = $msg->toolResults;
-        if (! isset($results[$resultIndex])) {
+        if (! isset($results[$resultIndex]) ) {
             return;
         }
 

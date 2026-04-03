@@ -6,10 +6,17 @@ namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\UI\Tui\SubagentDisplayManager;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 
 final class SubagentDisplayManagerTest extends TestCase
 {
+    public static function setUpBeforeClass(): void
+    {
+        // Register the custom 'cosmos' spinner used by SubagentDisplayManager
+        CancellableLoaderWidget::addSpinner('cosmos', ['✦', '✧', '⊛', '◈', '⊛', '✧']);
+    }
+
     private ContainerWidget $conversation;
     private string $breathColor;
     private bool $renderCalled;

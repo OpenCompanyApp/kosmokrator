@@ -7,14 +7,24 @@ namespace Kosmokrator\Agent;
 use Kosmokrator\LLM\ModelCatalog;
 
 /**
- * Calculates context window thresholds: warning, auto-compact, and blocking limits.
+ * Calculates context-window budget thresholds for conversation compaction.
  *
- * Each threshold is derived from the model's context window minus a configurable buffer.
- * Used by ContextManager to decide when to prune or compact. The snapshot() method
- * returns a single array with all threshold flags for a given estimated token count.
+ * Uses ModelCatalog to determine the raw context window size, then derives
+ * warning, auto-compact, and blocking thresholds based on configured token
+ * buffers. Consumed by the agent loop to decide when to compact history.
+ *
+ * @see ModelCatalog For raw context-window sizes per model
+ * @see CompactionPlan The plan produced when a threshold is crossed
  */
 final class ContextBudget
 {
+    /**
+     * @param  ModelCatalog|null  $models  Catalog of model capabilities; falls back to 200k when null
+     * @param  int  $reserveOutputTokens  Tokens reserved for the LLM's response generation
+     * @param  int  $warningBufferTokens  Buffer subtracted from effective window for the warning threshold
+     * @param  int  $autoCompactBufferTokens  Buffer subtracted from effective window for the auto-compact threshold
+     * @param  int  $blockingBufferTokens  Buffer subtracted from effective window for the hard blocking threshold
+     */
     public function __construct(
         private readonly ?ModelCatalog $models,
         private readonly int $reserveOutputTokens = 0,
@@ -23,20 +33,33 @@ final class ContextBudget
         private readonly int $blockingBufferTokens = 0,
     ) {}
 
-    /** Raw model context window size (tokens). */
+    /**
+     * Get the raw context-window size for the given model.
+     *
+     * @param  string  $model  Model identifier used to look up capabilities
+     * @return int Context window in tokens (defaults to 200 000)
+     */
     public function contextWindow(string $model): int
     {
         return $this->models?->contextWindow($model) ?? 200_000;
     }
 
-    /** Context window minus reserved output tokens — the usable input budget. */
+    /**
+     * Context window minus the output-reservation tokens.
+     *
+     * @param  string  $model  Model identifier
+     * @return int Usable input token budget (always ≥ 1)
+     */
     public function effectiveContextWindow(string $model): int
     {
         return max(1, $this->contextWindow($model) - max(0, $this->reserveOutputTokens));
     }
 
     /**
-     * Token count at which a warning should be logged.
+     * Token count at which a low-context warning should be emitted.
+     *
+     * @param  string  $model  Model identifier
+     * @return int Warning threshold in tokens
      */
     public function warningThreshold(string $model): int
     {
@@ -44,7 +67,10 @@ final class ContextBudget
     }
 
     /**
-     * Token count at which auto-compaction should trigger.
+     * Token count at which automatic compaction should be triggered.
+     *
+     * @param  string  $model  Model identifier
+     * @return int Auto-compact threshold in tokens
      */
     public function autoCompactThreshold(string $model): int
     {
@@ -52,7 +78,10 @@ final class ContextBudget
     }
 
     /**
-     * Token count at which the context is considered full and action is mandatory.
+     * Token count at which further turns are blocked until compaction completes.
+     *
+     * @param  string  $model  Model identifier
+     * @return int Hard blocking threshold in tokens
      */
     public function blockingThreshold(string $model): int
     {
@@ -60,10 +89,10 @@ final class ContextBudget
     }
 
     /**
-     * Compute a budget snapshot with all thresholds and boolean flags for the given token estimate.
+     * Build a point-in-time snapshot of all budget metrics for the given token usage.
      *
-     * @param  int  $estimatedTokens  Current estimated token usage
-     * @param  string  $model  Model identifier for context-window lookup
+     * @param  int  $estimatedTokens  Current estimated token usage from TokenEstimator
+     * @param  string  $model  Model identifier
      * @return array{
      *   estimated_tokens:int,
      *   context_window:int,
@@ -83,6 +112,7 @@ final class ContextBudget
         $warning = $this->warningThreshold($model);
         $autoCompact = $this->autoCompactThreshold($model);
         $blocking = $this->blockingThreshold($model);
+        // Clamp to 0 so negative usage never produces a negative percentage
         $percentLeft = max(0, (int) round((($effective - $estimatedTokens) / $effective) * 100));
 
         return [

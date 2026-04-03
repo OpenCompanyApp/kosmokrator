@@ -11,9 +11,11 @@ use Illuminate\Foundation\Application as LaravelApp;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Facade;
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
+use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
@@ -27,8 +29,8 @@ use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Settings\SettingsManager;
-use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\SettingsPaths;
+use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
@@ -57,15 +59,16 @@ use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Logger;
+use OpenCompany\PrismCodex\Codex;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
 use OpenCompany\PrismRelay\Caching\GeminiCacheStore;
 use OpenCompany\PrismRelay\Caching\PromptCacheOrchestrator;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Relay;
-use OpenCompany\PrismRelay\RelayManager;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Registry\RelayRegistryBuilder;
+use OpenCompany\PrismRelay\Relay;
+use OpenCompany\PrismRelay\RelayManager;
 use Prism\Prism\PrismManager;
 use Prism\Prism\PrismServiceProvider;
 use Psr\Log\LoggerInterface;
@@ -199,8 +202,8 @@ class Kernel
     {
         $config = $this->container->make('config');
         $settings = $this->container->make(SettingsRepository::class);
-        $hasExternalConfig = (new SettingsPaths(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd()))->globalReadPath() !== null
-            || (new SettingsPaths(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd()))->projectReadPath() !== null;
+        $hasExternalConfig = (new SettingsPaths(InstructionLoader::gitRoot() ?? getcwd()))->globalReadPath() !== null
+            || (new SettingsPaths(InstructionLoader::gitRoot() ?? getcwd()))->projectReadPath() !== null;
 
         // Legacy SQLite provider/model preferences only apply when no external config exists yet.
         if (! $hasExternalConfig) {
@@ -313,8 +316,8 @@ class Kernel
             baseConfigPath: $this->basePath.'/config',
         ));
         $this->container->singleton(RelayRegistryBuilder::class, fn () => new RelayRegistryBuilder(
-                configDir: $this->basePath.'/vendor/opencompanyapp/prism-relay/config',
-            ));
+            configDir: $this->basePath.'/vendor/opencompanyapp/prism-relay/config',
+        ));
         $this->container->singleton(RelayRegistry::class, function () {
             $config = $this->container->make('config');
             $relayOverrides = is_array($config->get('relay.providers', []))
@@ -363,7 +366,7 @@ class Kernel
         unset($providers['codex']);
         (new RelayManager($providers))->register($manager);
         $manager->extend('codex', function ($app, array $config) {
-            return new \OpenCompany\PrismCodex\Codex(
+            return new Codex(
                 oauthService: $this->container->make(CodexOAuthService::class),
                 url: $config['url'] ?? 'https://chatgpt.com/backend-api/codex',
                 accountId: $config['account_id'] ?? null,
@@ -411,6 +414,7 @@ class Kernel
             ),
             $log,
         ));
+        $this->container->singleton(LlmClientInterface::class, fn () => $this->container->make(PrismService::class));
 
         $provider = $config->get('kosmokrator.agent.default_provider', 'z');
         $providerUrl = rtrim($registry->url($provider), '/');
@@ -526,6 +530,34 @@ class Kernel
             $evaluator->setPermissionMode($defaultMode);
 
             return $evaluator;
+        });
+
+        // Completion sound — compose music via LLM after each agent response
+        $this->container->singleton(CompletionSound::class, function () use ($config) {
+            $sessionId = $this->container->make(SessionManager::class)->currentSessionId() ?? 'default';
+
+            // Resolve audio model override — if set, apply to a cloned LLM client
+            $llm = $this->container->make(LlmClientInterface::class);
+            $audioProvider = $config->get('kosmokrator.agent.audio_provider');
+            $audioModel = $config->get('kosmokrator.agent.audio_model');
+
+            if ($audioProvider !== null && $audioProvider !== '') {
+                $llm->setProvider($audioProvider);
+            }
+            if ($audioModel !== null && $audioModel !== '') {
+                $llm->setModel($audioModel);
+            }
+
+            return new CompletionSound(
+                llm: $llm,
+                log: $this->container->make(LoggerInterface::class),
+                sessionId: $sessionId,
+                enabled: $config->get('kosmokrator.audio.completion_sound', false),
+                soundfont: str_replace('~', getenv('HOME') ?: sys_get_temp_dir(), $config->get('kosmokrator.audio.soundfont', '~/.kosmokrator/soundfonts/FluidR3_GM.sf2')),
+                maxDuration: (int) $config->get('kosmokrator.audio.max_duration', 8),
+                maxRetries: (int) $config->get('kosmokrator.audio.max_retries', 1),
+                llmTimeoutSeconds: (int) $config->get('kosmokrator.audio.llm_timeout', 60),
+            );
         });
     }
 

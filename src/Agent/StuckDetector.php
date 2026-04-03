@@ -42,7 +42,7 @@ final class StuckDetector
     {
         // Build signatures and add to rolling window
         foreach ($toolCalls as $tc) {
-            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode($tc->arguments()));
+            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode($tc->arguments(), JSON_INVALID_UTF8_SUBSTITUTE));
         }
         $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
 

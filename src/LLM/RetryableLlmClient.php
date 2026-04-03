@@ -22,16 +22,18 @@ use Psr\Log\LoggerInterface;
 class RetryableLlmClient implements LlmClientInterface
 {
     /**
-     * @param LlmClientInterface $inner       The underlying client to delegate calls to
-     * @param LoggerInterface    $log         Logger for retry warnings
-     * @param int                $maxAttempts Maximum retry attempts (0 = unlimited)
-     * @param \Closure|null      $onRetry     Optional callback invoked as (int $attempt, float $delay, string $error) on each retry
+     * @param  LlmClientInterface  $inner  The underlying client to delegate calls to
+     * @param  LoggerInterface  $log  Logger for retry warnings
+     * @param  int  $maxAttempts  Maximum retry attempts (0 = unlimited)
+     * @param  \Closure|null  $onRetry  Optional callback invoked as (int $attempt, float $delay, string $error) on each retry
+     * @param  (\Closure(float, ?Cancellation): void)|null  $sleepFunction  Override for delay behavior (useful in tests)
      */
     public function __construct(
         private readonly LlmClientInterface $inner,
         private readonly LoggerInterface $log,
         private int $maxAttempts = 0,
         private ?\Closure $onRetry = null,
+        private ?\Closure $sleepFunction = null,
     ) {}
 
     public function setOnRetry(?\Closure $onRetry): void
@@ -47,9 +49,9 @@ class RetryableLlmClient implements LlmClientInterface
     /**
      * Send a chat request with automatic retry on transient failures.
      *
-     * @param  Message[]    $messages     Conversation history
-     * @param  Tool[]       $tools        Available tools for function calling
-     * @param  Cancellation $cancellation Optional Amp cancellation token
+     * @param  Message[]  $messages  Conversation history
+     * @param  Tool[]  $tools  Available tools for function calling
+     * @param  Cancellation  $cancellation  Optional Amp cancellation token
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
@@ -78,7 +80,11 @@ class RetryableLlmClient implements LlmClientInterface
                     }
                 }
 
-                $this->smartDelay($delay, $cancellation);
+                if ($this->sleepFunction !== null) {
+                    ($this->sleepFunction)($delay, $cancellation);
+                } else {
+                    $this->smartDelay($delay, $cancellation);
+                }
             }
         }
     }
@@ -141,7 +147,7 @@ class RetryableLlmClient implements LlmClientInterface
         }
 
         // Exponential backoff with jitter: ~2s, ~4s, ~8s, ~16s, ~32s, ~60s, ~60s, ...
-        $base = min((int) pow(2, $attempt), 60);
+        $base = min(pow(2, min($attempt, 6)), 60.0);
 
         return (float) ($base + random_int(0, max(1, (int) ($base * 0.3))));
     }
@@ -152,11 +158,15 @@ class RetryableLlmClient implements LlmClientInterface
      */
     private function smartDelay(float $seconds, ?Cancellation $cancellation): void
     {
+        $seconds = max(0.0, $seconds);
+
         if (\Fiber::getCurrent() !== null) {
             \Amp\delay($seconds, cancellation: $cancellation);
         } else {
             $cancellation?->throwIfRequested();
-            sleep((int) ceil($seconds));
+            if ($seconds > 0) {
+                sleep((int) ceil($seconds));
+            }
             $cancellation?->throwIfRequested();
         }
     }

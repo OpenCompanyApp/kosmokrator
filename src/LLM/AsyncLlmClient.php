@@ -129,7 +129,7 @@ class AsyncLlmClient implements LlmClientInterface
         $request = new Request($this->baseUrl.'/chat/completions', 'POST');
         $request->setHeader('Authorization', 'Bearer '.$this->apiKey);
         $request->setHeader('Content-Type', 'application/json');
-        $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR));
+        $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
         $request->setTransferTimeout(600);
         $request->setInactivityTimeout(300);
 
@@ -256,6 +256,8 @@ class AsyncLlmClient implements LlmClientInterface
 
         // Non-blocking body read
         $body = $response->getBody()->buffer($cancellation);
+        // Sanitize response body: strip invalid UTF-8 bytes that some providers return
+        $body = mb_convert_encoding($body, 'UTF-8', 'UTF-8');
         $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
 
         $choice = $data['choices'][0] ?? [];

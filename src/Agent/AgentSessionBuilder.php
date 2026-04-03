@@ -21,8 +21,8 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
 use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismRelay\Relay;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
+use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -176,6 +176,41 @@ final class AgentSessionBuilder
         $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
 
         $llmClientClass = $useAsyncClient ? 'async' : 'prism';
+
+        // Resolve per-depth model overrides for subagents
+        $subagentProvider = $sessionManager->getSetting('subagent_provider')
+            ?? $config->get('kosmokrator.agent.subagent_provider');
+        $subagentModel = $sessionManager->getSetting('subagent_model')
+            ?? $config->get('kosmokrator.agent.subagent_model');
+        $depth2Provider = $sessionManager->getSetting('subagent_depth2_provider')
+            ?? $config->get('kosmokrator.agent.subagent_depth2_provider');
+        $depth2Model = $sessionManager->getSetting('subagent_depth2_model')
+            ?? $config->get('kosmokrator.agent.subagent_depth2_model');
+
+        $subagentApiKey = $subagentProvider !== null && $subagentProvider !== ''
+            ? $providers->apiKey($subagentProvider) : null;
+        $subagentBaseUrl = $subagentProvider !== null && $subagentProvider !== ''
+            ? rtrim($registry->url($subagentProvider), '/') : null;
+        $depth2ApiKey = $depth2Provider !== null && $depth2Provider !== ''
+            ? $providers->apiKey($depth2Provider) : null;
+        $depth2BaseUrl = $depth2Provider !== null && $depth2Provider !== ''
+            ? rtrim($registry->url($depth2Provider), '/') : null;
+
+        $modelConfig = new SubagentModelConfig(
+            defaultProvider: $provider,
+            defaultModel: $llm->getModel(),
+            defaultApiKey: $config->get("prism.providers.{$provider}.api_key", ''),
+            defaultBaseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
+            subagentProvider: $subagentProvider !== '' ? $subagentProvider : null,
+            subagentModel: $subagentModel !== '' ? $subagentModel : null,
+            subagentApiKey: $subagentApiKey !== '' ? $subagentApiKey : null,
+            subagentBaseUrl: $subagentBaseUrl !== '' ? $subagentBaseUrl : null,
+            depth2Provider: $depth2Provider !== '' ? $depth2Provider : null,
+            depth2Model: $depth2Model !== '' ? $depth2Model : null,
+            depth2ApiKey: $depth2ApiKey !== '' ? $depth2ApiKey : null,
+            depth2BaseUrl: $depth2BaseUrl !== '' ? $depth2BaseUrl : null,
+        );
+
         $subagentFactory = new SubagentFactory(
             rootRegistry: $toolRegistry,
             log: $log,
@@ -184,12 +219,9 @@ final class AgentSessionBuilder
             permissions: $permissions,
             rootCancellation: fn () => $ui->getCancellation(),
             llmClientClass: $llmClientClass,
-            apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
-            baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
-            model: $llm->getModel(),
+            modelConfig: $modelConfig,
             maxTokens: $llm->getMaxTokens(),
             temperature: $llm->getTemperature(),
-            provider: $provider,
             budget: $contextBudget,
             protectedContextBuilder: $protectedContextBuilder,
             relay: $this->container->make(Relay::class),

@@ -163,3 +163,10 @@ session:
 
 codex:
   oauth_port: 9876
+
+audio:
+  completion_sound: true
+  soundfont: "~/.kosmokrator/soundfonts/FluidR3_GM.sf2"
+  llm_timeout: 60
+  max_duration: 8
+  max_retries: 1

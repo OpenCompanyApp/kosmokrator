@@ -152,9 +152,9 @@ class ToolResultDeduplicator
     {
         $args = $result->args;
         ksort($args);
-        $resultStr = is_string($result->result) ? $result->result : json_encode($result->result);
+        $resultStr = is_string($result->result) ? $result->result : json_encode($result->result, JSON_INVALID_UTF8_SUBSTITUTE);
 
-        return $result->toolName.':'.json_encode($args, JSON_THROW_ON_ERROR).':'.md5($resultStr);
+        return $result->toolName.':'.json_encode($args, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE).':'.md5($resultStr);
     }
 
     private function normalizePath(string $path): string

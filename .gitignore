@@ -9,3 +9,4 @@
 /tmp
 /docs/confidential
 /.playwright-cli
+/builds

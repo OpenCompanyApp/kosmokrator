@@ -11,7 +11,7 @@ use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SessionManager;
-use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\UIManager;
@@ -29,7 +29,7 @@ readonly class SlashCommandContext
         public LlmClientInterface $llm,
         public TaskStore $taskStore,
         public Repository $config,
-        public SettingsRepository $settings,
+        public SettingsRepositoryInterface $settings,
         public ?SubagentOrchestrator $orchestrator = null,
         public ?ModelCatalog $models = null,
         public ?ProviderCatalog $providers = null,

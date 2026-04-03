@@ -6,14 +6,14 @@ namespace Kosmokrator\Task\Tool;
 
 use Kosmokrator\Task\Task;
 use Kosmokrator\Task\TaskStore;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
  * Tool for creating tasks — either a single task or a batch via JSON array.
  * Part of the task management toolset exposed to the AI agent.
  */
-class TaskCreateTool implements ToolInterface
+class TaskCreateTool extends AbstractTool
 {
     public function __construct(
         private readonly TaskStore $store,
@@ -50,10 +50,10 @@ class TaskCreateTool implements ToolInterface
     }
 
     /**
-     * @param  array<string,mixed> $args Tool call arguments from the agent
-     * @return ToolResult           Created task summary or error message
+     * @param  array<string,mixed>  $args  Tool call arguments from the agent
+     * @return ToolResult Created task summary or error message
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $hasSubject = isset($args['subject']) && $args['subject'] !== '';
         $hasTasks = isset($args['tasks']) && $args['tasks'] !== '';

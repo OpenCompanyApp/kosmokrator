@@ -12,7 +12,7 @@ use Kosmokrator\UI\RendererInterface;
  *
  * Delegates rendering to the UI layer via RendererInterface.
  */
-class AskUserTool implements ToolInterface
+class AskUserTool extends AbstractTool
 {
     public function __construct(
         private readonly RendererInterface $ui,
@@ -35,12 +35,7 @@ class AskUserTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array
-    {
-        return ['question'];
-    }
-
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $question = $args['question'] ?? '';
 

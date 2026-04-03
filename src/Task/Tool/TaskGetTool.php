@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Task\Tool;
 
 use Kosmokrator\Task\TaskStore;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
  * Retrieves full details of a single task, including its children.
  * Part of the task management toolset exposed to the AI agent.
  */
-class TaskGetTool implements ToolInterface
+class TaskGetTool extends AbstractTool
 {
     public function __construct(
         private readonly TaskStore $store,
@@ -38,17 +38,11 @@ class TaskGetTool implements ToolInterface
         ];
     }
 
-    /** @return list<string> Parameters that must always be provided */
-    public function requiredParameters(): array
-    {
-        return ['id'];
-    }
-
     /**
-     * @param  array<string,mixed> $args Tool call arguments from the agent
-     * @return ToolResult           Task detail view with children or error message
+     * @param  array<string,mixed>  $args  Tool call arguments from the agent
+     * @return ToolResult Task detail view with children or error message
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $id = $args['id'] ?? '';
         if ($id === '') {

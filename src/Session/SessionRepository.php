@@ -10,14 +10,14 @@ namespace Kosmokrator\Session;
  * Part of the Session subsystem — used by session management commands
  * to create, find, list, and update conversation sessions.
  */
-class SessionRepository
+class SessionRepository implements SessionRepositoryInterface
 {
     public function __construct(private Database $db) {}
 
     /**
-     * @param string $project  Project root path identifying the workspace
-     * @param string $model    LLM model identifier to associate with the session
-     * @return string          The newly generated session UUID
+     * @param  string  $project  Project root path identifying the workspace
+     * @param  string  $model  LLM model identifier to associate with the session
+     * @return string The newly generated session UUID
      */
     public function create(string $project, string $model): string
     {
@@ -38,7 +38,7 @@ class SessionRepository
     }
 
     /**
-     * @param string $id  Full session UUID
+     * @param  string  $id  Full session UUID
      * @return array|null Session row as associative array, or null if not found
      */
     public function find(string $id): ?array
@@ -66,8 +66,8 @@ class SessionRepository
     }
 
     /**
-     * @param string $id     Session UUID
-     * @param string $title  Human-readable title to store
+     * @param  string  $id  Session UUID
+     * @param  string  $title  Human-readable title to store
      */
     public function updateTitle(string $id, string $title): void
     {
@@ -87,9 +87,9 @@ class SessionRepository
     }
 
     /**
-     * @param string $project  Project root path to filter by
-     * @param int    $limit    Maximum number of sessions to return
-     * @return array[]         List of session rows with aggregated message_count and last_user_message
+     * @param  string  $project  Project root path to filter by
+     * @param  int  $limit  Maximum number of sessions to return
+     * @return array[] List of session rows with aggregated message_count and last_user_message
      */
     public function listByProject(string $project, int $limit = 20): array
     {
@@ -109,8 +109,8 @@ class SessionRepository
     }
 
     /**
-     * @param string $project  Project root path to filter by
-     * @return array|null      Most recently updated session row, or null if none exist
+     * @param  string  $project  Project root path to filter by
+     * @return array|null Most recently updated session row, or null if none exist
      */
     public function latest(string $project): ?array
     {

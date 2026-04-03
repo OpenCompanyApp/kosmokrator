@@ -3,7 +3,7 @@
 namespace Kosmokrator\Tool\Coding;
 
 use Amp\Process\Process;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 use function Amp\ByteStream\buffer;
@@ -13,7 +13,7 @@ use function Amp\ByteStream\buffer;
  * Automatically uses ripgrep (`rg`) when available for faster searches, falling back to GNU `grep`.
  * Use to find usages, trace code paths, or locate patterns across the codebase.
  */
-class GrepTool implements ToolInterface
+class GrepTool extends AbstractTool
 {
     public function __construct(
         private readonly int $timeout = 30,
@@ -47,7 +47,7 @@ class GrepTool implements ToolInterface
      * @param  array{pattern: string, path?: string, glob?: string}  $args  Regex pattern, search path, and optional file filter
      * @return ToolResult Matching lines (up to 100), or "no matches" / error message
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $pattern = $args['pattern'] ?? '';
         $path = $args['path'] ?? '.';

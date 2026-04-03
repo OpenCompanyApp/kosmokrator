@@ -28,8 +28,7 @@ Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streamin
 
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
+- [Installation](#installation)
 - [CLI Usage](#cli-usage)
 - [Agent Modes](#agent-modes)
 - [Slash Commands](#slash-commands)
@@ -47,26 +46,58 @@ Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streamin
 - [Development](#development)
 - [License](#license)
 
-## Prerequisites
+## Installation
 
-- **PHP 8.4+** with the `pcntl`, `posix`, and `mbstring` extensions
-- **Composer 2.x**
-- A terminal with ANSI color support (TUI mode requires a modern terminal — iTerm2, Kitty, Windows Terminal, Ghostty, etc.)
+### Static binary (no PHP required)
 
-## Quick Start
+Download a self-contained binary for your platform — no PHP installation needed:
 
 ```bash
-# Clone and install
-git clone https://github.com/opencompany/kosmokrator.git
+# macOS (Apple Silicon)
+curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+
+# macOS (Intel)
+curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
+  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+
+# Linux (x86_64)
+curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+
+# Linux (ARM64)
+curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
+  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+```
+
+### PHAR (requires PHP 8.4+)
+
+If you already have PHP installed, the PHAR is smaller (~5MB vs ~25MB):
+
+```bash
+curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+```
+
+### From source
+
+```bash
+git clone https://github.com/OpenCompanyApp/kosmokrator.git
 cd kosmokrator
 composer install
-
-# Interactive setup — select a provider and enter your API key
 bin/kosmokrator setup
-
-# Run
-bin/kosmokrator
 ```
+
+Requires PHP 8.4+ with `pcntl`, `posix`, and `mbstring` extensions, and Composer 2.x.
+
+### Getting started
+
+```bash
+kosmokrator setup    # First run — select provider and enter API key
+kosmokrator          # Start the agent
+```
+
+TUI mode requires a modern terminal (iTerm2, Kitty, Ghostty, Windows Terminal, etc.). Falls back to ANSI mode automatically on simpler terminals.
 
 ## CLI Usage
 
@@ -141,6 +172,8 @@ Type these at the prompt during a session.
 |---------|-------------|
 | `/settings` | Open the settings workspace |
 | `/agents` | Show the live subagent swarm dashboard |
+| `/update` | Check for updates and self-update |
+| `/feedback <text>` | Submit feedback or a bug report as a GitHub issue (requires `gh` CLI) |
 | `/tasks clear` | Remove all tasks |
 | `/clear` | Clear the terminal screen |
 | `/theogony` | Replay the mythological intro animation |

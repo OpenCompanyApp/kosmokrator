@@ -1,9 +1,10 @@
 {
+    "main": "bin/kosmokrator",
+    "output": "builds/kosmokrator.phar",
     "chmod": "0755",
     "directories": [
-        "app",
-        "bootstrap",
         "config",
+        "src",
         "vendor"
     ],
     "files": [
@@ -14,5 +15,6 @@
     "compactors": [
         "KevinGH\\Box\\Compactor\\Php",
         "KevinGH\\Box\\Compactor\\Json"
-    ]
+    ],
+    "banner": "KosmoKrator — AI coding agent for the terminal\n\n(c) OpenCompany\n\nLicense: MIT"
 }

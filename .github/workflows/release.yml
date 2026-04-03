@@ -1,0 +1,169 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, dom, xml
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction
+
+      - name: PHPStan
+        run: php vendor/bin/phpstan analyse --no-progress
+
+      - name: Tests
+        run: php vendor/bin/phpunit
+
+  build-phar:
+    name: Build PHAR
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter
+          tools: composer:v2
+          ini-values: phar.readonly=0
+
+      - name: Install dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Install Box
+        run: composer global require humbug/box
+
+      - name: Build PHAR
+        run: |
+          mkdir -p builds
+          box compile
+
+      - name: Verify PHAR
+        run: php builds/kosmokrator.phar --version
+
+      - name: Upload PHAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kosmokrator-phar
+          path: builds/kosmokrator.phar
+
+  build-static:
+    name: Build static binary (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+          - os: macos
+            arch: x86_64
+            runner: macos-13
+          - os: macos
+            arch: aarch64
+            runner: macos-14
+    needs: build-phar
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download PHAR
+        uses: actions/download-artifact@v4
+        with:
+          name: kosmokrator-phar
+          path: builds
+
+      - name: Setup PHP (for static-php-cli build tool)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, curl, openssl, phar, tokenizer
+          tools: composer:v2
+
+      - name: Build micro SAPI via static-php-cli
+        run: |
+          # Clone static-php-cli
+          git clone https://github.com/crazywhalecc/static-php-cli.git --depth=1
+          cd static-php-cli
+          composer install --no-dev
+
+          # Define the extensions KosmoKrator needs
+          EXTENSIONS="pcntl,posix,mbstring,sqlite3,pdo,pdo_sqlite,curl,openssl,zlib,dom,xml,xmlwriter,simplexml,phar,tokenizer,ctype,filter,session,fileinfo"
+
+          # Download sources and build micro SAPI
+          php bin/spc doctor --auto-fix || true
+          php bin/spc download --for-extensions="$EXTENSIONS" --with-php=8.4
+          php bin/spc build --build-micro "$EXTENSIONS"
+
+      - name: Combine micro + PHAR into static binary
+        run: |
+          cat static-php-cli/buildroot/bin/micro.sfx builds/kosmokrator.phar > builds/kosmokrator-${{ matrix.os }}-${{ matrix.arch }}
+          chmod +x builds/kosmokrator-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Verify static binary
+        if: matrix.os == 'linux' && matrix.arch == 'x86_64' || matrix.os == 'macos'
+        run: builds/kosmokrator-${{ matrix.os }}-${{ matrix.arch }} --version
+
+      - name: Upload static binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: kosmokrator-${{ matrix.os }}-${{ matrix.arch }}
+          path: builds/kosmokrator-${{ matrix.os }}-${{ matrix.arch }}
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-phar, build-static]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp artifacts/kosmokrator-phar/kosmokrator.phar release/kosmokrator.phar
+          cp artifacts/kosmokrator-linux-x86_64/kosmokrator-linux-x86_64 release/kosmokrator-linux-x86_64
+          cp artifacts/kosmokrator-linux-aarch64/kosmokrator-linux-aarch64 release/kosmokrator-linux-aarch64
+          cp artifacts/kosmokrator-macos-x86_64/kosmokrator-macos-x86_64 release/kosmokrator-macos-x86_64
+          cp artifacts/kosmokrator-macos-aarch64/kosmokrator-macos-aarch64 release/kosmokrator-macos-aarch64
+
+          # Generate checksums
+          cd release
+          sha256sum * > checksums.sha256 || shasum -a 256 * > checksums.sha256
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/kosmokrator.phar
+            release/kosmokrator-linux-x86_64
+            release/kosmokrator-linux-aarch64
+            release/kosmokrator-macos-x86_64
+            release/kosmokrator-macos-aarch64
+            release/checksums.sha256

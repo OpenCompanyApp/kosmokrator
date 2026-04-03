@@ -2,7 +2,7 @@
 
 namespace Kosmokrator\Tool\Coding;
 
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -10,7 +10,7 @@ use Kosmokrator\Tool\ToolResult;
  * Use for new files or complete overwrites; for targeted edits prefer FileEditTool or ApplyPatchTool.
  * Overwrites existing files without confirmation — the LLM should read first to avoid data loss.
  */
-class FileWriteTool implements ToolInterface
+class FileWriteTool extends AbstractTool
 {
     public function name(): string
     {
@@ -30,16 +30,11 @@ class FileWriteTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array
-    {
-        return ['path', 'content'];
-    }
-
     /**
      * @param  array{path: string, content: string}  $args  File path and full content to write
      * @return ToolResult Summary with line count, or error if write or directory creation failed
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $path = $args['path'] ?? '';
         $content = $args['content'] ?? '';

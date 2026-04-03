@@ -150,3 +150,57 @@
 [2026-04-03 19:20:29] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
 [2026-04-03 19:20:29] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d012fd4708c.py","instrument":"Banjo"}
 [2026-04-03 19:20:29] INFO: Worker finished
+[2026-04-03 19:27:09] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:27:09] INFO: Completion sound worker booted
+[2026-04-03 19:27:09] INFO: Worker starting composition {"instrument":24,"message_preview":"Pushed `94c4f64`. Clean tree now:\n\n```\n94c4f64 feat: settings workspace, bash widget, subagent orche"}
+[2026-04-03 19:27:38] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":2010}
+[2026-04-03 19:27:38] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d014aa036a3.py","instrument":"Guitar"}
+[2026-04-03 19:27:38] INFO: Worker finished
+[2026-04-03 19:28:44] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:28:44] INFO: Completion sound worker booted
+[2026-04-03 19:28:44] INFO: Worker starting composition {"instrument":24,"message_preview":"Error: Uncaught Whoops\\Exception\\ErrorException thrown in event loop error handler Kosmokrator\\Kerne"}
+[2026-04-03 19:29:03] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1052}
+[2026-04-03 19:29:03] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d014ff9c17c.py","instrument":"Guitar"}
+[2026-04-03 19:29:03] INFO: Worker finished
+[2026-04-03 19:29:20] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:29:20] INFO: Completion sound worker booted
+[2026-04-03 19:29:20] INFO: Worker starting composition {"instrument":11,"message_preview":"Hey! 👋 What can I help you with today?"}
+[2026-04-03 19:29:47] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":891}
+[2026-04-03 19:29:47] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d0152b26a7f.py","instrument":"Vibraphone"}
+[2026-04-03 19:29:47] INFO: Worker finished
+[2026-04-03 19:31:24] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:31:24] INFO: Completion sound worker booted
+[2026-04-03 19:31:24] INFO: Worker starting composition {"instrument":11,"message_preview":"Hey again! What are you working on? I'm ready when you need me."}
+[2026-04-03 19:31:36] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:31:36] INFO: Completion sound worker booted
+[2026-04-03 19:31:36] INFO: Worker starting composition {"instrument":98,"message_preview":"Hey! What can I help you with?"}
+[2026-04-03 19:31:41] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":784}
+[2026-04-03 19:31:41] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d0159d32899.py","instrument":"Vibraphone"}
+[2026-04-03 19:31:41] INFO: Worker finished
+[2026-04-03 19:31:41] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:31:41] INFO: Completion sound worker booted
+[2026-04-03 19:31:41] INFO: Worker starting composition {"instrument":98,"message_preview":"Hey! What can I help you with?"}
+[2026-04-03 19:31:51] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":776}
+[2026-04-03 19:31:51] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d015a7882e8.py","instrument":"Crystal Pad"}
+[2026-04-03 19:31:51] INFO: Worker finished
+[2026-04-03 19:31:57] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":854}
+[2026-04-03 19:31:57] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d015ad18326.py","instrument":"Crystal Pad"}
+[2026-04-03 19:31:57] INFO: Worker finished
+[2026-04-03 19:32:02] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:32:02] INFO: Completion sound worker booted
+[2026-04-03 19:32:02] INFO: Worker starting composition {"instrument":98,"message_preview":"Not sure what `\/sest\/sest` means — could you clarify what you'd like to do? I'm ready to help with c"}
+[2026-04-03 19:32:25] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":816}
+[2026-04-03 19:32:25] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d015c9072e4.py","instrument":"Crystal Pad"}
+[2026-04-03 19:32:25] INFO: Worker finished
+[2026-04-03 19:33:09] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:33:09] INFO: Completion sound worker booted
+[2026-04-03 19:33:09] INFO: Worker starting composition {"instrument":105,"message_preview":"Done. Here's what changed:\n\n### `src\/UI\/Tui\/Widget\/BashCommandWidget.php` — Rewritten\n\n- **Collapsed"}
+[2026-04-03 19:34:01] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1482}
+[2026-04-03 19:34:01] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d0162955697.py","instrument":"Banjo"}
+[2026-04-03 19:34:01] INFO: Worker finished
+[2026-04-03 19:47:23] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-03 19:47:23] INFO: Completion sound worker booted
+[2026-04-03 19:47:23] INFO: Worker starting composition {"instrument":105,"message_preview":"Here's a summary of the KosmoKrator project:\n\n## KosmoKrator — AI Coding Agent for the Terminal\n\n**W"}
+[2026-04-03 19:47:45] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1658}
+[2026-04-03 19:47:45] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d01961b8c2c.py","instrument":"Banjo"}
+[2026-04-03 19:47:45] INFO: Worker finished

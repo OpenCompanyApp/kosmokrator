@@ -9,10 +9,12 @@ use Kosmokrator\Agent\AgentSessionBuilder;
 use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Task\TaskStore;
-use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Coding\ShellSessionManager;
+use Kosmokrator\Tool\Permission\PermissionMode;
+use Kosmokrator\Update\UpdateChecker;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -83,6 +85,13 @@ class AgentCommand extends Command
         } else {
             $modelName = $session->llm->getProvider().'/'.$session->llm->getModel();
             $session->sessionManager->createSession($modelName);
+
+            // Check for updates on clean session start
+            $currentVersion = $this->getApplication()?->getVersion() ?? 'dev';
+            $updateAvailable = (new UpdateChecker($currentVersion))->check();
+            if ($updateAvailable !== null) {
+                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run /update to install.");
+            }
         }
 
         return $this->repl($session);
@@ -95,7 +104,7 @@ class AgentCommand extends Command
     {
         $taskStore = $this->container->make(TaskStore::class);
         $config = $this->container->make('config');
-        $settings = $this->container->make(SettingsRepository::class);
+        $settings = $this->container->make(SettingsRepositoryInterface::class);
         $models = $this->container->make(ModelCatalog::class);
 
         $providers = $this->container->make(ProviderCatalog::class);
@@ -160,7 +169,7 @@ class AgentCommand extends Command
                     $messages = $history->messages();
                     // Find the last assistant message for content analysis
                     for ($i = count($messages) - 1; $i >= 0; $i--) {
-                        if ($messages[$i] instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage
+                        if ($messages[$i] instanceof AssistantMessage
                             && $messages[$i]->content !== '') {
                             $sound->play(
                                 $messages[$i]->content,
@@ -173,7 +182,7 @@ class AgentCommand extends Command
                 }
             } catch (\Throwable $e) {
                 // Never let the sound system break the REPL — but log it
-                error_log('[CompletionSound] Hook failed: ' . $e->getMessage());
+                error_log('[CompletionSound] Hook failed: '.$e->getMessage());
             }
 
             // Plan mode: show approval dialog after run completes
@@ -245,10 +254,14 @@ class AgentCommand extends Command
         $registry->register(new Slash\ModeCommand(AgentMode::Ask));
 
         // Utility commands
+        $version = $this->getApplication()?->getVersion() ?? 'dev';
         $registry->register(new Slash\NewCommand);
         $registry->register(new Slash\ResumeCommand);
         $registry->register(new Slash\SettingsCommand($this->container));
         $registry->register(new Slash\AgentsCommand);
+        $registry->register(new Slash\UpdateCommand($version));
+        $registry->register(new Slash\FeedbackCommand($version));
+        $registry->register(new Slash\RenameCommand);
 
         return $registry;
     }

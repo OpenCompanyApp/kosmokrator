@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Task\Tool;
 
 use Kosmokrator\Task\TaskStore;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
  * Updates a task's status, subject, description, or dependency links.
  * Part of the task management toolset exposed to the AI agent.
  */
-class TaskUpdateTool implements ToolInterface
+class TaskUpdateTool extends AbstractTool
 {
     public function __construct(
         private readonly TaskStore $store,
@@ -51,10 +51,10 @@ class TaskUpdateTool implements ToolInterface
     }
 
     /**
-     * @param  array<string,mixed> $args Tool call arguments from the agent
-     * @return ToolResult           Updated task detail with tree view or error message
+     * @param  array<string,mixed>  $args  Tool call arguments from the agent
+     * @return ToolResult Updated task detail with tree view or error message
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $id = $args['id'] ?? '';
         if ($id === '') {

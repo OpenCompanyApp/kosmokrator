@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -12,7 +12,7 @@ use Kosmokrator\Tool\ToolResult;
  *
  * Non-destructive: calling read does not consume or alter the session state.
  */
-final class ShellReadTool implements ToolInterface
+final class ShellReadTool extends AbstractTool
 {
     public function __construct(
         private readonly ShellSessionManager $sessions,
@@ -46,22 +46,18 @@ final class ShellReadTool implements ToolInterface
      *
      * @param  array<string, mixed>  $args  Tool arguments from the AI agent
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $sessionId = trim((string) ($args['session_id'] ?? ''));
         if ($sessionId === '') {
             return ToolResult::error('session_id is required.');
         }
 
-        try {
-            $output = $this->sessions->read(
-                id: $sessionId,
-                waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
-            );
+        $output = $this->sessions->read(
+            id: $sessionId,
+            waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
+        );
 
-            return ToolResult::success($output);
-        } catch (\Throwable $e) {
-            return ToolResult::error($e->getMessage());
-        }
+        return ToolResult::success($output);
     }
 }

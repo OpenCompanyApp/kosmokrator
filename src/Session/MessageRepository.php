@@ -19,21 +19,20 @@ use Prism\Prism\ValueObjects\ToolResult;
  * Handles serialization of Prism message types (including tool calls/results)
  * to and from the `messages` table, and supports compacting old messages.
  */
-class MessageRepository
+class MessageRepository implements MessageRepositoryInterface
 {
     public function __construct(private Database $db) {}
 
     /**
      * Persist a new message and return its auto-incremented row ID.
      *
-     * @param string       $sessionId   Session this message belongs to
-     * @param string       $role        Message role (user, assistant, system, tool_result)
-     * @param string|null  $content     Text content of the message
-     * @param ToolCall[]|null   $toolCalls    Tool calls requested by an assistant message
-     * @param ToolResult[]|null $toolResults  Tool execution results for a tool_result message
-     * @param int          $tokensIn    Input token count for this message
-     * @param int          $tokensOut   Output token count for this message
-     *
+     * @param  string  $sessionId  Session this message belongs to
+     * @param  string  $role  Message role (user, assistant, system, tool_result)
+     * @param  string|null  $content  Text content of the message
+     * @param  ToolCall[]|null  $toolCalls  Tool calls requested by an assistant message
+     * @param  ToolResult[]|null  $toolResults  Tool execution results for a tool_result message
+     * @param  int  $tokensIn  Input token count for this message
+     * @param  int  $tokensOut  Output token count for this message
      * @return int Inserted row ID
      */
     public function append(
@@ -67,8 +66,7 @@ class MessageRepository
     /**
      * Load all non-compacted messages for a session, deserialized into Prism value objects.
      *
-     * @param string $sessionId Session to load messages for
-     *
+     * @param  string  $sessionId  Session to load messages for
      * @return Message[] Ordered list of deserialized messages
      */
     public function loadActive(string $sessionId): array
@@ -93,9 +91,8 @@ class MessageRepository
     /**
      * Load raw message rows for a session, optionally including compacted ones.
      *
-     * @param string $sessionId        Session to load messages for
-     * @param bool   $includeCompacted Whether to include compacted (summarized) messages
-     *
+     * @param  string  $sessionId  Session to load messages for
+     * @param  bool  $includeCompacted  Whether to include compacted (summarized) messages
      * @return array<int, array<string, mixed>> Raw database rows
      */
     public function loadRaw(string $sessionId, bool $includeCompacted = false): array
@@ -115,8 +112,8 @@ class MessageRepository
     /**
      * Mark all messages before a given ID as compacted (excluded from active context).
      *
-     * @param string $sessionId Session whose messages to mark
-     * @param int    $beforeId  Compact all messages with an ID lower than this
+     * @param  string  $sessionId  Session whose messages to mark
+     * @param  int  $beforeId  Compact all messages with an ID lower than this
      */
     public function markCompacted(string $sessionId, int $beforeId): void
     {
@@ -129,7 +126,7 @@ class MessageRepository
     /**
      * Mark specific messages as compacted by their row IDs.
      *
-     * @param int[] $messageIds Database row IDs to compact
+     * @param  int[]  $messageIds  Database row IDs to compact
      */
     public function markCompactedIds(array $messageIds): void
     {
@@ -148,9 +145,9 @@ class MessageRepository
     /**
      * Compact the given message IDs and insert a system summary message in one transaction.
      *
-     * @param string $sessionId   Session being compacted
-     * @param int[]  $messageIds  Row IDs to mark as compacted
-     * @param string $summary     Summary text stored as a system message
+     * @param  string  $sessionId  Session being compacted
+     * @param  int[]  $messageIds  Row IDs to mark as compacted
+     * @param  string  $summary  Summary text stored as a system message
      */
     public function compactWithSummary(string $sessionId, array $messageIds, string $summary): void
     {
@@ -185,8 +182,7 @@ class MessageRepository
     /**
      * Count non-compacted messages for a session.
      *
-     * @param string $sessionId Session to count messages for
-     *
+     * @param  string  $sessionId  Session to count messages for
      * @return int Number of active (non-compacted) messages
      */
     public function count(string $sessionId): int
@@ -202,8 +198,7 @@ class MessageRepository
     /**
      * Sum total token usage across all messages for a session.
      *
-     * @param string $sessionId Session to tally tokens for
-     *
+     * @param  string  $sessionId  Session to tally tokens for
      * @return array{tokens_in: int, tokens_out: int} Cumulative token counts
      */
     public function sumTokens(string $sessionId): array
@@ -225,11 +220,10 @@ class MessageRepository
     /**
      * Search messages across all sessions for a project using a LIKE query.
      *
-     * @param string      $project          Project path to scope the search
-     * @param string      $query            Search term (LIKE pattern, auto-escaped)
-     * @param string|null $excludeSessionId  Optional session to exclude from results
-     * @param int         $limit            Maximum number of rows to return
-     *
+     * @param  string  $project  Project path to scope the search
+     * @param  string  $query  Search term (LIKE pattern, auto-escaped)
+     * @param  string|null  $excludeSessionId  Optional session to exclude from results
+     * @param  int  $limit  Maximum number of rows to return
      * @return array<int, array<string, mixed>> Matching message rows with session metadata
      */
     public function searchProjectHistory(string $project, string $query, ?string $excludeSessionId = null, int $limit = 5): array

@@ -3,7 +3,7 @@
 namespace Kosmokrator\Tool\Coding;
 
 use Amp\Process\Process;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -16,7 +16,7 @@ use function Amp\ByteStream\buffer;
  * Use for running tests, git operations, package installs, and other CLI tasks.
  * Streams output in real time via an optional progress callback; enforces a configurable timeout.
  */
-class BashTool implements ToolInterface
+class BashTool extends AbstractTool
 {
     /** @var (\Closure(string): void)|null */
     public static ?\Closure $progressCallback = null;
@@ -26,8 +26,8 @@ class BashTool implements ToolInterface
     private LoggerInterface $log;
 
     /**
-     * @param int               $timeout Default per-command timeout in seconds
-     * @param LoggerInterface|null $log  Optional PSR-3 logger
+     * @param  int  $timeout  Default per-command timeout in seconds
+     * @param  LoggerInterface|null  $log  Optional PSR-3 logger
      */
     public function __construct(int $timeout = 120, ?LoggerInterface $log = null)
     {
@@ -62,7 +62,7 @@ class BashTool implements ToolInterface
      * @param  array{command: string, timeout?: int}  $args  Command and optional timeout override
      * @return ToolResult Combined stdout+stderr output with exit code, or error on timeout/failure
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $command = trim($args['command'] ?? '');
 

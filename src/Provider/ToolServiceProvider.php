@@ -1,0 +1,123 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\Provider;
+
+use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\Tool\MemorySaveTool;
+use Kosmokrator\Session\Tool\MemorySearchTool;
+use Kosmokrator\Task\TaskStore;
+use Kosmokrator\Task\Tool\TaskCreateTool;
+use Kosmokrator\Task\Tool\TaskGetTool;
+use Kosmokrator\Task\Tool\TaskListTool;
+use Kosmokrator\Task\Tool\TaskUpdateTool;
+use Kosmokrator\Tool\Coding\ApplyPatchTool;
+use Kosmokrator\Tool\Coding\BashTool;
+use Kosmokrator\Tool\Coding\FileEditTool;
+use Kosmokrator\Tool\Coding\FileReadTool;
+use Kosmokrator\Tool\Coding\FileWriteTool;
+use Kosmokrator\Tool\Coding\GlobTool;
+use Kosmokrator\Tool\Coding\GrepTool;
+use Kosmokrator\Tool\Coding\Patch\PatchApplier;
+use Kosmokrator\Tool\Coding\Patch\PatchParser;
+use Kosmokrator\Tool\Coding\ShellKillTool;
+use Kosmokrator\Tool\Coding\ShellReadTool;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
+use Kosmokrator\Tool\Coding\ShellStartTool;
+use Kosmokrator\Tool\Coding\ShellWriteTool;
+use Kosmokrator\Tool\Permission\GuardianEvaluator;
+use Kosmokrator\Tool\Permission\PermissionConfigParser;
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\PermissionMode;
+use Kosmokrator\Tool\Permission\SessionGrants;
+use Kosmokrator\Tool\ToolRegistry;
+use Psr\Log\LoggerInterface;
+
+/**
+ * Registers the tool registry with all coding, task, and memory tools,
+ * plus the permission evaluator and its dependencies.
+ */
+class ToolServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $config = $this->container->make('config');
+
+        $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
+        $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
+        $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
+
+        $this->container->singleton(TaskStore::class);
+        $this->container->singleton(PatchParser::class);
+        $this->container->singleton(PatchApplier::class, fn () => new PatchApplier(
+            $config->get('kosmokrator.tools.blocked_paths', []),
+        ));
+        $this->container->singleton(ShellSessionManager::class, fn () => new ShellSessionManager(
+            $this->container->make(LoggerInterface::class),
+            $shellWaitMs,
+            $bashTimeout,
+            $shellIdleTtl,
+        ));
+
+        $this->container->singleton(SessionGrants::class);
+        $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
+            $parser = new PermissionConfigParser;
+            $parsed = $parser->parse($config);
+
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+            $guardian = new GuardianEvaluator($projectRoot, $parsed['guardian_safe_commands']);
+            $defaultMode = PermissionMode::tryFrom($parsed['default_permission_mode']) ?? PermissionMode::Guardian;
+
+            $evaluator = new PermissionEvaluator(
+                $parsed['rules'],
+                $this->container->make(SessionGrants::class),
+                $parsed['blocked_paths'],
+                $guardian,
+            );
+            $evaluator->setPermissionMode($defaultMode);
+
+            return $evaluator;
+        });
+
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout) {
+            $registry = new ToolRegistry;
+            $registry->register(new FileReadTool);
+            $registry->register(new FileWriteTool);
+            $registry->register(new FileEditTool);
+            $registry->register(new ApplyPatchTool(
+                $this->container->make(PatchParser::class),
+                $this->container->make(PatchApplier::class),
+            ));
+            $registry->register(new GlobTool);
+            $registry->register(new GrepTool);
+            $registry->register(new BashTool($bashTimeout));
+            $registry->register(new ShellStartTool(
+                $this->container->make(ShellSessionManager::class),
+            ));
+            $registry->register(new ShellWriteTool(
+                $this->container->make(ShellSessionManager::class),
+                $this->container->make(PermissionEvaluator::class),
+            ));
+            $registry->register(new ShellReadTool(
+                $this->container->make(ShellSessionManager::class),
+            ));
+            $registry->register(new ShellKillTool(
+                $this->container->make(ShellSessionManager::class),
+            ));
+
+            $taskStore = $this->container->make(TaskStore::class);
+            $registry->register(new TaskCreateTool($taskStore));
+            $registry->register(new TaskUpdateTool($taskStore));
+            $registry->register(new TaskListTool($taskStore));
+            $registry->register(new TaskGetTool($taskStore));
+
+            $sessionManager = $this->container->make(SessionManager::class);
+            $registry->register(new MemorySaveTool($sessionManager));
+            $registry->register(new MemorySearchTool($sessionManager));
+
+            return $registry;
+        });
+    }
+}

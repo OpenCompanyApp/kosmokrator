@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
-use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -13,7 +13,7 @@ use Kosmokrator\Tool\ToolResult;
  *
  * Enforces read-only mode by blocking mutative commands via PermissionEvaluator.
  */
-final class ShellWriteTool implements ToolInterface
+final class ShellWriteTool extends AbstractTool
 {
     public function __construct(
         private readonly ShellSessionManager $sessions,
@@ -50,7 +50,7 @@ final class ShellWriteTool implements ToolInterface
      *
      * @param  array<string, mixed>  $args  Tool arguments from the AI agent
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $sessionId = trim((string) ($args['session_id'] ?? ''));
         if ($sessionId === '') {
@@ -58,22 +58,19 @@ final class ShellWriteTool implements ToolInterface
         }
 
         $input = (string) ($args['input'] ?? '');
-        try {
-            // Block mutative commands in read-only sessions
-            if ($this->sessions->isReadOnly($sessionId) && $this->permissions?->isMutativeCommand($input)) {
-                return ToolResult::error("Command blocked for read-only shell session '{$sessionId}'.");
-            }
 
-            $output = $this->sessions->write(
-                id: $sessionId,
-                input: $input,
-                submit: ! array_key_exists('submit', $args) || (bool) $args['submit'],
-                waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
-            );
-
-            return ToolResult::success($output);
-        } catch (\Throwable $e) {
-            return ToolResult::error($e->getMessage());
+        // Block mutative commands in read-only sessions
+        if ($this->sessions->isReadOnly($sessionId) && $this->permissions?->isMutativeCommand($input)) {
+            return ToolResult::error("Command blocked for read-only shell session '{$sessionId}'.");
         }
+
+        $output = $this->sessions->write(
+            id: $sessionId,
+            input: $input,
+            submit: ! array_key_exists('submit', $args) || (bool) $args['submit'],
+            waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
+        );
+
+        return ToolResult::success($output);
     }
 }

@@ -31,10 +31,10 @@ class SessionManager
     private ?string $projectScope = null;
 
     public function __construct(
-        private readonly SessionRepository $sessions,
-        private readonly MessageRepository $messages,
-        private readonly SettingsRepository $settings,
-        private readonly MemoryRepository $memories,
+        private readonly SessionRepositoryInterface $sessions,
+        private readonly MessageRepositoryInterface $messages,
+        private readonly SettingsRepositoryInterface $settings,
+        private readonly MemoryRepositoryInterface $memories,
         private readonly LoggerInterface $log,
         private readonly ?SettingsManager $configSettings = null,
     ) {}
@@ -42,7 +42,7 @@ class SessionManager
     /**
      * Set the active project directory and derive its settings scope.
      *
-     * @param string $project Absolute path to the project root
+     * @param  string  $project  Absolute path to the project root
      */
     public function setProject(string $project): void
     {
@@ -70,7 +70,7 @@ class SessionManager
     /**
      * Create a new session for the current project and model.
      *
-     * @param string $model LLM model identifier to associate with the session
+     * @param  string  $model  LLM model identifier to associate with the session
      * @return string The newly created session ID
      */
     public function createSession(string $model): string
@@ -93,7 +93,7 @@ class SessionManager
     /**
      * Switch the active session to an existing one.
      *
-     * @param string $id Session ID to activate
+     * @param  string  $id  Session ID to activate
      */
     public function setCurrentSession(string $id): void
     {
@@ -105,9 +105,9 @@ class SessionManager
      *
      * Automatically sets the session title from the first user message.
      *
-     * @param Message $message Prism message to persist
-     * @param int $tokensIn Input tokens consumed by this message
-     * @param int $tokensOut Output tokens generated for this message
+     * @param  Message  $message  Prism message to persist
+     * @param  int  $tokensIn  Input tokens consumed by this message
+     * @param  int  $tokensOut  Output tokens generated for this message
      */
     public function saveMessage(Message $message, int $tokensIn = 0, int $tokensOut = 0): void
     {
@@ -140,7 +140,7 @@ class SessionManager
     /**
      * Rename the current session for easy identification later.
      *
-     * @param string $title New title for the session
+     * @param  string  $title  New title for the session
      */
     public function renameSession(string $title): void
     {
@@ -154,7 +154,7 @@ class SessionManager
     /**
      * Reconstruct the conversation history for a session, with deduplication.
      *
-     * @param string $sessionId Session ID to load history from
+     * @param  string  $sessionId  Session ID to load history from
      * @return ConversationHistory Rebuilt history ready for the agent
      */
     public function loadHistory(string $sessionId): ConversationHistory
@@ -184,7 +184,7 @@ class SessionManager
     /**
      * Look up a session by exact ID or unique prefix.
      *
-     * @param string $idOrPrefix Full session ID or a unique prefix
+     * @param  string  $idOrPrefix  Full session ID or a unique prefix
      * @return array<string, mixed>|null Session data or null if not found
      */
     public function findSession(string $idOrPrefix): ?array
@@ -197,7 +197,7 @@ class SessionManager
     /**
      * Reactivate an existing session and reload its conversation history.
      *
-     * @param string $sessionId Session ID to resume
+     * @param  string  $sessionId  Session ID to resume
      * @return ConversationHistory The restored conversation history
      */
     public function resumeSession(string $sessionId): ConversationHistory
@@ -211,7 +211,7 @@ class SessionManager
     /**
      * List recent sessions for the current project.
      *
-     * @param int $limit Maximum number of sessions to return
+     * @param  int  $limit  Maximum number of sessions to return
      * @return array<int, array<string, mixed>>
      */
     public function listSessions(int $limit = 20): array
@@ -222,7 +222,7 @@ class SessionManager
     /**
      * Resolve a setting value, checking config file then project/global DB scopes.
      *
-     * @param string $key Dot-notation setting key
+     * @param  string  $key  Dot-notation setting key
      */
     public function getSetting(string $key): ?string
     {
@@ -244,9 +244,9 @@ class SessionManager
     /**
      * Store a setting value in the given scope.
      *
-     * @param string $key Dot-notation setting key
-     * @param string $value Setting value to store
-     * @param string $scope Either 'project' or 'global'
+     * @param  string  $key  Dot-notation setting key
+     * @param  string  $value  Setting value to store
+     * @param  string  $scope  Either 'project' or 'global'
      */
     public function setSetting(string $key, string $value, string $scope = 'project'): void
     {
@@ -278,12 +278,12 @@ class SessionManager
     /**
      * Store a new memory entry.
      *
-     * @param string $type Memory type (project, user, decision, compaction)
-     * @param string $title Short descriptive title
-     * @param string $content Full memory content
-     * @param string $memoryClass Retention class ('durable', 'working', 'priority')
-     * @param bool $pinned Whether the memory is pinned for priority recall
-     * @param string|null $expiresAt ISO timestamp for expiration, or null for no expiry
+     * @param  string  $type  Memory type (project, user, decision, compaction)
+     * @param  string  $title  Short descriptive title
+     * @param  string  $content  Full memory content
+     * @param  string  $memoryClass  Retention class ('durable', 'working', 'priority')
+     * @param  bool  $pinned  Whether the memory is pinned for priority recall
+     * @param  string|null  $expiresAt  ISO timestamp for expiration, or null for no expiry
      * @return int The newly created memory ID
      */
     public function addMemory(
@@ -309,7 +309,7 @@ class SessionManager
     /**
      * Look up a single memory by ID.
      *
-     * @param int $id Memory ID
+     * @param  int  $id  Memory ID
      * @return array<string, mixed>|null Memory data or null if not found
      */
     public function findMemory(int $id): ?array
@@ -320,12 +320,12 @@ class SessionManager
     /**
      * Update an existing memory's content and optional metadata.
      *
-     * @param int $id Memory ID to update
-     * @param string $content New memory content
-     * @param string|null $title Updated title, or null to keep existing
-     * @param string|null $memoryClass Updated retention class, or null to keep existing
-     * @param bool|null $pinned Updated pinned flag, or null to keep existing
-     * @param string|null $expiresAt Updated expiration, or null to keep existing
+     * @param  int  $id  Memory ID to update
+     * @param  string  $content  New memory content
+     * @param  string|null  $title  Updated title, or null to keep existing
+     * @param  string|null  $memoryClass  Updated retention class, or null to keep existing
+     * @param  bool|null  $pinned  Updated pinned flag, or null to keep existing
+     * @param  string|null  $expiresAt  Updated expiration, or null to keep existing
      */
     public function updateMemory(
         int $id,
@@ -341,10 +341,10 @@ class SessionManager
     /**
      * Search memories by type, query text, and/or class.
      *
-     * @param string|null $type Filter by memory type
-     * @param string|null $query Search text for title/content matching
-     * @param int $limit Maximum results to return
-     * @param string|null $memoryClass Filter by retention class
+     * @param  string|null  $type  Filter by memory type
+     * @param  string|null  $query  Search text for title/content matching
+     * @param  int  $limit  Maximum results to return
+     * @param  string|null  $memoryClass  Filter by retention class
      * @return array<int, array<string, mixed>>
      */
     public function searchMemories(?string $type = null, ?string $query = null, int $limit = 20, ?string $memoryClass = null): array
@@ -355,7 +355,7 @@ class SessionManager
     /**
      * Delete a memory entry by ID.
      *
-     * @param int $id Memory ID to delete
+     * @param  int  $id  Memory ID to delete
      */
     public function deleteMemory(int $id): void
     {
@@ -365,8 +365,8 @@ class SessionManager
     /**
      * Select contextually relevant memories and mark them as surfaced.
      *
-     * @param string|null $query Query text for relevance scoring
-     * @param int $limit Maximum memories to return
+     * @param  string|null  $query  Query text for relevance scoring
+     * @param  int  $limit  Maximum memories to return
      * @return array<int, array<string, mixed>>
      */
     public function getRelevantMemories(?string $query = null, int $limit = 6): array
@@ -377,9 +377,9 @@ class SessionManager
     /**
      * Use the MemorySelector to pick the most relevant memories for the current context.
      *
-     * @param string|null $query Query text for relevance scoring
-     * @param int $limit Maximum memories to return
-     * @param bool $markSurfaced Whether to update the surfaced_at timestamp on selected memories
+     * @param  string|null  $query  Query text for relevance scoring
+     * @param  int  $limit  Maximum memories to return
+     * @param  bool  $markSurfaced  Whether to update the surfaced_at timestamp on selected memories
      * @return array<int, array<string, mixed>>
      */
     public function selectRelevantMemories(?string $query = null, int $limit = 6, bool $markSurfaced = true): array
@@ -397,8 +397,8 @@ class SessionManager
     /**
      * Full-text search across all session messages in the current project.
      *
-     * @param string $query Search terms
-     * @param int $limit Maximum results to return
+     * @param  string  $query  Search terms
+     * @param  int  $limit  Maximum results to return
      * @return array<int, array<string, mixed>>
      */
     public function searchSessionHistory(string $query, int $limit = 5): array
@@ -443,8 +443,8 @@ class SessionManager
      * Walks backward through raw messages to find the boundary after N user turns,
      * then replaces everything before that boundary with the summary.
      *
-     * @param string $summary Compacted summary of older messages
-     * @param int $keepRecentTurns Number of recent user turns to preserve
+     * @param  string  $summary  Compacted summary of older messages
+     * @param  int  $keepRecentTurns  Number of recent user turns to preserve
      */
     public function persistCompaction(string $summary, int $keepRecentTurns = 3): void
     {
@@ -490,7 +490,7 @@ class SessionManager
     /**
      * Apply a structured compaction plan that specifies how many messages to compact.
      *
-     * @param CompactionPlan $plan Plan containing the summary and message count to compact
+     * @param  CompactionPlan  $plan  Plan containing the summary and message count to compact
      */
     public function persistCompactionPlan(CompactionPlan $plan): void
     {

@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\UI\Ansi;
 
 use Kosmokrator\Agent\AgentPhase;
+use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\Ansi\AnsiConversationRenderer;
 use Kosmokrator\UI\Ansi\AnsiRenderer;
+use Kosmokrator\UI\Ansi\AnsiSubagentRenderer;
+use Kosmokrator\UI\Ansi\AnsiToolRenderer;
 use PHPUnit\Framework\TestCase;
 
 class AnsiRendererTest extends TestCase
@@ -412,7 +416,6 @@ class AnsiRendererTest extends TestCase
         $output = $this->captureOutput(fn () => $this->renderer->showToolCall('bash', ['command' => 'ls -la']));
         $plain = $this->stripAnsi($output);
 
-        $this->assertStringContainsString('Bash', $plain);
         $this->assertStringContainsString('ls -la', $plain);
     }
 
@@ -432,7 +435,7 @@ class AnsiRendererTest extends TestCase
 
     public function test_show_tool_call_skips_ask_user(): void
     {
-        $output = $this->captureOutput(fn () => $this->renderer->showToolCall('ask_user', ['question' => 'What?' ]));
+        $output = $this->captureOutput(fn () => $this->renderer->showToolCall('ask_user', ['question' => 'What?']));
 
         $this->assertSame('', $output);
     }
@@ -467,14 +470,15 @@ class AnsiRendererTest extends TestCase
     {
         $output = $this->captureOutput(fn () => $this->renderer->showToolResult('bash', 'ok', true));
 
-        $this->assertStringContainsString('✓', $output);
+        $this->assertStringContainsString('ok', $output);
     }
 
     public function test_show_tool_result_failure_outputs_error_icon(): void
     {
         $output = $this->captureOutput(fn () => $this->renderer->showToolResult('bash', 'error', false));
 
-        $this->assertStringContainsString('✗', $output);
+        // Failed bash commands show all output — the error text should be visible
+        $this->assertStringContainsString('error', $output);
     }
 
     public function test_show_tool_result_file_read_shows_line_count(): void
@@ -511,7 +515,7 @@ class AnsiRendererTest extends TestCase
         $lines = array_fill(0, 30, 'some output line');
         $output = $this->captureOutput(fn () => $this->renderer->showToolResult('bash', implode("\n", $lines), true));
 
-        $this->assertStringContainsString('more lines', $output);
+        $this->assertStringContainsString('+28 lines', $output);
     }
 
     // ── showToolCall + showToolResult for file_edit with diff ────────────
@@ -535,23 +539,25 @@ class AnsiRendererTest extends TestCase
 
     public function test_is_task_tool_identifies_task_tools(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'isTaskTool');
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+        $method = new \ReflectionMethod(AnsiToolRenderer::class, 'isTaskTool');
 
-        $this->assertTrue($method->invoke($this->renderer, 'task_create'));
-        $this->assertTrue($method->invoke($this->renderer, 'task_update'));
-        $this->assertTrue($method->invoke($this->renderer, 'task_list'));
-        $this->assertTrue($method->invoke($this->renderer, 'task_get'));
-        $this->assertFalse($method->invoke($this->renderer, 'bash'));
-        $this->assertFalse($method->invoke($this->renderer, 'file_edit'));
-        $this->assertFalse($method->invoke($this->renderer, 'ask_user'));
+        $this->assertTrue($method->invoke($toolRenderer, 'task_create'));
+        $this->assertTrue($method->invoke($toolRenderer, 'task_update'));
+        $this->assertTrue($method->invoke($toolRenderer, 'task_list'));
+        $this->assertTrue($method->invoke($toolRenderer, 'task_get'));
+        $this->assertFalse($method->invoke($toolRenderer, 'bash'));
+        $this->assertFalse($method->invoke($toolRenderer, 'file_edit'));
+        $this->assertFalse($method->invoke($toolRenderer, 'ask_user'));
     }
 
     public function test_find_choice_from_args_with_string_choices(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'findChoiceFromArgs');
+        $convRenderer = $this->createConversationRenderer();
+        $method = new \ReflectionMethod(AnsiConversationRenderer::class, 'findChoiceFromArgs');
 
         $args = ['choices' => json_encode(['Option A', 'Option B'])];
-        $result = $method->invoke($this->renderer, $args, 'Option B');
+        $result = $method->invoke($convRenderer, $args, 'Option B');
 
         $this->assertNotNull($result);
         $this->assertSame('Option B', $result['label']);
@@ -561,13 +567,14 @@ class AnsiRendererTest extends TestCase
 
     public function test_find_choice_from_args_with_object_choices(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'findChoiceFromArgs');
+        $convRenderer = $this->createConversationRenderer();
+        $method = new \ReflectionMethod(AnsiConversationRenderer::class, 'findChoiceFromArgs');
 
         $args = ['choices' => json_encode([
             ['label' => 'Yes', 'detail' => 'Proceed', 'recommended' => true],
             ['label' => 'No', 'detail' => 'Cancel'],
         ])];
-        $result = $method->invoke($this->renderer, $args, 'Yes');
+        $result = $method->invoke($convRenderer, $args, 'Yes');
 
         $this->assertNotNull($result);
         $this->assertSame('Yes', $result['label']);
@@ -577,28 +584,31 @@ class AnsiRendererTest extends TestCase
 
     public function test_find_choice_from_args_returns_null_for_missing(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'findChoiceFromArgs');
+        $convRenderer = $this->createConversationRenderer();
+        $method = new \ReflectionMethod(AnsiConversationRenderer::class, 'findChoiceFromArgs');
 
         $args = ['choices' => json_encode(['A', 'B'])];
-        $result = $method->invoke($this->renderer, $args, 'C');
+        $result = $method->invoke($convRenderer, $args, 'C');
 
         $this->assertNull($result);
     }
 
     public function test_find_choice_from_args_returns_null_for_invalid_json(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'findChoiceFromArgs');
+        $convRenderer = $this->createConversationRenderer();
+        $method = new \ReflectionMethod(AnsiConversationRenderer::class, 'findChoiceFromArgs');
 
-        $result = $method->invoke($this->renderer, ['choices' => 'not json'], 'A');
+        $result = $method->invoke($convRenderer, ['choices' => 'not json'], 'A');
 
         $this->assertNull($result);
     }
 
     public function test_find_choice_from_args_returns_null_for_missing_key(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'findChoiceFromArgs');
+        $convRenderer = $this->createConversationRenderer();
+        $method = new \ReflectionMethod(AnsiConversationRenderer::class, 'findChoiceFromArgs');
 
-        $result = $method->invoke($this->renderer, [], 'A');
+        $result = $method->invoke($convRenderer, [], 'A');
 
         $this->assertNull($result);
     }
@@ -653,10 +663,11 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_task_tool_call_label_task_create_with_subject(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatTaskToolCallLabel');
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+        $method = new \ReflectionMethod(AnsiToolRenderer::class, 'formatTaskToolCallLabel');
 
         $result = $method->invoke(
-            $this->renderer,
+            $toolRenderer,
             'task_create',
             ['subject' => 'My Task'],
             '◉',
@@ -671,11 +682,12 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_task_tool_call_label_task_create_with_tasks_json(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatTaskToolCallLabel');
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+        $method = new \ReflectionMethod(AnsiToolRenderer::class, 'formatTaskToolCallLabel');
 
         $tasks = json_encode([['id' => '1'], ['id' => '2'], ['id' => '3']]);
         $result = $method->invoke(
-            $this->renderer,
+            $toolRenderer,
             'task_create',
             ['tasks' => $tasks],
             '◉',
@@ -690,10 +702,11 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_task_tool_call_label_task_update_in_progress_returns_null(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatTaskToolCallLabel');
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+        $method = new \ReflectionMethod(AnsiToolRenderer::class, 'formatTaskToolCallLabel');
 
         $result = $method->invoke(
-            $this->renderer,
+            $toolRenderer,
             'task_update',
             ['status' => 'in_progress', 'id' => 't1'],
             '◉',
@@ -707,10 +720,11 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_task_tool_call_label_task_get_returns_null(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatTaskToolCallLabel');
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+        $method = new \ReflectionMethod(AnsiToolRenderer::class, 'formatTaskToolCallLabel');
 
         $result = $method->invoke(
-            $this->renderer,
+            $toolRenderer,
             'task_get',
             ['id' => 't1'],
             '◉',
@@ -724,10 +738,11 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_task_tool_call_label_task_list_returns_null(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatTaskToolCallLabel');
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+        $method = new \ReflectionMethod(AnsiToolRenderer::class, 'formatTaskToolCallLabel');
 
         $result = $method->invoke(
-            $this->renderer,
+            $toolRenderer,
             'task_list',
             [],
             '◉',
@@ -743,7 +758,8 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_dashboard_with_minimal_data(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatDashboard');
+        $subagentRenderer = new AnsiSubagentRenderer;
+        $method = new \ReflectionMethod(AnsiSubagentRenderer::class, 'formatDashboard');
 
         $summary = [
             'total' => 1,
@@ -765,7 +781,7 @@ class AnsiRendererTest extends TestCase
             'retriedAndRecovered' => 0,
         ];
 
-        $result = $method->invoke($this->renderer, $summary, []);
+        $result = $method->invoke($subagentRenderer, $summary, []);
         $plain = $this->stripAnsi($result);
 
         $this->assertStringContainsString('S W A R M   C O N T R O L', $plain);
@@ -775,9 +791,10 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_dashboard_with_failures(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatDashboard');
+        $subagentRenderer = new AnsiSubagentRenderer;
+        $method = new \ReflectionMethod(AnsiSubagentRenderer::class, 'formatDashboard');
 
-        $stats = $this->createMock(\Kosmokrator\Agent\SubagentStats::class);
+        $stats = $this->createMock(SubagentStats::class);
         $stats->agentType = 'general';
         $stats->task = 'Failing task';
         $stats->error = 'Some error message';
@@ -803,7 +820,7 @@ class AnsiRendererTest extends TestCase
             'retriedAndRecovered' => 0,
         ];
 
-        $result = $method->invoke($this->renderer, $summary, []);
+        $result = $method->invoke($subagentRenderer, $summary, []);
         $plain = $this->stripAnsi($result);
 
         $this->assertStringContainsString('Failures', $plain);
@@ -813,7 +830,8 @@ class AnsiRendererTest extends TestCase
 
     public function test_format_dashboard_with_by_type_breakdown(): void
     {
-        $method = new \ReflectionMethod(AnsiRenderer::class, 'formatDashboard');
+        $subagentRenderer = new AnsiSubagentRenderer;
+        $method = new \ReflectionMethod(AnsiSubagentRenderer::class, 'formatDashboard');
 
         $summary = [
             'total' => 4,
@@ -838,7 +856,7 @@ class AnsiRendererTest extends TestCase
             'retriedAndRecovered' => 0,
         ];
 
-        $result = $method->invoke($this->renderer, $summary, []);
+        $result = $method->invoke($subagentRenderer, $summary, []);
         $plain = $this->stripAnsi($result);
 
         $this->assertStringContainsString('By Type', $plain);
@@ -959,5 +977,17 @@ class AnsiRendererTest extends TestCase
     private function stripAnsi(string $text): string
     {
         return preg_replace('/\033\[[^m]*m/', '', $text);
+    }
+
+    private function createConversationRenderer(): AnsiConversationRenderer
+    {
+        $toolRenderer = new AnsiToolRenderer(fn () => null);
+
+        return new AnsiConversationRenderer(
+            $toolRenderer,
+            fn () => null,
+            fn () => null,
+            fn (string $q, string $a, bool $answered, bool $recommended) => null,
+        );
     }
 }

@@ -3,9 +3,10 @@
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\UI\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,9 +28,9 @@ class SetupCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $settings = $this->container->make(SettingsRepository::class);
+        $settings = $this->container->make(SettingsRepositoryInterface::class);
         $configSettings = $this->container->make(SettingsManager::class);
-        $configSettings->setProjectRoot(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd());
+        $configSettings->setProjectRoot(InstructionLoader::gitRoot() ?? getcwd());
         $providers = $this->container->make(ProviderCatalog::class);
         $codexAuth = $this->container->make(CodexAuthFlow::class);
 

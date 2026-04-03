@@ -2,7 +2,7 @@
 
 namespace Kosmokrator\Tool\Coding;
 
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -11,7 +11,7 @@ use Kosmokrator\Tool\ToolResult;
  * Large files (>10 MB) are streamed line-by-line to keep memory usage low.
  * Prefer this over shell commands (`cat`, `head`) for inspecting files.
  */
-class FileReadTool implements ToolInterface
+class FileReadTool extends AbstractTool
 {
     private const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
 
@@ -48,7 +48,7 @@ class FileReadTool implements ToolInterface
      * @param  array{path: string, offset?: int, limit?: int}  $args  File path and optional line range
      * @return ToolResult File contents with line numbers, or cached "unchanged" notice
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $path = $args['path'] ?? '';
         $offset = max(1, (int) ($args['offset'] ?? 1));

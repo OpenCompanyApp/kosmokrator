@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Task\Tool;
 
 use Kosmokrator\Task\TaskStore;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
  * Lists all tasks as a rendered tree with status icons and elapsed time.
  * Part of the task management toolset exposed to the AI agent.
  */
-class TaskListTool implements ToolInterface
+class TaskListTool extends AbstractTool
 {
     public function __construct(
         private readonly TaskStore $store,
@@ -36,17 +36,11 @@ class TaskListTool implements ToolInterface
         return [];
     }
 
-    /** @return list<string> Parameters that must always be provided */
-    public function requiredParameters(): array
-    {
-        return [];
-    }
-
     /**
-     * @param  array<string,mixed> $args Tool call arguments (unused)
-     * @return ToolResult           Rendered task tree
+     * @param  array<string,mixed>  $args  Tool call arguments (unused)
+     * @return ToolResult Rendered task tree
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         return ToolResult::success($this->store->renderTree());
     }

@@ -2,7 +2,7 @@
 
 namespace Kosmokrator\Tool\Coding;
 
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -10,7 +10,7 @@ use Kosmokrator\Tool\ToolResult;
  * Use to discover project structure, locate specific file types, or enumerate test files.
  * Automatically skips hidden directories, `vendor/`, and `node_modules/` during recursion.
  */
-class GlobTool implements ToolInterface
+class GlobTool extends AbstractTool
 {
     public function name(): string
     {
@@ -39,7 +39,7 @@ class GlobTool implements ToolInterface
      * @param  array{pattern: string, path?: string}  $args  Glob pattern and optional base directory
      * @return ToolResult Sorted list of matching relative paths (capped at 200), or "no matches" message
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $pattern = $args['pattern'] ?? '';
         $basePath = rtrim($args['path'] ?? getcwd(), '/');

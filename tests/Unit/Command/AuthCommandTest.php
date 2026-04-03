@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Command;
 
-use Illuminate\Container\Container;
 use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
 use Kosmokrator\Command\AuthCommand;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
+use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
+use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
@@ -57,7 +60,7 @@ class AuthCommandTest extends TestCase
         $this->catalog = new ProviderCatalog($meta, $registry, $config, $this->settings, $tokenStore);
 
         // CodexAuthFlow — use an uninitialized CodexOAuthService
-        $oauthRef = new \ReflectionClass(\OpenCompany\PrismCodex\CodexOAuthService::class);
+        $oauthRef = new \ReflectionClass(CodexOAuthService::class);
         $oauth = $oauthRef->newInstanceWithoutConstructor();
         $this->codex = new CodexAuthFlow($oauth, $tokenStore, $config);
 
@@ -68,6 +71,7 @@ class AuthCommandTest extends TestCase
 
         $this->container->singleton(ProviderCatalog::class, static fn () => $catalog);
         $this->container->singleton(SettingsRepository::class, static fn () => $settings);
+        $this->container->alias(SettingsRepository::class, SettingsRepositoryInterface::class);
         $this->container->singleton(CodexAuthFlow::class, static fn () => $codex);
 
         $command = new AuthCommand($this->container);
@@ -81,14 +85,14 @@ class AuthCommandTest extends TestCase
     {
         return new class implements CodexTokenStore
         {
-            private ?\OpenCompany\PrismCodex\ValueObjects\CodexToken $token = null;
+            private ?CodexToken $token = null;
 
-            public function current(): ?\OpenCompany\PrismCodex\ValueObjects\CodexToken
+            public function current(): ?CodexToken
             {
                 return $this->token;
             }
 
-            public function save(\OpenCompany\PrismCodex\ValueObjects\CodexToken $token): \OpenCompany\PrismCodex\ValueObjects\CodexToken
+            public function save(CodexToken $token): CodexToken
             {
                 $this->token = $token;
 

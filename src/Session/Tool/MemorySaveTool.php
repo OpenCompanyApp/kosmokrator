@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Session\Tool;
 
 use Kosmokrator\Session\SessionManager;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
  * Persists memories (project facts, user preferences, architectural decisions) across sessions.
  * Exposed as the "memory_save" tool so agents can store knowledge for later recall.
  */
-class MemorySaveTool implements ToolInterface
+class MemorySaveTool extends AbstractTool
 {
     private const VALID_TYPES = ['project', 'user', 'decision'];
 
@@ -55,10 +55,10 @@ class MemorySaveTool implements ToolInterface
     }
 
     /**
-     * @param  array{type?:string, title?:string, content?:string, class?:string, pinned?:bool, expires_days?:int, id?:string} $args  Memory fields from the agent call
+     * @param  array{type?:string, title?:string, content?:string, class?:string, pinned?:bool, expires_days?:int, id?:string}  $args  Memory fields from the agent call
      * @return ToolResult Success message with the new/updated memory ID, or an error description
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $type = $args['type'] ?? '';
         $title = $args['title'] ?? '';

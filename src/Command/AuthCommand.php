@@ -7,7 +7,7 @@ namespace Kosmokrator\Command;
 use Illuminate\Container\Container;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Table;
@@ -40,7 +40,7 @@ final class AuthCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $catalog = $this->container->make(ProviderCatalog::class);
-        $settings = $this->container->make(SettingsRepository::class);
+        $settings = $this->container->make(SettingsRepositoryInterface::class);
         $codex = $this->container->make(CodexAuthFlow::class);
 
         $action = (string) $input->getArgument('action');
@@ -81,7 +81,7 @@ final class AuthCommand extends Command
     /**
      * Authenticates a provider via OAuth browser/device flow or stores an API key.
      */
-    private function login(ProviderCatalog $catalog, SettingsRepository $settings, CodexAuthFlow $codex, InputInterface $input, OutputInterface $output, string $provider): int
+    private function login(ProviderCatalog $catalog, SettingsRepositoryInterface $settings, CodexAuthFlow $codex, InputInterface $input, OutputInterface $output, string $provider): int
     {
         if ($provider === '') {
             $output->writeln('<error>Provide a provider name.</error>');
@@ -129,7 +129,7 @@ final class AuthCommand extends Command
     /**
      * Removes stored credentials for a provider (OAuth token or API key).
      */
-    private function logout(ProviderCatalog $catalog, SettingsRepository $settings, CodexAuthFlow $codex, OutputInterface $output, string $provider): int
+    private function logout(ProviderCatalog $catalog, SettingsRepositoryInterface $settings, CodexAuthFlow $codex, OutputInterface $output, string $provider): int
     {
         if ($provider === '') {
             $output->writeln('<error>Provide a provider name.</error>');

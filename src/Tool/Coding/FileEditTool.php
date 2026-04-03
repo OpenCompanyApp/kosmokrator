@@ -2,7 +2,7 @@
 
 namespace Kosmokrator\Tool\Coding;
 
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -10,7 +10,7 @@ use Kosmokrator\Tool\ToolResult;
  * Use when only one targeted replacement is needed; for multi-hunk or multi-file changes use ApplyPatchTool.
  * Streams the file to avoid loading it entirely into memory (constant memory regardless of file size).
  */
-class FileEditTool implements ToolInterface
+class FileEditTool extends AbstractTool
 {
     private const CHUNK_SIZE = 65536;
 
@@ -33,16 +33,11 @@ class FileEditTool implements ToolInterface
         ];
     }
 
-    public function requiredParameters(): array
-    {
-        return ['path', 'old_string', 'new_string'];
-    }
-
     /**
      * @param  array{path: string, old_string: string, new_string: string}  $args
      * @return ToolResult Edit summary with line delta, or error if not found / ambiguous / write failed
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $path = $args['path'] ?? '';
         $oldString = $args['old_string'] ?? '';

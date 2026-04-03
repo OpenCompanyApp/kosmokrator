@@ -24,6 +24,20 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     use FocusableTrait;
     use KeybindingsTrait;
 
+    protected static function getDefaultKeybindings(): array
+    {
+        return [
+            'up' => [Key::UP],
+            'down' => [Key::DOWN],
+            'left' => [Key::LEFT],
+            'right' => [Key::RIGHT],
+            'confirm' => [Key::ENTER],
+            'cancel' => [Key::ESCAPE],
+            'backspace' => [Key::BACKSPACE],
+            'save' => ['ctrl+s'],
+        ];
+    }
+
     private int $categoryIndex = 0;
 
     /** Index of the currently selected field within the visible fields list. */
@@ -369,7 +383,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
      * Render the full settings workspace: header, category nav + fields, and details panel.
      *
      * @param  RenderContext  $context  Terminal dimensions
-     * @return list<string>  ANSI-formatted lines
+     * @return list<string> ANSI-formatted lines
      */
     public function render(RenderContext $context): array
     {
@@ -842,7 +856,6 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     }
 
     /**
-     * @param  string  $csv
      * @return list<string>
      */
     /** Split a comma-separated string into a trimmed, filtered list of values. */
@@ -1095,7 +1108,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             'relay:',
             '  providers:',
             "    {$id}:",
-            "      label: ".($definition['label'] !== '' ? $definition['label'] : $id),
+            '      label: '.($definition['label'] !== '' ? $definition['label'] : $id),
             "      driver: {$definition['driver']}",
             "      auth: {$definition['auth']}",
             "      url: {$definition['url']}",

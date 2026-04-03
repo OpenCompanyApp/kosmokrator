@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -12,7 +12,7 @@ use Kosmokrator\Tool\ToolResult;
  *
  * Returns a session ID for use with ShellWriteTool, ShellReadTool, and ShellKillTool.
  */
-final class ShellStartTool implements ToolInterface
+final class ShellStartTool extends AbstractTool
 {
     public function __construct(
         private readonly ShellSessionManager $sessions,
@@ -49,25 +49,21 @@ final class ShellStartTool implements ToolInterface
      *
      * @param  array<string, mixed>  $args  Tool arguments from the AI agent
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $command = trim((string) ($args['command'] ?? ''));
         if ($command === '') {
             return ToolResult::error('No command provided.');
         }
 
-        try {
-            $result = $this->sessions->start(
-                command: $command,
-                cwd: isset($args['cwd']) ? (string) $args['cwd'] : null,
-                readOnly: (bool) ($args['read_only'] ?? $this->readOnly),
-                timeoutSeconds: isset($args['timeout']) ? (int) $args['timeout'] : null,
-                waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
-            );
+        $result = $this->sessions->start(
+            command: $command,
+            cwd: isset($args['cwd']) ? (string) $args['cwd'] : null,
+            readOnly: (bool) ($args['read_only'] ?? $this->readOnly),
+            timeoutSeconds: isset($args['timeout']) ? (int) $args['timeout'] : null,
+            waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
+        );
 
-            return ToolResult::success($result['output']);
-        } catch (\Throwable $e) {
-            return ToolResult::error($e->getMessage());
-        }
+        return ToolResult::success($result['output']);
     }
 }

@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Session\Tool;
 
 use Kosmokrator\Session\SessionManager;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
  * Searches persisted memories and optionally session history by type, class, or free-text query.
  * Exposed as the "memory_search" tool so agents can recall previously stored knowledge.
  */
-class MemorySearchTool implements ToolInterface
+class MemorySearchTool extends AbstractTool
 {
     private const VALID_TYPES = ['project', 'user', 'decision', 'compaction'];
 
@@ -54,10 +54,10 @@ class MemorySearchTool implements ToolInterface
     }
 
     /**
-     * @param  array{type?:string, class?:string, query?:string, scope?:string} $args  Optional filters from the agent call
+     * @param  array{type?:string, class?:string, query?:string, scope?:string}  $args  Optional filters from the agent call
      * @return ToolResult Formatted list of matching memories/history entries, or a "not found" notice
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $type = $args['type'] ?? null;
         $memoryClass = $args['class'] ?? null;

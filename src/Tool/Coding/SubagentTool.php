@@ -6,7 +6,7 @@ namespace Kosmokrator\Tool\Coding;
 
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
-use Kosmokrator\Tool\ToolInterface;
+use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
 /**
@@ -15,7 +15,7 @@ use Kosmokrator\Tool\ToolResult;
  * Supports await mode (blocks until the child finishes) and background mode (result injected later).
  * Each instance is bound to a parent AgentContext — not registered globally.
  */
-class SubagentTool implements ToolInterface
+class SubagentTool extends AbstractTool
 {
     /**
      * @param  \Closure(AgentContext, string): string  $agentFactory
@@ -79,7 +79,7 @@ class SubagentTool implements ToolInterface
      * @param  array{task: string, type?: string, mode?: string, id?: string, depends_on?: string[], group?: string}  $args
      * @return ToolResult Child agent summary (await mode) or spawn confirmation (background mode)
      */
-    public function execute(array $args): ToolResult
+    protected function handle(array $args): ToolResult
     {
         $task = trim((string) ($args['task'] ?? ''));
         $typeStr = (string) ($args['type'] ?? 'explore');
@@ -114,35 +114,31 @@ class SubagentTool implements ToolInterface
             $mode = 'await';
         }
 
-        try {
-            $orchestrator = $this->parentContext->orchestrator;
+        $orchestrator = $this->parentContext->orchestrator;
 
-            // If no ID provided, generate one before spawning so we can reference it
-            $id ??= $orchestrator->generateId();
+        // If no ID provided, generate one before spawning so we can reference it
+        $id ??= $orchestrator->generateId();
 
-            $future = $orchestrator->spawnAgent(
-                parentContext: $this->parentContext,
-                task: $task,
-                childType: $childType,
-                mode: $mode,
-                id: $id,
-                dependsOn: $dependsOn,
-                group: $group,
-                agentFactory: $this->agentFactory,
-            );
+        $future = $orchestrator->spawnAgent(
+            parentContext: $this->parentContext,
+            task: $task,
+            childType: $childType,
+            mode: $mode,
+            id: $id,
+            dependsOn: $dependsOn,
+            group: $group,
+            agentFactory: $this->agentFactory,
+        );
 
-            if ($mode === 'await') {
-                $result = $future->await();
+        if ($mode === 'await') {
+            $result = $future->await();
 
-                return ToolResult::success($result);
-            }
-
-            return ToolResult::success(
-                "Agent '{$id}' spawned in background ({$childType->value}). Results will be delivered when ready."
-            );
-        } catch (\Throwable $e) {
-            return ToolResult::error("Failed to spawn agent: {$e->getMessage()}");
+            return ToolResult::success($result);
         }
+
+        return ToolResult::success(
+            "Agent '{$id}' spawned in background ({$childType->value}). Results will be delivered when ready."
+        );
     }
 
     /**

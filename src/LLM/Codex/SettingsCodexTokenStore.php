@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM\Codex;
 
-use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 
@@ -21,7 +21,7 @@ final class SettingsCodexTokenStore implements CodexTokenStore
     private const PREFIX = 'provider.codex.';
 
     public function __construct(
-        private readonly SettingsRepository $settings,
+        private readonly SettingsRepositoryInterface $settings,
     ) {}
 
     /**
@@ -53,7 +53,7 @@ final class SettingsCodexTokenStore implements CodexTokenStore
     /**
      * Persist a Codex token to settings and return a refreshed instance with updated timestamps.
      *
-     * @param CodexToken $token The token to persist
+     * @param  CodexToken  $token  The token to persist
      * @return CodexToken A new token instance with the updated_at timestamp applied
      */
     public function save(CodexToken $token): CodexToken

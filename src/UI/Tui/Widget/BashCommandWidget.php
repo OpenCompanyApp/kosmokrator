@@ -100,7 +100,7 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
         if ($command === '') {
             $headerLine = "{$gold}{$icon}{$r} {$dim}(shell){$r}";
         } elseif (mb_strlen($command) > $headerWidth) {
-            $headerLine = "{$gold}{$icon}{$r} ".mb_substr($command, 0, $headerWidth - 1)."…";
+            $headerLine = "{$gold}{$icon}{$r} ".mb_substr($command, 0, $headerWidth - 1).'…';
         } else {
             $headerLine = "{$gold}{$icon}{$r} {$command}";
         }

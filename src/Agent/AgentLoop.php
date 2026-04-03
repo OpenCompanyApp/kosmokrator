@@ -3,6 +3,10 @@
 namespace Kosmokrator\Agent;
 
 use Amp\CancelledException;
+use Illuminate\Contracts\Events\Dispatcher;
+use Kosmokrator\Agent\Event\ContextCompacted;
+use Kosmokrator\Agent\Event\LlmResponseReceived;
+use Kosmokrator\Agent\Event\MessagePersisted;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
@@ -14,6 +18,9 @@ use Kosmokrator\UI\SafeDisplay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
+use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
@@ -78,6 +85,7 @@ class AgentLoop
         private readonly ?ContextBudget $budget = null,
         private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
+        private readonly ?Dispatcher $events = null,
     ) {
         $this->history = new ConversationHistory;
         $this->stuckDetector = new StuckDetector;
@@ -173,6 +181,9 @@ class AgentLoop
                 [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history, $this->mode, $this->agentContext);
                 $this->sessionTokensIn += $compactIn;
                 $this->sessionTokensOut += $compactOut;
+                if ($compactIn > 0 || $compactOut > 0) {
+                    $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
+                }
                 $this->injectPendingBackgroundResults();
                 $this->injectQueuedUserMessages();
                 $this->contextManager->refreshSystemPrompt($this->mode, $this->history, $this->agentContext);
@@ -200,6 +211,11 @@ class AgentLoop
                     $this->lastCacheReadInputTokens = $cacheReadInputTokens;
                     $this->lastCacheWriteInputTokens = $cacheWriteInputTokens;
 
+                    $this->events?->dispatch(new LlmResponseReceived(
+                        $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens,
+                        $this->contextManager->getModelName(),
+                    ));
+
                     if ($fullText !== '') {
                         SafeDisplay::call(fn () => $this->ui->streamChunk($fullText), $this->log);
                     }
@@ -223,6 +239,7 @@ class AgentLoop
                             $this->sessionTokensOut += $cOut;
                             if ($cIn > 0 || $cOut > 0) {
                                 $this->resetToolCachesAfterCompaction();
+                                $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
                             }
                         } else {
                             $this->history->trimOldest();
@@ -321,6 +338,7 @@ class AgentLoop
                     $this->sessionTokensOut += $cOut;
                     if ($cIn > 0 || $cOut > 0) {
                         $this->resetToolCachesAfterCompaction();
+                        $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
                     }
                 }
 
@@ -376,6 +394,9 @@ class AgentLoop
             [$compactIn, $compactOut] = $this->contextManager->headlessPreFlightCheck($this->history, $this->mode, $this->agentContext);
             $this->sessionTokensIn += $compactIn;
             $this->sessionTokensOut += $compactOut;
+            if ($compactIn > 0 || $compactOut > 0) {
+                $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
+            }
             $this->injectPendingBackgroundResults();
             $this->contextManager->refreshSystemPrompt($this->mode, $this->history, $this->agentContext);
 
@@ -392,6 +413,12 @@ class AgentLoop
                 $this->sessionTokensOut += $response->completionTokens;
                 $this->stats?->addTokens($response->promptTokens, $response->completionTokens);
                 $this->stats?->touchActivity();
+
+                $this->events?->dispatch(new LlmResponseReceived(
+                    $response->promptTokens, $response->completionTokens,
+                    $response->cacheReadInputTokens, $response->cacheWriteInputTokens,
+                    $this->contextManager->getModelName(),
+                ));
 
                 $this->log->debug('Headless LLM response', [
                     'round' => $round,
@@ -428,6 +455,9 @@ class AgentLoop
                         [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
                         $this->sessionTokensIn += $cIn;
                         $this->sessionTokensOut += $cOut;
+                        if ($cIn > 0 || $cOut > 0) {
+                            $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
+                        }
                     } else {
                         $this->history->trimOldest();
                     }
@@ -633,8 +663,7 @@ class AgentLoop
         int $tokensOut,
         int $cacheReadInputTokens = 0,
         int $cacheWriteInputTokens = 0,
-    ): float
-    {
+    ): float {
         if ($this->models !== null) {
             return $this->models->estimateCost(
                 $model,
@@ -656,8 +685,7 @@ class AgentLoop
         int $tokensOut,
         int $cacheReadInputTokens = 0,
         int $cacheWriteInputTokens = 0,
-    ): float
-    {
+    ): float {
         if ($this->models !== null) {
             return $this->models->estimateDisplayCost(
                 $model,
@@ -780,6 +808,16 @@ class AgentLoop
     private function persistMessage(Message $message, int $tokensIn = 0, int $tokensOut = 0): void
     {
         $this->sessionManager?->saveMessage($message, $tokensIn, $tokensOut);
+
+        if ($this->sessionManager !== null) {
+            $role = match (true) {
+                $message instanceof UserMessage => 'user',
+                $message instanceof AssistantMessage => 'assistant',
+                $message instanceof ToolResultMessage => 'tool',
+                default => 'system',
+            };
+            $this->events?->dispatch(new MessagePersisted($role, $tokensIn, $tokensOut));
+        }
     }
 
     /** Manually trigger history compaction (e.g. from a /compact slash command). */
@@ -788,5 +826,8 @@ class AgentLoop
         [$tokensIn, $tokensOut] = $this->contextManager->performCompaction($this->history);
         $this->sessionTokensIn += $tokensIn;
         $this->sessionTokensOut += $tokensOut;
+        if ($tokensIn > 0 || $tokensOut > 0) {
+            $this->events?->dispatch(new ContextCompacted(0, $tokensIn, $tokensOut));
+        }
     }
 }

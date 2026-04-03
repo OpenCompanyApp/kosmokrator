@@ -71,4 +71,72 @@ final class ModelCatalogTest extends TestCase
         $this->assertSame(200000, $catalog->contextWindow('o3'));
         $this->assertTrue($catalog->supportsThinking('o3'));
     }
+
+    public function test_coding_plan_models_use_reference_price_for_display_cost_only(): void
+    {
+        $meta = new ProviderMeta([
+            'z' => [
+                'default_model' => 'glm-5',
+                'url' => 'https://api.z.ai/api/coding/paas/v4',
+                'models' => [
+                    'glm-5' => [
+                        'display_name' => 'GLM-5',
+                        'context' => 204800,
+                        'max_output' => 131072,
+                        'input' => 0.0,
+                        'output' => 0.0,
+                        'pricing_kind' => 'coding_plan',
+                        'reference_input' => 1.0,
+                        'reference_output' => 3.2,
+                    ],
+                ],
+            ],
+        ]);
+
+        $catalog = new ModelCatalog(['models' => []], $meta);
+
+        $this->assertSame(0.0, $catalog->estimateActualCost('glm-5', 1_000_000, 1_000_000));
+        $this->assertSame(4.2, $catalog->estimateDisplayCost('glm-5', 1_000_000, 1_000_000));
+    }
+
+    public function test_token_plan_models_have_zero_actual_and_display_cost_even_when_paid_variant_shares_id(): void
+    {
+        $meta = new ProviderMeta([
+            'mimo' => [
+                'default_model' => 'mimo-v2-pro',
+                'url' => 'https://token-plan-sgp.xiaomimimo.com/v1',
+                'models' => [
+                    'mimo-v2-pro' => [
+                        'display_name' => 'MiMo V2 Pro',
+                        'context' => 1048576,
+                        'max_output' => 131072,
+                        'input' => 0.0,
+                        'output' => 0.0,
+                        'pricing_kind' => 'token_plan',
+                    ],
+                ],
+            ],
+            'mimo-api' => [
+                'default_model' => 'mimo-v2-pro',
+                'url' => 'https://api.xiaomimimo.com/v1',
+                'models' => [
+                    'mimo-v2-pro' => [
+                        'display_name' => 'MiMo V2 Pro',
+                        'context' => 1048576,
+                        'max_output' => 131072,
+                        'input' => 2.5,
+                        'output' => 10.0,
+                        'pricing_kind' => 'paid',
+                    ],
+                ],
+            ],
+        ]);
+
+        $catalog = new ModelCatalog(['models' => []], $meta);
+
+        $this->assertSame(0.0, $catalog->estimateActualCost('mimo-v2-pro', 1_000_000, 1_000_000, 0, 0, 'mimo'));
+        $this->assertSame(0.0, $catalog->estimateDisplayCost('mimo-v2-pro', 1_000_000, 1_000_000, 0, 0, 'mimo'));
+        $this->assertSame(0.0, $catalog->estimateCacheSavings('mimo-v2-pro', 1_000_000, 500_000, 0, 'mimo'));
+        $this->assertSame(12.5, $catalog->estimateActualCost('mimo-v2-pro', 1_000_000, 1_000_000, 0, 0, 'mimo-api'));
+    }
 }

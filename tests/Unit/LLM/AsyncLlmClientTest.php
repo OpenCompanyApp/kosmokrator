@@ -12,6 +12,7 @@ class AsyncLlmClientTest extends TestCase
         $this->assertTrue(AsyncLlmClient::supportsProvider('z'));
         $this->assertTrue(AsyncLlmClient::supportsProvider('kimi'));
         $this->assertTrue(AsyncLlmClient::supportsProvider('mimo'));
+        $this->assertTrue(AsyncLlmClient::supportsProvider('mimo-api'));
         $this->assertTrue(AsyncLlmClient::supportsProvider('perplexity'));
         $this->assertFalse(AsyncLlmClient::supportsProvider('codex'));
         $this->assertFalse(AsyncLlmClient::supportsProvider('anthropic'));

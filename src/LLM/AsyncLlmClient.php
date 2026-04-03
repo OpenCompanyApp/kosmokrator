@@ -16,6 +16,7 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use Prism\Prism\ValueObjects\ToolCall;
 
 class AsyncLlmClient implements LlmClientInterface
@@ -39,6 +40,7 @@ class AsyncLlmClient implements LlmClientInterface
         'kimi',
         'kimi-coding',
         'mimo',
+        'mimo-api',
     ];
 
     public function __construct(
@@ -50,7 +52,7 @@ class AsyncLlmClient implements LlmClientInterface
         private int|float|null $temperature = null,
         private string $provider = 'z',
         ?Relay $relay = null,
-        private readonly ?ProviderCapabilitiesResolver $capabilities = null,
+        private readonly ?RelayRegistry $registry = null,
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
         $this->relay = $relay ?? new Relay;
@@ -175,11 +177,11 @@ class AsyncLlmClient implements LlmClientInterface
 
     private function supportsTemperature(): bool
     {
-        if ($this->capabilities !== null) {
-            return $this->capabilities->supportsTemperature($this->provider);
+        if ($this->registry !== null) {
+            return $this->registry->capabilities($this->provider)['temperature'];
         }
 
-        return ProviderCapabilities::for($this->provider)->supportsTemperature();
+        return ProviderCapabilities::for($this->provider, $this->registry)->supportsTemperature();
     }
 
     private function parseResponse(Response $response, ?Cancellation $cancellation): LlmResponse

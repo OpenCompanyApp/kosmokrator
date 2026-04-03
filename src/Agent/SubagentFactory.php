@@ -102,7 +102,7 @@ class SubagentFactory
 
     private function createLlmClient(): LlmClientInterface
     {
-        if ($this->llmClientClass === 'async' && AsyncLlmClient::supportsProvider($this->provider)) {
+        if ($this->llmClientClass === 'async') {
             $inner = new AsyncLlmClient(
                 apiKey: $this->apiKey,
                 baseUrl: $this->baseUrl,

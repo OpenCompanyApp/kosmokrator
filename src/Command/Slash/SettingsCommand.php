@@ -13,11 +13,11 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Tool\Permission\PermissionMode;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 final class SettingsCommand implements SlashCommand
 {
@@ -49,7 +49,7 @@ final class SettingsCommand implements SlashCommand
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $catalog = $ctx->providers ?? $this->container->make(ProviderCatalog::class);
-        $registry = $this->container->make(RelayProviderRegistry::class);
+        $registry = $this->container->make(RelayRegistry::class);
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot($ctx->sessionManager->getProject() ?? getcwd());
 
@@ -67,6 +67,11 @@ final class SettingsCommand implements SlashCommand
         $deleteCustomProvider = is_string($result['delete_custom_provider'] ?? null)
             ? trim((string) $result['delete_custom_provider'])
             : '';
+
+        $setupProvider = trim((string) ($changes['provider.setup_provider'] ?? $ctx->llm->getProvider()));
+        if ($setupProvider === '__custom__') {
+            $setupProvider = trim((string) ($customProvider['id'] ?? ''));
+        }
 
         if ($customProvider !== null) {
             $settings->saveCustomProvider(
@@ -102,9 +107,14 @@ final class SettingsCommand implements SlashCommand
                 'agent.max_tokens' => $this->applyMaxTokens($ctx, $stringValue, $scope),
                 'agent.default_provider' => $this->applyProvider($ctx, $catalog, $registry, $settings, $stringValue, $scope),
                 'agent.default_model' => $this->applyModel($ctx, $settings, $targetProvider, $stringValue, $scope),
-                'provider.secret.api_key' => $this->storeApiKey($ctx, $targetProvider, $stringValue),
-                'provider.auth_action' => $this->handleAuthAction($ctx, $catalog, $targetProvider, $stringValue),
+                'provider.secret.api_key' => $this->storeApiKey($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
+                'provider.auth_action' => $this->handleAuthAction($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
                 'provider.auth_status',
+                'provider.setup_provider',
+                'provider.setup_status',
+                'provider.setup_auth_mode',
+                'provider.setup_driver',
+                'provider.setup_url',
                 'custom_provider.id',
                 'custom_provider.label',
                 'custom_provider.driver',
@@ -163,6 +173,7 @@ final class SettingsCommand implements SlashCommand
             ? $settings->customProviders()[$currentProvider]
             : [];
         $providerStatuses = $catalog->authStatuses();
+        $setupProvider = $currentProvider;
 
         $categories = [];
         foreach ($schema->categoryLabels() as $categoryId => $label) {
@@ -186,7 +197,24 @@ final class SettingsCommand implements SlashCommand
                 ];
             }
 
-            if ($categoryId === 'provider_model') {
+            if ($categoryId === 'models') {
+                $providerModelCount = count($catalog->modelIds((string) ($fields[0]['value'] ?? $currentProvider)));
+                $fields[] = [
+                    'id' => 'provider.model_inventory',
+                    'label' => 'Configured models',
+                    'value' => $providerModelCount > 0 ? $providerModelCount.' models' : 'No models',
+                    'source' => 'runtime',
+                    'effect' => 'next_session',
+                    'type' => 'readonly',
+                    'options' => [],
+                    'description' => 'Models currently available for the selected provider. Full list appears in the details panel below.',
+                ];
+            }
+
+            if ($categoryId === 'provider_setup') {
+                $setupProviderDefinition = $catalog->provider($setupProvider);
+                $setupAuthMode = $catalog->authMode($setupProvider);
+                [$credentialLabel, $credentialDescription] = $this->credentialFieldMeta($setupProvider, $setupAuthMode);
                 $firstModelId = '';
                 $firstModel = [];
                 $models = is_array($customProvider['models'] ?? null) ? $customProvider['models'] : [];
@@ -196,6 +224,78 @@ final class SettingsCommand implements SlashCommand
                 }
 
                 $fields = array_merge($fields, [
+                    [
+                        'id' => 'provider.setup_provider',
+                        'label' => 'Provider to configure',
+                        'value' => $setupProvider,
+                        'source' => 'runtime',
+                        'effect' => 'applies_now',
+                        'type' => 'dynamic_choice',
+                        'options' => [],
+                        'description' => 'Choose a built-in provider to configure, or switch to Custom Provider to write a YAML definition.',
+                    ],
+                    [
+                        'id' => 'provider.setup_status',
+                        'label' => 'Credential status',
+                        'value' => $providerStatuses[$setupProvider] ?? 'Unknown',
+                        'source' => 'runtime',
+                        'effect' => 'applies_now',
+                        'type' => 'readonly',
+                        'options' => [],
+                        'description' => 'Current auth or credential status for the selected provider.',
+                    ],
+                    [
+                        'id' => 'provider.setup_auth_mode',
+                        'label' => 'Auth method',
+                        'value' => $catalog->authMode($setupProvider),
+                        'source' => 'runtime',
+                        'effect' => 'applies_now',
+                        'type' => 'readonly',
+                        'options' => [],
+                        'description' => 'How this provider authenticates: API key, OAuth, or none.',
+                    ],
+                    [
+                        'id' => 'provider.setup_driver',
+                        'label' => 'Driver',
+                        'value' => (string) ($setupProviderDefinition?->driver ?? ''),
+                        'source' => 'runtime',
+                        'effect' => 'next_session',
+                        'type' => 'readonly',
+                        'options' => [],
+                        'description' => 'Transport/adapter used to register this provider.',
+                    ],
+                    [
+                        'id' => 'provider.setup_url',
+                        'label' => 'Base URL',
+                        'value' => (string) ($setupProviderDefinition?->url ?? ''),
+                        'source' => 'runtime',
+                        'effect' => 'next_session',
+                        'type' => 'readonly',
+                        'options' => [],
+                        'description' => 'Endpoint currently configured for this provider.',
+                    ],
+                    [
+                        'id' => 'provider.secret.api_key',
+                        'label' => $credentialLabel,
+                        'value' => $setupAuthMode === 'api_key' ? $catalog->maskedCredential($setupProvider) : '',
+                        'source' => 'secret_store',
+                        'effect' => 'applies_now',
+                        'type' => $setupAuthMode === 'api_key' ? 'text' : 'readonly',
+                        'options' => [],
+                        'description' => $credentialDescription,
+                    ],
+                    [
+                        'id' => 'provider.auth_action',
+                        'label' => $setupAuthMode === 'oauth' ? 'Sign-in action' : 'Credential action',
+                        'value' => '',
+                        'source' => 'runtime',
+                        'effect' => 'applies_now',
+                        'type' => 'choice',
+                        'options' => [],
+                        'description' => $setupAuthMode === 'oauth'
+                            ? 'Start sign-in, inspect login state, or sign out.'
+                            : 'Set, inspect, or clear the saved credential for this provider.',
+                    ],
                     [
                         'id' => 'custom_provider.id',
                         'label' => 'Custom provider ID',
@@ -357,7 +457,10 @@ final class SettingsCommand implements SlashCommand
             'scope' => $ctx->sessionManager->getProject() !== null ? 'project' : 'global',
             'categories' => $categories,
             'provider_options' => $catalog->providerOptions(),
+            'setup_provider_options' => $this->setupProviderOptions($catalog),
             'model_options_by_provider' => $catalog->modelOptionsByProvider(),
+            'models_provider_options' => $this->configuredProviderOptions($catalog, $currentProvider),
+            'models_model_options_by_provider' => $this->configuredModelOptionsByProvider($catalog, $currentProvider),
             'provider_statuses' => $providerStatuses,
             'provider_api_key_display' => $this->providerApiKeyDisplay($catalog),
             'providers_by_id' => $this->providersById($catalog),
@@ -398,14 +501,14 @@ final class SettingsCommand implements SlashCommand
     private function applyProvider(
         SlashCommandContext $ctx,
         ProviderCatalog $catalog,
-        RelayProviderRegistry $registry,
+        RelayRegistry $registry,
         SettingsManager $settings,
         string $provider,
         string $scope,
     ): void {
         $settings->set('agent.default_provider', $provider, $scope);
 
-        if (self::requiresRestart($ctx->llm, $provider)) {
+        if ($this->requiresRestart($ctx->llm, $registry, $provider)) {
             $ctx->ui->showNotice("Provider saved as {$provider}. Restart session to switch runtime.");
 
             return;
@@ -433,21 +536,27 @@ final class SettingsCommand implements SlashCommand
         $settings->set('agent.default_model', $model, $scope);
         $settings->setProviderLastModel($provider, $model, $scope);
 
-        if (! self::requiresRestart($ctx->llm, $provider)) {
+        if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayRegistry::class), $provider)) {
             $ctx->llm->setModel($model);
         }
     }
 
-    private function storeApiKey(SlashCommandContext $ctx, string $provider, string $value): void
+    private function storeApiKey(SlashCommandContext $ctx, ProviderCatalog $catalog, string $provider, string $value): void
     {
-        if ($value === '' || str_starts_with($value, '(') || $provider === 'codex') {
+        if (
+            $value === ''
+            || str_starts_with($value, '(')
+            || $provider === ''
+            || $provider === 'codex'
+            || $value === $catalog->maskedCredential($provider)
+        ) {
             return;
         }
 
         $ctx->settings->set('global', "provider.{$provider}.api_key", $value);
         $inner = self::innerClient($ctx->llm);
 
-        if (! self::requiresRestart($ctx->llm, $provider) && method_exists($inner, 'setApiKey')) {
+        if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayRegistry::class), $provider) && method_exists($inner, 'setApiKey')) {
             $inner->setApiKey($value);
         }
     }
@@ -476,7 +585,7 @@ final class SettingsCommand implements SlashCommand
             if ($action === 'clear_key') {
                 $ctx->settings->delete('global', "provider.{$provider}.api_key");
                 $inner = self::innerClient($ctx->llm);
-                if (! self::requiresRestart($ctx->llm, $provider) && method_exists($inner, 'setApiKey')) {
+                if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayRegistry::class), $provider) && method_exists($inner, 'setApiKey')) {
                     $inner->setApiKey('');
                 }
                 $ctx->ui->showNotice("Cleared API key for {$provider}.");
@@ -487,7 +596,7 @@ final class SettingsCommand implements SlashCommand
             if ($action === 'edit_key') {
                 $key = trim($ctx->ui->askUser("Enter API key for {$provider}:"));
                 if ($key !== '') {
-                    $this->storeApiKey($ctx, $provider, $key);
+                    $this->storeApiKey($ctx, $catalog, $provider, $key);
                     $ctx->ui->showNotice("Stored API key for {$provider}.");
                 }
             }
@@ -522,11 +631,11 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
-    private static function requiresRestart(LlmClientInterface $llm, string $provider): bool
+    private function requiresRestart(LlmClientInterface $llm, RelayRegistry $registry, string $provider): bool
     {
         $inner = self::innerClient($llm);
 
-        return $inner instanceof AsyncLlmClient && ! AsyncLlmClient::supportsProvider($provider);
+        return $inner instanceof AsyncLlmClient && ! $registry->supportsAsync($provider);
     }
 
     private static function innerClient(LlmClientInterface $llm): LlmClientInterface
@@ -542,8 +651,12 @@ final class SettingsCommand implements SlashCommand
         $map = [];
         foreach ($catalog->providers() as $provider) {
             $map[$provider->id] = [
+                'label' => $provider->label,
+                'description' => $provider->description,
                 'source' => $provider->source,
                 'driver' => $provider->driver,
+                'url' => $provider->url,
+                'auth_mode' => $provider->authMode,
                 'auth_status' => $catalog->authStatus($provider->id),
                 'input_modalities' => $provider->inputModalities,
                 'output_modalities' => $provider->outputModalities,
@@ -575,9 +688,23 @@ final class SettingsCommand implements SlashCommand
     private function authActionOptions(string $authMode): array
     {
         return match ($authMode) {
-            'oauth' => ['', 'status', 'login_browser', 'login_device', 'logout'],
-            'none' => ['', 'status'],
-            default => ['', 'status', 'edit_key', 'clear_key'],
+            'oauth' => [
+                ['value' => '', 'label' => 'Choose action', 'description' => 'No action.'],
+                ['value' => 'status', 'label' => 'Check login status', 'description' => 'Show the current OAuth login state.'],
+                ['value' => 'login_browser', 'label' => 'Sign in in browser', 'description' => 'Open the browser-based login flow.'],
+                ['value' => 'login_device', 'label' => 'Sign in with device code', 'description' => 'Use a device-code flow for remote or headless environments.'],
+                ['value' => 'logout', 'label' => 'Sign out / switch account', 'description' => 'Remove the saved OAuth session so you can connect a different account.'],
+            ],
+            'none' => [
+                ['value' => '', 'label' => 'No action needed', 'description' => 'This provider does not require credentials.'],
+                ['value' => 'status', 'label' => 'Check provider status', 'description' => 'Show the current provider status.'],
+            ],
+            default => [
+                ['value' => '', 'label' => 'Choose action', 'description' => 'No action.'],
+                ['value' => 'status', 'label' => 'Check saved key', 'description' => 'Show whether a key is already configured.'],
+                ['value' => 'edit_key', 'label' => 'Set or replace key', 'description' => 'Enter a new key for this provider.'],
+                ['value' => 'clear_key', 'label' => 'Clear saved key', 'description' => 'Remove the currently saved key.'],
+            ],
         };
     }
 
@@ -592,6 +719,80 @@ final class SettingsCommand implements SlashCommand
         }
 
         return $options;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function credentialFieldMeta(string $provider, string $authMode): array
+    {
+        if ($authMode !== 'api_key') {
+            return ['Credential', 'Credential is managed separately from YAML config.'];
+        }
+
+        return match ($provider) {
+            'mimo' => ['Token plan key', 'Enter the Xiaomi MiMo token-plan key (`tp-...`). It is stored separately from YAML config.'],
+            default => ['API key', 'Enter the API key for this provider. It is stored separately from YAML config.'],
+        };
+    }
+
+    /**
+     * @return list<array{value: string, label: string, description: string}>
+     */
+    private function setupProviderOptions(ProviderCatalog $catalog): array
+    {
+        $options = $catalog->providerOptions();
+        $options[] = [
+            'value' => '__custom__',
+            'label' => 'Custom Provider',
+            'description' => 'Define a provider in YAML with a custom driver, URL, models, and modalities.',
+        ];
+
+        return $options;
+    }
+
+    /**
+     * @return list<array{value: string, label: string, description: string}>
+     */
+    private function configuredProviderOptions(ProviderCatalog $catalog, string $currentProvider): array
+    {
+        return array_values(array_filter(
+            $catalog->providerOptions(),
+            fn (array $option): bool => $this->providerIsConfigured($catalog, (string) ($option['value'] ?? ''), $currentProvider),
+        ));
+    }
+
+    /**
+     * @return array<string, list<array{value: string, label: string, description: string}>>
+     */
+    private function configuredModelOptionsByProvider(ProviderCatalog $catalog, string $currentProvider): array
+    {
+        $models = $catalog->modelOptionsByProvider();
+        $filtered = [];
+
+        foreach (array_keys($models) as $provider) {
+            if (! $this->providerIsConfigured($catalog, $provider, $currentProvider)) {
+                continue;
+            }
+
+            $filtered[$provider] = $models[$provider];
+        }
+
+        return $filtered;
+    }
+
+    private function providerIsConfigured(ProviderCatalog $catalog, string $provider, string $currentProvider): bool
+    {
+        if ($provider === '' || $provider === $currentProvider) {
+            return $provider !== '';
+        }
+
+        return match ($catalog->authMode($provider)) {
+            'none' => true,
+            'oauth' => ! str_starts_with($catalog->authStatus($provider), 'Not authenticated')
+                && ! str_starts_with($catalog->authStatus($provider), 'Expired'),
+            default => trim($catalog->apiKey($provider)) !== '',
+        };
     }
 
     private function runtimeValue(SlashCommandContext $ctx, string $id, mixed $fallback): string

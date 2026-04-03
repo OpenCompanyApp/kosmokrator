@@ -8,9 +8,15 @@ use Illuminate\Config\Repository;
 use Kosmokrator\Session\SettingsRepository;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 final class ProviderCatalog
 {
+    /** @var list<string> */
+    private const HIDDEN_PROVIDER_IDS = [
+        'zhipuai',
+    ];
+
     /** @var array<string, array{label: string, description: string, auth: string}> */
     private const DEFINITIONS = [
         'anthropic' => ['label' => 'Anthropic', 'description' => 'Claude models via Anthropic API key', 'auth' => 'api_key'],
@@ -26,7 +32,8 @@ final class ProviderCatalog
         'ollama' => ['label' => 'Ollama', 'description' => 'Local models, no remote credentials required', 'auth' => 'none'],
         'kimi' => ['label' => 'Kimi', 'description' => 'Moonshot Kimi models via API key', 'auth' => 'api_key'],
         'kimi-coding' => ['label' => 'Kimi Coding', 'description' => 'Moonshot coding-plan endpoint via API key', 'auth' => 'api_key'],
-        'mimo' => ['label' => 'Xiaomi MiMo', 'description' => 'MiMo Token Plan models via API key', 'auth' => 'api_key'],
+        'mimo' => ['label' => 'Xiaomi MiMo Token Plan', 'description' => 'MiMo token-plan models via token-plan key', 'auth' => 'api_key'],
+        'mimo-api' => ['label' => 'Xiaomi MiMo API', 'description' => 'MiMo pay-as-you-go API via API key', 'auth' => 'api_key'],
         'minimax' => ['label' => 'MiniMax', 'description' => 'MiniMax models via API key', 'auth' => 'api_key'],
         'minimax-cn' => ['label' => 'MiniMax CN', 'description' => 'MiniMax China-region endpoint via API key', 'auth' => 'api_key'],
         'z' => ['label' => 'Z.AI', 'description' => 'Z.AI coding endpoint via API key', 'auth' => 'api_key'],
@@ -38,6 +45,8 @@ final class ProviderCatalog
         'anthropic',
         'openai',
         'codex',
+        'mimo',
+        'mimo-api',
         'gemini',
         'deepseek',
         'groq',
@@ -48,7 +57,6 @@ final class ProviderCatalog
         'ollama',
         'kimi',
         'kimi-coding',
-        'mimo',
         'minimax',
         'minimax-cn',
         'z',
@@ -57,7 +65,7 @@ final class ProviderCatalog
 
     public function __construct(
         private readonly ProviderMeta $meta,
-        private readonly RelayProviderRegistry $registry,
+        private readonly RelayRegistry $registry,
         private readonly Repository $config,
         private readonly SettingsRepository $settings,
         private readonly CodexTokenStore $codexTokens,
@@ -71,6 +79,10 @@ final class ProviderCatalog
         $providers = [];
 
         foreach ($this->configuredProviderIds() as $provider) {
+            if (! $this->isSelectableProvider($provider) || $this->isHiddenProvider($provider)) {
+                continue;
+            }
+
             $definition = $this->provider($provider);
             if ($definition !== null) {
                 $providers[] = $definition;
@@ -111,6 +123,10 @@ final class ProviderCatalog
                 thinking: $info->thinking,
                 inputPricePerMillion: $info->inputPricePerMillion,
                 outputPricePerMillion: $info->outputPricePerMillion,
+                pricingKind: $info->pricingKind,
+                referenceInputPricePerMillion: $info->referenceInputPricePerMillion,
+                referenceOutputPricePerMillion: $info->referenceOutputPricePerMillion,
+                status: $info->status,
                 inputModalities: $modalities['input'],
                 outputModalities: $modalities['output'],
             );
@@ -162,8 +178,10 @@ final class ProviderCatalog
         return array_map(
             fn (ProviderDefinition $provider): array => [
                 'value' => $provider->id,
-                'label' => $provider->id,
-                'description' => "{$provider->label} · {$provider->description} · ".($provider->source === 'custom' ? 'Custom' : 'Built-in'),
+                'label' => $provider->label,
+                'description' => "{$provider->id} · {$provider->description} · "
+                    .count($provider->models).' models · '
+                    .($provider->source === 'custom' ? 'Custom' : 'Built-in'),
             ],
             $this->providers(),
         );
@@ -180,8 +198,8 @@ final class ProviderCatalog
             $options[$provider->id] = array_map(
                 fn (ModelDefinition $model): array => [
                     'value' => $model->id,
-                    'label' => $model->id,
-                    'description' => $this->formatModelDescription($model),
+                    'label' => $model->displayName,
+                    'description' => $model->id.' · '.$this->formatModelDescription($model),
                 ],
                 $provider->models,
             );
@@ -307,11 +325,54 @@ final class ProviderCatalog
             $parts[] = 'thinking';
         }
 
-        if ($model->inputPricePerMillion !== null && $model->outputPricePerMillion !== null) {
+        if ($model->pricingKind === 'coding_plan'
+            && $model->referenceInputPricePerMillion !== null
+            && $model->referenceOutputPricePerMillion !== null) {
+            $parts[] = '$'.$this->trimFloat($model->referenceInputPricePerMillion)
+                .'/$'.$this->trimFloat($model->referenceOutputPricePerMillion)
+                .' per 1M · Coding Plan';
+        } elseif ($model->pricingKind === 'token_plan') {
+            $parts[] = 'Token Plan';
+        } elseif ($model->pricingKind === 'public_free') {
+            $parts[] = 'Free';
+        } elseif ($model->inputPricePerMillion !== null && $model->outputPricePerMillion !== null) {
             $parts[] = '$'.$this->trimFloat($model->inputPricePerMillion).'/$'.$this->trimFloat($model->outputPricePerMillion).' per 1M';
         }
 
+        if ($model->status !== null && $model->status !== '' && $model->status !== 'active') {
+            $parts[] = $model->status;
+        }
+
         return implode(' · ', $parts);
+    }
+
+    private function isSelectableProvider(string $provider): bool
+    {
+        return ! in_array($this->registry->driver($provider), [
+            'unsupported',
+            'external-process',
+            'google-vertex',
+            'amazon-bedrock',
+        ], true);
+    }
+
+    private function isHiddenProvider(string $provider): bool
+    {
+        if (in_array($provider, self::HIDDEN_PROVIDER_IDS, true)) {
+            return true;
+        }
+
+        foreach ($this->registry->allProviders() as $definition) {
+            if (($definition['source'] ?? '') !== 'custom') {
+                continue;
+            }
+
+            if (($definition['models_dev_provider'] ?? null) === $provider) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function formatTokens(int $tokens): string

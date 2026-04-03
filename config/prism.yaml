@@ -25,6 +25,9 @@ providers:
   mimo:
     api_key: ${MIMO_API_KEY}
     url: https://token-plan-sgp.xiaomimimo.com/v1
+  mimo-api:
+    api_key: ${MIMO_PAYG_API_KEY}
+    url: https://api.xiaomimimo.com/v1
   gemini:
     api_key: ${GEMINI_API_KEY}
     url: https://generativelanguage.googleapis.com/v1beta

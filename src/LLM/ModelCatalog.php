@@ -46,9 +46,26 @@ class ModelCatalog
         int $tokensOut,
         int $cacheReadInputTokens = 0,
         int $cacheWriteInputTokens = 0,
+        ?string $provider = null,
     ): float
     {
-        $spec = $this->resolve($model);
+        return $this->estimateActualCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $provider);
+    }
+
+    public function estimateActualCost(
+        string $model,
+        int $tokensIn,
+        int $tokensOut,
+        int $cacheReadInputTokens = 0,
+        int $cacheWriteInputTokens = 0,
+        ?string $provider = null,
+    ): float
+    {
+        $spec = $this->resolve($model, $provider);
+        if (($spec['pricing_kind'] ?? 'paid') === 'token_plan') {
+            return 0.0;
+        }
+
         $inRate = (float) ($spec['input_price'] ?? $this->default['input_price']);
         $outRate = (float) ($spec['output_price'] ?? $this->default['output_price']);
         $cachedReadRate = (float) ($spec['cached_input_price'] ?? $inRate);
@@ -64,17 +81,56 @@ class ModelCatalog
         );
     }
 
+    public function estimateDisplayCost(
+        string $model,
+        int $tokensIn,
+        int $tokensOut,
+        int $cacheReadInputTokens = 0,
+        int $cacheWriteInputTokens = 0,
+        ?string $provider = null,
+    ): float
+    {
+        $spec = $this->resolve($model, $provider);
+
+        if (($spec['pricing_kind'] ?? 'paid') !== 'coding_plan') {
+            return $this->estimateActualCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $provider);
+        }
+
+        $referenceIn = $spec['reference_input_price'] ?? null;
+        $referenceOut = $spec['reference_output_price'] ?? null;
+        if (! is_numeric($referenceIn) || ! is_numeric($referenceOut)) {
+            return $this->estimateActualCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $provider);
+        }
+
+        $cachedReadRate = (float) ($spec['cached_input_price'] ?? $referenceIn);
+        $cachedWriteRate = (float) ($spec['cached_write_price'] ?? $referenceIn);
+        $uncachedInputTokens = max(0, $tokensIn - $cacheReadInputTokens - $cacheWriteInputTokens);
+
+        return round(
+            ($uncachedInputTokens * (float) $referenceIn / 1_000_000)
+            + ($cacheReadInputTokens * $cachedReadRate / 1_000_000)
+            + ($cacheWriteInputTokens * $cachedWriteRate / 1_000_000)
+            + ($tokensOut * (float) $referenceOut / 1_000_000),
+            4,
+        );
+    }
+
     public function estimateCacheSavings(
         string $model,
         int $tokensIn,
         int $cacheReadInputTokens = 0,
         int $cacheWriteInputTokens = 0,
+        ?string $provider = null,
     ): float {
         if ($cacheReadInputTokens === 0 && $cacheWriteInputTokens === 0) {
             return 0.0;
         }
 
-        $spec = $this->resolve($model);
+        $spec = $this->resolve($model, $provider);
+        if (($spec['pricing_kind'] ?? 'paid') === 'token_plan') {
+            return 0.0;
+        }
+
         $inRate = (float) ($spec['input_price'] ?? $this->default['input_price']);
         $cachedReadRate = (float) ($spec['cached_input_price'] ?? $inRate);
         $cachedWriteRate = (float) ($spec['cached_write_price'] ?? $inRate);
@@ -147,9 +203,14 @@ class ModelCatalog
     /**
      * Resolve model spec — tries exact match first, then substring match.
      */
-    private function resolve(string $model): array
+    private function resolve(string $model, ?string $provider = null): array
     {
         $key = strtolower($model);
+        $providerKey = $provider !== null && $provider !== '' ? strtolower($provider.'/'.$model) : null;
+
+        if ($providerKey !== null && isset($this->models[$providerKey])) {
+            return $this->models[$providerKey];
+        }
 
         // Exact match
         if (isset($this->models[$key])) {
@@ -182,6 +243,13 @@ class ModelCatalog
             return $provider;
         }
 
+        if ($this->providerMeta !== null) {
+            $canonical = $this->providerMeta->registry()->canonicalProvider($provider);
+            if ($canonical !== null) {
+                return $canonical;
+            }
+        }
+
         return $this->providerAliases[$provider] ?? $provider;
     }
 
@@ -192,6 +260,20 @@ class ModelCatalog
     {
         if ($this->providerMeta !== null && $this->providerMeta->has($provider)) {
             return [$provider];
+        }
+
+        if ($this->providerMeta !== null) {
+            $aliases = [];
+            foreach ($this->providerMeta->registry()->registrationNames() as $candidate) {
+                $canonical = $this->providerMeta->registry()->canonicalProvider($candidate);
+                if ($canonical === $provider) {
+                    $aliases[] = $candidate;
+                }
+            }
+
+            if ($aliases !== []) {
+                return array_values(array_unique($aliases));
+            }
         }
 
         $providers = [$provider];
@@ -217,7 +299,7 @@ class ModelCatalog
             foreach ($this->providerMeta->allProviders() as $provider) {
                 foreach ($this->providerMeta->models($provider) as $model) {
                     $info = $this->providerMeta->modelInfo($provider, $model);
-                    $models[strtolower($model)] = [
+                    $spec = [
                         'provider' => $provider,
                         'context' => $info->contextWindow,
                         'max_output' => $info->maxOutput,
@@ -225,9 +307,16 @@ class ModelCatalog
                         'output_price' => $info->outputPricePerMillion ?? $this->default['output_price'],
                         'cached_input_price' => $info->cachedInputPricePerMillion,
                         'cached_write_price' => $info->cachedWritePricePerMillion,
+                        'pricing_kind' => $info->pricingKind,
+                        'reference_input_price' => $info->referenceInputPricePerMillion,
+                        'reference_output_price' => $info->referenceOutputPricePerMillion,
+                        'status' => $info->status,
                         'thinking' => $info->thinking,
                         'streaming' => true,
                     ];
+
+                    $models[strtolower($provider.'/'.$model)] = $spec;
+                    $models[strtolower($model)] ??= $spec;
                 }
             }
         }

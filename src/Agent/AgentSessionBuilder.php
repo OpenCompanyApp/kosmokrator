@@ -10,7 +10,6 @@ use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
@@ -23,6 +22,7 @@ use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismRelay\Relay;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -79,7 +79,7 @@ final class AgentSessionBuilder
         $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
 
         // Create LLM client (async for TUI, sync for ANSI)
-        $registry = $this->container->make(RelayProviderRegistry::class);
+        $registry = $this->container->make(RelayRegistry::class);
         $useAsyncClient = $ui->getActiveRenderer() === 'tui' && $registry->supportsAsync($provider);
 
         /** @var LlmClientInterface $llm */

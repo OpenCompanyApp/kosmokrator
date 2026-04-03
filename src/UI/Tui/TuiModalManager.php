@@ -25,6 +25,7 @@ use Symfony\Component\Tui\Style\Padding;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\VerticalAlign;
 use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\InputWidget;
@@ -45,6 +46,7 @@ final class TuiModalManager
 
     public function __construct(
         private readonly ContainerWidget $overlay,
+        private readonly AbstractWidget $sessionRoot,
         private readonly Tui $tui,
         private readonly EditorWidget $input,
         private readonly \Closure $renderCallback,
@@ -253,21 +255,10 @@ final class TuiModalManager
     {
         $widget = new SettingsWorkspaceWidget($currentSettings);
         $widget->setId('settings-workspace');
-
-        $panel = new ContainerWidget;
-        $panel->setId('settings-panel-wrapper');
-        $panel->expandVertically(true);
-        $panel->setStyle(new Style(
-            border: Border::all(1, BorderPattern::rounded(), Color::hex('#ffc850')),
-            padding: new Padding(0, 1, 0, 1),
-            verticalAlign: VerticalAlign::Top,
-        ));
-        $panel->add($widget);
-
-        $this->overlay->expandVertically(true);
-        $this->overlay->add($panel);
+        $this->tui->remove($this->sessionRoot);
+        $this->tui->add($widget);
         $this->tui->setFocus($widget);
-        $this->flushRender();
+        $this->forceRender();
 
         $result = [];
         $suspension = EventLoop::getSuspension();
@@ -281,10 +272,11 @@ final class TuiModalManager
 
         $suspension->suspend();
 
-        $this->overlay->remove($panel);
-        $this->overlay->expandVertically(false);
-        $this->tui->setFocus($this->input);
+        $this->tui->remove($widget);
+        $this->tui->add($this->sessionRoot);
         $this->forceRender();
+        $this->tui->setFocus($this->input);
+        $this->flushRender();
 
         return $result;
     }

@@ -15,11 +15,8 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelCatalog;
-use Kosmokrator\LLM\ProviderCapabilitiesResolver;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\LLM\RelayProviderRegistrar;
-use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
@@ -66,6 +63,9 @@ use OpenCompany\PrismRelay\Caching\GeminiCacheStore;
 use OpenCompany\PrismRelay\Caching\PromptCacheOrchestrator;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Relay;
+use OpenCompany\PrismRelay\RelayManager;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
+use OpenCompany\PrismRelay\Registry\RelayRegistryBuilder;
 use Prism\Prism\PrismManager;
 use Prism\Prism\PrismServiceProvider;
 use Psr\Log\LoggerInterface;
@@ -140,11 +140,23 @@ class Kernel
         $loader = new ConfigLoader($this->basePath.'/config');
         $config = $loader->load();
 
+        $codexUrl = (string) $config->get('prism.providers.codex.url', 'https://chatgpt.com/backend-api/codex');
+        $codexOAuthPort = (int) $config->get('kosmokrator.codex.oauth_port', 9876);
+
         $this->container->instance('config', $config);
         $this->container->alias('config', Repository::class);
 
         // Map prism.yaml keys to where Prism expects them
         $config->set('prism', $config->get('prism', []));
+        $config->set('codex', [
+            'url' => $codexUrl,
+            'oauth_port' => $codexOAuthPort,
+            'callback_route' => '/auth/codex/callback',
+            'table' => 'codex_tokens',
+            'id_token_add_organizations' => true,
+            'originator' => 'kosmokrator',
+            'user_agent' => 'kosmokrator',
+        ]);
     }
 
     private function registerDatabase(): void
@@ -279,18 +291,35 @@ class Kernel
             store: $this->container->make(YamlConfigStore::class),
             baseConfigPath: $this->basePath.'/config',
         ));
-        $this->container->singleton(RelayProviderRegistry::class, fn () => new RelayProviderRegistry(
-            $this->container->make('config'),
-        ));
-        $this->container->singleton(ProviderCapabilitiesResolver::class, fn () => new ProviderCapabilitiesResolver(
-            $this->container->make(RelayProviderRegistry::class),
-        ));
+        $this->container->singleton(RelayRegistryBuilder::class, fn () => new RelayRegistryBuilder(
+                configDir: $this->basePath.'/vendor/opencompanyapp/prism-relay/config',
+            ));
+        $this->container->singleton(RelayRegistry::class, function () {
+            $config = $this->container->make('config');
+            $relayOverrides = is_array($config->get('relay.providers', []))
+                ? $config->get('relay.providers', [])
+                : [];
+            $prismProviders = is_array($config->get('prism.providers', []))
+                ? $config->get('prism.providers', [])
+                : [];
+
+            foreach ($prismProviders as $provider => $providerConfig) {
+                if (! is_array($providerConfig) || ! isset($providerConfig['url']) || ! is_string($providerConfig['url'])) {
+                    continue;
+                }
+
+                $relayOverrides[$provider] ??= [];
+                $relayOverrides[$provider]['url'] = $providerConfig['url'];
+            }
+
+            return $this->container->make(RelayRegistryBuilder::class)->build($relayOverrides);
+        });
         $this->container->singleton(ProviderMeta::class, fn () => new ProviderMeta(
-            $this->container->make(RelayProviderRegistry::class)->all(),
+            $this->container->make(RelayRegistry::class),
         ));
         $this->container->singleton(ProviderCatalog::class, fn () => new ProviderCatalog(
             $this->container->make(ProviderMeta::class),
-            $this->container->make(RelayProviderRegistry::class),
+            $this->container->make(RelayRegistry::class),
             $this->container->make('config'),
             $this->container->make(SettingsRepository::class),
             $this->container->make(CodexTokenStoreContract::class),
@@ -308,10 +337,16 @@ class Kernel
         $provider->register();
 
         $manager = $this->container->make(PrismManager::class);
-        (new RelayProviderRegistrar(
-            $this->container->make(RelayProviderRegistry::class),
-            $this->container->make(CodexOAuthService::class),
-        ))->register($manager);
+        $providers = $this->container->make(RelayRegistry::class)->allProviders();
+        unset($providers['codex']);
+        (new RelayManager($providers))->register($manager);
+        $manager->extend('codex', function ($app, array $config) {
+            return new \OpenCompany\PrismCodex\Codex(
+                oauthService: $this->container->make(CodexOAuthService::class),
+                url: $config['url'] ?? 'https://chatgpt.com/backend-api/codex',
+                accountId: $config['account_id'] ?? null,
+            );
+        });
     }
 
     private function registerFacades(): void
@@ -324,7 +359,7 @@ class Kernel
     private function registerAgentServices(): void
     {
         $config = $this->container->make('config');
-        $registry = $this->container->make(RelayProviderRegistry::class);
+        $registry = $this->container->make(RelayRegistry::class);
         $providers = $this->container->make(ProviderCatalog::class);
 
         $log = $this->container->make(LoggerInterface::class);
@@ -345,7 +380,7 @@ class Kernel
                 maxTokens: $config->get('kosmokrator.agent.max_tokens'),
                 temperature: $config->get('kosmokrator.agent.temperature', 0.0),
                 relay: $this->container->make(Relay::class),
-                capabilities: $this->container->make(ProviderCapabilitiesResolver::class),
+                registry: $this->container->make(RelayRegistry::class),
             ),
             $log,
         ));
@@ -362,7 +397,7 @@ class Kernel
                 temperature: $config->get('kosmokrator.agent.temperature', 0.0),
                 provider: $provider,
                 relay: $this->container->make(Relay::class),
-                capabilities: $this->container->make(ProviderCapabilitiesResolver::class),
+                registry: $this->container->make(RelayRegistry::class),
             ),
             $log,
         ));

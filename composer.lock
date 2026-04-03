@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "dd19c2cde39116720f84ec1115227f16",
+    "content-hash": "b9c77b0edb355a18ec27f69bc0bf4e30",
     "packages": [
         {
             "name": "amphp/amp",
@@ -1729,7 +1729,7 @@
                     "homepage": "https://github.com/Nyholm"
                 },
                 {
-                    "name": "Márk Sági-Kazár",
+                    "name": "M\u00e1rk S\u00e1gi-Kaz\u00e1r",
                     "email": "mark.sagikazar@gmail.com",
                     "homepage": "https://github.com/sagikazarmark"
                 },
@@ -1925,7 +1925,7 @@
                     "homepage": "https://github.com/Nyholm"
                 },
                 {
-                    "name": "Márk Sági-Kazár",
+                    "name": "M\u00e1rk S\u00e1gi-Kaz\u00e1r",
                     "email": "mark.sagikazar@gmail.com",
                     "homepage": "https://github.com/sagikazarmark"
                 },
@@ -1935,7 +1935,7 @@
                     "homepage": "https://github.com/Tobion"
                 },
                 {
-                    "name": "Márk Sági-Kazár",
+                    "name": "M\u00e1rk S\u00e1gi-Kaz\u00e1r",
                     "email": "mark.sagikazar@gmail.com",
                     "homepage": "https://sagikazarmark.hu"
                 }
@@ -3363,7 +3363,7 @@
                     "homepage": "https://nette.org/contributors"
                 }
             ],
-            "description": "📐 Nette Schema: validating data structures against a given Schema.",
+            "description": "\ud83d\udcd0 Nette Schema: validating data structures against a given Schema.",
             "homepage": "https://nette.org",
             "keywords": [
                 "config",
@@ -3442,7 +3442,7 @@
                     "homepage": "https://nette.org/contributors"
                 }
             ],
-            "description": "🛠  Nette Utils: lightweight utilities for string & array manipulation, image handling, safe JSON encoding/decoding, validation, slug or strong password generating etc.",
+            "description": "\ud83d\udee0  Nette Utils: lightweight utilities for string & array manipulation, image handling, safe JSON encoding/decoding, validation, slug or strong password generating etc.",
             "homepage": "https://nette.org",
             "keywords": [
                 "array",
@@ -3556,10 +3556,16 @@
         {
             "name": "opencompany/prism-codex",
             "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/OpenCompanyApp/prism-codex.git",
+                "reference": "530d4ce28cb8115df5e28e0507547cddb0cfe184"
+            },
             "dist": {
-                "type": "path",
-                "url": "../../Sites/opencompany/tmp/prism-codex",
-                "reference": "862b0c1d0879c5333fd9b4d2bf3c6a8c8af06f81"
+                "type": "zip",
+                "url": "https://api.github.com/repos/OpenCompanyApp/prism-codex/zipball/530d4ce28cb8115df5e28e0507547cddb0cfe184",
+                "reference": "530d4ce28cb8115df5e28e0507547cddb0cfe184",
+                "shasum": ""
             },
             "require": {
                 "illuminate/console": "^11.0|^12.0|^13.0",
@@ -3574,6 +3580,7 @@
                 "orchestra/testbench": "^9.0|^10.0|^11.0",
                 "phpunit/phpunit": "^11.0"
             },
+            "default-branch": true,
             "type": "library",
             "extra": {
                 "laravel": {
@@ -3601,7 +3608,7 @@
                     "homepage": "https://github.com/OpenCompanyApp"
                 }
             ],
-            "description": "Use your ChatGPT Pro/Plus subscription as a Prism PHP provider — $0 token costs via Codex API",
+            "description": "Use your ChatGPT Pro/Plus subscription as a Prism PHP provider \u2014 $0 token costs via Codex API",
             "homepage": "https://github.com/OpenCompanyApp/prism-codex",
             "keywords": [
                 "ai",
@@ -3613,10 +3620,11 @@
                 "openai",
                 "prism"
             ],
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "source": "https://github.com/OpenCompanyApp/prism-codex/tree/main",
+                "issues": "https://github.com/OpenCompanyApp/prism-codex/issues"
+            },
+            "time": "2026-04-03T11:52:31+00:00"
         },
         {
             "name": "opencompanyapp/prism-relay",
@@ -3654,7 +3662,7 @@
             "license": [
                 "MIT"
             ],
-            "description": "Provider normalizer and registry for Prism PHP — custom providers, error categorization, tool call sanitization, caching strategy",
+            "description": "Provider normalizer and registry for Prism PHP \u2014 custom providers, error categorization, tool call sanitization, caching strategy",
             "support": {
                 "source": "https://github.com/OpenCompanyApp/prism-relay/tree/main",
                 "issues": "https://github.com/OpenCompanyApp/prism-relay/issues"
@@ -4473,7 +4481,7 @@
                     "email": "ceesjank@gmail.com"
                 },
                 {
-                    "name": "Christian Lück",
+                    "name": "Christian L\u00fcck",
                     "email": "christian@clue.engineering"
                 },
                 {
@@ -4767,7 +4775,7 @@
                     "email": "fabien@symfony.com"
                 },
                 {
-                    "name": "Jean-François Simon",
+                    "name": "Jean-Fran\u00e7ois Simon",
                     "email": "jeanfrancois.simon@sensiolabs.com"
                 },
                 {
@@ -6237,7 +6245,7 @@
             ],
             "authors": [
                 {
-                    "name": "Grégoire Pineau",
+                    "name": "Gr\u00e9goire Pineau",
                     "email": "lyrixx@lyrixx.info"
                 },
                 {
@@ -6777,9 +6785,10 @@
             "name": "symfony/tui",
             "version": "dev-tui",
             "dist": {
-                "type": "path",
-                "url": "vendor-src/symfony/src/Symfony/Component/Tui",
-                "reference": "ae0a039f8999ee1960724d8fd8d19964361ae302"
+                "type": "zip",
+                "url": "https://api.github.com/repos/OpenCompanyApp/symfony/zipball/a5a770c178f9d4b470a600709194ca32fdb3dbc3",
+                "reference": "a5a770c178f9d4b470a600709194ca32fdb3dbc3",
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.4",
@@ -6821,10 +6830,12 @@
                 "terminal",
                 "tui"
             ],
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "source": {
+                "type": "git",
+                "url": "https://github.com/OpenCompanyApp/symfony.git",
+                "reference": "a5a770c178f9d4b470a600709194ca32fdb3dbc3"
+            },
+            "time": "2026-03-29T12:53:33+02:00"
         },
         {
             "name": "symfony/uid",
@@ -6862,7 +6873,7 @@
             ],
             "authors": [
                 {
-                    "name": "Grégoire Pineau",
+                    "name": "Gr\u00e9goire Pineau",
                     "email": "lyrixx@lyrixx.info"
                 },
                 {
@@ -9341,6 +9352,6 @@
     "platform": {
         "php": "^8.4"
     },
-    "platform-dev": {},
+    "platform-dev": [],
     "plugin-api-version": "2.9.0"
 }

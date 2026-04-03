@@ -6,6 +6,7 @@ use Amp\Cancellation;
 use Generator;
 use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
 use OpenCompany\PrismRelay\Relay;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Prism;
 use Prism\Prism\Streaming\Events\StreamEvent;
@@ -24,7 +25,7 @@ class PrismService implements LlmClientInterface
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
         ?Relay $relay = null,
-        private readonly ?ProviderCapabilitiesResolver $capabilities = null,
+        private readonly ?RelayRegistry $registry = null,
     ) {
         $this->relay = $relay ?? new Relay;
     }
@@ -129,11 +130,11 @@ class PrismService implements LlmClientInterface
 
     public function supportsStreaming(): bool
     {
-        if ($this->capabilities !== null) {
-            return $this->capabilities->supportsStreaming($this->provider);
+        if ($this->registry !== null) {
+            return $this->registry->capabilities($this->provider)['streaming'];
         }
 
-        return $this->provider !== 'z';
+        return ProviderCapabilities::for($this->provider, $this->registry)->supportsStreaming();
     }
 
     private function buildRequest(array $messages, array $tools = []): PendingRequest
@@ -168,10 +169,10 @@ class PrismService implements LlmClientInterface
 
     private function supportsTemperature(): bool
     {
-        if ($this->capabilities !== null) {
-            return $this->capabilities->supportsTemperature($this->provider);
+        if ($this->registry !== null) {
+            return $this->registry->capabilities($this->provider)['temperature'];
         }
 
-        return ProviderCapabilities::for($this->provider)->supportsTemperature();
+        return ProviderCapabilities::for($this->provider, $this->registry)->supportsTemperature();
     }
 }

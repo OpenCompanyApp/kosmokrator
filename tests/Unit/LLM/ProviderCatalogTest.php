@@ -7,11 +7,11 @@ namespace Kosmokrator\Tests\Unit\LLM;
 use Illuminate\Config\Repository;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ProviderCatalog;
-use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class ProviderCatalogTest extends TestCase
@@ -63,7 +63,11 @@ final class ProviderCatalogTest extends TestCase
             email: 'dev@example.com',
         ));
 
-        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry($config), $config, $settings, $tokens);
+        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+            'codex' => ['url' => 'https://chatgpt.com/backend-api/codex', 'auth' => 'oauth'],
+            'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4', 'auth' => 'api_key', 'driver' => 'glm-coding'],
+            'ollama' => ['url' => 'http://localhost:11434/v1', 'auth' => 'none', 'driver' => 'ollama'],
+        ]), $config, $settings, $tokens);
 
         $this->assertSame(['gpt-5.3-codex', 'gpt-5-codex-mini'], $catalog->modelIds('codex'));
         $this->assertSame(['glm-5.1', 'glm-5-turbo'], $catalog->modelIds('z'));
@@ -114,7 +118,27 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry($config), $config, $settings, new SettingsCodexTokenStore($settings));
+        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+            'mimo' => [
+                'source' => 'custom',
+                'label' => 'Xiaomi MiMo',
+                'driver' => 'openai-compatible',
+                'auth' => 'api_key',
+                'url' => 'https://token-plan-sgp.xiaomimimo.com/v1',
+                'modalities' => [
+                    'input' => ['text', 'image'],
+                    'output' => ['text'],
+                ],
+                'models' => [
+                    'mimo-v2-pro' => [
+                        'modalities' => [
+                            'input' => ['text', 'image'],
+                            'output' => ['text'],
+                        ],
+                    ],
+                ],
+            ],
+        ]), $config, $settings, new SettingsCodexTokenStore($settings));
 
         $provider = $catalog->provider('mimo');
 
@@ -123,5 +147,146 @@ final class ProviderCatalogTest extends TestCase
         $this->assertSame('openai-compatible', $provider->driver);
         $this->assertSame(['text', 'image'], $provider->inputModalities);
         $this->assertSame(['text', 'image'], $provider->models[0]->inputModalities);
+    }
+
+    public function test_provider_catalog_formats_free_and_coding_plan_models(): void
+    {
+        $meta = new ProviderMeta([
+            'z' => [
+                'default_model' => 'glm-5',
+                'url' => 'https://api.z.ai/api/coding/paas/v4',
+                'models' => [
+                    'glm-5' => [
+                        'display_name' => 'GLM-5',
+                        'context' => 204800,
+                        'max_output' => 131072,
+                        'input' => 0.0,
+                        'output' => 0.0,
+                        'pricing_kind' => 'coding_plan',
+                        'reference_input' => 1.0,
+                        'reference_output' => 3.2,
+                    ],
+                    'glm-5-free' => [
+                        'display_name' => 'GLM-5 Free',
+                        'context' => 204800,
+                        'max_output' => 131072,
+                        'input' => 0.0,
+                        'output' => 0.0,
+                        'pricing_kind' => 'public_free',
+                    ],
+                ],
+            ],
+            'mimo' => [
+                'default_model' => 'mimo-v2-pro',
+                'url' => 'https://token-plan-sgp.xiaomimimo.com/v1',
+                'models' => [
+                    'mimo-v2-pro' => [
+                        'display_name' => 'MiMo V2 Pro',
+                        'context' => 1048576,
+                        'max_output' => 131072,
+                        'input' => 0.0,
+                        'output' => 0.0,
+                        'pricing_kind' => 'token_plan',
+                    ],
+                ],
+            ],
+        ]);
+
+        $config = new Repository([
+            'prism' => [
+                'providers' => [
+                    'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4'],
+                    'mimo' => ['url' => 'https://token-plan-sgp.xiaomimimo.com/v1'],
+                ],
+            ],
+        ]);
+
+        $settings = new SettingsRepository(new Database(':memory:'));
+        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+            'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4', 'auth' => 'api_key', 'driver' => 'glm-coding'],
+            'mimo' => ['url' => 'https://token-plan-sgp.xiaomimimo.com/v1', 'auth' => 'api_key', 'driver' => 'openai-compatible'],
+        ]), $config, $settings, new SettingsCodexTokenStore($settings));
+
+        $providerOptions = $catalog->providerOptions();
+        $options = $catalog->modelOptionsByProvider();
+
+        $providerMap = [];
+        foreach ($providerOptions as $option) {
+            $providerMap[$option['value']] = $option;
+        }
+
+        $this->assertSame('Z.AI', $providerMap['z']['label']);
+        $this->assertStringContainsString('2 models', $providerMap['z']['description']);
+        $this->assertSame('GLM-5', $options['z'][0]['label']);
+        $this->assertStringContainsString('glm-5', $options['z'][0]['description']);
+        $this->assertStringContainsString('Coding Plan', $options['z'][0]['description']);
+        $this->assertStringContainsString('$1/$3.2 per 1M', $options['z'][0]['description']);
+        $this->assertStringContainsString('Free', $options['z'][1]['description']);
+        $this->assertSame('Xiaomi MiMo Token Plan', $providerMap['mimo']['label']);
+        $this->assertStringContainsString('Token Plan', $options['mimo'][0]['description']);
+    }
+
+    public function test_provider_catalog_hides_raw_source_providers_when_curated_alias_exists(): void
+    {
+        $meta = new ProviderMeta([
+            'z-api' => [
+                'default_model' => 'glm-5',
+                'url' => 'https://open.bigmodel.cn/api/paas/v4',
+                'models' => [
+                    'glm-5' => ['display_name' => 'GLM-5', 'context' => 204800, 'max_output' => 131072],
+                ],
+            ],
+            'zai' => [
+                'default_model' => 'glm-5',
+                'url' => 'https://open.bigmodel.cn/api/paas/v4',
+                'models' => [
+                    'glm-5' => ['display_name' => 'GLM-5', 'context' => 204800, 'max_output' => 131072],
+                ],
+            ],
+            'zhipuai' => [
+                'default_model' => 'glm-5',
+                'url' => 'https://open.bigmodel.cn/api/paas/v4',
+                'models' => [
+                    'glm-5' => ['display_name' => 'GLM-5', 'context' => 204800, 'max_output' => 131072],
+                ],
+            ],
+        ]);
+
+        $config = new Repository([
+            'prism' => [
+                'providers' => [
+                    'z-api' => ['url' => 'https://open.bigmodel.cn/api/paas/v4'],
+                ],
+            ],
+        ]);
+
+        $settings = new SettingsRepository(new Database(':memory:'));
+        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+            'z-api' => [
+                'url' => 'https://open.bigmodel.cn/api/paas/v4',
+                'auth' => 'api_key',
+                'driver' => 'openai-compatible',
+                'source' => 'custom',
+                'models_dev_provider' => 'zai',
+            ],
+            'zai' => [
+                'url' => 'https://open.bigmodel.cn/api/paas/v4',
+                'auth' => 'api_key',
+                'driver' => 'openai-compatible',
+                'source' => 'built_in',
+            ],
+            'zhipuai' => [
+                'url' => 'https://open.bigmodel.cn/api/paas/v4',
+                'auth' => 'api_key',
+                'driver' => 'openai-compatible',
+                'source' => 'built_in',
+            ],
+        ]), $config, $settings, new SettingsCodexTokenStore($settings));
+
+        $providerIds = array_map(static fn (array $option): string => $option['value'], $catalog->providerOptions());
+
+        $this->assertContains('z-api', $providerIds);
+        $this->assertNotContains('zai', $providerIds);
+        $this->assertNotContains('zhipuai', $providerIds);
     }
 }

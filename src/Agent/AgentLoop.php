@@ -314,7 +314,7 @@ class AgentLoop
                     $this->formatStatusModelLabel($modelName),
                     $tokensIn,
                     $tokensOut,
-                    $this->getSessionCost(),
+                    $this->getSessionDisplayCost(),
                     $this->contextManager->getContextWindow(),
                 ), $this->log);
 
@@ -494,6 +494,16 @@ class AgentLoop
 
     public function getSessionCost(): float
     {
+        return $this->calculateSessionCost(display: false);
+    }
+
+    public function getSessionDisplayCost(): float
+    {
+        return $this->calculateSessionCost(display: true);
+    }
+
+    private function calculateSessionCost(bool $display): float
+    {
         $tokensIn = $this->sessionTokensIn;
         $tokensOut = $this->sessionTokensOut;
 
@@ -503,7 +513,13 @@ class AgentLoop
             $tokensOut += $sub['out'];
         }
 
-        return $this->estimateCost(
+        return $display ? $this->estimateDisplayCost(
+            $this->contextManager->getModelName(),
+            $tokensIn,
+            $tokensOut,
+            $this->sessionCacheReadInputTokens,
+            $this->sessionCacheWriteInputTokens,
+        ) : $this->estimateCost(
             $this->contextManager->getModelName(),
             $tokensIn,
             $tokensOut,
@@ -571,11 +587,40 @@ class AgentLoop
     ): float
     {
         if ($this->models !== null) {
-            return $this->models->estimateCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
+            return $this->models->estimateCost(
+                $model,
+                $tokensIn,
+                $tokensOut,
+                $cacheReadInputTokens,
+                $cacheWriteInputTokens,
+                $this->llm->getProvider(),
+            );
         }
 
         // Fallback: Sonnet-like pricing
         return round(($tokensIn * 3 / 1_000_000) + ($tokensOut * 15 / 1_000_000), 4);
+    }
+
+    private function estimateDisplayCost(
+        string $model,
+        int $tokensIn,
+        int $tokensOut,
+        int $cacheReadInputTokens = 0,
+        int $cacheWriteInputTokens = 0,
+    ): float
+    {
+        if ($this->models !== null) {
+            return $this->models->estimateDisplayCost(
+                $model,
+                $tokensIn,
+                $tokensOut,
+                $cacheReadInputTokens,
+                $cacheWriteInputTokens,
+                $this->llm->getProvider(),
+            );
+        }
+
+        return $this->estimateCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
     }
 
     private function formatStatusModelLabel(string $modelName): string

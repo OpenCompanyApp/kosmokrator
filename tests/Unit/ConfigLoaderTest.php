@@ -148,6 +148,29 @@ class ConfigLoaderTest extends TestCase
         $this->assertEquals(0.8, $config->get('kosmokrator.agent.temperature'));
     }
 
+    public function test_project_config_is_discovered_from_parent_directories(): void
+    {
+        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  default_provider: z");
+
+        $projectDir = $this->tempDir.'/repo';
+        mkdir($projectDir.'/.kosmokrator', 0755, true);
+        file_put_contents($projectDir.'/.kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    default_provider: openai");
+
+        $nestedDir = $projectDir.'/packages/app';
+        mkdir($nestedDir, 0755, true);
+        chdir($nestedDir);
+
+        $fakeHome = $this->tempDir.'/empty_home_parent_search';
+        mkdir($fakeHome, 0755, true);
+        putenv("HOME={$fakeHome}");
+        $_ENV['HOME'] = $fakeHome;
+
+        $loader = new ConfigLoader($this->configDir);
+        $config = $loader->load();
+
+        $this->assertSame('openai', $config->get('kosmokrator.agent.default_provider'));
+    }
+
     public function test_merge_priority_project_over_user_over_base(): void
     {
         file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  model: base-model");

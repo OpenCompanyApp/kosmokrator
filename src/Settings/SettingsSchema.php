@@ -39,7 +39,8 @@ final class SettingsSchema
     {
         return [
             'general',
-            'provider_model',
+            'models',
+            'provider_setup',
             'auth',
             'context_memory',
             'agent',
@@ -56,7 +57,8 @@ final class SettingsSchema
     {
         return [
             'general' => 'General',
-            'provider_model' => 'Provider & Model',
+            'models' => 'Models',
+            'provider_setup' => 'Provider Setup',
             'auth' => 'Auth',
             'context_memory' => 'Context & Memory',
             'agent' => 'Agent',
@@ -141,7 +143,7 @@ final class SettingsSchema
                 path: 'kosmokrator.agent.default_provider',
                 label: 'Default provider',
                 description: 'Default provider used when a session starts.',
-                category: 'provider_model',
+                category: 'models',
                 type: 'dynamic_choice',
                 effect: 'next_session',
                 default: 'z',
@@ -151,7 +153,7 @@ final class SettingsSchema
                 path: 'kosmokrator.agent.default_model',
                 label: 'Default model',
                 description: 'Default model used when a session starts.',
-                category: 'provider_model',
+                category: 'models',
                 type: 'dynamic_choice',
                 effect: 'next_session',
                 default: 'GLM-5.1',

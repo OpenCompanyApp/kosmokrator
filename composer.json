@@ -36,18 +36,12 @@
     },
     "repositories": [
         {
-            "type": "path",
-            "url": "vendor-src/symfony/src/Symfony/Component/Tui",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/OpenCompanyApp/symfony.git"
         },
         {
-            "type": "path",
-            "url": "../../Sites/opencompany/tmp/prism-codex",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/OpenCompanyApp/prism-codex.git"
         },
         {
             "type": "vcs",

@@ -86,14 +86,8 @@ class ConfigLoader
 
     private function loadProjectConfig(): ?array
     {
-        $cwd = getcwd();
-        $paths = [
-            $cwd.'/.kosmokrator.yaml',
-            $cwd.'/.kosmokrator/config.yaml',
-        ];
-
         $merged = null;
-        foreach ($paths as $path) {
+        foreach ($this->projectConfigCandidates() as $path) {
             if (! file_exists($path)) {
                 continue;
             }
@@ -103,6 +97,36 @@ class ConfigLoader
         }
 
         return $merged;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function projectConfigCandidates(): array
+    {
+        $cwd = getcwd() ?: '.';
+        $dirs = [];
+        $seen = [];
+        $current = realpath($cwd) ?: $cwd;
+
+        while ($current !== '' && ! isset($seen[$current])) {
+            $seen[$current] = true;
+            $dirs[] = $current;
+            $parent = dirname($current);
+            if ($parent === $current) {
+                break;
+            }
+            $current = $parent;
+        }
+
+        $dirs = array_reverse($dirs);
+        $paths = [];
+        foreach ($dirs as $dir) {
+            $paths[] = $dir.'/.kosmokrator.yaml';
+            $paths[] = $dir.'/.kosmokrator/config.yaml';
+        }
+
+        return $paths;
     }
 
     private function normalizeExternalConfig(array $data): array

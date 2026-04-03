@@ -231,163 +231,14 @@ class TuiRenderer implements RendererInterface
         // Modal manager — owns all overlay + Suspension dialogs
         $this->modalManager = new TuiModalManager(
             overlay: $this->overlay,
+            sessionRoot: $this->session,
             tui: $this->tui,
             input: $this->input,
             renderCallback: fn () => $this->flushRender(),
             forceRenderCallback: fn () => $this->forceRender(),
         );
 
-        // Keyboard shortcuts on input
-        $this->input->onInput(function (string $data): bool {
-            $kb = $this->input->getKeybindings();
-
-            // Slash completion navigation — intercept when menu is visible
-            if ($this->slashCompletion !== null) {
-                if ($kb->matches($data, 'cursor_up') || $kb->matches($data, 'cursor_down')) {
-                    $this->slashCompletion->handleInput($data);
-                    $this->flushRender();
-
-                    return true;
-                }
-                if ($kb->matches($data, 'submit')) {
-                    $selected = $this->slashCompletion->getSelectedItem();
-                    if ($selected !== null) {
-                        $command = $selected['value'];
-                        $this->input->setText('');
-                        $this->hideSlashCompletion();
-                        if ($this->promptSuspension !== null) {
-                            $suspension = $this->promptSuspension;
-                            $this->promptSuspension = null;
-                            $suspension->resume($command);
-                        }
-                    }
-
-                    return true;
-                }
-                if ($data === "\t") {
-                    $selected = $this->slashCompletion->getSelectedItem();
-                    if ($selected !== null) {
-                        $this->input->setText($selected['value']);
-                    }
-                    $this->hideSlashCompletion();
-
-                    return true;
-                }
-                if ($data === "\x1b") {
-                    $this->hideSlashCompletion();
-
-                    return true;
-                }
-            }
-
-            // Ctrl+A — open swarm dashboard (agents running)
-            if ($data === "\x01") {
-                if ($this->immediateCommandHandler !== null) {
-                    ($this->immediateCommandHandler)('/agents');
-                }
-
-                return true;
-            }
-
-            if ($kb->matches($data, 'history_up')) {
-                $this->scrollHistoryUp();
-
-                return true;
-            }
-
-            if ($kb->matches($data, 'history_down')) {
-                $this->scrollHistoryDown();
-
-                return true;
-            }
-
-            if ($this->isBrowsingHistory() && $kb->matches($data, 'history_end')) {
-                $this->jumpToLiveOutput();
-
-                return true;
-            }
-
-            // Ctrl+L — force full re-render
-            if ($data === "\x0C") {
-                $this->forceRender();
-
-                return true;
-            }
-
-            // Ctrl+O — toggle all tool results expanded/collapsed
-            if ($kb->matches($data, 'expand_tools')) {
-                $this->toggleAllToolResults();
-
-                return true;
-            }
-
-            // Shift+Tab — cycle mode
-            if ($kb->matches($data, 'cycle_mode')) {
-                $nextMode = $this->cycleMode();
-
-                if ($this->promptSuspension !== null) {
-                    // At prompt: submit as slash command, preserve editor text
-                    $savedText = $this->input->getText();
-                    $suspension = $this->promptSuspension;
-                    $this->promptSuspension = null;
-                    $this->pendingEditorRestore = $savedText;
-                    $suspension->resume("/{$nextMode}");
-                } else {
-                    // During run: switch UI immediately, queue command, cancel request
-                    $modeColors = [
-                        'edit' => "\033[38;2;80;200;120m",
-                        'plan' => "\033[38;2;160;120;255m",
-                        'ask' => "\033[38;2;255;180;60m",
-                    ];
-                    $this->showMode(ucfirst($nextMode), $modeColors[$nextMode] ?? '');
-                    $this->messageQueue[] = "/{$nextMode}";
-                    $this->requestCancellation?->cancel();
-                }
-
-                return true;
-            }
-
-            return false;
-        });
-
-        // Ctrl+C / Escape on input — context-aware
-        $this->input->onCancel(function () {
-            // During ask_user tool: return empty (dismiss)
-            $askSuspension = $this->modalManager->getAskSuspension();
-            if ($askSuspension !== null) {
-                $this->modalManager->clearAskSuspension();
-                $askSuspension->resume('');
-
-                return;
-            }
-
-            // During thinking: cancel the LLM request
-            if ($this->requestCancellation !== null) {
-                $this->requestCancellation->cancel();
-
-                return;
-            }
-
-            // At prompt: quit
-            if ($this->promptSuspension !== null) {
-                $suspension = $this->promptSuspension;
-                $this->promptSuspension = null;
-                $suspension->resume('/quit');
-            }
-        });
-
-        // Slash command completion on input change
-        $this->input->onChange(function (ChangeEvent $event) {
-            $value = $event->getValue();
-
-            if (str_starts_with($value, '/') && $value !== '/') {
-                $this->showSlashCompletion($value);
-            } elseif ($value === '/') {
-                $this->showSlashCompletion('');
-            } else {
-                $this->hideSlashCompletion();
-            }
-        });
+        $this->bindInputHandlers();
 
         // Assemble layout: conversation → overlay → taskBar → thinkingBar → input → statusBar
         $this->session->add($this->conversation);
@@ -397,48 +248,6 @@ class TuiRenderer implements RendererInterface
         $this->session->add($this->thinkingBar);
         $this->session->add($this->input);
         $this->session->add($this->statusBar);
-
-        // Submit handler on editor (Ctrl+Enter)
-        $this->input->onSubmit(function (SubmitEvent $event) {
-            $value = $event->getValue();
-            $this->input->setText('');
-            $this->hideSlashCompletion();
-
-            // During ask_user tool: return answer to the tool
-            $askSuspension = $this->modalManager->getAskSuspension();
-            if ($askSuspension !== null) {
-                $this->modalManager->clearAskSuspension();
-                $askSuspension->resume($value);
-
-                return;
-            }
-
-            // During thinking: try immediate commands first, else queue
-            if ($this->requestCancellation !== null) {
-                if (trim($value) !== '') {
-                    if ($this->immediateCommandHandler !== null && ($this->immediateCommandHandler)($value)) {
-                        return;
-                    }
-                    $this->queueMessage($value);
-                }
-
-                return;
-            }
-
-            // At prompt: normal submit
-            if ($this->promptSuspension !== null) {
-                $suspension = $this->promptSuspension;
-                $this->promptSuspension = null;
-                $suspension->resume($value);
-
-                return;
-            }
-
-            // Fallback: queue text submitted during transitional states
-            if (trim($value) !== '') {
-                $this->queueMessage($value);
-            }
-        });
 
         $this->tui->add($this->session);
         $this->tui->setFocus($this->input);
@@ -539,8 +348,6 @@ HELP;
         if ($this->pendingEditorRestore !== null) {
             $this->input->setText($this->pendingEditorRestore);
             $this->pendingEditorRestore = null;
-        } else {
-            $this->input->setText('');
         }
 
         $this->tui->setFocus($this->input);
@@ -1298,7 +1105,12 @@ HELP;
 
     public function showSettings(array $currentSettings): array
     {
-        return $this->modalManager->showSettings($currentSettings);
+        $result = $this->modalManager->showSettings($currentSettings);
+        $this->bindInputHandlers();
+        $this->tui->setFocus($this->input);
+        $this->forceRender();
+
+        return $result;
     }
 
     public function pickSession(array $items): ?string
@@ -1453,6 +1265,191 @@ HELP;
     {
         $this->tui->requestRender(force: true);
         $this->tui->processRender();
+    }
+
+    private function bindInputHandlers(): void
+    {
+        $this->input->onInput(function (string $data): bool {
+            $kb = $this->input->getKeybindings();
+
+            if ($this->slashCompletion !== null) {
+                if ($kb->matches($data, 'cursor_up') || $kb->matches($data, 'cursor_down')) {
+                    $this->slashCompletion->handleInput($data);
+                    $this->flushRender();
+
+                    return true;
+                }
+                if ($kb->matches($data, 'submit')) {
+                    $selected = $this->slashCompletion->getSelectedItem();
+                    if ($selected !== null) {
+                        $command = $selected['value'];
+                        $this->input->setText('');
+                        $this->hideSlashCompletion();
+                        if ($this->promptSuspension !== null) {
+                            $suspension = $this->promptSuspension;
+                            $this->promptSuspension = null;
+                            $suspension->resume($command);
+                        }
+                    }
+
+                    return true;
+                }
+                if ($data === "\t") {
+                    $selected = $this->slashCompletion->getSelectedItem();
+                    if ($selected !== null) {
+                        $this->input->setText($selected['value']);
+                    }
+                    $this->hideSlashCompletion();
+
+                    return true;
+                }
+                if ($data === "\x1b") {
+                    $this->hideSlashCompletion();
+
+                    return true;
+                }
+            }
+
+            if ($data === "\x01") {
+                if ($this->immediateCommandHandler !== null) {
+                    ($this->immediateCommandHandler)('/agents');
+                }
+
+                return true;
+            }
+
+            if ($kb->matches($data, 'history_up')) {
+                $this->scrollHistoryUp();
+
+                return true;
+            }
+
+            if ($kb->matches($data, 'history_down')) {
+                $this->scrollHistoryDown();
+
+                return true;
+            }
+
+            if ($this->isBrowsingHistory() && $kb->matches($data, 'history_end')) {
+                $this->jumpToLiveOutput();
+
+                return true;
+            }
+
+            if ($data === "\x0C") {
+                $this->forceRender();
+
+                return true;
+            }
+
+            if ($kb->matches($data, 'expand_tools')) {
+                $this->toggleAllToolResults();
+
+                return true;
+            }
+
+            if ($kb->matches($data, 'cycle_mode')) {
+                $nextMode = $this->cycleMode();
+
+                if ($this->promptSuspension !== null) {
+                    $savedText = $this->input->getText();
+                    $suspension = $this->promptSuspension;
+                    $this->promptSuspension = null;
+                    $this->pendingEditorRestore = $savedText;
+                    $suspension->resume("/{$nextMode}");
+                } else {
+                    $modeColors = [
+                        'edit' => "\033[38;2;80;200;120m",
+                        'plan' => "\033[38;2;160;120;255m",
+                        'ask' => "\033[38;2;255;180;60m",
+                    ];
+                    $this->showMode(ucfirst($nextMode), $modeColors[$nextMode] ?? '');
+                    $this->messageQueue[] = "/{$nextMode}";
+                    $this->requestCancellation?->cancel();
+                }
+
+                return true;
+            }
+
+            return false;
+        });
+
+        $this->input->onCancel(function () {
+            $askSuspension = $this->modalManager->getAskSuspension();
+            if ($askSuspension !== null) {
+                $this->modalManager->clearAskSuspension();
+                $askSuspension->resume('');
+
+                return;
+            }
+
+            if ($this->requestCancellation !== null) {
+                $this->requestCancellation->cancel();
+
+                return;
+            }
+
+            if ($this->promptSuspension !== null) {
+                $suspension = $this->promptSuspension;
+                $this->promptSuspension = null;
+                $suspension->resume('/quit');
+
+                return;
+            }
+
+            if ($this->immediateCommandHandler !== null) {
+                ($this->immediateCommandHandler)('/quit');
+            }
+        });
+
+        $this->input->onChange(function (ChangeEvent $event) {
+            $value = $event->getValue();
+
+            if (str_starts_with($value, '/') && $value !== '/') {
+                $this->showSlashCompletion($value);
+            } elseif ($value === '/') {
+                $this->showSlashCompletion('');
+            } else {
+                $this->hideSlashCompletion();
+            }
+        });
+
+        $this->input->onSubmit(function (SubmitEvent $event) {
+            $value = $event->getValue();
+            $this->input->setText('');
+            $this->hideSlashCompletion();
+
+            $askSuspension = $this->modalManager->getAskSuspension();
+            if ($askSuspension !== null) {
+                $this->modalManager->clearAskSuspension();
+                $askSuspension->resume($value);
+
+                return;
+            }
+
+            if ($this->requestCancellation !== null) {
+                if (trim($value) !== '') {
+                    if ($this->immediateCommandHandler !== null && ($this->immediateCommandHandler)($value)) {
+                        return;
+                    }
+                    $this->queueMessage($value);
+                }
+
+                return;
+            }
+
+            if ($this->promptSuspension !== null) {
+                $suspension = $this->promptSuspension;
+                $this->promptSuspension = null;
+                $suspension->resume($value);
+
+                return;
+            }
+
+            if (trim($value) !== '') {
+                $this->queueMessage($value);
+            }
+        });
     }
 
     private function cycleMode(): string

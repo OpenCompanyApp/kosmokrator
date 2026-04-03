@@ -22,11 +22,20 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
     private int $fieldIndex = 0;
 
-    private string $pane = 'fields';
-
     private bool $editing = false;
 
     private string $editBuffer = '';
+
+    private bool $pickerOpen = false;
+
+    private string $pickerFieldId = '';
+
+    /** @var list<array{value: string, label: string, description: string}> */
+    private array $pickerOptions = [];
+
+    private int $pickerIndex = 0;
+
+    private string $pickerQuery = '';
 
     private string $scope;
 
@@ -122,6 +131,83 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return;
         }
 
+        if ($this->pickerOpen) {
+            if ($data === "\t" || $data === "\x1b[Z") {
+                $this->closePicker();
+                $this->cycleCategory($data === "\x1b[Z" ? -1 : 1);
+
+                return;
+            }
+
+            if ($kb->matches($data, 'cancel')) {
+                if ($this->pickerQuery !== '') {
+                    $this->pickerQuery = '';
+                    $this->resetPickerIndex();
+                    $this->invalidate();
+                } else {
+                    $this->closePicker();
+                }
+
+                return;
+            }
+
+            if ($kb->matches($data, 'up')) {
+                $count = count($this->visiblePickerOptions());
+                if ($count > 0) {
+                    $this->pickerIndex = ($this->pickerIndex - 1 + $count) % $count;
+                    $this->invalidate();
+                }
+
+                return;
+            }
+
+            if ($kb->matches($data, 'down')) {
+                $count = count($this->visiblePickerOptions());
+                if ($count > 0) {
+                    $this->pickerIndex = ($this->pickerIndex + 1) % $count;
+                    $this->invalidate();
+                }
+
+                return;
+            }
+
+            if ($kb->matches($data, 'backspace')) {
+                if ($this->pickerQuery !== '') {
+                    $this->pickerQuery = mb_substr($this->pickerQuery, 0, max(0, mb_strlen($this->pickerQuery) - 1));
+                    $this->resetPickerIndex();
+                    $this->invalidate();
+                }
+
+                return;
+            }
+
+            if ($data !== '' && ! str_starts_with($data, "\033") && ! ctype_cntrl($data)) {
+                $this->pickerQuery .= $data;
+                $this->resetPickerIndex();
+                $this->invalidate();
+
+                return;
+            }
+
+            if ($kb->matches($data, 'confirm')) {
+                $option = $this->selectedPickerOption();
+                if ($option !== null && $this->pickerFieldId !== '') {
+                    $this->values[$this->pickerFieldId] = $option['value'];
+                    $this->handleFieldSideEffects($this->pickerFieldId);
+                }
+
+                $this->closePicker();
+
+                return;
+            }
+        }
+
+        if ($data === "\t" || $data === "\x1b[Z") {
+            $this->cycleCategory($data === "\x1b[Z" ? -1 : 1);
+
+            return;
+        }
+
         if ($kb->matches($data, 'save') || $data === 's') {
             if ($this->onSaveCallback !== null) {
                 ($this->onSaveCallback)($this->buildResult());
@@ -134,13 +220,6 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             if ($this->onCancelCallback !== null) {
                 ($this->onCancelCallback)();
             }
-
-            return;
-        }
-
-        if ($data === "\t") {
-            $this->pane = $this->pane === 'categories' ? 'fields' : 'categories';
-            $this->invalidate();
 
             return;
         }
@@ -176,7 +255,10 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
 
         if ($data === 'x') {
-            $providerId = trim((string) ($this->values['agent.default_provider'] ?? ''));
+            $providerId = trim((string) ($this->values['provider.setup_provider'] ?? $this->values['agent.default_provider'] ?? ''));
+            if ($providerId === '__custom__') {
+                $providerId = trim((string) ($this->values['custom_provider.id'] ?? ''));
+            }
             if ($providerId !== '' && (($this->view['providers_by_id'][$providerId]['source'] ?? '') === 'custom')) {
                 $this->deleteCustomProviderId = $providerId;
                 $this->invalidate();
@@ -185,30 +267,14 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return;
         }
 
-        if ($this->pane === 'categories') {
-            if ($kb->matches($data, 'up')) {
-                $this->categoryIndex = ($this->categoryIndex - 1 + count($this->categories())) % count($this->categories());
-                $this->fieldIndex = 0;
-                $this->invalidate();
-
-                return;
-            }
-
-            if ($kb->matches($data, 'down')) {
-                $this->categoryIndex = ($this->categoryIndex + 1) % count($this->categories());
-                $this->fieldIndex = 0;
-                $this->invalidate();
-            }
-
-            if ($kb->matches($data, 'confirm')) {
-                $this->pane = 'fields';
-                $this->invalidate();
-            }
+        if ($this->isModelsCategory()) {
+            $this->handleModelsBrowserInput($data, $kb);
 
             return;
         }
 
-        $fields = $this->selectedCategory()['fields'] ?? [];
+        $fields = $this->visibleFields();
+
         if ($fields === []) {
             return;
         }
@@ -227,14 +293,11 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return;
         }
 
-        if ($kb->matches($data, 'left')) {
-            $this->cycleSelectedField(-1);
-
-            return;
-        }
-
         if ($kb->matches($data, 'right')) {
-            $this->cycleSelectedField(1);
+            $field = $this->selectedField();
+            if ($field !== null && $this->fieldSupportsPicker($field)) {
+                $this->openPickerForField($field);
+            }
 
             return;
         }
@@ -245,8 +308,8 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
                 return;
             }
 
-            if (in_array($field['type'] ?? 'text', ['choice', 'toggle', 'dynamic_choice'], true)) {
-                $this->cycleSelectedField(1);
+            if ($this->fieldSupportsPicker($field)) {
+                $this->openPickerForField($field);
 
                 return;
             }
@@ -264,31 +327,38 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $columns = max(90, $context->getColumns());
         $rows = max(24, $context->getRows());
 
-        $navWidth = 24;
-        $detailsWidth = max(30, (int) floor($columns * 0.28));
-        $fieldsWidth = $columns - $navWidth - $detailsWidth - 8;
-
         $headerLines = $this->renderHeader($columns);
-        $bodyHeight = $rows - count($headerLines) - 4;
+        $availableHeight = $rows - count($headerLines) - 4;
 
-        $left = $this->renderCategories($navWidth, $bodyHeight);
-        $middle = $this->renderFields($fieldsWidth, $bodyHeight);
-        $right = $this->renderDetails($detailsWidth, $bodyHeight);
+        $navWidth = min(24, max(20, (int) floor($columns * 0.22)));
+        $fieldsWidth = max(30, $columns - $navWidth - 2);
+
+        $detailsHeight = min(12, max(8, (int) floor($availableHeight * 0.34)));
+        $topHeight = max(8, $availableHeight - $detailsHeight - 1);
+
+        $left = $this->renderCategories($navWidth, $topHeight);
+        $right = $this->renderFields($fieldsWidth, $topHeight);
+        $details = $this->renderDetails($columns, $detailsHeight);
 
         $lines = $headerLines;
 
-        for ($i = 0; $i < $bodyHeight; $i++) {
-            $leftLine = $left[$i] ?? str_repeat(' ', $navWidth + 2);
-            $middleLine = $middle[$i] ?? str_repeat(' ', $fieldsWidth + 2);
-            $rightLine = $right[$i] ?? str_repeat(' ', $detailsWidth + 2);
-            $lines[] = $leftLine.'  '.$middleLine.'  '.$rightLine;
+        for ($i = 0; $i < $topHeight; $i++) {
+            $leftLine = $left[$i] ?? str_repeat(' ', $navWidth);
+            $rightLine = $right[$i] ?? str_repeat(' ', $fieldsWidth);
+            $lines[] = $this->padVisible($leftLine.'  '.$rightLine, $columns);
         }
 
         $lines[] = '';
-        $lines[] = $this->footer($columns);
+
+        foreach ($details as $detailLine) {
+            $lines[] = $this->padVisible($detailLine, $columns);
+        }
+
+        $lines[] = '';
+        $lines[] = $this->padVisible($this->footer($columns), $columns);
 
         return array_map(
-            fn (string $line): string => AnsiUtils::truncateToWidth($line, $context->getColumns()),
+            fn (string $line): string => $this->padVisible($this->truncateVisible($line, $context->getColumns()), $context->getColumns()),
             $lines,
         );
     }
@@ -328,66 +398,83 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
      */
     private function selectedField(): ?array
     {
-        $fields = $this->selectedCategory()['fields'] ?? [];
+        $fields = $this->visibleFields();
 
         return $fields[$this->fieldIndex] ?? null;
     }
 
-    private function cycleSelectedField(int $direction): void
-    {
-        $field = $this->selectedField();
-        if ($field === null) {
-            return;
-        }
-
-        $options = $this->optionsForField($field);
-        if ($options === []) {
-            return;
-        }
-
-        $current = $this->values[$field['id']] ?? '';
-        $index = array_search($current, $options, true);
-        $index = $index === false ? 0 : $index;
-        $index = ($index + $direction + count($options)) % count($options);
-        $this->values[$field['id']] = $options[$index];
-        $this->handleFieldSideEffects($field['id']);
-        $this->invalidate();
-    }
-
     /**
      * @param  array<string, mixed>  $field
-     * @return list<string>
+     * @return list<array{value: string, label: string, description: string}>
      */
     private function optionsForField(array $field): array
     {
         $id = (string) ($field['id'] ?? '');
+        if ($id === 'provider.setup_provider') {
+            return array_values(array_map(
+                static fn (array $item): array => [
+                    'value' => (string) ($item['value'] ?? ''),
+                    'label' => (string) ($item['label'] ?? $item['value'] ?? ''),
+                    'description' => (string) ($item['description'] ?? ''),
+                ],
+                $this->view['setup_provider_options'] ?? [],
+            ));
+        }
+
         if ($id === 'agent.default_model') {
             $provider = $this->values['agent.default_provider'] ?? '';
 
             return array_values(array_map(
-                static fn (array $item): string => (string) $item['value'],
+                static fn (array $item): array => [
+                    'value' => (string) ($item['value'] ?? ''),
+                    'label' => (string) ($item['label'] ?? $item['value'] ?? ''),
+                    'description' => (string) ($item['description'] ?? ''),
+                ],
                 $this->view['model_options_by_provider'][$provider] ?? [],
             ));
         }
 
         if ($id === 'provider.auth_action') {
-            $provider = $this->values['agent.default_provider'] ?? '';
+            $provider = $this->values['provider.setup_provider'] ?? $this->values['agent.default_provider'] ?? '';
+            if ($provider === '__custom__') {
+                $provider = '';
+            }
 
             return array_values(array_map(
-                'strval',
+                static fn (mixed $item): array => is_array($item)
+                    ? [
+                        'value' => (string) ($item['value'] ?? ''),
+                        'label' => (string) ($item['label'] ?? $item['value'] ?? ''),
+                        'description' => (string) ($item['description'] ?? ''),
+                    ]
+                    : [
+                        'value' => (string) $item,
+                        'label' => (string) $item,
+                        'description' => '',
+                    ],
                 $this->view['auth_action_options_by_provider'][$provider] ?? [''],
             ));
         }
 
-        $options = $field['options'] ?? [];
-        if ($options === [] && $id === 'agent.default_provider') {
-            $options = array_values(array_map(
-                static fn (array $item): string => (string) $item['value'],
+        if ($id === 'agent.default_provider') {
+            return array_values(array_map(
+                static fn (array $item): array => [
+                    'value' => (string) ($item['value'] ?? ''),
+                    'label' => (string) ($item['label'] ?? $item['value'] ?? ''),
+                    'description' => (string) ($item['description'] ?? ''),
+                ],
                 $this->view['provider_options'] ?? [],
             ));
         }
 
-        return array_values(array_map('strval', $options));
+        return array_values(array_map(
+            static fn (mixed $item): array => [
+                'value' => (string) $item,
+                'label' => (string) $item,
+                'description' => '',
+            ],
+            $field['options'] ?? [],
+        ));
     }
 
     private function handleFieldSideEffects(string $fieldId): void
@@ -416,26 +503,107 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
                 $this->values['custom_provider.output_modalities'] = implode(', ', $firstModel['modalities']['output'] ?? $custom['modalities']['output'] ?? ['text']);
             } else {
                 $models = $this->optionsForField(['id' => 'agent.default_model']);
-                if ($models !== [] && ! in_array($this->values['agent.default_model'] ?? '', $models, true)) {
-                    $this->values['agent.default_model'] = $models[0];
+                $modelValues = array_map(static fn (array $item): string => $item['value'], $models);
+                if ($models !== [] && ! in_array($this->values['agent.default_model'] ?? '', $modelValues, true)) {
+                    $this->values['agent.default_model'] = $models[0]['value'];
                 }
             }
+        }
+
+        if ($fieldId === 'provider.setup_provider') {
+            $provider = trim((string) ($this->values[$fieldId] ?? ''));
+            if ($provider === '__custom__') {
+                $this->values['provider.setup_status'] = 'Not configured';
+                $this->values['provider.setup_auth_mode'] = 'api_key';
+                $this->values['provider.setup_driver'] = 'openai-compatible';
+                $this->values['provider.setup_url'] = '';
+                $this->values['provider.secret.api_key'] = '';
+                $this->values['provider.auth_action'] = '';
+                foreach ([
+                    'custom_provider.id',
+                    'custom_provider.label',
+                    'custom_provider.url',
+                    'custom_provider.default_model',
+                    'custom_provider.model_id',
+                    'custom_provider.context',
+                    'custom_provider.max_output',
+                ] as $customField) {
+                    $this->values[$customField] = '';
+                }
+                $this->values['custom_provider.driver'] = 'openai-compatible';
+                $this->values['custom_provider.auth'] = 'api_key';
+                $this->values['custom_provider.input_modalities'] = 'text';
+                $this->values['custom_provider.output_modalities'] = 'text';
+                $this->fieldIndex = 0;
+                $this->invalidate();
+
+                return;
+            }
+
+            $providerInfo = $this->view['providers_by_id'][$provider] ?? [];
+            $this->values['provider.setup_status'] = (string) ($providerInfo['auth_status'] ?? 'Unknown');
+            $this->values['provider.setup_auth_mode'] = (string) ($providerInfo['auth_mode'] ?? 'api_key');
+            $this->values['provider.setup_driver'] = (string) ($providerInfo['driver'] ?? '');
+            $this->values['provider.setup_url'] = (string) ($providerInfo['url'] ?? '');
+            $this->values['provider.secret.api_key'] = (string) ($this->view['provider_api_key_display'][$provider] ?? '');
+            $this->values['provider.auth_action'] = '';
+
+            $custom = $this->view['custom_provider_definitions'][$provider] ?? null;
+            if (is_array($custom)) {
+                $models = is_array($custom['models'] ?? null) ? $custom['models'] : [];
+                $firstId = (string) array_key_first($models);
+                $firstModel = is_array($models[$firstId] ?? null) ? $models[$firstId] : [];
+                $this->values['custom_provider.id'] = $provider;
+                $this->values['custom_provider.label'] = (string) ($custom['label'] ?? '');
+                $this->values['custom_provider.driver'] = (string) ($custom['driver'] ?? 'openai-compatible');
+                $this->values['custom_provider.url'] = (string) ($custom['url'] ?? '');
+                $this->values['custom_provider.auth'] = (string) ($custom['auth'] ?? 'api_key');
+                $this->values['custom_provider.default_model'] = (string) ($custom['default_model'] ?? $firstId);
+                $this->values['custom_provider.model_id'] = $firstId;
+                $this->values['custom_provider.context'] = (string) ($firstModel['context'] ?? '');
+                $this->values['custom_provider.max_output'] = (string) ($firstModel['max_output'] ?? '');
+                $this->values['custom_provider.input_modalities'] = implode(', ', $firstModel['modalities']['input'] ?? $custom['modalities']['input'] ?? ['text']);
+                $this->values['custom_provider.output_modalities'] = implode(', ', $firstModel['modalities']['output'] ?? $custom['modalities']['output'] ?? ['text']);
+            } else {
+                foreach ([
+                    'custom_provider.id',
+                    'custom_provider.label',
+                    'custom_provider.url',
+                    'custom_provider.default_model',
+                    'custom_provider.model_id',
+                    'custom_provider.context',
+                    'custom_provider.max_output',
+                ] as $customField) {
+                    $this->values[$customField] = '';
+                }
+                $this->values['custom_provider.driver'] = 'openai-compatible';
+                $this->values['custom_provider.auth'] = 'api_key';
+                $this->values['custom_provider.input_modalities'] = 'text';
+                $this->values['custom_provider.output_modalities'] = 'text';
+            }
+
+            $this->fieldIndex = 0;
+            $this->invalidate();
         }
     }
 
     private function jumpToProviderDraft(): void
     {
         foreach ($this->categories() as $index => $category) {
-            if (($category['id'] ?? '') !== 'provider_model') {
+            if (($category['id'] ?? '') !== 'provider_setup') {
                 continue;
             }
 
             $this->categoryIndex = $index;
-            $this->pane = 'fields';
+            $this->values['provider.setup_provider'] = '__custom__';
+            $this->values['provider.setup_status'] = 'Not configured';
+            $this->values['provider.setup_auth_mode'] = 'api_key';
+            $this->values['provider.setup_driver'] = 'openai-compatible';
+            $this->values['provider.setup_url'] = '';
             foreach (['custom_provider.id', 'custom_provider.label', 'custom_provider.driver', 'custom_provider.url', 'custom_provider.auth', 'custom_provider.default_model', 'custom_provider.model_id', 'custom_provider.context', 'custom_provider.max_output', 'custom_provider.input_modalities', 'custom_provider.output_modalities'] as $fieldId) {
                 $this->values[$fieldId] = $fieldId === 'custom_provider.driver' ? 'openai-compatible' : ($fieldId === 'custom_provider.auth' ? 'api_key' : ($fieldId === 'custom_provider.input_modalities' || $fieldId === 'custom_provider.output_modalities' ? 'text' : ''));
             }
-            $this->fieldIndex = 2;
+            $this->fieldIndex = 0;
             $this->deleteCustomProviderId = null;
             $this->invalidate();
 
@@ -533,9 +701,11 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $model = $this->values['agent.default_model'] ?? '';
         $unsaved = $this->values === $this->originalValues ? 'Saved' : 'Unsaved changes';
         $status = $unsaved === 'Saved' ? Theme::info() : Theme::warning();
+        $providerLabel = $this->displayLabelForFieldValue('agent.default_provider', $provider);
+        $modelLabel = $this->displayLabelForFieldValue('agent.default_model', $model);
 
         return [
-            "{$accent}⚙ Settings{$r}  {$dim}scope{$r}: {$white}{$this->scope}{$r}  {$dim}provider{$r}: {$white}{$provider}{$r}  {$dim}model{$r}: {$white}{$model}{$r}  {$status}{$unsaved}{$r}",
+            "{$accent}⚙ Settings{$r}  {$dim}scope{$r}: {$white}{$this->scope}{$r}  {$dim}provider{$r}: {$white}{$providerLabel}{$r}  {$dim}model{$r}: {$white}{$modelLabel}{$r}  {$status}{$unsaved}{$r}",
             "{$dim}Separate settings workspace. Save writes YAML-backed config; auth secrets remain managed separately.{$r}",
             str_repeat('─', max(10, $width - 2)),
         ];
@@ -549,8 +719,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $lines = [$this->boxHeader('Categories', $width)];
         foreach ($this->categories() as $index => $category) {
             $selected = $index === $this->categoryIndex;
-            $focused = $selected && $this->pane === 'categories';
-            $prefix = $focused ? '› ' : ($selected ? '• ' : '  ');
+            $prefix = $selected ? '• ' : '  ';
             $color = $selected ? Theme::accent() : Theme::text();
             $lines[] = $this->boxLine("{$prefix}{$color}{$category['label']}".Theme::reset(), $width);
         }
@@ -569,8 +738,16 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     private function renderFields(int $width, int $height): array
     {
         $category = $this->selectedCategory();
+        if ($this->pickerOpen) {
+            return $this->renderPicker($width, $height);
+        }
+
+        if ($this->isModelsCategory()) {
+            return $this->renderModelsBrowser($width, $height);
+        }
+
         $lines = [$this->boxHeader($category['label'], $width)];
-        $fields = $category['fields'] ?? [];
+        $fields = $this->visibleFields();
 
         $visibleCount = max(6, $height - 2);
         $offset = max(0, $this->fieldIndex - (int) floor($visibleCount / 2));
@@ -579,14 +756,16 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         foreach ($window as $relative => $field) {
             $absoluteIndex = $offset + $relative;
             $selected = $absoluteIndex === $this->fieldIndex;
-            $focused = $selected && $this->pane === 'fields';
-            $cursor = $focused ? '› ' : ($selected ? '• ' : '  ');
+            $cursor = $selected ? '› ' : '  ';
             $label = (string) ($field['label'] ?? $field['id']);
             $value = $selected && $this->editing
                 ? $this->editBuffer.'▏'
-                : ($this->values[$field['id']] ?? '');
+                : $this->displayValueForField($field);
+            if ($this->fieldSupportsPicker($field)) {
+                $value .= '  ▾';
+            }
             $color = $selected ? Theme::white() : Theme::text();
-            $line = sprintf('%s%s%s%s', $cursor, $label, str_repeat(' ', max(1, $width - mb_strwidth($label) - mb_strwidth($value) - 6)), $value);
+            $line = $this->formatEntryLine($cursor, $label, $value, max(8, $width - 2));
             $lines[] = $this->boxLine("{$color}{$line}".Theme::reset(), $width);
         }
 
@@ -604,8 +783,43 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     private function renderDetails(int $width, int $height): array
     {
         $lines = [$this->boxHeader('Details', $width)];
+        if ($this->pickerOpen) {
+            $option = $this->selectedPickerOption();
+            $field = $this->selectedField();
+            $title = (string) ($field['label'] ?? 'Selection');
+            $matches = count($this->visiblePickerOptions());
+            $lines[] = $this->boxLine($title, $width, Theme::accent());
+            $lines[] = $this->boxLine('Enter selects · Esc clears/closes · type to filter', $width);
+            $lines[] = $this->boxLine('Matches: '.$matches, $width);
+            $lines[] = $this->boxLine('Filter: '.($this->pickerQuery !== '' ? $this->pickerQuery : '(none)'), $width);
+            $lines[] = $this->boxLine('', $width);
+            if ($option !== null) {
+                $lines[] = $this->boxLine('Value: '.$option['value'], $width);
+                foreach ($this->wrap($option['description'], $width - 2) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
+            }
+
+            while (count($lines) < $height - 1) {
+                $lines[] = $this->boxLine('', $width);
+            }
+            $lines[] = $this->boxFooter($width);
+
+            return array_slice($lines, 0, $height);
+        }
+
+        if ($this->isModelsCategory()) {
+            return $this->renderModelsDetails($width, $height);
+        }
+
         $field = $this->selectedField();
-        $provider = $this->values['agent.default_provider'] ?? '';
+        $categoryId = (string) ($this->selectedCategory()['id'] ?? '');
+        $provider = $categoryId === 'provider_setup'
+            ? (string) ($this->values['provider.setup_provider'] ?? '')
+            : (string) ($this->values['agent.default_provider'] ?? '');
+        if ($provider === '__custom__') {
+            $provider = (string) ($this->values['custom_provider.id'] ?? '');
+        }
         $providerInfo = $this->view['providers_by_id'][$provider] ?? [];
 
         if ($field !== null) {
@@ -628,7 +842,25 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             $lines[] = $this->boxLine('Output: '.implode(', ', $providerInfo['output_modalities'] ?? ['text']), $width);
         }
 
-        $yaml = $this->buildYamlPreview();
+        if ($provider !== '' && in_array((string) ($field['id'] ?? ''), ['agent.default_provider', 'agent.default_model', 'provider.model_inventory'], true)) {
+            $lines[] = $this->boxLine('', $width);
+            $lines[] = $this->boxLine('Available Models', $width, Theme::accent());
+            $modelOptions = $this->view['model_options_by_provider'][$provider] ?? [];
+            $labels = array_map(
+                static fn (array $item): string => (string) (($item['label'] ?? '') !== '' ? $item['label'] : ($item['value'] ?? '')),
+                array_slice($modelOptions, 0, 24),
+            );
+
+            foreach ($this->wrap(implode(', ', $labels), $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+
+            if (count($modelOptions) > 24) {
+                $lines[] = $this->boxLine('...and '.(count($modelOptions) - 24).' more', $width);
+            }
+        }
+
+        $yaml = $categoryId === 'provider_setup' ? $this->buildYamlPreview() : [];
         if ($yaml !== []) {
             $lines[] = $this->boxLine('', $width);
             $lines[] = $this->boxLine('Custom Provider YAML', $width, Theme::accent());
@@ -678,10 +910,446 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $dim = Theme::dim();
         $r = Theme::reset();
 
+        if ($this->isModelsCategory()) {
+            return AnsiUtils::truncateToWidth(
+                "{$dim}Tab/Shift+Tab category  ↑↓ browse providers/models  Enter select default  s save  q cancel  g/p scope{$r}",
+                $width,
+                '',
+            );
+        }
+
         return AnsiUtils::truncateToWidth(
-            "{$dim}Tab pane  ↑↓ navigate  ←→ cycle  Enter edit  s save  q cancel  g/p scope  r reset  a new provider  x remove custom{$r}",
+            "{$dim}Tab/Shift+Tab category  ↑↓ fields/list  → open list  type to filter  Enter select/edit  Esc clear/back  s save  q cancel  g/p scope  r reset{$r}",
             $width,
+            '',
         );
+    }
+
+    private function padVisible(string $line, int $width): string
+    {
+        $visible = AnsiUtils::visibleWidth($line);
+        if ($visible >= $width) {
+            return $line;
+        }
+
+        return $line.str_repeat(' ', $width - $visible);
+    }
+
+    private function truncateVisible(string $line, int $width): string
+    {
+        return AnsiUtils::truncateToWidth($line, $width, '', false);
+    }
+
+    private function formatEntryLine(string $prefix, string $left, string $right, int $innerWidth): string
+    {
+        $prefixWidth = AnsiUtils::visibleWidth($prefix);
+        $rightWidth = AnsiUtils::visibleWidth($right);
+        $gap = $right !== '' ? 1 : 0;
+
+        if ($prefixWidth >= $innerWidth) {
+            return $this->truncateVisible($prefix, $innerWidth);
+        }
+
+        if ($prefixWidth + $rightWidth + $gap >= $innerWidth) {
+            return $prefix.$this->truncateVisible($right, $innerWidth - $prefixWidth);
+        }
+
+        $availableLeft = max(0, $innerWidth - $prefixWidth - $rightWidth - $gap);
+        $left = $this->truncateVisible($left, $availableLeft);
+        $leftWidth = AnsiUtils::visibleWidth($left);
+        $padding = max(0, $innerWidth - $prefixWidth - $leftWidth - $rightWidth);
+
+        return $prefix.$left.str_repeat(' ', $padding).$right;
+    }
+
+    private function cycleCategory(int $direction): void
+    {
+        $categories = $this->categories();
+        if ($categories === []) {
+            return;
+        }
+
+        $this->categoryIndex = ($this->categoryIndex + $direction + count($categories)) % count($categories);
+        $this->fieldIndex = 0;
+        $this->invalidate();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function visibleFields(): array
+    {
+        $fields = $this->selectedCategory()['fields'] ?? [];
+        $categoryId = (string) ($this->selectedCategory()['id'] ?? '');
+
+        if ($categoryId !== 'provider_setup') {
+            $this->fieldIndex = min($this->fieldIndex, max(0, count($fields) - 1));
+
+            return $fields;
+        }
+
+        $selectedProvider = trim((string) ($this->values['provider.setup_provider'] ?? ($this->values['agent.default_provider'] ?? '')));
+        $providerInfo = $selectedProvider !== '' && $selectedProvider !== '__custom__'
+            ? ($this->view['providers_by_id'][$selectedProvider] ?? [])
+            : [];
+        $showCustomFields = $selectedProvider === '__custom__' || (($providerInfo['source'] ?? '') === 'custom');
+        $authMode = (string) ($providerInfo['auth_mode'] ?? ($selectedProvider === '__custom__' ? 'api_key' : 'api_key'));
+
+        $visible = array_values(array_filter($fields, static function (array $field) use ($showCustomFields, $authMode): bool {
+            $id = (string) ($field['id'] ?? '');
+
+            return match ($id) {
+                'provider.setup_provider',
+                'provider.setup_status',
+                'provider.setup_auth_mode',
+                'provider.setup_driver',
+                'provider.setup_url' => true,
+                'provider.secret.api_key' => $authMode === 'api_key',
+                'provider.auth_action' => $authMode !== 'none',
+                default => str_starts_with($id, 'custom_provider.') ? $showCustomFields : true,
+            };
+        }));
+
+        $this->fieldIndex = min($this->fieldIndex, max(0, count($visible) - 1));
+
+        return $visible;
+    }
+
+    private function isModelsCategory(): bool
+    {
+        return (string) ($this->selectedCategory()['id'] ?? '') === 'models';
+    }
+
+    private function handleModelsBrowserInput(string $data, object $kb): void
+    {
+        $items = $this->modelBrowserItems();
+        if ($items === []) {
+            return;
+        }
+
+        if ($kb->matches($data, 'up')) {
+            $this->fieldIndex = ($this->fieldIndex - 1 + count($items)) % count($items);
+            $this->invalidate();
+
+            return;
+        }
+
+        if ($kb->matches($data, 'down')) {
+            $this->fieldIndex = ($this->fieldIndex + 1) % count($items);
+            $this->invalidate();
+
+            return;
+        }
+
+        if (! $kb->matches($data, 'confirm') && ! $kb->matches($data, 'right')) {
+            return;
+        }
+
+        $selected = $items[$this->fieldIndex] ?? null;
+        if ($selected === null) {
+            return;
+        }
+
+        $provider = (string) ($selected['provider'] ?? '');
+        if ($provider === '') {
+            return;
+        }
+
+        $this->values['agent.default_provider'] = $provider;
+        $this->handleFieldSideEffects('agent.default_provider');
+
+        if (($selected['type'] ?? '') === 'model') {
+            $this->values['agent.default_model'] = (string) ($selected['model'] ?? '');
+        }
+
+        $this->invalidate();
+    }
+
+    private function fieldSupportsPicker(array $field): bool
+    {
+        return in_array((string) ($field['type'] ?? 'text'), ['choice', 'toggle', 'dynamic_choice'], true)
+            || $this->optionsForField($field) !== [];
+    }
+
+    /**
+     * @return list<array{type:string,provider:string,model:string,label:string,description:string}>
+     */
+    private function modelBrowserItems(): array
+    {
+        $items = [];
+
+        foreach ($this->view['models_provider_options'] ?? $this->view['provider_options'] ?? [] as $providerOption) {
+            $provider = (string) ($providerOption['value'] ?? '');
+            if ($provider === '') {
+                continue;
+            }
+
+            $models = $this->view['models_model_options_by_provider'][$provider]
+                ?? $this->view['model_options_by_provider'][$provider]
+                ?? [];
+            $items[] = [
+                'type' => 'provider',
+                'provider' => $provider,
+                'model' => '',
+                'label' => (string) ($providerOption['label'] ?? $provider),
+                'description' => count($models).' models',
+            ];
+
+            foreach ($models as $modelOption) {
+                $items[] = [
+                    'type' => 'model',
+                    'provider' => $provider,
+                    'model' => (string) ($modelOption['value'] ?? ''),
+                    'label' => (string) ($modelOption['label'] ?? $modelOption['value'] ?? ''),
+                    'description' => (string) ($modelOption['description'] ?? ''),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderModelsBrowser(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Models', $width)];
+        $items = $this->modelBrowserItems();
+        $visibleCount = max(6, $height - 2);
+        $maxIndex = max(0, count($items) - 1);
+        $selectedIndex = min($this->fieldIndex, $maxIndex);
+        $offset = max(0, $selectedIndex - (int) floor($visibleCount / 2));
+        $window = array_slice($items, $offset, $visibleCount);
+        $currentProvider = (string) ($this->values['agent.default_provider'] ?? '');
+        $currentModel = (string) ($this->values['agent.default_model'] ?? '');
+
+        foreach ($window as $relative => $item) {
+            $absoluteIndex = $offset + $relative;
+            $selected = $absoluteIndex === $selectedIndex;
+            $cursor = $selected ? '› ' : '  ';
+
+            if ($item['type'] === 'provider') {
+                $label = $item['label'];
+                $right = $item['provider'] === $currentProvider ? 'selected' : $item['description'];
+                $color = $item['provider'] === $currentProvider ? Theme::accent() : Theme::text();
+            } else {
+                $label = '  '.$item['label'];
+                $right = $item['provider'] === $currentProvider && $item['model'] === $currentModel ? 'default' : '';
+                $color = $item['provider'] === $currentProvider && $item['model'] === $currentModel ? Theme::white() : Theme::dim();
+            }
+
+            $line = $this->formatEntryLine($cursor, $label, $right, max(8, $width - 2));
+            $lines[] = $this->boxLine("{$color}{$line}".Theme::reset(), $width);
+        }
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderModelsDetails(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Details', $width)];
+        $items = $this->modelBrowserItems();
+        $selected = $items[min($this->fieldIndex, max(0, count($items) - 1))] ?? null;
+        $currentProvider = (string) ($this->values['agent.default_provider'] ?? '');
+        $provider = (string) ($selected['provider'] ?? $currentProvider);
+        $providerInfo = $this->view['providers_by_id'][$provider] ?? [];
+
+        if ($selected !== null) {
+            $lines[] = $this->boxLine(($selected['type'] === 'provider' ? 'Provider' : 'Model').': '.$selected['label'], $width, Theme::accent());
+            $lines[] = $this->boxLine('', $width);
+
+            foreach ($this->wrap($selected['description'], $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+        }
+
+        if ($provider !== '') {
+            $lines[] = $this->boxLine('', $width);
+            $lines[] = $this->boxLine('Provider', $width, Theme::accent());
+            $lines[] = $this->boxLine('ID: '.$provider, $width);
+            $lines[] = $this->boxLine('Auth: '.($providerInfo['auth_status'] ?? 'Unknown'), $width);
+            $lines[] = $this->boxLine('Driver: '.($providerInfo['driver'] ?? 'unknown'), $width);
+            $lines[] = $this->boxLine('Input: '.implode(', ', $providerInfo['input_modalities'] ?? ['text']), $width);
+            $lines[] = $this->boxLine('Output: '.implode(', ', $providerInfo['output_modalities'] ?? ['text']), $width);
+        }
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function openPickerForField(array $field): void
+    {
+        $options = $this->optionsForField($field);
+        if ($options === []) {
+            return;
+        }
+
+        $this->pickerOpen = true;
+        $this->pickerFieldId = (string) ($field['id'] ?? '');
+        $this->pickerOptions = $options;
+        $this->pickerQuery = '';
+        if ($this->pickerFieldId === 'agent.default_provider') {
+            $this->pickerIndex = 0;
+        } else {
+            $current = $this->values[$this->pickerFieldId] ?? '';
+            $index = array_search($current, array_map(static fn (array $item): string => $item['value'], $options), true);
+            $this->pickerIndex = $index === false ? 0 : $index;
+        }
+        $this->invalidate();
+    }
+
+    private function closePicker(): void
+    {
+        $this->pickerOpen = false;
+        $this->pickerFieldId = '';
+        $this->pickerOptions = [];
+        $this->pickerIndex = 0;
+        $this->pickerQuery = '';
+        $this->invalidate();
+    }
+
+    /**
+     * @return array{value: string, label: string, description: string}|null
+     */
+    private function selectedPickerOption(): ?array
+    {
+        return $this->visiblePickerOptions()[$this->pickerIndex] ?? null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderPicker(int $width, int $height): array
+    {
+        $field = $this->selectedField();
+        $title = 'Select '.(string) ($field['label'] ?? 'Value');
+        $lines = [$this->boxHeader($title, $width)];
+        $options = $this->visiblePickerOptions();
+        $visibleCount = max(6, $height - 2);
+        $offset = max(0, $this->pickerIndex - (int) floor($visibleCount / 2));
+        $window = array_slice($options, $offset, $visibleCount);
+
+        if ($window === []) {
+            $lines[] = $this->boxLine('No matches. Type to filter differently.', $width, Theme::warning());
+        }
+
+        foreach ($window as $relative => $option) {
+            $absoluteIndex = $offset + $relative;
+            $selected = $absoluteIndex === $this->pickerIndex;
+            $cursor = $selected ? '› ' : '  ';
+            $label = $option['label'] !== '' ? $option['label'] : $option['value'];
+            $value = $option['value'];
+            $right = $value !== $label ? $value : '';
+            $color = $selected ? Theme::white() : Theme::text();
+            $line = $this->formatEntryLine($cursor, $label, $right, max(8, $width - 2));
+            $lines[] = $this->boxLine("{$color}{$line}".Theme::reset(), $width);
+        }
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    /**
+     * @return list<array{value: string, label: string, description: string}>
+     */
+    private function visiblePickerOptions(): array
+    {
+        if ($this->pickerQuery === '') {
+            return $this->pickerOptions;
+        }
+
+        $needle = mb_strtolower($this->pickerQuery);
+
+        return array_values(array_filter(
+            $this->pickerOptions,
+            static function (array $option) use ($needle): bool {
+                $haystack = mb_strtolower($option['label'].' '.$option['value'].' '.$option['description']);
+
+                return str_contains($haystack, $needle);
+            },
+        ));
+    }
+
+    private function resetPickerIndex(): void
+    {
+        $options = $this->visiblePickerOptions();
+        if ($options === []) {
+            $this->pickerIndex = 0;
+
+            return;
+        }
+
+        $current = $this->pickerFieldId !== '' ? ($this->values[$this->pickerFieldId] ?? '') : '';
+        $index = array_search($current, array_map(static fn (array $item): string => $item['value'], $options), true);
+        $this->pickerIndex = $index === false ? 0 : $index;
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function displayValueForField(array $field): string
+    {
+        $id = (string) ($field['id'] ?? '');
+        if ($id === 'provider.model_inventory') {
+            $provider = (string) ($this->values['agent.default_provider'] ?? '');
+            $count = count($this->view['model_options_by_provider'][$provider] ?? []);
+
+            return $count > 0 ? $count.' models' : 'No models';
+        }
+
+        $value = (string) ($this->values[$id] ?? '');
+
+        return $this->displayLabelForFieldValue($id, $value);
+    }
+
+    private function displayLabelForFieldValue(string $fieldId, string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $field = ['id' => $fieldId];
+        foreach ($this->optionsForField($field) as $option) {
+            if ($option['value'] !== $value) {
+                continue;
+            }
+
+            if ($fieldId === 'agent.default_provider') {
+                return $option['label'].' ('.$value.')';
+            }
+
+            if ($fieldId === 'provider.setup_provider') {
+                return $option['label'];
+            }
+
+            if ($fieldId === 'agent.default_model' && $option['label'] !== $value) {
+                return $option['label'];
+            }
+
+            return $option['label'] !== '' ? $option['label'] : $value;
+        }
+
+        return $value;
     }
 
     private function boxHeader(string $title, int $width): string
@@ -691,6 +1359,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $r = Theme::reset();
         $inner = max(8, $width - 2);
         $label = " {$title} ";
+        $label = $this->truncateVisible($label, max(1, $inner));
         $fill = max(0, $inner - mb_strwidth($label));
 
         return "{$border}┌{$accent}{$label}{$border}".str_repeat('─', $fill)."┐{$r}";
@@ -702,7 +1371,8 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $r = Theme::reset();
         $inner = max(8, $width - 2);
         $text = $color !== '' ? $color.$content.$r : $content;
-        $visible = AnsiUtils::visibleWidth($content);
+        $text = $this->truncateVisible($text, $inner);
+        $visible = AnsiUtils::visibleWidth($text);
         $padding = max(0, $inner - $visible);
 
         return "{$border}│{$r}{$text}".str_repeat(' ', $padding)."{$border}│{$r}";

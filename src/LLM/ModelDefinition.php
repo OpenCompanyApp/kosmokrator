@@ -18,6 +18,10 @@ final readonly class ModelDefinition
         public bool $thinking = false,
         public ?float $inputPricePerMillion = null,
         public ?float $outputPricePerMillion = null,
+        public string $pricingKind = 'paid',
+        public ?float $referenceInputPricePerMillion = null,
+        public ?float $referenceOutputPricePerMillion = null,
+        public ?string $status = null,
         public array $inputModalities = ['text'],
         public array $outputModalities = ['text'],
     ) {}

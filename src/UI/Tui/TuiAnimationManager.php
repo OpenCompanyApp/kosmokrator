@@ -94,6 +94,7 @@ final class TuiAnimationManager
     /**
      * @param  ContainerWidget  $thinkingBar  Container for thinking/compacting loaders
      * @param  \Closure(): bool  $hasTasksProvider  Returns whether the task store has tasks
+     * @param  \Closure(): bool  $hasSubagentActivityProvider  Returns whether subagents are actively running
      * @param  \Closure(): void  $refreshTaskBarCallback  Triggers a task bar refresh
      * @param  \Closure(): void  $subagentTickCallback  Ticks the subagent tree refresh
      * @param  \Closure(): void  $subagentCleanupCallback  Cleans up subagent display state
@@ -103,6 +104,7 @@ final class TuiAnimationManager
     public function __construct(
         private readonly ContainerWidget $thinkingBar,
         private readonly \Closure $hasTasksProvider,
+        private readonly \Closure $hasSubagentActivityProvider,
         private readonly \Closure $refreshTaskBarCallback,
         private readonly \Closure $subagentTickCallback,
         private readonly \Closure $subagentCleanupCallback,
@@ -393,10 +395,16 @@ final class TuiAnimationManager
             $this->breathColor = "\033[38;2;{$cr};{$cg};{$cb}m";
 
             if ($this->loader !== null && $phrase !== '') {
-                $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
-                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
                 $dim = "\033[38;5;245m";
-                $this->loader->setMessage("{$this->breathColor}{$phrase}{$r} {$dim}({$formatted}){$r}");
+                $message = "{$this->breathColor}{$phrase}{$r}";
+
+                if (! ($this->hasSubagentActivityProvider)()) {
+                    $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+                    $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                    $message .= "{$dim} · {$formatted}{$r}";
+                }
+
+                $this->loader->setMessage($message);
             }
 
             if (($this->hasTasksProvider)()) {

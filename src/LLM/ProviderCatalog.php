@@ -26,6 +26,7 @@ final class ProviderCatalog
         'ollama' => ['label' => 'Ollama', 'description' => 'Local models, no remote credentials required', 'auth' => 'none'],
         'kimi' => ['label' => 'Kimi', 'description' => 'Moonshot Kimi models via API key', 'auth' => 'api_key'],
         'kimi-coding' => ['label' => 'Kimi Coding', 'description' => 'Moonshot coding-plan endpoint via API key', 'auth' => 'api_key'],
+        'mimo' => ['label' => 'Xiaomi MiMo', 'description' => 'MiMo Token Plan models via API key', 'auth' => 'api_key'],
         'minimax' => ['label' => 'MiniMax', 'description' => 'MiniMax models via API key', 'auth' => 'api_key'],
         'minimax-cn' => ['label' => 'MiniMax CN', 'description' => 'MiniMax China-region endpoint via API key', 'auth' => 'api_key'],
         'z' => ['label' => 'Z.AI', 'description' => 'Z.AI coding endpoint via API key', 'auth' => 'api_key'],
@@ -47,6 +48,7 @@ final class ProviderCatalog
         'ollama',
         'kimi',
         'kimi-coding',
+        'mimo',
         'minimax',
         'minimax-cn',
         'z',
@@ -55,6 +57,7 @@ final class ProviderCatalog
 
     public function __construct(
         private readonly ProviderMeta $meta,
+        private readonly RelayProviderRegistry $registry,
         private readonly Repository $config,
         private readonly SettingsRepository $settings,
         private readonly CodexTokenStore $codexTokens,
@@ -83,15 +86,23 @@ final class ProviderCatalog
             return null;
         }
 
-        $definition = self::DEFINITIONS[$provider] ?? [
+        $registryDefinition = $this->registry->provider($provider) ?? [];
+        $fallback = self::DEFINITIONS[$provider] ?? [
             'label' => $this->humanize($provider),
             'description' => $this->humanize($provider).' provider',
-            'auth' => 'api_key',
+            'auth' => $this->registry->authMode($provider),
         ];
+
+        $definition = array_merge($fallback, array_filter([
+            'label' => $registryDefinition['label'] ?? null,
+            'description' => $registryDefinition['description'] ?? null,
+            'auth' => $registryDefinition['auth'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null));
 
         $models = [];
         foreach ($this->meta->models($provider) as $model) {
             $info = $this->meta->modelInfo($provider, $model);
+            $modalities = $this->registry->modelModalities($provider, $model);
             $models[] = new ModelDefinition(
                 id: $model,
                 displayName: $info->displayName ?? $model,
@@ -100,17 +111,25 @@ final class ProviderCatalog
                 thinking: $info->thinking,
                 inputPricePerMillion: $info->inputPricePerMillion,
                 outputPricePerMillion: $info->outputPricePerMillion,
+                inputModalities: $modalities['input'],
+                outputModalities: $modalities['output'],
             );
         }
+
+        $providerModalities = $this->registry->providerModalities($provider);
 
         return new ProviderDefinition(
             id: $provider,
             label: $definition['label'],
             description: $definition['description'],
             authMode: $definition['auth'],
-            url: $this->config->get("prism.providers.{$provider}.url", $this->meta->url($provider) ?? ''),
+            source: $this->registry->source($provider),
+            driver: $this->registry->driver($provider),
+            url: $this->registry->url($provider),
             defaultModel: $this->meta->defaultModel($provider) ?? ($models[0]->id ?? ''),
             models: $models,
+            inputModalities: $providerModalities['input'],
+            outputModalities: $providerModalities['output'],
         );
     }
 
@@ -144,7 +163,7 @@ final class ProviderCatalog
             fn (ProviderDefinition $provider): array => [
                 'value' => $provider->id,
                 'label' => $provider->id,
-                'description' => "{$provider->label} · {$provider->description}",
+                'description' => "{$provider->label} · {$provider->description} · ".($provider->source === 'custom' ? 'Custom' : 'Built-in'),
             ],
             $this->providers(),
         );
@@ -262,7 +281,7 @@ final class ProviderCatalog
      */
     private function configuredProviderIds(): array
     {
-        $configured = array_keys($this->config->get('prism.providers', []));
+        $configured = $this->meta->allProviders();
 
         usort($configured, function (string $left, string $right): int {
             $leftIndex = array_search($left, self::ORDER, true);

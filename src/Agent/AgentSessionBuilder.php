@@ -10,6 +10,7 @@ use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
@@ -78,7 +79,8 @@ final class AgentSessionBuilder
         $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
 
         // Create LLM client (async for TUI, sync for ANSI)
-        $useAsyncClient = $ui->getActiveRenderer() === 'tui' && AsyncLlmClient::supportsProvider($provider);
+        $registry = $this->container->make(RelayProviderRegistry::class);
+        $useAsyncClient = $ui->getActiveRenderer() === 'tui' && $registry->supportsAsync($provider);
 
         /** @var LlmClientInterface $llm */
         $llm = $useAsyncClient

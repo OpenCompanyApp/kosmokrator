@@ -38,6 +38,7 @@ class AsyncLlmClient implements LlmClientInterface
         'z-api',
         'kimi',
         'kimi-coding',
+        'mimo',
     ];
 
     public function __construct(
@@ -49,6 +50,7 @@ class AsyncLlmClient implements LlmClientInterface
         private int|float|null $temperature = null,
         private string $provider = 'z',
         ?Relay $relay = null,
+        private readonly ?ProviderCapabilitiesResolver $capabilities = null,
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
         $this->relay = $relay ?? new Relay;
@@ -106,6 +108,21 @@ class AsyncLlmClient implements LlmClientInterface
         return $this->parseResponse($response, $cancellation);
     }
 
+    /**
+     * @param  Message[]  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    private function mapMessages(array $messages): array
+    {
+        $allMessages = $messages;
+
+        if (trim($this->systemPrompt) !== '') {
+            array_unshift($allMessages, new SystemMessage($this->systemPrompt));
+        }
+
+        return $this->relay->mapOpenAiCompatibleMessages($this->provider, $allMessages);
+    }
+
     public function getProvider(): string
     {
         return $this->provider;
@@ -158,6 +175,10 @@ class AsyncLlmClient implements LlmClientInterface
 
     private function supportsTemperature(): bool
     {
+        if ($this->capabilities !== null) {
+            return $this->capabilities->supportsTemperature($this->provider);
+        }
+
         return ProviderCapabilities::for($this->provider)->supportsTemperature();
     }
 
@@ -204,7 +225,7 @@ class AsyncLlmClient implements LlmClientInterface
         $toolCalls = array_map(fn (array $tc): ToolCall => new ToolCall(
             id: $tc['id'],
             name: $tc['function']['name'],
-            arguments: $tc['function']['arguments'] ?? '{}',
+            arguments: self::sanitizeJson($tc['function']['arguments'] ?? '{}'),
         ), $rawToolCalls);
 
         return new LlmResponse(
@@ -282,6 +303,18 @@ class AsyncLlmClient implements LlmClientInterface
                 ],
             ],
         ], $tools);
+    }
+
+    /**
+     * Strip control characters (U+0000–U+001F except whitespace) from a JSON
+     * string so json_decode() won't fail with JSON_ERROR_CTRL_CHAR.
+     */
+    private static function sanitizeJson(string $json): string
+    {
+        // preg_replace is faster than character-by-character; \x00-\x08,
+        // \x0B (vertical tab), \x0C (form feed), \x0E-\x1F are the
+        // non-whitespace C0 controls that trigger the error.
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $json);
     }
 
     private function mapFinishReason(string $reason): FinishReason

@@ -10,6 +10,7 @@ use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
 use Kosmokrator\UI\Tui\Widget\PermissionPromptWidget;
 use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
+use Kosmokrator\UI\Tui\Widget\SettingsWorkspaceWidget;
 use Kosmokrator\UI\Tui\Widget\SwarmDashboardWidget;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
@@ -250,146 +251,8 @@ final class TuiModalManager
      */
     public function showSettings(array $currentSettings): array
     {
-        $selectedProvider = (string) ($currentSettings['provider'] ?? '');
-        $modelsByProvider = is_array($currentSettings['model_options_by_provider'] ?? null)
-            ? $currentSettings['model_options_by_provider']
-            : [];
-        $providerOptions = is_array($currentSettings['provider_options'] ?? null)
-            ? $currentSettings['provider_options']
-            : [];
-        $providerStatuses = is_array($currentSettings['provider_statuses'] ?? null)
-            ? $currentSettings['provider_statuses']
-            : [];
-        $providerAuthModes = is_array($currentSettings['provider_auth_modes'] ?? null)
-            ? $currentSettings['provider_auth_modes']
-            : [];
-        $providerModelValues = is_array($currentSettings['provider_model_values'] ?? null)
-            ? $currentSettings['provider_model_values']
-            : [];
-        $providerApiKeyDisplay = is_array($currentSettings['provider_api_key_display'] ?? null)
-            ? $currentSettings['provider_api_key_display']
-            : [];
-
-        $items = [
-            new SettingItem(
-                id: 'provider',
-                label: 'Provider',
-                currentValue: $currentSettings['provider'] ?? '',
-                description: 'LLM provider -- press Enter to select from the shared provider catalog',
-                submenu: fn (string $current, callable $onDone) => $this->buildProviderSubmenu($providerOptions),
-            ),
-            new SettingItem(
-                id: 'model',
-                label: 'Model',
-                currentValue: $currentSettings['model'] ?? '',
-                description: 'LLM model -- provider-aware list sourced from PrismRelay metadata',
-                submenu: function (string $current, callable $onDone) use (&$selectedProvider, $modelsByProvider) {
-                    return $this->buildModelSubmenu($selectedProvider, $current, $onDone, $modelsByProvider);
-                },
-            ),
-            new SettingItem(
-                id: 'api_key',
-                label: 'API Key',
-                currentValue: $currentSettings['api_key'] ?? '(not used)',
-                description: 'API key for providers that use key-based auth -- press Enter to edit directly',
-                submenu: function (string $current, callable $onDone) use (&$selectedProvider, $providerAuthModes) {
-                    return $this->buildApiKeySubmenu($selectedProvider, $onDone, $providerAuthModes);
-                },
-            ),
-            new SettingItem(
-                id: 'auth_action',
-                label: 'Auth',
-                currentValue: $currentSettings['auth_status'] ?? '',
-                description: 'Login actions for OAuth providers like Codex',
-                submenu: function (string $current, callable $onDone) use (&$selectedProvider, $providerStatuses, $providerAuthModes) {
-                    return $this->buildAuthSubmenu($selectedProvider, $providerStatuses, $providerAuthModes);
-                },
-            ),
-            new SettingItem(
-                id: 'mode',
-                label: 'Mode',
-                currentValue: $currentSettings['mode'] ?? 'edit',
-                description: 'Agent mode -- edit (full access), plan (read-only), ask (conversational)',
-                values: ['edit', 'plan', 'ask'],
-            ),
-            new SettingItem(
-                id: 'permission_mode',
-                label: 'Permission Mode',
-                currentValue: $currentSettings['permission_mode'] ?? 'guardian',
-                description: 'Guardian (smart auto), Argus (ask all), Prometheus (approve all)',
-                values: ['guardian', 'argus', 'prometheus'],
-            ),
-            new SettingItem(
-                id: 'memories',
-                label: 'Memories',
-                currentValue: $currentSettings['memories'] ?? 'on',
-                description: 'Long-term knowledge persistence across sessions',
-                values: ['on', 'off'],
-            ),
-            new SettingItem(
-                id: 'auto_compact',
-                label: 'Auto-compact',
-                currentValue: $currentSettings['auto_compact'] ?? 'on',
-                description: 'Automatically compact context when approaching token limit',
-                values: ['on', 'off'],
-            ),
-            new SettingItem(
-                id: 'compact_threshold',
-                label: 'Compact threshold',
-                currentValue: $currentSettings['compact_threshold'] ?? '60',
-                description: 'Context usage % at which compaction triggers (lower = more aggressive)',
-                values: ['40', '50', '60', '70', '80'],
-            ),
-            new SettingItem(
-                id: 'prune_protect',
-                label: 'Prune protect',
-                currentValue: $currentSettings['prune_protect'] ?? '40000',
-                description: 'Tokens of recent tool output to protect from pruning',
-                values: ['20000', '30000', '40000', '60000', '80000'],
-            ),
-            new SettingItem(
-                id: 'prune_min_savings',
-                label: 'Prune threshold',
-                currentValue: $currentSettings['prune_min_savings'] ?? '20000',
-                description: 'Minimum token savings required to trigger pruning',
-                values: ['10000', '20000', '30000', '50000'],
-            ),
-            new SettingItem(
-                id: 'temperature',
-                label: 'Temperature',
-                currentValue: $currentSettings['temperature'] ?? '0.0',
-                description: 'LLM sampling temperature (0.0 = deterministic, 1.0 = creative)',
-                values: ['0.0', '0.1', '0.2', '0.3', '0.5', '0.7', '1.0'],
-            ),
-            new SettingItem(
-                id: 'max_tokens',
-                label: 'Max Tokens',
-                currentValue: $currentSettings['max_tokens'] ?? '',
-                description: 'Maximum output tokens per LLM response (empty = provider default)',
-                values: ['', '4096', '8192', '16384', '32768', '65536'],
-            ),
-            new SettingItem(
-                id: 'subagent_concurrency',
-                label: 'Subagent concurrency',
-                currentValue: $currentSettings['subagent_concurrency'] ?? '10',
-                description: 'Max concurrent subagents (0 = unlimited). Takes effect next session.',
-                values: ['0', '1', '3', '5', '10', '20', '50', '100', '250', '500', '1000'],
-            ),
-            new SettingItem(
-                id: 'subagent_max_retries',
-                label: 'Subagent max retries',
-                currentValue: $currentSettings['subagent_max_retries'] ?? '2',
-                description: 'Max agent-level retries on transient failure (0 = no retry). Takes effect next session.',
-                values: ['0', '1', '2', '3', '5'],
-            ),
-        ];
-
-        $settingsWidget = new SettingsListWidget($items, maxVisible: $this->settingsMaxVisible());
-        $settingsWidget->setId('settings-panel');
-        $settingsWidget->setStyle(new Style(
-            padding: new Padding(0, 0, 0, 0),
-            border: Border::all(0),
-        ));
+        $widget = new SettingsWorkspaceWidget($currentSettings);
+        $widget->setId('settings-workspace');
 
         $panel = new ContainerWidget;
         $panel->setId('settings-panel-wrapper');
@@ -399,48 +262,21 @@ final class TuiModalManager
             padding: new Padding(0, 1, 0, 1),
             verticalAlign: VerticalAlign::Top,
         ));
-        $panel->add($settingsWidget);
+        $panel->add($widget);
 
         $this->overlay->expandVertically(true);
         $this->overlay->add($panel);
-        $this->tui->setFocus($settingsWidget);
+        $this->tui->setFocus($widget);
         $this->flushRender();
 
-        $changes = [];
+        $result = [];
         $suspension = EventLoop::getSuspension();
-
-        $settingsWidget->onChange(function (SettingChangeEvent $event) use (&$changes, &$selectedProvider, $settingsWidget, $providerAuthModes, $providerStatuses, $providerModelValues, $providerApiKeyDisplay) {
-            $changes[$event->getId()] = $event->getValue();
-            if ($event->getId() === 'provider') {
-                $selectedProvider = $event->getValue();
-                unset($changes['api_key'], $changes['auth_action']);
-                $rememberedModel = (string) ($providerModelValues[$selectedProvider] ?? '');
-                if ($rememberedModel !== '') {
-                    $settingsWidget->updateValue('model', $rememberedModel);
-                    $changes['model'] = $rememberedModel;
-                }
-
-                $settingsWidget->updateValue(
-                    'api_key',
-                    (string) ($providerApiKeyDisplay[$selectedProvider] ?? '(not used)'),
-                );
-                $settingsWidget->updateValue(
-                    'auth_action',
-                    (string) ($providerStatuses[$selectedProvider] ?? ''),
-                );
-
-                $authMode = $providerAuthModes[$selectedProvider] ?? 'api_key';
-                $apiKeyDisplay = $providerApiKeyDisplay[$selectedProvider] ?? '(not used)';
-
-                if ($authMode === 'api_key' && $apiKeyDisplay === '(not set)') {
-                    $this->focusSettingsItem($settingsWidget, 'api_key');
-                    $this->activateSettingsItem($settingsWidget);
-                }
-            }
+        $widget->onSave(function (array $payload) use (&$result, $suspension) {
+            $result = $payload;
+            $suspension->resume(true);
         });
-
-        $settingsWidget->onCancel(function () use ($suspension) {
-            $suspension->resume(null);
+        $widget->onCancel(function () use ($suspension) {
+            $suspension->resume(false);
         });
 
         $suspension->suspend();
@@ -450,7 +286,7 @@ final class TuiModalManager
         $this->tui->setFocus($this->input);
         $this->forceRender();
 
-        return $changes;
+        return $result;
     }
 
     /**

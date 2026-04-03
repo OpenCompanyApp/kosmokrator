@@ -8,6 +8,7 @@ use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\MemorySelector;
 use Kosmokrator\Agent\ToolResultDeduplicator;
+use Kosmokrator\Settings\SettingsManager;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -29,12 +30,14 @@ class SessionManager
         private readonly SettingsRepository $settings,
         private readonly MemoryRepository $memories,
         private readonly LoggerInterface $log,
+        private readonly ?SettingsManager $configSettings = null,
     ) {}
 
     public function setProject(string $project): void
     {
         $this->project = $project;
         $this->projectScope = SettingsRepository::projectScope($project);
+        $this->configSettings?->setProjectRoot($project);
     }
 
     public function getProject(): ?string
@@ -139,6 +142,13 @@ class SessionManager
 
     public function getSetting(string $key): ?string
     {
+        if ($this->configSettings !== null) {
+            $value = $this->configSettings->get($key);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
         if ($this->projectScope === null) {
             return $this->settings->get('global', $key);
         }
@@ -148,6 +158,12 @@ class SessionManager
 
     public function setSetting(string $key, string $value, string $scope = 'project'): void
     {
+        if ($this->configSettings !== null) {
+            $this->configSettings->set($key, $value, $scope);
+
+            return;
+        }
+
         $resolvedScope = $scope === 'project' && $this->projectScope !== null
             ? $this->projectScope
             : 'global';

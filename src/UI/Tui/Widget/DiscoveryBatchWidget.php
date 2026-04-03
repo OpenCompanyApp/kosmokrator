@@ -112,6 +112,8 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
             'file_read' => 0,
             'glob' => 0,
             'grep' => 0,
+            'bash' => 0,
+            'memory_search' => 0,
         ];
 
         foreach ($this->items as $item) {
@@ -128,10 +130,16 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
             $parts[] = $counts['glob'].' '.($counts['glob'] === 1 ? 'glob' : 'globs');
         }
         if ($counts['grep'] > 0) {
-            $parts[] = $counts['grep'].' '.($counts['grep'] === 1 ? 'grep' : 'greps');
+            $parts[] = $counts['grep'].' '.($counts['grep'] === 1 ? 'search' : 'searches');
+        }
+        if ($counts['bash'] > 0) {
+            $parts[] = $counts['bash'].' '.($counts['bash'] === 1 ? 'probe' : 'probes');
+        }
+        if ($counts['memory_search'] > 0) {
+            $parts[] = $counts['memory_search'].' '.($counts['memory_search'] === 1 ? 'recall' : 'recalls');
         }
 
-        return $parts === [] ? 'No discovery actions yet' : implode('  ·  ', $parts);
+        return $parts === [] ? 'No omens yet' : implode('  ·  ', $parts);
     }
 
     /**
@@ -148,8 +156,10 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
         };
         $friendly = match ($item['name']) {
             'file_read' => 'Read',
-            'glob' => 'Glob',
+            'glob' => 'Scan',
             'grep' => 'Search',
+            'bash' => 'Probe',
+            'memory_search' => 'Recall',
             default => ucfirst($item['name']),
         };
         $meta = $item['summary'] !== '' ? "{$dim}  ·  {$item['summary']}{$r}" : '';

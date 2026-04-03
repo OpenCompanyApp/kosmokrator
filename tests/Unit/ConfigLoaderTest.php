@@ -127,6 +127,27 @@ class ConfigLoaderTest extends TestCase
         $this->assertEquals(0.5, $config->get('kosmokrator.agent.temperature'));
     }
 
+    public function test_canonical_user_and_project_paths_are_loaded(): void
+    {
+        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  temperature: 0.0");
+
+        $fakeHome = $this->tempDir.'/home_xdg';
+        mkdir($fakeHome.'/.config/kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.config/kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    temperature: 0.4");
+        putenv("HOME={$fakeHome}");
+        $_ENV['HOME'] = $fakeHome;
+
+        $projectDir = $this->tempDir.'/project_xdg';
+        mkdir($projectDir.'/.kosmokrator', 0755, true);
+        file_put_contents($projectDir.'/.kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    temperature: 0.8");
+        chdir($projectDir);
+
+        $loader = new ConfigLoader($this->configDir);
+        $config = $loader->load();
+
+        $this->assertEquals(0.8, $config->get('kosmokrator.agent.temperature'));
+    }
+
     public function test_merge_priority_project_over_user_over_base(): void
     {
         file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  model: base-model");
@@ -182,6 +203,27 @@ class ConfigLoaderTest extends TestCase
         $config = $loader->load();
 
         $this->assertSame('user-key', $config->get('prism.providers.anthropic.api_key'));
+    }
+
+    public function test_relay_provider_blocks_are_loaded_from_external_config(): void
+    {
+        $fakeHome = $this->tempDir.'/relay_home';
+        mkdir($fakeHome.'/.config/kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.config/kosmokrator/config.yaml', <<<YAML
+relay:
+  providers:
+    mimo:
+      driver: openai-compatible
+      url: https://token-plan-sgp.xiaomimimo.com/v1
+YAML);
+        putenv("HOME={$fakeHome}");
+        $_ENV['HOME'] = $fakeHome;
+
+        $loader = new ConfigLoader($this->configDir);
+        $config = $loader->load();
+
+        $this->assertSame('openai-compatible', $config->get('relay.providers.mimo.driver'));
+        $this->assertSame('https://token-plan-sgp.xiaomimimo.com/v1', $config->get('relay.providers.mimo.url'));
     }
 
     public function test_no_user_config_file(): void

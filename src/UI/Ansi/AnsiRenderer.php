@@ -550,101 +550,84 @@ class AnsiRenderer implements RendererInterface
         $white = "\033[1;37m";
 
         echo "\n{$accent}  ⚙ Settings{$r}\n";
-        foreach ($currentSettings as $key => $value) {
-            if (is_array($value)) {
-                continue;
-            }
-            echo "{$dim}    {$white}{$key}{$r}{$dim}: {$value}{$r}\n";
-        }
-        echo "\n{$dim}  Provider/model/auth can be edited here. Press Enter to keep the current value.{$r}\n\n";
+        echo "{$dim}  Separate settings workspace. Press Enter to keep a value unchanged.{$r}\n\n";
+
+        $scope = strtolower(trim(readline('  Scope [project/global, default project]: ')));
+        $scope = $scope === 'global' ? 'global' : 'project';
 
         $changes = [];
-        $provider = (string) ($currentSettings['provider'] ?? '');
-        $providerOptions = is_array($currentSettings['provider_options'] ?? null) ? $currentSettings['provider_options'] : [];
-        $modelsByProvider = is_array($currentSettings['model_options_by_provider'] ?? null) ? $currentSettings['model_options_by_provider'] : [];
-        $providerStatuses = is_array($currentSettings['provider_statuses'] ?? null) ? $currentSettings['provider_statuses'] : [];
-        $providerAuthModes = is_array($currentSettings['provider_auth_modes'] ?? null) ? $currentSettings['provider_auth_modes'] : [];
-        $providerDefaults = is_array($currentSettings['provider_defaults'] ?? null) ? $currentSettings['provider_defaults'] : [];
-        $providerModelValues = is_array($currentSettings['provider_model_values'] ?? null) ? $currentSettings['provider_model_values'] : [];
-        $providerApiKeyDisplay = is_array($currentSettings['provider_api_key_display'] ?? null) ? $currentSettings['provider_api_key_display'] : [];
+        $categories = is_array($currentSettings['categories'] ?? null) ? $currentSettings['categories'] : [];
 
-        if ($providerOptions !== []) {
-            echo "{$white}  Providers{$r}\n";
-            foreach ($providerOptions as $option) {
-                $marker = $option['value'] === $provider ? '*' : ' ';
-                echo "{$dim}    {$marker} {$white}{$option['value']}{$r}{$dim} — {$option['description']}{$r}\n";
-            }
-            echo "\n";
+        foreach ($categories as $category) {
+            echo "{$white}  {$category['label']}{$r}\n";
 
-            $selectedProvider = trim(readline("  Provider [{$provider}]: "));
-            if ($selectedProvider !== '' && $selectedProvider !== $provider) {
-                $provider = $selectedProvider;
-                $changes['provider'] = $selectedProvider;
-            }
-        }
+            foreach ($category['fields'] ?? [] as $field) {
+                $id = (string) ($field['id'] ?? '');
+                $type = (string) ($field['type'] ?? 'text');
+                $current = (string) ($field['value'] ?? '');
 
-        $currentModel = (string) ($currentSettings['model'] ?? '');
-        $providerModels = $modelsByProvider[$provider] ?? [];
-        $modelDefault = $providerModelValues[$provider] ?? $providerDefaults[$provider] ?? $currentModel;
-        if ($providerModels !== []) {
-            echo "{$white}  Models for {$provider}{$r}\n";
-            foreach ($providerModels as $model) {
-                echo "{$dim}    {$white}{$model['value']}{$r}{$dim} — {$model['description']}{$r}\n";
-            }
-            echo "\n";
-        }
+                if ($type === 'readonly') {
+                    echo "{$dim}    {$field['label']}: {$current}{$r}\n";
 
-        $modelPromptDefault = $currentModel !== '' ? $currentModel : $modelDefault;
-        $selectedModel = trim(readline("  Model [{$modelPromptDefault}]: "));
-        if ($selectedModel !== '' && $selectedModel !== $currentModel) {
-            $changes['model'] = $selectedModel;
-        }
-
-        $authMode = $providerAuthModes[$provider] ?? 'api_key';
-        $authStatus = $providerStatuses[$provider] ?? 'Unknown';
-        echo "{$dim}  Auth status: {$authStatus}{$r}\n";
-
-        if ($authMode === 'api_key') {
-            $storedDisplay = $providerApiKeyDisplay[$provider] ?? '(not set)';
-            if ($storedDisplay === '(not set)') {
-                $apiKey = trim(readline('  API key: '));
-                if ($apiKey !== '') {
-                    $changes['api_key'] = $apiKey;
+                    continue;
                 }
-            } else {
-                $action = strtolower(trim(readline('  API key action [keep/edit/clear/status]: ')));
-                if ($action === 'edit') {
-                    $apiKey = trim(readline('  API key: '));
-                    if ($apiKey !== '') {
-                        $changes['api_key'] = $apiKey;
-                    }
-                } elseif ($action === 'clear') {
-                    $changes['auth_action'] = 'clear_key';
-                } elseif ($action === 'status') {
-                    $changes['auth_action'] = 'status';
+
+                $hint = '';
+                $options = is_array($field['options'] ?? null) ? $field['options'] : [];
+                if ($options !== []) {
+                    $hint = ' ['.implode('/', $options).']';
                 }
+
+                $answer = readline("  {$field['label']}{$hint} [{$current}]: ");
+                $answer = trim($answer);
+
+                if ($answer === '') {
+                    continue;
+                }
+
+                $changes[$id] = $answer;
             }
-        } elseif ($authMode === 'oauth') {
-            $action = strtolower(trim(readline('  Codex auth [browser/device/logout/status/skip]: ')));
-            $map = [
-                'browser' => 'login_browser',
-                'device' => 'login_device',
-                'logout' => 'logout',
-                'status' => 'status',
+
+            echo "\n";
+        }
+
+        $customProvider = null;
+        $customProviderId = trim((string) ($changes['custom_provider.id'] ?? ''));
+        $customModelId = trim((string) ($changes['custom_provider.model_id'] ?? ''));
+        if ($customProviderId !== '' && $customModelId !== '') {
+            $customProvider = [
+                'id' => $customProviderId,
+                'definition' => [
+                    'label' => (string) ($changes['custom_provider.label'] ?? $currentSettings['custom_provider_definitions'][$customProviderId]['label'] ?? ''),
+                    'driver' => (string) ($changes['custom_provider.driver'] ?? 'openai-compatible'),
+                    'auth' => (string) ($changes['custom_provider.auth'] ?? 'api_key'),
+                    'url' => (string) ($changes['custom_provider.url'] ?? ''),
+                    'default_model' => (string) ($changes['custom_provider.default_model'] ?? $customModelId),
+                    'modalities' => [
+                        'input' => array_values(array_filter(array_map('trim', explode(',', (string) ($changes['custom_provider.input_modalities'] ?? 'text'))))),
+                        'output' => array_values(array_filter(array_map('trim', explode(',', (string) ($changes['custom_provider.output_modalities'] ?? 'text'))))),
+                    ],
+                    'models' => [
+                        $customModelId => [
+                            'display_name' => (string) ($changes['custom_provider.label'] ?? $customModelId),
+                            'context' => (int) ($changes['custom_provider.context'] ?? 0),
+                            'max_output' => (int) ($changes['custom_provider.max_output'] ?? 0),
+                            'modalities' => [
+                                'input' => array_values(array_filter(array_map('trim', explode(',', (string) ($changes['custom_provider.input_modalities'] ?? 'text'))))),
+                                'output' => array_values(array_filter(array_map('trim', explode(',', (string) ($changes['custom_provider.output_modalities'] ?? 'text'))))),
+                            ],
+                        ],
+                    ],
+                ],
             ];
-            if (isset($map[$action])) {
-                $changes['auth_action'] = $map[$action];
-            }
-        } else {
-            $action = strtolower(trim(readline('  Auth action [status/skip]: ')));
-            if ($action === 'status') {
-                $changes['auth_action'] = 'status';
-            }
         }
 
-        echo "\n";
-
-        return $changes;
+        return [
+            'scope' => $scope,
+            'changes' => $changes,
+            'custom_provider' => $customProvider,
+            'delete_custom_provider' => null,
+        ];
     }
 
     public function pickSession(array $items): ?string

@@ -124,11 +124,11 @@ class KosmokratorStyleSheet
             ),
 
             EditorWidget::class.'::frame' => new Style(
-                color: Color::hex('#a02018'),
+                color: Color::hex('#6b3028'),
             ),
 
             EditorWidget::class.':focus::frame' => new Style(
-                color: Color::hex('#ff5040'),
+                color: Color::hex('#c85a42'),
             ),
 
             // Context progress bar

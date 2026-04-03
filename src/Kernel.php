@@ -15,8 +15,11 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ProviderCapabilitiesResolver;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\RelayProviderRegistrar;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
@@ -26,6 +29,10 @@ use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
+use Kosmokrator\Settings\SettingsManager;
+use Kosmokrator\Settings\SettingsSchema;
+use Kosmokrator\Settings\SettingsPaths;
+use Kosmokrator\Settings\YamlConfigStore;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
@@ -53,7 +60,6 @@ use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Logger;
-use OpenCompany\PrismCodex\Codex;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
 use OpenCompany\PrismRelay\Caching\GeminiCacheStore;
@@ -62,9 +68,6 @@ use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\PrismManager;
 use Prism\Prism\PrismServiceProvider;
-use Prism\Prism\Providers\Anthropic\Anthropic;
-use Prism\Prism\Providers\DeepSeek\DeepSeek;
-use Prism\Prism\Providers\Z\Z;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
 use Symfony\Component\Console\Application;
@@ -168,16 +171,20 @@ class Kernel
     {
         $config = $this->container->make('config');
         $settings = $this->container->make(SettingsRepository::class);
+        $hasExternalConfig = (new SettingsPaths(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd()))->globalReadPath() !== null
+            || (new SettingsPaths(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd()))->projectReadPath() !== null;
 
-        // Provider and model from SQLite override YAML defaults (env vars already resolved)
-        $sqliteProvider = $settings->get('global', 'agent.default_provider');
-        if ($sqliteProvider !== null) {
-            $config->set('kosmokrator.agent.default_provider', $sqliteProvider);
-        }
+        // Legacy SQLite provider/model preferences only apply when no external config exists yet.
+        if (! $hasExternalConfig) {
+            $sqliteProvider = $settings->get('global', 'agent.default_provider');
+            if ($sqliteProvider !== null) {
+                $config->set('kosmokrator.agent.default_provider', $sqliteProvider);
+            }
 
-        $sqliteModel = $settings->get('global', 'agent.default_model');
-        if ($sqliteModel !== null) {
-            $config->set('kosmokrator.agent.default_model', $sqliteModel);
+            $sqliteModel = $settings->get('global', 'agent.default_model');
+            if ($sqliteModel !== null) {
+                $config->set('kosmokrator.agent.default_model', $sqliteModel);
+            }
         }
 
         // API key: env var takes priority, then SQLite
@@ -264,9 +271,26 @@ class Kernel
 
         // HTTP client factory (used by Prism via Http facade)
         $this->container->singleton('http', fn () => new HttpFactory);
-        $this->container->singleton(ProviderMeta::class, fn () => new ProviderMeta);
+        $this->container->singleton(SettingsSchema::class, fn () => new SettingsSchema);
+        $this->container->singleton(YamlConfigStore::class, fn () => new YamlConfigStore);
+        $this->container->singleton(SettingsManager::class, fn () => new SettingsManager(
+            config: $this->container->make('config'),
+            schema: $this->container->make(SettingsSchema::class),
+            store: $this->container->make(YamlConfigStore::class),
+            baseConfigPath: $this->basePath.'/config',
+        ));
+        $this->container->singleton(RelayProviderRegistry::class, fn () => new RelayProviderRegistry(
+            $this->container->make('config'),
+        ));
+        $this->container->singleton(ProviderCapabilitiesResolver::class, fn () => new ProviderCapabilitiesResolver(
+            $this->container->make(RelayProviderRegistry::class),
+        ));
+        $this->container->singleton(ProviderMeta::class, fn () => new ProviderMeta(
+            $this->container->make(RelayProviderRegistry::class)->all(),
+        ));
         $this->container->singleton(ProviderCatalog::class, fn () => new ProviderCatalog(
             $this->container->make(ProviderMeta::class),
+            $this->container->make(RelayProviderRegistry::class),
             $this->container->make('config'),
             $this->container->make(SettingsRepository::class),
             $this->container->make(CodexTokenStoreContract::class),
@@ -284,58 +308,10 @@ class Kernel
         $provider->register();
 
         $manager = $this->container->make(PrismManager::class);
-
-        $manager->extend(
-            'kimi',
-            fn ($app, array $config) => new DeepSeek(
-                apiKey: $config['api_key'] ?? '',
-                url: $config['url'] ?? 'https://api.moonshot.ai/v1',
-            ),
-        );
-
-        $manager->extend(
-            'kimi-coding',
-            fn ($app, array $config) => new DeepSeek(
-                apiKey: $config['api_key'] ?? '',
-                url: $config['url'] ?? 'https://api.moonshot.ai/v1',
-            ),
-        );
-
-        $manager->extend(
-            'minimax',
-            fn ($app, array $config) => new Anthropic(
-                apiKey: $config['api_key'] ?? '',
-                apiVersion: '2023-06-01',
-                url: $config['url'] ?? 'https://api.minimax.io/anthropic/v1',
-            ),
-        );
-
-        $manager->extend(
-            'minimax-cn',
-            fn ($app, array $config) => new Anthropic(
-                apiKey: $config['api_key'] ?? '',
-                apiVersion: '2023-06-01',
-                url: $config['url'] ?? 'https://api.minimaxi.com/anthropic/v1',
-            ),
-        );
-
-        // Register z-api as alias of z provider (same class, different config/URL)
-        $manager->extend(
-            'z-api',
-            fn ($app, array $config) => new Z(
-                apiKey: $config['api_key'] ?? '',
-                url: $config['url'] ?? 'https://open.bigmodel.cn/api/paas/v4',
-            ),
-        );
-
-        $manager->extend(
-            'codex',
-            fn ($app, array $config) => new Codex(
-                oauthService: $this->container->make(CodexOAuthService::class),
-                url: $config['url'] ?? 'https://chatgpt.com/backend-api/codex',
-                accountId: $config['account_id'] ?? null,
-            ),
-        );
+        (new RelayProviderRegistrar(
+            $this->container->make(RelayProviderRegistry::class),
+            $this->container->make(CodexOAuthService::class),
+        ))->register($manager);
     }
 
     private function registerFacades(): void
@@ -348,6 +324,8 @@ class Kernel
     private function registerAgentServices(): void
     {
         $config = $this->container->make('config');
+        $registry = $this->container->make(RelayProviderRegistry::class);
+        $providers = $this->container->make(ProviderCatalog::class);
 
         $log = $this->container->make(LoggerInterface::class);
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
@@ -367,21 +345,24 @@ class Kernel
                 maxTokens: $config->get('kosmokrator.agent.max_tokens'),
                 temperature: $config->get('kosmokrator.agent.temperature', 0.0),
                 relay: $this->container->make(Relay::class),
+                capabilities: $this->container->make(ProviderCapabilitiesResolver::class),
             ),
             $log,
         ));
 
         $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $providerUrl = rtrim($registry->url($provider), '/');
         $this->container->singleton(AsyncLlmClient::class, fn () => new RetryableLlmClient(
             new AsyncLlmClient(
-                apiKey: $config->get("prism.providers.{$provider}.api_key", ''),
-                baseUrl: rtrim($config->get("prism.providers.{$provider}.url", ''), '/'),
+                apiKey: $providers->apiKey($provider),
+                baseUrl: $providerUrl,
                 model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
                 systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
                 maxTokens: $config->get('kosmokrator.agent.max_tokens'),
                 temperature: $config->get('kosmokrator.agent.temperature', 0.0),
                 provider: $provider,
                 relay: $this->container->make(Relay::class),
+                capabilities: $this->container->make(ProviderCapabilitiesResolver::class),
             ),
             $log,
         ));
@@ -462,6 +443,7 @@ class Kernel
             settings: $this->container->make(SettingsRepository::class),
             memories: $this->container->make(MemoryRepository::class),
             log: $this->container->make(LoggerInterface::class),
+            configSettings: $this->container->make(SettingsManager::class),
         ));
 
         $this->container->singleton(SessionGrants::class);

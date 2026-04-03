@@ -19,13 +19,13 @@ class ConfigLoader
             $config[$key] = $this->parseYaml($path);
         }
 
-        // Merge user config (~/.kosmokrator/config.yaml)
+        // Merge user config (~/.config/kosmokrator/config.yaml, legacy ~/.kosmokrator/config.yaml)
         $userConfig = $this->loadUserConfig();
         if ($userConfig !== null) {
             $config = $this->mergeDeep($config, $userConfig);
         }
 
-        // Merge project config (.kosmokrator.yaml in cwd)
+        // Merge project config (.kosmokrator/config.yaml, legacy .kosmokrator.yaml in cwd)
         $projectConfig = $this->loadProjectConfig();
         if ($projectConfig !== null) {
             $config = $this->mergeDeep($config, $projectConfig);
@@ -66,39 +66,76 @@ class ConfigLoader
     private function loadUserConfig(): ?array
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-        $path = $home.'/.kosmokrator/config.yaml';
+        $paths = [
+            $home.'/.kosmokrator/config.yaml',
+            $home.'/.config/kosmokrator/config.yaml',
+        ];
 
-        if (! file_exists($path)) {
-            return null;
+        $merged = null;
+        foreach ($paths as $path) {
+            if (! file_exists($path)) {
+                continue;
+            }
+
+            $parsed = $this->normalizeExternalConfig($this->parseYaml($path));
+            $merged = $merged === null ? $parsed : $this->mergeDeep($merged, $parsed);
         }
 
-        $userConfig = $this->parseYaml($path);
-
-        $result = [];
-
-        // Map user provider keys into prism config
-        if (isset($userConfig['providers'])) {
-            $result['prism']['providers'] = $userConfig['providers'];
-            unset($userConfig['providers']);
-        }
-
-        // Everything else goes under kosmokrator.*
-        if (! empty($userConfig)) {
-            $result['kosmokrator'] = $userConfig;
-        }
-
-        return $result;
+        return $merged;
     }
 
     private function loadProjectConfig(): ?array
     {
-        $path = getcwd().'/.kosmokrator.yaml';
+        $cwd = getcwd();
+        $paths = [
+            $cwd.'/.kosmokrator.yaml',
+            $cwd.'/.kosmokrator/config.yaml',
+        ];
 
-        if (! file_exists($path)) {
-            return null;
+        $merged = null;
+        foreach ($paths as $path) {
+            if (! file_exists($path)) {
+                continue;
+            }
+
+            $parsed = $this->normalizeExternalConfig($this->parseYaml($path));
+            $merged = $merged === null ? $parsed : $this->mergeDeep($merged, $parsed);
         }
 
-        return ['kosmokrator' => $this->parseYaml($path)];
+        return $merged;
+    }
+
+    private function normalizeExternalConfig(array $data): array
+    {
+        $knownRoots = ['app', 'kosmokrator', 'prism', 'models', 'relay'];
+        $hasKnownRoot = array_intersect(array_keys($data), $knownRoots) !== [];
+
+        if ($hasKnownRoot) {
+            if (isset($data['providers']) && ! isset($data['prism']['providers'])) {
+                $data['prism']['providers'] = $data['providers'];
+                unset($data['providers']);
+            }
+
+            return $data;
+        }
+
+        $result = [];
+
+        if (isset($data['providers'])) {
+            $result['prism']['providers'] = $data['providers'];
+            unset($data['providers']);
+        }
+
+        if (isset($data['relay'])) {
+            $result['relay'] = is_array($data['relay']) ? $data['relay'] : [];
+            unset($data['relay']);
+        }
+
+        if (! empty($data)) {
+            $result['kosmokrator'] = $data;
+        }
+
+        return $result;
     }
 
     private function mergeDeep(array $base, array $override): array

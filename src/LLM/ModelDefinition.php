@@ -6,6 +6,10 @@ namespace Kosmokrator\LLM;
 
 final readonly class ModelDefinition
 {
+    /**
+     * @param  list<string>  $inputModalities
+     * @param  list<string>  $outputModalities
+     */
     public function __construct(
         public string $id,
         public string $displayName,
@@ -14,6 +18,8 @@ final readonly class ModelDefinition
         public bool $thinking = false,
         public ?float $inputPricePerMillion = null,
         public ?float $outputPricePerMillion = null,
+        public array $inputModalities = ['text'],
+        public array $outputModalities = ['text'],
     ) {}
 
     public function label(): string

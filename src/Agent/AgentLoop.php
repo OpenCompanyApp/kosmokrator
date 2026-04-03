@@ -580,43 +580,7 @@ class AgentLoop
 
     private function formatStatusModelLabel(string $modelName): string
     {
-        if ($this->lastCacheReadInputTokens === 0 && $this->lastCacheWriteInputTokens === 0) {
-            return $modelName;
-        }
-
-        $suffix = sprintf(
-            'cache r%s w%s',
-            $this->formatTokenCount($this->lastCacheReadInputTokens),
-            $this->formatTokenCount($this->lastCacheWriteInputTokens),
-        );
-
-        if ($this->models !== null) {
-            $savings = $this->models->estimateCacheSavings(
-                $modelName,
-                $this->sessionTokensIn,
-                $this->sessionCacheReadInputTokens,
-                $this->sessionCacheWriteInputTokens,
-            );
-
-            if ($savings > 0) {
-                $suffix .= sprintf(' save $%.4f', $savings);
-            }
-        }
-
-        return $modelName.' · '.$suffix;
-    }
-
-    private function formatTokenCount(int $tokens): string
-    {
-        if ($tokens >= 1_000_000) {
-            return round($tokens / 1_000_000, 1).'M';
-        }
-
-        if ($tokens >= 1_000) {
-            return round($tokens / 1_000, 1).'k';
-        }
-
-        return (string) $tokens;
+        return $modelName;
     }
 
     private function resetToolCachesAfterCompaction(): void

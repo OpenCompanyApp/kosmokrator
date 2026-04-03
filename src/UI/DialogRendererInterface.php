@@ -13,7 +13,7 @@ interface DialogRendererInterface
      * Show the settings panel and block until the user closes it.
      *
      * @param  array<string, mixed>  $currentSettings
-     * @return array<string, string> Changed settings (id => new value)
+     * @return array<string, mixed> Structured settings result payload
      */
     public function showSettings(array $currentSettings): array;
 

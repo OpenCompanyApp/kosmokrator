@@ -75,6 +75,11 @@ final class SubagentDisplayManager
         $this->treeProvider = $provider;
     }
 
+    public function hasRunningAgents(): bool
+    {
+        return $this->loader !== null;
+    }
+
     /**
      * Ensure the wrapper container exists in the conversation.
      *
@@ -181,7 +186,7 @@ final class SubagentDisplayManager
         $blue = "\033[38;2;112;160;208m";
 
         $count = count($entries);
-        $label = $count === 1 ? 'Agent running...' : "{$count} agents running...";
+        $label = $this->formatRunningSummary($count, 0);
 
         $container = $this->ensureContainer();
         if ($container === null) {
@@ -228,9 +233,9 @@ final class SubagentDisplayManager
                         $total = AgentDisplayFormatter::countNodes($tree);
                         $done = AgentDisplayFormatter::countByStatus($tree, 'done');
                         if ($done > 0) {
-                            $this->cachedLoaderLabel = "{$total} agents ({$done} done)";
+                            $this->cachedLoaderLabel = $this->formatRunningSummary($total, $done);
                         } else {
-                            $this->cachedLoaderLabel = $total === 1 ? 'Agent running...' : "{$total} agents running...";
+                            $this->cachedLoaderLabel = $this->formatRunningSummary($total, 0);
                         }
                     }
                 } catch (\Throwable $e) {
@@ -239,12 +244,25 @@ final class SubagentDisplayManager
             }
 
             $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
-            $hint = "{$dim}(ctrl+a for dashboard){$r}";
-            $this->loader->setMessage("{$color}{$this->cachedLoaderLabel}  {$dim}{$time}{$r}  {$hint}");
+            $hint = "{$dim}ctrl+a for dashboard{$r}";
+            $meta = "{$dim} · {$time} · {$r}{$hint}";
+            $this->loader->setMessage("{$color}{$this->cachedLoaderLabel}{$r}{$meta}");
             ($this->renderCallback)();
         });
 
         ($this->renderCallback)();
+    }
+
+    private function formatRunningSummary(int $total, int $done): string
+    {
+        $noun = $total === 1 ? 'agent' : 'agents';
+        $label = "{$total} {$noun} active";
+
+        if ($done > 0) {
+            $label .= " · {$done} done";
+        }
+
+        return $label;
     }
 
     /**

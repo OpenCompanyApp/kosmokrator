@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\LLM;
 use Illuminate\Config\Repository;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
@@ -62,12 +63,65 @@ final class ProviderCatalogTest extends TestCase
             email: 'dev@example.com',
         ));
 
-        $catalog = new ProviderCatalog($meta, $config, $settings, $tokens);
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry($config), $config, $settings, $tokens);
 
         $this->assertSame(['gpt-5.3-codex', 'gpt-5-codex-mini'], $catalog->modelIds('codex'));
         $this->assertSame(['glm-5.1', 'glm-5-turbo'], $catalog->modelIds('z'));
         $this->assertSame('Authenticated · dev@example.com', $catalog->authStatus('codex'));
         $this->assertSame('Configured · zai-secr...1234', $catalog->authStatus('z'));
         $this->assertSame('No authentication required', $catalog->authStatus('ollama'));
+    }
+
+    public function test_provider_catalog_surfaces_custom_provider_source_and_modalities(): void
+    {
+        $meta = new ProviderMeta([
+            'mimo' => [
+                'default_model' => 'mimo-v2-pro',
+                'url' => 'https://token-plan-sgp.xiaomimimo.com/v1',
+                'models' => [
+                    'mimo-v2-pro' => ['display_name' => 'MiMo V2 Pro', 'context' => 1048576, 'max_output' => 131072],
+                ],
+            ],
+        ]);
+
+        $config = new Repository([
+            'relay' => [
+                'providers' => [
+                    'mimo' => [
+                        'label' => 'Xiaomi MiMo',
+                        'driver' => 'openai-compatible',
+                        'auth' => 'api_key',
+                        'modalities' => [
+                            'input' => ['text', 'image'],
+                            'output' => ['text'],
+                        ],
+                        'models' => [
+                            'mimo-v2-pro' => [
+                                'modalities' => [
+                                    'input' => ['text', 'image'],
+                                    'output' => ['text'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'prism' => [
+                'providers' => [
+                    'mimo' => ['url' => 'https://token-plan-sgp.xiaomimimo.com/v1'],
+                ],
+            ],
+        ]);
+
+        $settings = new SettingsRepository(new Database(':memory:'));
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry($config), $config, $settings, new SettingsCodexTokenStore($settings));
+
+        $provider = $catalog->provider('mimo');
+
+        $this->assertNotNull($provider);
+        $this->assertSame('custom', $provider->source);
+        $this->assertSame('openai-compatible', $provider->driver);
+        $this->assertSame(['text', 'image'], $provider->inputModalities);
+        $this->assertSame(['text', 'image'], $provider->models[0]->inputModalities);
     }
 }

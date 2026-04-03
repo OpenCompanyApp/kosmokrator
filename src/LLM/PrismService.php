@@ -24,6 +24,7 @@ class PrismService implements LlmClientInterface
         private ?int $maxTokens = null,
         private int|float|null $temperature = null,
         ?Relay $relay = null,
+        private readonly ?ProviderCapabilitiesResolver $capabilities = null,
     ) {
         $this->relay = $relay ?? new Relay;
     }
@@ -128,10 +129,11 @@ class PrismService implements LlmClientInterface
 
     public function supportsStreaming(): bool
     {
-        // Providers known to NOT support streaming in Prism
-        $nonStreamingProviders = ['z'];
+        if ($this->capabilities !== null) {
+            return $this->capabilities->supportsStreaming($this->provider);
+        }
 
-        return ! in_array($this->provider, $nonStreamingProviders);
+        return $this->provider !== 'z';
     }
 
     private function buildRequest(array $messages, array $tools = []): PendingRequest
@@ -166,6 +168,10 @@ class PrismService implements LlmClientInterface
 
     private function supportsTemperature(): bool
     {
+        if ($this->capabilities !== null) {
+            return $this->capabilities->supportsTemperature($this->provider);
+        }
+
         return ProviderCapabilities::for($this->provider)->supportsTemperature();
     }
 }

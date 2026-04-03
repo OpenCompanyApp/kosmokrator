@@ -6,6 +6,7 @@ use Illuminate\Container\Container;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\UI\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -24,6 +25,8 @@ class SetupCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $settings = $this->container->make(SettingsRepository::class);
+        $configSettings = $this->container->make(SettingsManager::class);
+        $configSettings->setProjectRoot(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd());
         $providers = $this->container->make(ProviderCatalog::class);
         $codexAuth = $this->container->make(CodexAuthFlow::class);
 
@@ -35,7 +38,7 @@ class SetupCommand extends Command
 
         echo "\n{$accent}  ⚡ KosmoKrator Setup{$r}\n\n";
 
-        $currentProvider = $settings->get('global', 'agent.default_provider')
+        $currentProvider = $configSettings->get('agent.default_provider')
             ?? (string) $this->container->make('config')->get('kosmokrator.agent.default_provider', 'z');
 
         echo "{$dim}  Available providers:{$r}\n";
@@ -68,8 +71,8 @@ class SetupCommand extends Command
         }
         echo "\n";
 
-        $savedModel = $settings->get('global', 'agent.default_model');
-        $providerSavedModel = $settings->get('global', "provider.{$provider}.last_model");
+        $savedModel = $configSettings->get('agent.default_model');
+        $providerSavedModel = $configSettings->getProviderLastModel($provider);
         $currentModel = $providerSavedModel ?? $savedModel;
         if ($currentModel === null || ! $providers->supportsModel($provider, $currentModel)) {
             $currentModel = $definition->defaultModel !== '' ? $definition->defaultModel : ($providerModels[0] ?? '');
@@ -77,9 +80,9 @@ class SetupCommand extends Command
         $model = readline("{$dim}  Model [{$currentModel}]: {$r}") ?: $currentModel;
         $model = trim($model);
 
-        $settings->set('global', 'agent.default_provider', $provider);
-        $settings->set('global', 'agent.default_model', $model);
-        $settings->set('global', "provider.{$provider}.last_model", $model);
+        $configSettings->set('agent.default_provider', $provider, 'global');
+        $configSettings->set('agent.default_model', $model, 'global');
+        $configSettings->setProviderLastModel($provider, $model, 'global');
 
         if ($definition->authMode === 'oauth') {
             echo "{$dim}  Codex uses your ChatGPT login, not an API key.{$r}\n";

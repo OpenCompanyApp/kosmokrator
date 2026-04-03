@@ -206,6 +206,7 @@ class TuiRenderer implements RendererInterface
         $this->animationManager = new TuiAnimationManager(
             thinkingBar: $this->thinkingBar,
             hasTasksProvider: fn () => $this->taskStore !== null && ! $this->taskStore->isEmpty(),
+            hasSubagentActivityProvider: fn () => $this->subagentDisplay->hasRunningAgents(),
             refreshTaskBarCallback: fn () => $this->refreshTaskBar(),
             subagentTickCallback: fn () => $this->subagentDisplay->tickTreeRefresh(),
             subagentCleanupCallback: fn () => $this->subagentDisplay->cleanup(),
@@ -695,7 +696,7 @@ HELP;
             return;
         }
 
-        if ($name === 'bash') {
+        if ($name === 'bash' && ! $this->isOmensTool($name, $args)) {
             $this->finalizeDiscoveryBatch();
             $this->beginBashCommand((string) ($args['command'] ?? ''));
             $this->flushRender();
@@ -703,7 +704,7 @@ HELP;
             return;
         }
 
-        if ($this->isDiscoveryTool($name)) {
+        if ($this->isOmensTool($name, $args)) {
             $this->appendDiscoveryToolCall($name, $args);
             $this->flushRender();
 
@@ -780,14 +781,14 @@ HELP;
             return;
         }
 
-        if ($name === 'bash') {
+        if ($name === 'bash' && ! $this->isOmensTool($name, $this->lastToolArgs)) {
             $this->completeBashCommand($output, $success);
             $this->flushRender();
 
             return;
         }
 
-        if ($this->isDiscoveryTool($name)) {
+        if ($this->isOmensTool($name, $this->lastToolArgs)) {
             $this->completeDiscoveryToolResult($name, $output, $success);
             $this->flushRender();
 
@@ -834,7 +835,7 @@ HELP;
     {
         if ($this->isTaskTool($name)
             || $name === 'bash'
-            || $this->isDiscoveryTool($name)
+            || $this->isOmensTool($name, [])
             || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
             return;
         }
@@ -1133,11 +1134,17 @@ HELP;
 
                     $this->flushPendingQuestionRecap();
 
-                    if ($this->isDiscoveryTool($name)) {
+                    if ($this->isOmensTool($name, $args)) {
                         $output = $toolResult !== null
                             ? (is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result))
                             : '';
-                        $discoveryGroup[] = $this->buildDiscoveryItem($name, $args, $output, $toolResult !== null);
+                        $discoveryGroup[] = $this->buildDiscoveryItem(
+                            $name,
+                            $args,
+                            $output,
+                            $toolResult !== null,
+                            $this->inferHistoricToolSuccess($name, $toolResult),
+                        );
 
                         continue;
                     }
@@ -1149,7 +1156,7 @@ HELP;
                         $bashWidget->addStyleClass('tool-shell');
                         if ($toolResult !== null) {
                             $output = is_string($toolResult->result) ? $toolResult->result : json_encode($toolResult->result);
-                            $bashWidget->setResult($output, true);
+                            $bashWidget->setResult($output, $this->inferHistoricToolSuccess($name, $toolResult));
                         }
                         $this->addConversationWidget($bashWidget);
 
@@ -1273,10 +1280,7 @@ HELP;
         $sep = "\033[38;5;240m·{$r}";
         $dimWhite = "\033[38;2;140;140;150m";
         $ctxColor = Theme::contextColor($ratio);
-        $costColor = "\033[38;5;245m";
-        $costLabel = Theme::formatCost($cost);
-
-        $this->statusDetail = "{$dimWhite}{$model}{$r}  {$sep}  {$ctxColor}{$inLabel}/{$maxLabel}{$r}  {$sep}  {$costColor}{$costLabel}{$r}";
+        $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}";
         $this->refreshStatusBar();
         $this->flushRender();
     }
@@ -1286,8 +1290,8 @@ HELP;
         $r = "\033[0m";
         $sep = "\033[38;5;240m·{$r}";
         $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r}  {$sep}  "
-            ."{$this->currentPermissionColor}{$this->currentPermissionLabel}{$r}  {$sep}  "
+            "{$this->currentModeColor}{$this->currentModeLabel}{$r} {$sep} "
+            ."{$this->currentPermissionColor}{$this->currentPermissionLabel}{$r} {$sep} "
             .$this->statusDetail
         );
     }
@@ -1511,9 +1515,9 @@ HELP;
         $this->flushRender();
     }
 
-    private function isDiscoveryTool(string $name): bool
+    private function isOmensTool(string $name, array $args): bool
     {
-        return in_array($name, ['file_read', 'glob', 'grep'], true);
+        return ExplorationClassifier::isOmensTool($name, $args);
     }
 
     private function appendDiscoveryToolCall(string $name, array $args): void
@@ -1587,6 +1591,8 @@ HELP;
             'file_read' => $this->formatDiscoveryReadLabel($args),
             'glob' => $this->formatDiscoveryGlobLabel($args),
             'grep' => $this->formatDiscoveryGrepLabel($args),
+            'bash' => $this->formatDiscoveryBashLabel($args),
+            'memory_search' => $this->formatDiscoveryMemoryLabel($args),
             default => Theme::toolLabel($name),
         };
 
@@ -1651,6 +1657,36 @@ HELP;
         return $label;
     }
 
+    private function formatDiscoveryBashLabel(array $args): string
+    {
+        $command = trim((string) ($args['command'] ?? ''));
+        if ($command === '') {
+            return 'shell probe';
+        }
+
+        return mb_strlen($command) > 90 ? mb_substr($command, 0, 90).'…' : $command;
+    }
+
+    private function formatDiscoveryMemoryLabel(array $args): string
+    {
+        $query = trim((string) ($args['query'] ?? ''));
+        $type = trim((string) ($args['type'] ?? ''));
+        $memoryClass = trim((string) ($args['class'] ?? ''));
+        $scope = trim((string) ($args['scope'] ?? ''));
+
+        if ($query !== '') {
+            return '"'.$query.'"'.($scope !== '' ? " in {$scope}" : '');
+        }
+
+        $parts = array_values(array_filter([
+            $type !== '' ? $type : null,
+            $memoryClass !== '' ? $memoryClass : null,
+            $scope !== '' ? $scope : null,
+        ]));
+
+        return $parts === [] ? 'saved memories' : implode(' · ', $parts);
+    }
+
     private function normalizeDiscoveryPath(string $path): string
     {
         if ($path === '' || $path === '.') {
@@ -1670,8 +1706,26 @@ HELP;
             'file_read' => $this->countNonEmptyLines($output).' lines',
             'glob' => $this->summarizeCountedResult($output, 'file', 'files', 'No files matching'),
             'grep' => $this->summarizeCountedResult($output, 'match', 'matches', 'No matches found'),
+            'bash' => $this->summarizeCountedResult($output, 'line', 'lines', 'No output'),
+            'memory_search' => $this->summarizeMemorySearchResult($output),
             default => '',
         };
+    }
+
+    private function summarizeMemorySearchResult(string $output): string
+    {
+        $trimmed = trim($output);
+        if ($trimmed === '' || $trimmed === 'No memories found.' || $trimmed === 'No session history matches found.') {
+            return '0 recalls';
+        }
+
+        if (preg_match('/^Found (\d+) memories:/', $trimmed, $matches) === 1) {
+            $count = (int) $matches[1];
+
+            return $count.' '.($count === 1 ? 'recall' : 'recalls');
+        }
+
+        return $this->countNonEmptyLines($output).' lines';
     }
 
     private function summarizeCountedResult(string $output, string $singular, string $plural, string $emptyPrefix): string
@@ -1692,6 +1746,29 @@ HELP;
             explode("\n", $output),
             static fn (string $line): bool => trim($line) !== '',
         ));
+    }
+
+    private function inferHistoricToolSuccess(string $name, mixed $toolResult): bool
+    {
+        if (! is_object($toolResult) || ! property_exists($toolResult, 'result')) {
+            return true;
+        }
+
+        $result = $toolResult->result;
+        if (! is_string($result)) {
+            return true;
+        }
+
+        $trimmed = trim($result);
+        if (str_starts_with($trimmed, 'Error:')) {
+            return false;
+        }
+
+        if ($name === 'memory_search' && str_starts_with($trimmed, 'Invalid ')) {
+            return false;
+        }
+
+        return true;
     }
 
     private function containsAnsiEscapes(string $text): bool
@@ -1792,11 +1869,15 @@ HELP;
         // (the standalone loader in thinkingBar already shows the phrase)
         $thinkingPhrase = $this->animationManager->getThinkingPhrase();
         if ($thinkingPhrase !== null && ! $this->taskStore->hasInProgress() && $this->animationManager->getLoader() === null) {
-            $elapsed = (int) (microtime(true) - $this->animationManager->getThinkingStartTime());
-            $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
             $color = $breathColor ?? "\033[38;2;112;160;208m";
             $bar .= "\n  {$border}│{$r}";
-            $bar .= "\n  {$border}│{$r} {$color}{$thinkingPhrase}{$r} {$dim}({$formatted}){$r}";
+            $bar .= "\n  {$border}│{$r} {$color}{$thinkingPhrase}{$r}";
+
+            if (! $this->subagentDisplay->hasRunningAgents()) {
+                $elapsed = (int) (microtime(true) - $this->animationManager->getThinkingStartTime());
+                $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                $bar .= "{$dim} · {$formatted}{$r}";
+            }
         }
 
         $bar .= "\n  {$border}└{$r}";

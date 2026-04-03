@@ -22,6 +22,9 @@ providers:
   kimi-coding:
     api_key: ${KIMI_API_KEY}
     url: https://api.moonshot.ai/v1
+  mimo:
+    api_key: ${MIMO_API_KEY}
+    url: https://token-plan-sgp.xiaomimimo.com/v1
   gemini:
     api_key: ${GEMINI_API_KEY}
     url: https://generativelanguage.googleapis.com/v1beta

@@ -16,6 +16,7 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
+use OpenCompany\PrismRelay\Reasoning\ReasoningStrategy;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use Prism\Prism\ValueObjects\ToolCall;
 
@@ -68,6 +69,7 @@ class AsyncLlmClient implements LlmClientInterface
         private string $provider = 'z',
         ?Relay $relay = null,
         private readonly ?RelayRegistry $registry = null,
+        private string $reasoningEffort = 'off',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
         $this->relay = $relay ?? new Relay;
@@ -124,6 +126,13 @@ class AsyncLlmClient implements LlmClientInterface
 
         if ($this->temperature !== null && $this->supportsTemperature()) {
             $payload['temperature'] = $this->temperature;
+        }
+
+        if ($this->reasoningEffort !== 'off') {
+            $reasoningParams = ReasoningStrategy::requestParams($this->provider, $this->reasoningEffort);
+            if ($reasoningParams !== []) {
+                $payload = array_merge($payload, $reasoningParams);
+            }
         }
 
         $request = new Request($this->baseUrl.'/chat/completions', 'POST');
@@ -207,6 +216,16 @@ class AsyncLlmClient implements LlmClientInterface
         $this->maxTokens = $maxTokens;
     }
 
+    public function getReasoningEffort(): string
+    {
+        return $this->reasoningEffort;
+    }
+
+    public function setReasoningEffort(string $effort): void
+    {
+        $this->reasoningEffort = $effort;
+    }
+
     /**
      * Check whether the current provider supports temperature configuration.
      * Uses RelayProviderRegistry when available, otherwise falls back to ProviderCapabilities.
@@ -265,6 +284,7 @@ class AsyncLlmClient implements LlmClientInterface
         $usage = $data['usage'] ?? [];
 
         $text = $msg['content'] ?? '';
+        $reasoningContent = ReasoningStrategy::extractReasoning($this->provider, $msg);
         $rawToolCalls = $msg['tool_calls'] ?? [];
         $finishReason = $this->mapFinishReason($choice['finish_reason'] ?? '');
 
@@ -287,6 +307,7 @@ class AsyncLlmClient implements LlmClientInterface
             thoughtTokens: (int) (($usage['completion_tokens_details']['reasoning_tokens'] ?? null)
                 ?? ($usage['output_tokens_details']['reasoning_tokens'] ?? null)
                 ?? 0),
+            reasoningContent: $reasoningContent,
         );
     }
 

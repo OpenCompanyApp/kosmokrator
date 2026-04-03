@@ -25,6 +25,8 @@ class PrismService implements LlmClientInterface
 {
     private readonly Relay $relay;
 
+    private string $reasoningEffort = 'off';
+
     public function __construct(
         private string $provider,
         private string $model,
@@ -83,6 +85,16 @@ class PrismService implements LlmClientInterface
     public function setMaxTokens(?int $maxTokens): void
     {
         $this->maxTokens = $maxTokens;
+    }
+
+    public function getReasoningEffort(): string
+    {
+        return $this->reasoningEffort ?? 'off';
+    }
+
+    public function setReasoningEffort(string $effort): void
+    {
+        $this->reasoningEffort = $effort;
     }
 
     /**

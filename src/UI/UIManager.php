@@ -115,6 +115,12 @@ class UIManager implements RendererInterface
     }
 
     /** {@inheritDoc} */
+    public function showReasoningContent(string $content): void
+    {
+        $this->renderer->showReasoningContent($content);
+    }
+
+    /** {@inheritDoc} */
     public function streamChunk(string $text): void
     {
         $this->renderer->streamChunk($text);

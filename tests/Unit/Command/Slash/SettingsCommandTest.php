@@ -193,6 +193,13 @@ final class SettingsCommandTest extends TestCase
 
             public function setMaxTokens(?int $maxTokens): void {}
 
+            public function getReasoningEffort(): string
+            {
+                return 'off';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+
             public function setApiKey(string $apiKey): void
             {
                 $this->apiKey = $apiKey;

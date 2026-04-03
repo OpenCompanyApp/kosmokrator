@@ -216,6 +216,16 @@ class RetryableLlmClient implements LlmClientInterface
         $this->inner->setMaxTokens($maxTokens);
     }
 
+    public function getReasoningEffort(): string
+    {
+        return $this->inner->getReasoningEffort();
+    }
+
+    public function setReasoningEffort(string $effort): void
+    {
+        $this->inner->setReasoningEffort($effort);
+    }
+
     /** Get the underlying client for direct access when needed (e.g. stream()). */
     public function inner(): LlmClientInterface
     {

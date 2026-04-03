@@ -22,6 +22,7 @@ readonly class LlmResponse
      * @param int          $cacheWriteInputTokens    Input tokens written to provider cache (often discounted)
      * @param int          $cacheReadInputTokens     Input tokens served from provider cache (often discounted)
      * @param int          $thoughtTokens            Reasoning/thinking tokens used by extended-thinking models
+     * @param string       $reasoningContent         Raw reasoning/thinking text returned by extended-thinking models
      */
     public function __construct(
         public string $text,
@@ -32,5 +33,6 @@ readonly class LlmResponse
         public int $cacheWriteInputTokens = 0,
         public int $cacheReadInputTokens = 0,
         public int $thoughtTokens = 0,
+        public string $reasoningContent = '',
     ) {}
 }

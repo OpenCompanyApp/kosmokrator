@@ -115,6 +115,7 @@ final class SettingsCommand implements SlashCommand
                 'tools.default_permission_mode' => $this->applyPermissionMode($ctx, $stringValue, $scope),
                 'agent.temperature' => $this->applyTemperature($ctx, $stringValue, $scope),
                 'agent.max_tokens' => $this->applyMaxTokens($ctx, $stringValue, $scope),
+                'agent.reasoning_effort' => $this->applyReasoningEffort($ctx, $stringValue, $scope),
                 'agent.default_provider' => $this->applyProvider($ctx, $catalog, $registry, $settings, $stringValue, $scope),
                 'agent.default_model' => $this->applyModel($ctx, $settings, $targetProvider, $stringValue, $scope),
                 'provider.secret.api_key' => $this->storeApiKey($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
@@ -519,6 +520,13 @@ final class SettingsCommand implements SlashCommand
         $ctx->sessionManager->setSetting('agent.max_tokens', $value, $scope);
     }
 
+    /** Updates the reasoning effort level at runtime and persists the new value. */
+    private function applyReasoningEffort(SlashCommandContext $ctx, string $value, string $scope): void
+    {
+        $ctx->llm->setReasoningEffort($value);
+        $ctx->sessionManager->setSetting('agent.reasoning_effort', $value, $scope);
+    }
+
     /**
      * Switches the active LLM provider at runtime if possible, otherwise flags
      * a restart requirement. Updates the base URL and API key on the inner client.
@@ -846,6 +854,7 @@ final class SettingsCommand implements SlashCommand
             'agent.default_model' => $ctx->llm->getModel(),
             'agent.temperature' => (string) ($ctx->llm->getTemperature() ?? 0.0),
             'agent.max_tokens' => (string) ($ctx->llm->getMaxTokens() ?? ''),
+            'agent.reasoning_effort' => $ctx->llm->getReasoningEffort(),
             'context.compact_threshold' => (string) ($ctx->agentLoop->getCompactor()?->getCompactThresholdPercent() ?? $fallback ?? 60),
             'context.prune_protect' => (string) ($ctx->agentLoop->getPruner()?->getProtectTokens() ?? $fallback ?? 40000),
             'context.prune_min_savings' => (string) ($ctx->agentLoop->getPruner()?->getMinSavings() ?? $fallback ?? 20000),

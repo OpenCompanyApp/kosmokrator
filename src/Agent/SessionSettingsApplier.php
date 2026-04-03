@@ -36,6 +36,11 @@ final class SessionSettingsApplier
             $llm->setMaxTokens((int) $maxTokens);
         }
 
+        $reasoningEffort = $this->sessionManager->getSetting('reasoning_effort');
+        if ($reasoningEffort !== null) {
+            $llm->setReasoningEffort($reasoningEffort);
+        }
+
         $permMode = $this->sessionManager->getSetting('permission_mode');
         if ($permMode !== null) {
             $mode = PermissionMode::tryFrom($permMode);

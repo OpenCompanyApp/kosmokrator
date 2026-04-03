@@ -7,6 +7,7 @@ namespace Kosmokrator\UI;
 use Amp\Cancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\UI\Ansi\AnsiAnimation;
 
 /**
  * Core lifecycle and display methods for the rendering layer.
@@ -46,6 +47,9 @@ interface CoreRendererInterface
 
     /** Return the current cancellation token, or null if none active. */
     public function getCancellation(): ?Cancellation;
+
+    /** Display model reasoning/thinking content before the main response. */
+    public function showReasoningContent(string $content): void;
 
     /** Append a chunk of streamed LLM output to the display. */
     public function streamChunk(string $text): void;
@@ -115,4 +119,7 @@ interface CoreRendererInterface
 
     /** Play the Unleash swarm animation. */
     public function playUnleash(): void;
+
+    /** Play a generic AnsiAnimation (used by power commands). */
+    public function playAnimation(AnsiAnimation $animation): void;
 }

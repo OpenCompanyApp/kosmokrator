@@ -215,6 +215,10 @@ class AgentLoop
                         $this->contextManager->getModelName(),
                     ));
 
+                    if ($response->reasoningContent !== '') {
+                        SafeDisplay::call(fn () => $this->ui->showReasoningContent($response->reasoningContent), $this->log);
+                    }
+
                     if ($fullText !== '') {
                         SafeDisplay::call(fn () => $this->ui->streamChunk($fullText), $this->log);
                     }

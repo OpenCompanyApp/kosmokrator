@@ -419,6 +419,28 @@ HELP;
         return $this->requestCancellation?->getCancellation();
     }
 
+    public function showReasoningContent(string $content): void
+    {
+        $this->clearThinking();
+        $this->flushPendingQuestionRecap();
+
+        $dim = Theme::dim();
+        $r = Theme::reset();
+        $border = Theme::borderTask();
+
+        $lines = explode("\n", $content);
+        $header = "{$dim}{$border}⟐{$r} {$dim}Reasoning{$r}";
+
+        $widget = new Widget\CollapsibleWidget(
+            header: $header,
+            content: $content,
+            lineCount: count($lines),
+        );
+        $widget->addStyleClass('tool-result');
+        $this->addConversationWidget($widget);
+        $this->flushRender();
+    }
+
     public function streamChunk(string $text): void
     {
         $this->flushPendingQuestionRecap();
@@ -580,38 +602,25 @@ HELP;
 
     public function playTheogony(): void
     {
-        $this->tui->stop();
-        echo "\033[2J\033[H";
-
-        $theogony = new AnsiTheogony;
-        $theogony->animate();
-
-        usleep(800000);
-        echo "\033[2J\033[H";
-        $this->tui->start();
-        $this->forceRender();
+        $this->playAnimation(new AnsiTheogony);
     }
 
     public function playPrometheus(): void
     {
-        $this->tui->stop();
-        echo "\033[2J\033[H";
-
-        $prometheus = new AnsiPrometheus;
-        $prometheus->animate();
-
-        echo "\033[2J\033[H";
-        $this->tui->start();
-        $this->forceRender();
+        $this->playAnimation(new AnsiPrometheus);
     }
 
     public function playUnleash(): void
     {
+        $this->playAnimation(new AnsiUnleash);
+    }
+
+    public function playAnimation(AnsiAnimation $animation): void
+    {
         $this->tui->stop();
         echo "\033[2J\033[H";
 
-        $unleash = new AnsiUnleash;
-        $unleash->animate();
+        $animation->animate();
 
         echo "\033[2J\033[H";
         $this->tui->start();

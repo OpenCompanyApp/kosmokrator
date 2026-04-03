@@ -151,6 +151,24 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         return null;
     }
 
+    public function showReasoningContent(string $content): void
+    {
+        ($this->flushQuestionRecapCallback)();
+        $dim = Theme::dim();
+        $r = Theme::reset();
+        $border = Theme::borderTask();
+
+        $lines = explode("\n", $content);
+        $truncated = count($lines) > 10;
+        $preview = implode("\n", array_slice($lines, 0, 10));
+
+        echo "\n{$dim}{$border}⟐ Reasoning{$r}\n";
+        echo "{$dim}{$preview}{$r}\n";
+        if ($truncated) {
+            echo "{$dim}  ... +".(count($lines) - 10)." lines{$r}\n";
+        }
+    }
+
     public function streamChunk(string $text): void
     {
         ($this->flushQuestionRecapCallback)();
@@ -306,20 +324,22 @@ final class AnsiCoreRenderer implements CoreRendererInterface
 
     public function playTheogony(): void
     {
-        $theogony = new AnsiTheogony;
-        $theogony->animate();
+        $this->playAnimation(new AnsiTheogony);
     }
 
     public function playPrometheus(): void
     {
-        $prometheus = new AnsiPrometheus;
-        $prometheus->animate();
+        $this->playAnimation(new AnsiPrometheus);
     }
 
     public function playUnleash(): void
     {
-        $unleash = new AnsiUnleash;
-        $unleash->animate();
+        $this->playAnimation(new AnsiUnleash);
+    }
+
+    public function playAnimation(AnsiAnimation $animation): void
+    {
+        $animation->animate();
     }
 
     /** Returns the current mode label for use by other sub-renderers. */

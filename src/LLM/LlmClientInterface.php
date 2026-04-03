@@ -42,4 +42,8 @@ interface LlmClientInterface
     public function getMaxTokens(): ?int;
 
     public function setMaxTokens(?int $maxTokens): void;
+
+    public function getReasoningEffort(): string;
+
+    public function setReasoningEffort(string $effort): void;
 }

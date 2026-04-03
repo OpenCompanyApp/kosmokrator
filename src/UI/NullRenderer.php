@@ -52,6 +52,8 @@ class NullRenderer implements RendererInterface
         return $this->cancellation;
     }
 
+    public function showReasoningContent(string $content): void {}
+
     public function streamChunk(string $text): void {}
 
     public function streamComplete(): void {}

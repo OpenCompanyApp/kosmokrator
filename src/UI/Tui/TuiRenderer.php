@@ -98,6 +98,11 @@ class TuiRenderer implements RendererInterface
         return $this->core->getCancellation();
     }
 
+    public function showReasoningContent(string $content): void
+    {
+        $this->core->showReasoningContent($content);
+    }
+
     public function streamChunk(string $text): void
     {
         $this->core->streamChunk($text);

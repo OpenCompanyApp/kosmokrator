@@ -10,7 +10,9 @@ use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
 /**
- * Tool the LLM calls to spawn a subagent.
+ * Spawns child agents that run their own autonomous tool loops.
+ * Use for parallel research (explore), read-only planning (plan), or delegated read-write work (general).
+ * Supports await mode (blocks until the child finishes) and background mode (result injected later).
  * Each instance is bound to a parent AgentContext — not registered globally.
  */
 class SubagentTool implements ToolInterface
@@ -73,6 +75,10 @@ class SubagentTool implements ToolInterface
         return ['task'];
     }
 
+    /**
+     * @param  array{task: string, type?: string, mode?: string, id?: string, depends_on?: string[], group?: string}  $args
+     * @return ToolResult Child agent summary (await mode) or spawn confirmation (background mode)
+     */
     public function execute(array $args): ToolResult
     {
         $task = trim((string) ($args['task'] ?? ''));

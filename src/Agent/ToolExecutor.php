@@ -31,6 +31,12 @@ final class ToolExecutor
 {
     private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
+    /**
+     * @param RendererInterface      $ui           Terminal UI renderer for tool call/result display
+     * @param LoggerInterface        $log          Logger for tool execution events
+     * @param PermissionEvaluator|null $permissions Permission policy evaluator (null = no restrictions)
+     * @param OutputTruncator|null   $truncator    Truncates oversized tool output to fit context
+     */
     public function __construct(
         private readonly RendererInterface $ui,
         private readonly LoggerInterface $log,
@@ -439,16 +445,19 @@ final class ToolExecutor
         return null;
     }
 
+    /** Whether the tool is an interactive question tool (ask_user / ask_choice). */
     private function isAskTool(string $name): bool
     {
         return in_array($name, self::ASK_TOOLS, true);
     }
 
+    /** Whether the tool can execute shell commands that might be mutative. */
     private function isReadOnlyShellTool(string $name): bool
     {
         return in_array($name, ['bash', 'shell_start', 'shell_write'], true);
     }
 
+    /** Extract the command string from a tool call's arguments (handles both 'command' and 'input' keys). */
     private function commandLikeInput(ToolCall $toolCall): string
     {
         return (string) ($toolCall->arguments()['command'] ?? $toolCall->arguments()['input'] ?? '');

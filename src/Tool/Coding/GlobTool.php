@@ -5,6 +5,11 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Finds files matching a glob pattern, with recursive (`**`) support.
+ * Use to discover project structure, locate specific file types, or enumerate test files.
+ * Automatically skips hidden directories, `vendor/`, and `node_modules/` during recursion.
+ */
 class GlobTool implements ToolInterface
 {
     public function name(): string
@@ -30,6 +35,10 @@ class GlobTool implements ToolInterface
         return ['pattern'];
     }
 
+    /**
+     * @param  array{pattern: string, path?: string}  $args  Glob pattern and optional base directory
+     * @return ToolResult Sorted list of matching relative paths (capped at 200), or "no matches" message
+     */
     public function execute(array $args): ToolResult
     {
         $pattern = $args['pattern'] ?? '';

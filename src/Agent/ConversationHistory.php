@@ -9,16 +9,25 @@ use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolResult;
 
+/**
+ * Manages the conversation message list: adding, compacting, pruning, and restoring messages.
+ *
+ * Wraps an array of Prism Message objects (UserMessage, AssistantMessage, ToolResultMessage, SystemMessage).
+ * Supports compaction (replace old messages with a summary), pruning (replace tool results with placeholders),
+ * superseding (mark cached reads as stale), and trimming (drop oldest turns as a last resort).
+ */
 class ConversationHistory
 {
     /** @var array<int, Message> */
     private array $messages = [];
 
+    /** Append a user message to the conversation. */
     public function addUser(string $content): void
     {
         $this->messages[] = new UserMessage($content);
     }
 
+    /** Append an assistant message, optionally with tool calls. */
     public function addAssistant(string $content, array $toolCalls = []): void
     {
         $this->messages[] = new AssistantMessage($content, $toolCalls);
@@ -96,6 +105,9 @@ class ConversationHistory
         $this->messages = [new SystemMessage($summary), ...$recent];
     }
 
+    /**
+     * Replace the entire message list with the plan's pre-built replacement messages.
+     */
     public function applyCompactionPlan(CompactionPlan $plan): void
     {
         if ($plan->isEmpty()) {
@@ -105,13 +117,20 @@ class ConversationHistory
         $this->messages = $plan->replacementMessages;
     }
 
+    /**
+     * Find the message index where the Nth-to-last user turn starts (used by ContextCompactor).
+     */
     public function findKeepBoundary(int $keepRecent = 3): int
     {
         return self::findKeepBoundaryInMessages($this->messages, $keepRecent);
     }
 
     /**
-     * @param  Message[]  $messages
+     * Find the message index where the Nth-from-last user turn starts.
+     * Used by compaction to determine which messages to summarize vs. keep.
+     *
+     * @param  Message[]  $messages  Flat message array to scan
+     * @param  int  $keepRecent  Number of recent user turns to locate
      */
     public static function findKeepBoundaryInMessages(array $messages, int $keepRecent = 3): int
     {
@@ -132,6 +151,13 @@ class ConversationHistory
         return $keepFrom;
     }
 
+    /**
+     * Collect the text of the last N user messages for memory-relevance queries.
+     *
+     * @param  int  $turns  Number of user turns to include
+     * @param  int  $maxChars  Hard character limit on the concatenated result
+     * @return string Concatenated user text (oldest first), truncated to $maxChars
+     */
     public function latestUserContext(int $turns = 3, int $maxChars = 1200): string
     {
         $chunks = [];

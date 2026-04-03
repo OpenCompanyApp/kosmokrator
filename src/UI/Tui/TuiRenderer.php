@@ -42,6 +42,13 @@ use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 use Tempest\Highlight\Highlighter;
 
+/**
+ * Main TUI renderer implementing the full-screen terminal interface.
+ *
+ * Delegates phase/animation to TuiAnimationManager, overlay dialogs to TuiModalManager,
+ * subagent lifecycle to SubagentDisplayManager, tool classification to ExplorationClassifier,
+ * and permission previews to PermissionPreviewBuilder.
+ */
 class TuiRenderer implements RendererInterface
 {
     private Tui $tui;
@@ -84,6 +91,14 @@ class TuiRenderer implements RendererInterface
     private string $currentPermissionLabel = 'Guardian ◈';
 
     private string $currentPermissionColor = "\033[38;2;180;180;200m";
+
+    private ?int $lastStatusTokensIn = null;
+
+    private ?int $lastStatusTokensOut = null;
+
+    private ?float $lastStatusCost = null;
+
+    private ?int $lastStatusMaxContext = null;
 
     private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
 
@@ -149,11 +164,13 @@ class TuiRenderer implements RendererInterface
 
     private bool $hasHiddenActivityBelow = false;
 
+    /** Injects the TaskStore for rendering the task tree in the task bar. */
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
     }
 
+    /** Builds the full TUI layout: conversation, overlay, task bar, thinking bar, editor, and status bar. */
     public function initialize(): void
     {
         $this->tui = new Tui(KosmokratorStyleSheet::create());
@@ -256,6 +273,11 @@ class TuiRenderer implements RendererInterface
         $this->tui->start();
     }
 
+    /**
+     * Renders the startup splash: ANSI art animation, orrery diagram, and quick-reference tutorial.
+     *
+     * @param  bool  $animated  Whether to play the full ANSI animation or show a static splash
+     */
     public function renderIntro(bool $animated): void
     {
         // Run the full ANSI animated intro first (before TUI takes over the screen)
@@ -340,6 +362,11 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Suspends execution until the user submits input, then returns the entered text.
+     *
+     * @return string The user's input text (or a slash command)
+     */
     public function prompt(): string
     {
         $this->flushPendingQuestionRecap();
@@ -356,6 +383,11 @@ HELP;
         return $this->promptSuspension->suspend();
     }
 
+    /**
+     * Displays a user message bubble in the conversation area.
+     *
+     * @param  string  $text  The raw user message to display
+     */
     public function showUserMessage(string $text): void
     {
         $this->flushPendingQuestionRecap();
@@ -373,6 +405,11 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Transitions the renderer to a new agent phase, updating loaders and cancellation state.
+     *
+     * @param  AgentPhase  $phase  The target phase (Thinking, RunningTools, Idle)
+     */
     public function setPhase(AgentPhase $phase): void
     {
         if ($phase === $this->animationManager->getCurrentPhase()) {
@@ -398,31 +435,45 @@ HELP;
         }
     }
 
+    /** Shortcut to transition into the Thinking phase. */
     public function showThinking(): void
     {
         $this->setPhase(AgentPhase::Thinking);
     }
 
+    /** Shortcut to transition back to Idle phase. */
     public function clearThinking(): void
     {
         $this->setPhase(AgentPhase::Idle);
     }
 
+    /** Delegates to TuiAnimationManager to show the compacting loader. */
     public function showCompacting(): void
     {
         $this->animationManager->showCompacting();
     }
 
+    /** Delegates to TuiAnimationManager to clear the compacting loader. */
     public function clearCompacting(): void
     {
         $this->animationManager->clearCompacting();
     }
 
+    /**
+     * Returns the current request's cancellation token, or null if no request is active.
+     *
+     * @return Cancellation|null Cancellation token for the in-flight LLM request
+     */
     public function getCancellation(): ?Cancellation
     {
         return $this->requestCancellation?->getCancellation();
     }
 
+    /**
+     * Appends a streaming text chunk to the active response widget, auto-detecting ANSI art.
+     *
+     * @param  string  $text  The incremental text chunk from the LLM response
+     */
     public function streamChunk(string $text): void
     {
         $this->flushPendingQuestionRecap();
@@ -459,6 +510,7 @@ HELP;
         $this->flushRender();
     }
 
+    /** Finalizes the current streaming response and resets the active response state. */
     public function streamComplete(): void
     {
         $this->activeResponse = null;
@@ -467,6 +519,13 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Displays a tool call in the conversation, dispatching to specialized handlers
+     * for bash, discovery/omens, task, and ask tools.
+     *
+     * @param  string  $name  The tool name (e.g. 'file_read', 'bash', 'subagent')
+     * @param  array   $args  The tool call arguments
+     */
     public function showToolCall(string $name, array $args): void
     {
         if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
@@ -557,6 +616,14 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Displays a tool result with success/failure indicator, using diff views for edits
+     * and syntax highlighting for file reads.
+     *
+     * @param  string  $name     The tool name
+     * @param  string  $output   The raw tool output
+     * @param  bool    $success  Whether the tool call succeeded
+     */
     public function showToolResult(string $name, string $output, bool $success): void
     {
         if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
@@ -628,6 +695,13 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Delegates to TuiModalManager to show a permission prompt for a tool call.
+     *
+     * @param  string  $toolName  The tool requesting permission
+     * @param  array   $args      The tool call arguments for preview
+     * @return string The user's decision ('allow', 'deny', 'always', 'guardian', or 'prometheus')
+     */
     public function askToolPermission(string $toolName, array $args): string
     {
         return $this->modalManager->askToolPermission($toolName, $args);
@@ -638,6 +712,11 @@ HELP;
         // Intentionally silent — auto-approve is already visible in the status bar
     }
 
+    /**
+     * Shows an animated loader for a tool that is currently executing, with elapsed time.
+     *
+     * @param  string  $name  The tool name being executed
+     */
     public function showToolExecuting(string $name): void
     {
         if ($this->isTaskTool($name)
@@ -684,6 +763,11 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Updates the executing-tool loader with the latest output preview.
+     *
+     * @param  string  $output  Recent tool output to preview
+     */
     public function updateToolExecuting(string $output): void
     {
         // Show last non-empty line as preview
@@ -701,6 +785,7 @@ HELP;
         }
     }
 
+    /** Removes the tool-executing loader and cancels its animation timer. */
     public function clearToolExecuting(): void
     {
         if ($this->toolExecutingTimerId !== null) {
@@ -716,6 +801,12 @@ HELP;
         $this->toolExecutingPreview = null;
     }
 
+    /**
+     * Updates the status bar to reflect the active permission mode.
+     *
+     * @param  string  $label  The permission mode label (e.g. 'Guardian ◈')
+     * @param  string  $color  ANSI color code for the label
+     */
     public function setPermissionMode(string $label, string $color): void
     {
         $this->currentPermissionLabel = $label;
@@ -724,11 +815,23 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Delegates to TuiModalManager to show plan approval dialog.
+     *
+     * @param  string  $currentPermissionMode  The current permission mode identifier
+     * @return array{permission: string, context: string}|null Approved plan data, or null if rejected
+     */
     public function approvePlan(string $currentPermissionMode): ?array
     {
         return $this->modalManager->approvePlan($currentPermissionMode);
     }
 
+    /**
+     * Shows a free-text question modal and queues the answer for later recap display.
+     *
+     * @param  string  $question  The question to ask
+     * @return string The user's answer
+     */
     public function askUser(string $question): string
     {
         $answer = $this->modalManager->askUser($question);
@@ -743,6 +846,13 @@ HELP;
         return $answer;
     }
 
+    /**
+     * Shows a multiple-choice modal and queues the selection for later recap display.
+     *
+     * @param  string  $question  The question prompt
+     * @param  array   $choices   Array of choice options with labels and details
+     * @return string The selected choice label, or 'dismissed'
+     */
     public function askChoice(string $question, array $choices): string
     {
         $result = $this->modalManager->askChoice($question, $choices);
@@ -758,6 +868,7 @@ HELP;
         return $result;
     }
 
+    /** Applies syntax highlighting to file_read output, preserving line-number prefixes. */
     private function highlightFileOutput(string $output, ?string $path = null): string
     {
         $path ??= $this->lastToolArgs['path'] ?? '';
@@ -800,6 +911,7 @@ HELP;
         return implode("\n", $result);
     }
 
+    /** Renders a unified diff between old and new strings via DiffRenderer. */
     private function buildDiffView(string $old, string $new, string $path): string
     {
         return $this->getDiffRenderer()->render($old, $new, $path);
@@ -815,6 +927,7 @@ HELP;
         return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme);
     }
 
+    /** Clears all conversation widgets and resets scroll/discovery state. */
     public function clearConversation(): void
     {
         $this->conversation->clear();
@@ -831,6 +944,11 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Rebuilds the conversation from a message history array, pairing tool calls with their results.
+     *
+     * @param  array  $messages  Array of Prism message objects (UserMessage, AssistantMessage, ToolResultMessage)
+     */
     public function replayHistory(array $messages): void
     {
         $this->activeBashWidget = null;
@@ -1043,6 +1161,7 @@ HELP;
         $this->flushRender();
     }
 
+    /** Displays an informational notice in the conversation. */
     public function showNotice(string $message): void
     {
         $this->flushPendingQuestionRecap();
@@ -1052,6 +1171,7 @@ HELP;
         $this->flushRender();
     }
 
+    /** Updates the status bar with the current agent mode label and color. */
     public function showMode(string $label, string $color = ''): void
     {
         $this->currentModeLabel = $label;
@@ -1062,6 +1182,7 @@ HELP;
         $this->flushRender();
     }
 
+    /** Displays an error message in the conversation. */
     public function showError(string $message): void
     {
         $this->flushPendingQuestionRecap();
@@ -1071,8 +1192,22 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Updates the status bar with model name, token usage, cost, and context window progress.
+     *
+     * @param  string  $model       The model identifier (e.g. 'claude-sonnet-4')
+     * @param  int     $tokensIn    Input tokens consumed
+     * @param  int     $tokensOut   Output tokens generated
+     * @param  float   $cost        Total cost in USD
+     * @param  int     $maxContext  Maximum context window size in tokens
+     */
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
+        $this->lastStatusTokensIn = $tokensIn;
+        $this->lastStatusTokensOut = $tokensOut;
+        $this->lastStatusCost = $cost;
+        $this->lastStatusMaxContext = $maxContext;
+
         // Update progress bar max if model changed
         if ($this->statusBar->getMaxSteps() !== $maxContext) {
             $this->statusBar->start($maxContext, $tokensIn);
@@ -1092,6 +1227,43 @@ HELP;
         $this->flushRender();
     }
 
+    /**
+     * Updates the status bar when the runtime model/provider changes mid-session.
+     *
+     * @param  string  $provider    The provider name
+     * @param  string  $model       The model identifier
+     * @param  int     $maxContext  New maximum context window size
+     */
+    public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void
+    {
+        $tokensIn = min($this->lastStatusTokensIn ?? 0, $maxContext);
+
+        if ($this->statusBar->getMaxSteps() !== $maxContext) {
+            $this->statusBar->start($maxContext, $tokensIn);
+        } else {
+            $this->statusBar->setProgress($tokensIn);
+        }
+
+        $label = $provider.'/'.$model;
+        $r = "\033[0m";
+        $dimWhite = "\033[38;2;140;140;150m";
+
+        if ($this->lastStatusMaxContext === null) {
+            $this->statusDetail = "{$dimWhite}{$label}{$r}";
+        } else {
+            $inLabel = Theme::formatTokenCount($tokensIn);
+            $maxLabel = Theme::formatTokenCount($maxContext);
+            $ratio = min(1.0, $tokensIn / max(1, $maxContext));
+            $sep = "\033[38;5;240m·{$r}";
+            $ctxColor = Theme::contextColor($ratio);
+            $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}";
+        }
+
+        $this->refreshStatusBar();
+        $this->flushRender();
+    }
+
+    /** Rebuilds the status bar message from current mode, permission, and status detail. */
     private function refreshStatusBar(): void
     {
         $r = "\033[0m";
@@ -1103,6 +1275,12 @@ HELP;
         );
     }
 
+    /**
+     * Opens the settings modal; re-binds input handlers after close.
+     *
+     * @param  array  $currentSettings  Current setting key-value pairs
+     * @return array The updated settings
+     */
     public function showSettings(array $currentSettings): array
     {
         $result = $this->modalManager->showSettings($currentSettings);
@@ -1113,6 +1291,7 @@ HELP;
         return $result;
     }
 
+    /** Delegates to TuiModalManager to show session picker and return the selected session ID. */
     public function pickSession(array $items): ?string
     {
         return $this->modalManager->pickSession($items);
@@ -1123,6 +1302,7 @@ HELP;
         // Already handled in renderIntro
     }
 
+    /** Suspends TUI, plays the KosmoKrator origin ANSI animation, then resumes TUI. */
     public function playTheogony(): void
     {
         // Suspend TUI — restores terminal to normal mode
@@ -1140,6 +1320,7 @@ HELP;
         $this->forceRender();
     }
 
+    /** Suspends TUI, plays the Prometheus ANSI animation, then resumes TUI. */
     public function playPrometheus(): void
     {
         $this->tui->stop();
@@ -1153,6 +1334,11 @@ HELP;
         $this->forceRender();
     }
 
+    /**
+     * Returns the next queued user message (from interrupt-driven input during a request), or null.
+     *
+     * @return string|null The next queued message, or null if the queue is empty
+     */
     public function consumeQueuedMessage(): ?string
     {
         if ($this->messageQueue === []) {
@@ -1173,6 +1359,11 @@ HELP;
         $this->showUserMessage($message);
     }
 
+    /**
+     * Displays a text summary of all subagent statuses in the conversation.
+     *
+     * @param  array  $stats  Array of subagent status objects with status, task, agentType, toolCalls
+     */
     public function showSubagentStatus(array $stats): void
     {
         if (empty($stats)) {
@@ -1207,36 +1398,43 @@ HELP;
         // TUI: status is part of conversation flow, nothing to actively clear
     }
 
+    /** Delegates to SubagentDisplayManager to update running subagent entries. */
     public function showSubagentRunning(array $entries): void
     {
         $this->subagentDisplay->showRunning($entries);
     }
 
+    /** Sets the closure that provides the live agent tree for display. */
     public function setAgentTreeProvider(?\Closure $provider): void
     {
         $this->subagentDisplay->setTreeProvider($provider);
     }
 
+    /** Delegates to SubagentDisplayManager to refresh the agent tree visualization. */
     public function refreshSubagentTree(array $tree): void
     {
         $this->subagentDisplay->refreshTree($tree);
     }
 
+    /** Delegates to SubagentDisplayManager to display newly spawned subagents. */
     public function showSubagentSpawn(array $entries): void
     {
         $this->subagentDisplay->showSpawn($entries);
     }
 
+    /** Delegates to SubagentDisplayManager to display completed subagent batch results. */
     public function showSubagentBatch(array $entries): void
     {
         $this->subagentDisplay->showBatch($entries);
     }
 
+    /** Delegates to TuiModalManager to show the agents swarm dashboard overlay. */
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
     {
         $this->modalManager->showAgentsDashboard($summary, $allStats, $refresh);
     }
 
+    /** Stops the TUI and restores the terminal to normal mode. */
     public function teardown(): void
     {
         if ($this->tui->isRunning()) {
@@ -1267,6 +1465,7 @@ HELP;
         $this->tui->processRender();
     }
 
+    /** Registers input, cancel, change, and submit handlers on the editor widget. */
     private function bindInputHandlers(): void
     {
         $this->input->onInput(function (string $data): bool {
@@ -1452,6 +1651,7 @@ HELP;
         });
     }
 
+    /** Returns the next mode in the edit → plan → ask cycle. */
     private function cycleMode(): string
     {
         $modes = ['edit', 'plan', 'ask'];
@@ -1462,6 +1662,7 @@ HELP;
         return $next;
     }
 
+    /** Shows or updates the slash command autocomplete dropdown filtered by the current input. */
     private function showSlashCompletion(string $filter): void
     {
         $filtered = array_values(array_filter(
@@ -1487,6 +1688,7 @@ HELP;
         $this->flushRender();
     }
 
+    /** Removes the slash command autocomplete dropdown from the overlay. */
     private function hideSlashCompletion(): void
     {
         if ($this->slashCompletion !== null) {
@@ -1496,6 +1698,7 @@ HELP;
         }
     }
 
+    /** Toggles expand/collapse on every ToggleableWidget in the conversation tree. */
     private function toggleAllToolResults(): void
     {
         $toggle = function (array $widgets) use (&$toggle): void {
@@ -1512,11 +1715,13 @@ HELP;
         $this->flushRender();
     }
 
+    /** Delegates to ExplorationClassifier to check if a tool is an exploration/omens tool. */
     private function isOmensTool(string $name, array $args): bool
     {
         return ExplorationClassifier::isOmensTool($name, $args);
     }
 
+    /** Adds a pending discovery item to the active batch widget, creating the batch if needed. */
     private function appendDiscoveryToolCall(string $name, array $args): void
     {
         if ($this->activeDiscoveryBatch === null) {
@@ -1529,6 +1734,7 @@ HELP;
         $this->activeDiscoveryBatch->setItems($this->activeDiscoveryItems);
     }
 
+    /** Updates the last discovery item with its result output and success status. */
     private function completeDiscoveryToolResult(string $name, string $output, bool $success): void
     {
         if ($this->activeDiscoveryItems === []) {
@@ -1551,12 +1757,14 @@ HELP;
         $this->activeDiscoveryBatch?->setItems($this->activeDiscoveryItems);
     }
 
+    /** Resets the active discovery batch state after a non-discovery tool breaks the group. */
     private function finalizeDiscoveryBatch(): void
     {
         $this->activeDiscoveryBatch = null;
         $this->activeDiscoveryItems = [];
     }
 
+    /** Creates and adds a BashCommandWidget to the conversation. */
     private function beginBashCommand(string $command): void
     {
         $this->activeBashWidget = new BashCommandWidget($command);
@@ -1564,6 +1772,7 @@ HELP;
         $this->addConversationWidget($this->activeBashWidget);
     }
 
+    /** Attaches the result output to the active bash widget. */
     private function completeBashCommand(string $output, bool $success): void
     {
         if ($this->activeBashWidget === null) {
@@ -1614,6 +1823,7 @@ HELP;
         ];
     }
 
+    /** Formats a file_read tool label showing the relative path and optional offset. */
     private function formatDiscoveryReadLabel(array $args): string
     {
         $path = Theme::relativePath((string) ($args['path'] ?? ''));
@@ -1625,6 +1835,7 @@ HELP;
         return $path;
     }
 
+    /** Formats a glob tool label showing the pattern and optional path scope. */
     private function formatDiscoveryGlobLabel(array $args): string
     {
         $pattern = (string) ($args['pattern'] ?? '');
@@ -1637,6 +1848,7 @@ HELP;
         return "{$pattern} in {$path}";
     }
 
+    /** Formats a grep tool label showing the pattern, path scope, and optional glob filter. */
     private function formatDiscoveryGrepLabel(array $args): string
     {
         $pattern = '"'.(string) ($args['pattern'] ?? '').'"';
@@ -1654,6 +1866,7 @@ HELP;
         return $label;
     }
 
+    /** Formats a bash tool label, truncating long commands. */
     private function formatDiscoveryBashLabel(array $args): string
     {
         $command = trim((string) ($args['command'] ?? ''));
@@ -1664,6 +1877,7 @@ HELP;
         return mb_strlen($command) > 90 ? mb_substr($command, 0, 90).'…' : $command;
     }
 
+    /** Formats a memory_search tool label showing the query or filter criteria. */
     private function formatDiscoveryMemoryLabel(array $args): string
     {
         $query = trim((string) ($args['query'] ?? ''));
@@ -1684,6 +1898,7 @@ HELP;
         return $parts === [] ? 'saved memories' : implode(' · ', $parts);
     }
 
+    /** Returns a relative display path, collapsing empty/current-directory to '.'. */
     private function normalizeDiscoveryPath(string $path): string
     {
         if ($path === '' || $path === '.') {
@@ -1693,6 +1908,7 @@ HELP;
         return Theme::relativePath($path);
     }
 
+    /** Produces a one-line summary of a discovery tool result (e.g. "42 lines", "3 files"). */
     private function summarizeDiscoveryResult(string $name, string $output, bool $success): string
     {
         if (! $success) {
@@ -1709,6 +1925,7 @@ HELP;
         };
     }
 
+    /** Extracts a recall count from memory_search output text. */
     private function summarizeMemorySearchResult(string $output): string
     {
         $trimmed = trim($output);
@@ -1725,6 +1942,7 @@ HELP;
         return $this->countNonEmptyLines($output).' lines';
     }
 
+    /** Counts non-empty lines in output and formats with singular/plural noun. */
     private function summarizeCountedResult(string $output, string $singular, string $plural, string $emptyPrefix): string
     {
         $trimmed = trim($output);
@@ -1745,6 +1963,7 @@ HELP;
         ));
     }
 
+    /** Infers success/failure from a historic tool result string heuristically. */
     private function inferHistoricToolSuccess(string $name, mixed $toolResult): bool
     {
         if (! is_object($toolResult) || ! property_exists($toolResult, 'result')) {
@@ -1768,17 +1987,20 @@ HELP;
         return true;
     }
 
+    /** Checks whether a string contains ANSI escape sequences. */
     private function containsAnsiEscapes(string $text): bool
     {
         return str_contains($text, "\x1b[");
     }
 
+    /** Adds a widget to the conversation and marks hidden activity if browsing history. */
     private function addConversationWidget(AbstractWidget $widget): void
     {
         $this->conversation->add($widget);
         $this->markHiddenConversationActivity();
     }
 
+    /** Flags that new content was added below the visible area while browsing history. */
     private function markHiddenConversationActivity(): void
     {
         if (! $this->isBrowsingHistory()) {
@@ -1789,12 +2011,14 @@ HELP;
         $this->refreshHistoryStatus();
     }
 
+    /** Scrolls the conversation view up by one page step. */
     private function scrollHistoryUp(): void
     {
         $this->scrollOffset += $this->historyScrollStep();
         $this->applyScrollOffset();
     }
 
+    /** Scrolls the conversation view down by one page step, clamping at zero. */
     private function scrollHistoryDown(): void
     {
         $this->scrollOffset = max(0, $this->scrollOffset - $this->historyScrollStep());
@@ -1805,6 +2029,7 @@ HELP;
         $this->applyScrollOffset();
     }
 
+    /** Resets scroll to the bottom (live output position). */
     private function jumpToLiveOutput(): void
     {
         $this->scrollOffset = 0;
@@ -1812,6 +2037,7 @@ HELP;
         $this->applyScrollOffset();
     }
 
+    /** Applies the current scroll offset to the TUI and refreshes the history indicator. */
     private function applyScrollOffset(): void
     {
         $this->tui->setScrollOffset($this->scrollOffset);
@@ -1819,6 +2045,7 @@ HELP;
         $this->flushRender();
     }
 
+    /** Shows or hides the history status indicator based on scroll state. */
     private function refreshHistoryStatus(): void
     {
         if (! $this->isBrowsingHistory()) {
@@ -1830,16 +2057,19 @@ HELP;
         $this->historyStatus->show($this->hasHiddenActivityBelow);
     }
 
+    /** Returns true when the user has scrolled up from live output. */
     private function isBrowsingHistory(): bool
     {
         return $this->scrollOffset > 0;
     }
 
+    /** Calculates the number of lines to scroll per page-up/page-down, based on terminal height. */
     private function historyScrollStep(): int
     {
         return max(6, $this->tui->getTerminal()->getRows() - 10);
     }
 
+    /** Rebuilds the task tree display from TaskStore, embedding the thinking spinner when applicable. */
     public function refreshTaskBar(): void
     {
         if ($this->taskStore === null || $this->taskStore->isEmpty()) {
@@ -1882,11 +2112,13 @@ HELP;
         $this->taskBar->setText($bar);
     }
 
+    /** Returns true if the tool name is a task management tool. */
     private function isTaskTool(string $name): bool
     {
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
     }
 
+    /** Queues a question/answer pair for deferred recap display in the conversation. */
     private function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
     {
         $this->pendingQuestionRecap[] = [
@@ -1897,6 +2129,7 @@ HELP;
         ];
     }
 
+    /** Renders all queued question/answer pairs as an AnsweredQuestionsWidget and clears the queue. */
     private function flushPendingQuestionRecap(): void
     {
         if ($this->pendingQuestionRecap === []) {

@@ -13,6 +13,11 @@ use Symfony\Component\Tui\Widget\FocusableInterface;
 use Symfony\Component\Tui\Widget\FocusableTrait;
 use Symfony\Component\Tui\Widget\KeybindingsTrait;
 
+/**
+ * Post-plan approval dialog shown after the agent finishes planning.
+ * Lets the user choose to implement the plan with a specific permission mode and context strategy,
+ * or dismiss the plan entirely.
+ */
 class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
 {
     use FocusableTrait;
@@ -47,12 +52,13 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
         }
     }
 
-    /** @var callable|null */
+    /** @var callable|null Callback invoked when the user confirms (Implement). */
     private $onConfirmCallback = null;
 
-    /** @var callable|null */
+    /** @var callable|null Callback invoked when the user dismisses the plan. */
     private $onDismissCallback = null;
 
+    /** Register the callback invoked when the user confirms implementation. */
     public function onConfirm(callable $callback): static
     {
         $this->onConfirmCallback = $callback;
@@ -60,6 +66,7 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
         return $this;
     }
 
+    /** Register the callback invoked when the user dismisses the plan. */
     public function onDismiss(callable $callback): static
     {
         $this->onDismissCallback = $callback;
@@ -67,16 +74,19 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
         return $this;
     }
 
+    /** Return the currently selected permission-mode identifier (e.g. 'guardian', 'argus', 'prometheus'). */
     public function getPermissionId(): string
     {
         return self::PERMISSIONS[$this->permissionIndex]['id'];
     }
 
+    /** Return the currently selected context strategy identifier ('keep', 'compact', 'clear'). */
     public function getContextId(): string
     {
         return self::CONTEXTS[$this->contextIndex]['id'];
     }
 
+    /** Handle Up/Down/Left/Right/Enter/Esc to navigate rows and cycle toggles. */
     public function handleInput(string $data): void
     {
         $kb = $this->getKeybindings();
@@ -139,6 +149,12 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
         }
     }
 
+    /**
+     * Render the full-width bordered approval box with Implement/Dismiss options.
+     *
+     * @param  RenderContext  $context  Terminal dimensions
+     * @return list<string>  ANSI-formatted lines
+     */
     public function render(RenderContext $context): array
     {
         $r = Theme::reset();

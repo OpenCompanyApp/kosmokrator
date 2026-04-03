@@ -2,181 +2,251 @@
 
 namespace Kosmokrator\UI;
 
+/**
+ * Centralized ANSI color/theme definitions and terminal control sequences.
+ *
+ * Provides static helpers for colors, icons, formatting utilities, and
+ * cursor/terminal control used across all renderers.
+ */
 class Theme
 {
+    /** ANSI escape prefix. */
     private const ESC = "\033";
 
+    /**
+     * Build a 24-bit foreground color escape sequence.
+     *
+     * @param int $r Red channel (0–255)
+     * @param int $g Green channel (0–255)
+     * @param int $b Blue channel (0–255)
+     * @return string ANSI escape sequence
+     */
     public static function rgb(int $r, int $g, int $b): string
     {
         return self::ESC."[38;2;{$r};{$g};{$b}m";
     }
 
+    /**
+     * Build a 24-bit background color escape sequence.
+     *
+     * @param int $r Red channel (0–255)
+     * @param int $g Green channel (0–255)
+     * @param int $b Blue channel (0–255)
+     * @return string ANSI escape sequence
+     */
     public static function bgRgb(int $r, int $g, int $b): string
     {
         return self::ESC."[48;2;{$r};{$g};{$b}m";
     }
 
+    /**
+     * Build a 256-color foreground escape sequence.
+     *
+     * @param int $code 256-color palette index (0–255)
+     * @return string ANSI escape sequence
+     */
     public static function color256(int $code): string
     {
         return self::ESC."[38;5;{$code}m";
     }
 
     // Core palette
+    /** Primary brand color (fiery red-orange). */
     public static function primary(): string
     {
         return self::rgb(255, 60, 40);
     }
 
+    /** Dimmed primary for subtle accents. */
     public static function primaryDim(): string
     {
         return self::rgb(160, 30, 30);
     }
 
+    /** Accent highlight (gold). */
     public static function accent(): string
     {
         return self::rgb(255, 200, 80);
     }
 
+    /** Success/positive indicator (green). */
     public static function success(): string
     {
         return self::rgb(80, 220, 100);
     }
 
+    /** Warning indicator (amber). */
     public static function warning(): string
     {
         return self::rgb(255, 200, 80);
     }
 
+    /** Error/danger indicator (red). */
     public static function error(): string
     {
         return self::rgb(255, 80, 60);
     }
 
+    /** Informational highlight (sky blue). */
     public static function info(): string
     {
         return self::rgb(100, 200, 255);
     }
 
+    /** URL/link color (blue). */
     public static function link(): string
     {
         return self::rgb(80, 140, 255);
     }
 
+    /** Inline code color (purple). */
     public static function code(): string
     {
         return self::rgb(200, 120, 255);
     }
 
+    /** Muted/secondary text color. */
     public static function dim(): string
     {
         return self::color256(240);
     }
 
+    /** Even more muted color for separators and backgrounds. */
     public static function dimmer(): string
     {
         return self::color256(236);
     }
 
+    /** Default body text color (light gray). */
     public static function text(): string
     {
         return self::rgb(180, 180, 190);
     }
 
+    /** Bright white (bold). */
     public static function white(): string
     {
         return self::ESC.'[1;37m';
     }
 
+    /** Bold intensity attribute. */
     public static function bold(): string
     {
         return self::ESC.'[1m';
     }
 
+    /** Reset all attributes to terminal defaults. */
     public static function reset(): string
     {
         return self::ESC.'[0m';
     }
 
     // Border colors — dimmed variants of mode/accent colors
+    /** Dimmed gold — for agent dialogs (ask_user, ask_choice, permissions). */
     public static function borderAccent(): string
     {
         return self::rgb(180, 140, 50);
-    }   // dimmed gold — for agent dialogs (ask_user, ask_choice, permissions)
+    }
 
+    /** Dimmed purple — for plan mode dialogs. */
     public static function borderPlan(): string
     {
         return self::rgb(120, 90, 200);
-    }      // dimmed purple — for plan mode dialogs
+    }
 
+    /** Warm brown — for task bar and collapsible results. */
     public static function borderTask(): string
     {
         return self::rgb(128, 100, 40);
-    }      // warm brown — for task bar and collapsible results
+    }
 
     // Diff colors
+    /** Diff added-line foreground (green). */
     public static function diffAdd(): string
     {
         return self::rgb(60, 160, 80);
     }
 
+    /** Diff removed-line foreground (red). */
     public static function diffRemove(): string
     {
         return self::rgb(180, 60, 60);
     }
 
+    /** Diff added-line background (dark green). */
     public static function diffAddBg(): string
     {
         return self::bgRgb(20, 45, 20);
     }
 
+    /** Diff removed-line background (dark red). */
     public static function diffRemoveBg(): string
     {
         return self::bgRgb(55, 15, 15);
     }
 
+    /** Diff strong added background for word-level highlights. */
     public static function diffAddBgStrong(): string
     {
         return self::bgRgb(30, 70, 30);
     }
 
+    /** Diff strong removed background for word-level highlights. */
     public static function diffRemoveBgStrong(): string
     {
         return self::bgRgb(80, 20, 20);
     }
 
+    /** Diff context/unchanged line color (gray). */
     public static function diffContext(): string
     {
         return self::color256(244);
     }
 
-    // Code background
+    /** Code block background. */
     public static function codeBg(): string
     {
         return self::bgRgb(40, 40, 40);
     }
 
     // Terminal control
+    /** Hide the terminal cursor. */
     public static function hideCursor(): string
     {
         return self::ESC.'[?25l';
     }
 
+    /** Show the terminal cursor. */
     public static function showCursor(): string
     {
         return self::ESC.'[?25h';
     }
 
+    /** Clear the entire screen and move cursor to home position. */
     public static function clearScreen(): string
     {
         return self::ESC.'[2J'.self::ESC.'[H';
     }
 
+    /**
+     * Move the cursor to an absolute row/column position.
+     *
+     * @param int $row 1-based row
+     * @param int $col 1-based column
+     * @return string ANSI cursor positioning sequence
+     */
     public static function moveTo(int $row, int $col): string
     {
         return self::ESC."[{$row};{$col}H";
     }
 
     // Tool icons
+    /**
+     * Return the Unicode icon for a given tool name.
+     *
+     * @param string $name Internal tool identifier (e.g. 'file_read', 'bash')
+     * @return string Single Unicode glyph
+     */
     public static function toolIcon(string $name): string
     {
         return match ($name) {
@@ -201,6 +271,12 @@ class Theme
     }
 
     // Friendly display names for tools
+    /**
+     * Return a human-readable label for a given tool name.
+     *
+     * @param string $name Internal tool identifier
+     * @return string Display label (e.g. 'Read', 'Bash', 'Agent')
+     */
     public static function toolLabel(string $name): string
     {
         return match ($name) {
@@ -224,7 +300,12 @@ class Theme
         };
     }
 
-    // Context usage color: green → yellow → red
+    /**
+     * Return a color indicating context window usage (green → yellow → red).
+     *
+     * @param float $ratio Usage ratio 0.0–1.0
+     * @return string ANSI color escape sequence
+     */
     public static function contextColor(float $ratio): string
     {
         if ($ratio < 0.5) {
@@ -236,7 +317,13 @@ class Theme
         }
     }
 
-    // Context bar
+    /**
+     * Render a horizontal context-usage bar with token counts and percentage.
+     *
+     * @param int $tokensIn   Tokens currently consumed
+     * @param int $maxContext Maximum context window size
+     * @return string Formatted ANSI string (bar + label + percentage)
+     */
     public static function contextBar(int $tokensIn, int $maxContext): string
     {
         $ratio = min(1.0, $tokensIn / max(1, $maxContext));
@@ -253,6 +340,12 @@ class Theme
         return $bar.' '.self::dim().$label.' ('.$pct.'%)'.self::reset();
     }
 
+    /**
+     * Format a token count as a human-readable string (e.g. "1.2k", "3.5M").
+     *
+     * @param int $tokens Raw token count
+     * @return string Abbreviated representation
+     */
     public static function formatTokenCount(int $tokens): string
     {
         if ($tokens >= 1_000_000) {
@@ -265,6 +358,12 @@ class Theme
         return (string) $tokens;
     }
 
+    /**
+     * Format a USD cost value with appropriate precision.
+     *
+     * @param float $cost Cost in USD
+     * @return string Formatted string (e.g. "$0.0042", "$1.23")
+     */
     public static function formatCost(float $cost): string
     {
         if ($cost < 0.01) {

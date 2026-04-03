@@ -6,16 +6,24 @@ use Kosmokrator\Agent\AgentContext;
 use Prism\Prism\Schema\StringSchema;
 use Prism\Prism\Tool as PrismTool;
 
+/**
+ * Central registry of all available ToolInterface implementations.
+ *
+ * Supports lookup, scoped filtering by agent type, and conversion to Prism Tool
+ * instances for the LLM provider layer.
+ */
 class ToolRegistry
 {
     /** @var ToolInterface[] */
     private array $tools = [];
 
+    /** Register a tool instance keyed by its name. */
     public function register(ToolInterface $tool): void
     {
         $this->tools[$tool->name()] = $tool;
     }
 
+    /** Look up a tool by name, or return null if not registered. */
     public function get(string $name): ?ToolInterface
     {
         return $this->tools[$name] ?? null;
@@ -61,6 +69,9 @@ class ToolRegistry
         return array_map(fn (ToolInterface $tool) => $this->toPrismTool($tool), array_values($this->tools));
     }
 
+    /**
+     * Convert a single ToolInterface into a Prism Tool instance with mapped parameters.
+     */
     private function toPrismTool(ToolInterface $tool): PrismTool
     {
         // Prism calls tool handlers with named arguments matching the parameter names

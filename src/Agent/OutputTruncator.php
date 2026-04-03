@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Truncates large tool outputs (bash, file_read, grep) to stay within line/byte limits.
+ *
+ * When truncation occurs, the full output is saved to ~/.kosmokrator/data/truncations/ so the
+ * agent can access it via targeted file_read/grep rather than re-running the command.
+ * Old truncation files are cleaned up after a configurable retention period (default: 7 days).
+ */
 class OutputTruncator
 {
     private const DEFAULT_MAX_LINES = 2000;
@@ -75,6 +82,9 @@ class OutputTruncator
         return $output."\n\n[truncated - full output saved to {$fullPath}; inspect with targeted grep/file_read rather than pasting it back into context]";
     }
 
+    /**
+     * Persist the full output to a stable file path keyed by toolCallId.
+     */
     private function saveFull(string $output, string $toolCallId): string
     {
         if (! is_dir($this->storagePath)) {

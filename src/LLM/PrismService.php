@@ -14,6 +14,13 @@ use Prism\Prism\Text\PendingRequest;
 use Prism\Prism\Text\Response;
 use Prism\Prism\Tool;
 
+/**
+ * LLM client backed by the Prism PHP SDK for providers with native Prism drivers.
+ *
+ * Implements LlmClientInterface using Prism's text() and asStream() APIs.
+ * Handles prompt caching via PromptFrameBuilder and Relay. Used alongside AsyncLlmClient,
+ * which handles OpenAI-compatible providers via raw HTTP.
+ */
 class PrismService implements LlmClientInterface
 {
     private readonly Relay $relay;
@@ -30,6 +37,9 @@ class PrismService implements LlmClientInterface
         $this->relay = $relay ?? new Relay;
     }
 
+    /**
+     * @param string $prompt Full system prompt to prepend to every conversation
+     */
     public function setSystemPrompt(string $prompt): void
     {
         $this->systemPrompt = $prompt;
@@ -75,6 +85,13 @@ class PrismService implements LlmClientInterface
         $this->maxTokens = $maxTokens;
     }
 
+    /**
+     * Delegate to text() and reshape the Prism Response into our generic LlmResponse.
+     *
+     * @param  Message[]    $messages     Conversation history
+     * @param  Tool[]       $tools        Available tools for function calling
+     * @param  Cancellation $cancellation Unused — kept for interface compatibility
+     */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
         $response = $this->text($messages, $tools);
@@ -92,8 +109,13 @@ class PrismService implements LlmClientInterface
     }
 
     /**
+     * Yield streaming events from the provider for real-time token display.
+     *
+     * Wraps the Prism asStream() generator to apply relay normalization (beforeRequest,
+     * normalizeError) consistently across streaming and non-streaming paths.
+     *
      * @param  Message[]  $messages
-     * @param  Tool[]  $tools
+     * @param  Tool[]     $tools
      * @return Generator<StreamEvent>
      */
     public function stream(array $messages, array $tools = []): Generator
@@ -110,10 +132,13 @@ class PrismService implements LlmClientInterface
     }
 
     /**
-     * Non-streaming fallback for providers that don't support streaming.
+     * Non-streaming request returning a full Prism Response object.
+     *
+     * Unlike chat(), this returns the raw Prism Response for callers that need
+     * the full Prism value objects rather than the generic LlmResponse DTO.
      *
      * @param  Message[]  $messages
-     * @param  Tool[]  $tools
+     * @param  Tool[]     $tools
      */
     public function text(array $messages, array $tools = []): Response
     {
@@ -128,6 +153,10 @@ class PrismService implements LlmClientInterface
         return $this->relay->normalizeResponse($this->provider, $this->model, $response);
     }
 
+    /**
+     * Whether the current provider supports SSE streaming via Prism.
+     * Uses RelayProviderRegistry when available, otherwise falls back to ProviderCapabilities.
+     */
     public function supportsStreaming(): bool
     {
         if ($this->registry !== null) {
@@ -137,6 +166,12 @@ class PrismService implements LlmClientInterface
         return ProviderCapabilities::for($this->provider, $this->registry)->supportsStreaming();
     }
 
+    /**
+     * Build a pending Prism text request with prompt caching, tools, and provider options.
+     *
+     * @param  Message[] $messages Conversation history
+     * @param  Tool[]    $tools    Available tools for function calling
+     */
     private function buildRequest(array $messages, array $tools = []): PendingRequest
     {
         $cachePlan = $this->relay->planPromptCache(
@@ -167,6 +202,10 @@ class PrismService implements LlmClientInterface
         return $request;
     }
 
+    /**
+     * Check whether the current provider supports temperature configuration.
+     * Uses RelayProviderRegistry when available, otherwise falls back to ProviderCapabilities.
+     */
     private function supportsTemperature(): bool
     {
         if ($this->registry !== null) {

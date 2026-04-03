@@ -6,6 +6,12 @@ namespace Kosmokrator\Tool;
 
 use Kosmokrator\UI\RendererInterface;
 
+/**
+ * Interactive tool that prompts the user with a free-text question and returns
+ * their response. Used when the agent needs clarification before proceeding.
+ *
+ * Delegates rendering to the UI layer via RendererInterface.
+ */
 class AskUserTool implements ToolInterface
 {
     public function __construct(

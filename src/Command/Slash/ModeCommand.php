@@ -9,6 +9,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Switches the agent loop to a specific operational mode (e.g. edit, plan, explore).
+ */
 class ModeCommand implements SlashCommand
 {
     public function __construct(

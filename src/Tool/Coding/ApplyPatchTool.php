@@ -9,6 +9,11 @@ use Kosmokrator\Tool\Coding\Patch\PatchParser;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Applies structured patches for multi-hunk, multi-file edits (add, update, delete, move).
+ * Prefer this over multiple FileEditTool calls when changing several files or hunks at once.
+ * Delegates parsing to PatchParser and application to PatchApplier.
+ */
 final class ApplyPatchTool implements ToolInterface
 {
     public function __construct(
@@ -41,6 +46,10 @@ final class ApplyPatchTool implements ToolInterface
         return ['patch'];
     }
 
+    /**
+     * @param  array{patch: string}  $args  Patch text with *** Begin Patch / *** End Patch blocks
+     * @return ToolResult Success summary (added/updated/deleted/moved counts) or error message
+     */
     public function execute(array $args): ToolResult
     {
         $patch = (string) ($args['patch'] ?? '');

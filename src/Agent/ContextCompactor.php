@@ -13,6 +13,13 @@ use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Psr\Log\LoggerInterface;
 
+/**
+ * LLM-based context compaction: summarizes old conversation turns into a structured summary,
+ * then extracts durable memories (project facts, user preferences, technical decisions).
+ *
+ * Used by ContextManager when the conversation approaches the context window limit.
+ * Produces a CompactionPlan that ConversationHistory applies by replacing old messages with the summary.
+ */
 class ContextCompactor
 {
     private const DEFAULT_COMPACT_THRESHOLD_PERCENT = 60;
@@ -63,11 +70,23 @@ PROMPT;
         private readonly ?ContextBudget $budget = null,
     ) {}
 
+    /**
+     * Check whether the given prompt token count exceeds the compaction threshold for this model.
+     *
+     * @param  int  $promptTokens  Estimated tokens already in context
+     * @param  string  $model  Model identifier (e.g. "claude-3-opus")
+     */
     public function needsCompaction(int $promptTokens, string $model): bool
     {
         return $promptTokens >= $this->getThresholdTokens($model);
     }
 
+    /**
+     * Calculate the absolute token count at which compaction should trigger.
+     * Takes the lower of the percentage-based threshold and ContextBudget's auto-compact threshold.
+     *
+     * @param  string  $model  Model identifier used to look up the context window
+     */
     public function getThresholdTokens(string $model): int
     {
         $contextWindow = $this->models->contextWindow($model);
@@ -91,8 +110,10 @@ PROMPT;
     }
 
     /**
-     * Summarize old messages in the conversation history.
+     * Summarize old messages in the conversation history and return the raw result.
      *
+     * @param  ConversationHistory  $history  The conversation to summarize
+     * @param  int  $keepRecent  Number of recent user turns to preserve unchanged
      * @return array{summary: string, tokens_in: int, tokens_out: int}
      */
     public function compact(ConversationHistory $history, int $keepRecent = 3): array
@@ -107,7 +128,10 @@ PROMPT;
     }
 
     /**
-     * @param  Message[]  $protectedMessages
+     * Build a CompactionPlan: identify old messages, summarize via LLM, assemble replacement message list.
+     *
+     * @param  Message[]  $protectedMessages  Messages that must be preserved verbatim (system prompts, instructions)
+     * @param  int  $keepRecent  Number of recent user turns to keep un-summarized
      */
     public function buildPlan(ConversationHistory $history, array $protectedMessages = [], int $keepRecent = 3): CompactionPlan
     {
@@ -201,13 +225,7 @@ PROMPT;
         }
     }
 
-    /**
-     * @param  Message[]  $messages
-     */
-    /**
-     * Cap formatted output at ~100K chars (~25K tokens) to prevent memory blowup
-     * on very long conversations. Older messages are dropped first.
-     */
+    /** Format an array of Prism messages into a plain-text transcript for the summarization LLM. */
     private const MAX_FORMAT_CHARS = 100_000;
 
     private function formatMessages(array $messages): string
@@ -254,6 +272,9 @@ PROMPT;
         return implode("\n", $lines);
     }
 
+    /**
+     * Render tool-call arguments as a compact key-value string, hiding large fields.
+     */
     private function formatToolArgs(array $args): string
     {
         $parts = [];
@@ -270,6 +291,9 @@ PROMPT;
         return implode(', ', $parts);
     }
 
+    /**
+     * Truncate text to $maxLength characters, appending a length note when truncated.
+     */
     private function truncate(string $text, int $maxLength): string
     {
         if (mb_strlen($text) <= $maxLength) {

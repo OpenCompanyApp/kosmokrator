@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Formats stored memories into a structured markdown block for injection into the system prompt.
+ * Organises memories by class (priority, durable, working) and type (project, user, decision, compaction).
+ * Used by the agent runtime to provide persistent context to the LLM.
+ */
 class MemoryInjector
 {
     /**
@@ -78,6 +83,7 @@ class MemoryInjector
             fn (array $m): bool => ($m['memory_class'] ?? 'durable') === 'working' && ($m['type'] ?? '') !== 'compaction'
         ));
         if ($working !== []) {
+            // Cap working memory to 5 most-recent entries to limit context size
             $lines = ['## Working Memory'];
             foreach (array_slice($working, 0, 5) as $memory) {
                 $lines[] = '- '.$memory['title'].': '.self::truncate((string) $memory['content'], 180);
@@ -86,6 +92,7 @@ class MemoryInjector
         }
 
         if (isset($grouped['compaction'])) {
+            // Show at most 3 compaction entries to keep prompt concise
             $lines = ['## Previous Sessions'];
             foreach (array_slice($grouped['compaction'], 0, 3) as $memory) {
                 $date = isset($memory['created_at']) ? substr((string) $memory['created_at'], 0, 10) : '';
@@ -120,6 +127,9 @@ class MemoryInjector
         return "\n\n".implode("\n", $lines);
     }
 
+    /**
+     * Truncate $text to $limit characters, appending ellipsis when truncated.
+     */
     private static function truncate(string $text, int $limit): string
     {
         if (mb_strlen($text) <= $limit) {

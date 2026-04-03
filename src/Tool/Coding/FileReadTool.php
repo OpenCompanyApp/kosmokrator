@@ -5,6 +5,12 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Reads file contents with line numbers, supporting offset/limit for partial reads.
+ * Caches previous reads to avoid re-sending identical content (saves tokens on repeat reads of unchanged files).
+ * Large files (>10 MB) are streamed line-by-line to keep memory usage low.
+ * Prefer this over shell commands (`cat`, `head`) for inspecting files.
+ */
 class FileReadTool implements ToolInterface
 {
     private const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
@@ -38,6 +44,10 @@ class FileReadTool implements ToolInterface
         return ['path'];
     }
 
+    /**
+     * @param  array{path: string, offset?: int, limit?: int}  $args  File path and optional line range
+     * @return ToolResult File contents with line numbers, or cached "unchanged" notice
+     */
     public function execute(array $args): ToolResult
     {
         $path = $args['path'] ?? '';
@@ -95,6 +105,7 @@ class FileReadTool implements ToolInterface
         return ToolResult::success(rtrim($output));
     }
 
+    /** Clears the read cache so subsequent reads will return full content again. */
     public function resetCache(): void
     {
         $this->readCache = [];

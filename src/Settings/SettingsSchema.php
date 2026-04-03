@@ -4,22 +4,32 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Settings;
 
+/**
+ * Central registry of all known setting definitions and their aliases.
+ *
+ * Provides the schema consumed by SettingsManager for validation, categorisation,
+ * and dot-path resolution. Definitions are built once and cached statically.
+ */
 final class SettingsSchema
 {
-    /** @var array<string, SettingDefinition>|null */
+    /** @var array<string, SettingDefinition>|null Cached definitions keyed by canonical ID */
     private static ?array $definitions = null;
 
-    /** @var array<string, string>|null */
+    /** @var array<string, string>|null Alias map: short name → canonical dot-path ID */
     private static ?array $aliases = null;
 
     /**
-     * @return array<string, SettingDefinition>
+     * @return array<string, SettingDefinition> All registered definitions keyed by ID
      */
     public function definitions(): array
     {
         return self::$definitions ??= $this->buildDefinitions();
     }
 
+    /**
+     * @param  string $id Setting identifier (canonical or alias)
+     * @return SettingDefinition|null The matching definition, or null if unknown
+     */
     public function definition(string $id): ?SettingDefinition
     {
         $canonical = $this->canonicalId($id);
@@ -27,13 +37,17 @@ final class SettingsSchema
         return $this->definitions()[$canonical] ?? null;
     }
 
+    /**
+     * @param  string $id A setting ID, possibly an alias
+     * @return string The canonical dot-path ID
+     */
     public function canonicalId(string $id): string
     {
         return self::$aliases[$id] ?? $id;
     }
 
     /**
-     * @return list<string>
+     * @return list<string> Category identifiers in display order
      */
     public function categories(): array
     {
@@ -51,7 +65,7 @@ final class SettingsSchema
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string> Category ID → human-readable label
      */
     public function categoryLabels(): array
     {
@@ -69,7 +83,8 @@ final class SettingsSchema
     }
 
     /**
-     * @return list<SettingDefinition>
+     * @param  string $category Category identifier to filter by
+     * @return list<SettingDefinition> Definitions belonging to the given category
      */
     public function definitionsForCategory(string $category): array
     {
@@ -79,6 +94,7 @@ final class SettingsSchema
         ));
     }
 
+    /** Builds and caches the full definition list and alias map. */
     /**
      * @return array<string, SettingDefinition>
      */
@@ -102,6 +118,7 @@ final class SettingsSchema
             'subagent_max_depth' => 'agent.subagent_max_depth',
             'subagent_concurrency' => 'agent.subagent_concurrency',
             'subagent_max_retries' => 'agent.subagent_max_retries',
+            'subagent_idle_watchdog_seconds' => 'agent.subagent_idle_watchdog_seconds',
         ];
 
         $definitions = [
@@ -331,6 +348,16 @@ final class SettingsSchema
                 type: 'number',
                 effect: 'next_session',
                 default: 2,
+            ),
+            new SettingDefinition(
+                id: 'agent.subagent_idle_watchdog_seconds',
+                path: 'kosmokrator.agent.subagent_idle_watchdog_seconds',
+                label: 'Idle watchdog seconds',
+                description: 'Cancel only when a running subagent stops making progress updates for too long. Set 0 to disable.',
+                category: 'subagents',
+                type: 'number',
+                effect: 'next_session',
+                default: 900,
             ),
         ];
 

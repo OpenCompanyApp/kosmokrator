@@ -7,6 +7,12 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Tool that forcefully terminates a running shell session by ID.
+ *
+ * Sessions are also cleaned up automatically on idle timeout, but this tool
+ * provides explicit agent-controlled termination.
+ */
 final class ShellKillTool implements ToolInterface
 {
     public function __construct(
@@ -35,6 +41,11 @@ final class ShellKillTool implements ToolInterface
         return ['session_id'];
     }
 
+    /**
+     * Kill the session and return any remaining output.
+     *
+     * @param  array<string, mixed>  $args  Tool arguments from the AI agent
+     */
     public function execute(array $args): ToolResult
     {
         $sessionId = trim((string) ($args['session_id'] ?? ''));

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\CompositeCancellation;
 use Amp\DeferredCancellation;
 use Amp\Future;
 use Amp\Http\Client\HttpException;
 use Amp\Sync\LocalSemaphore;
 use Kosmokrator\LLM\RetryableHttpException;
 use Psr\Log\LoggerInterface;
+use Revolt\EventLoop;
 
 use function Amp\async;
 
@@ -31,18 +33,26 @@ class SubagentOrchestrator
     /** @var array<string, array<string, string>> Completed background results keyed by parent ID: parentId => [agentId => result] */
     private array $pendingResults = [];
 
-    /** @var array<string, DeferredCancellation> Background agent cancellation tokens */
+    /** @var array<string, DeferredCancellation> Dedicated subagent cancellation tokens */
     private array $cancellations = [];
 
     private int $autoIdCounter = 0;
 
     private ?LocalSemaphore $globalSemaphore;
 
+    /**
+     * @param LoggerInterface $log  Logger for orchestrator lifecycle events
+     * @param int $maxDepth         Maximum nesting depth for subagent trees
+     * @param int $concurrency      Max parallel agents (0 = unlimited)
+     * @param int $maxRetries       Retry attempts per agent on transient failures
+     * @param int|float $watchdogSeconds Idle watchdog threshold for an individual running agent (0 = disabled)
+     */
     public function __construct(
         private readonly LoggerInterface $log,
         private readonly int $maxDepth = 3,
         private readonly int $concurrency = 10,
         private readonly int $maxRetries = 2,
+        private readonly int|float $watchdogSeconds = 600,
     ) {
         // LocalSemaphore requires maxLocks >= 1, so 0 = unlimited (no semaphore)
         $this->globalSemaphore = $concurrency > 0 ? new LocalSemaphore($concurrency) : null;
@@ -77,11 +87,12 @@ class SubagentOrchestrator
             throw new \InvalidArgumentException("Agent ID '{$id}' already exists. Use a unique ID.");
         }
 
-        $agentCancellation = null;
-        if ($mode === 'background') {
-            $deferred = new DeferredCancellation;
-            $this->cancellations[$id] = $deferred;
-            $agentCancellation = $deferred->getCancellation();
+        $deferred = new DeferredCancellation;
+        $this->cancellations[$id] = $deferred;
+
+        $agentCancellation = $deferred->getCancellation();
+        if ($parentContext->cancellation !== null) {
+            $agentCancellation = new CompositeCancellation($parentContext->cancellation, $agentCancellation);
         }
 
         $childContext = $parentContext->childContext($childType, $id, $task, $agentCancellation);
@@ -117,6 +128,7 @@ class SubagentOrchestrator
         $future = async(function () use ($childContext, $task, $id, $dependsOn, $group, $mode, $stats, $agentFactory) {
             $lock = null;
             $globalLock = null;
+            $watchdogId = null;
 
             try {
                 // 1. Wait for dependencies
@@ -180,6 +192,38 @@ class SubagentOrchestrator
 
                 $stats->status = 'running';
                 $stats->startTime = microtime(true);
+
+                $stats->touchActivity();
+
+                if ($this->watchdogSeconds > 0) {
+                    $watchdogId = EventLoop::repeat(min(5.0, max(1.0, $this->watchdogSeconds / 6)), function () use ($id): void {
+                        $stats = $this->stats[$id] ?? null;
+                        $deferred = $this->cancellations[$id] ?? null;
+
+                        if ($stats === null || $deferred === null || $stats->status !== 'running') {
+                            return;
+                        }
+
+                        $idleSeconds = $stats->idleSeconds();
+                        if ($idleSeconds < $this->watchdogSeconds) {
+                            return;
+                        }
+
+                        $reason = sprintf(
+                            'watchdog: subagent idle for %.1fs with no activity',
+                            $idleSeconds,
+                        );
+
+                        $this->log->warning('Subagent watchdog firing', [
+                            'id' => $id,
+                            'elapsed' => round($stats->elapsed(), 2),
+                            'idle_seconds' => round($idleSeconds, 2),
+                            'limit_seconds' => $this->watchdogSeconds,
+                        ]);
+
+                        $deferred->cancel(new \RuntimeException($reason));
+                    });
+                }
 
                 $result = null;
                 $lastError = null;
@@ -259,24 +303,27 @@ class SubagentOrchestrator
                 return $result;
             } catch (\Throwable $e) {
                 $stats->status = 'failed';
-                $stats->error = $e->getMessage();
+                $stats->error = $this->extractFailureMessage($e);
                 $stats->endTime = microtime(true);
 
                 $this->log->error('Subagent failed', [
                     'id' => $id,
                     'parent_id' => $stats->parentId,
                     'depth' => $stats->depth,
-                    'error' => $e->getMessage(),
+                    'error' => $stats->error,
                     'elapsed' => round($stats->elapsed(), 2),
                 ]);
 
                 // Inject failure as a pending result so the parent is notified
                 if ($mode === 'background') {
-                    $this->pendingResults[$stats->parentId][$id] = "Error: Agent '{$id}' failed — {$e->getMessage()}";
+                    $this->pendingResults[$stats->parentId][$id] = "Error: Agent '{$id}' failed — {$stats->error}";
                 }
 
                 throw $e;
             } finally {
+                if ($watchdogId !== null) {
+                    EventLoop::cancel($watchdogId);
+                }
                 if ($lock !== null) {
                     $lock->release();
                     $this->log->debug("Agent '{$id}' released group semaphore", ['group' => $group]);
@@ -378,6 +425,9 @@ class SubagentOrchestrator
         return $all;
     }
 
+    /**
+     * Get or create a single-lock semaphore for a named group (sequential execution).
+     */
     public function getGroupSemaphore(string $name): LocalSemaphore
     {
         return $this->groups[$name] ??= new LocalSemaphore(1);
@@ -423,12 +473,12 @@ class SubagentOrchestrator
     }
 
     /**
-     * Cancel all running background agents. Called on session quit / Ctrl+C.
+     * Cancel all running subagents. Called on session quit / Ctrl+C.
      */
     public function cancelAll(): void
     {
         foreach ($this->cancellations as $id => $deferred) {
-            $this->log->info("Cancelling background agent '{$id}'");
+            $this->log->info("Cancelling subagent '{$id}'");
             $deferred->cancel();
         }
     }
@@ -436,6 +486,18 @@ class SubagentOrchestrator
     public function generateId(): string
     {
         return 'agent-'.++$this->autoIdCounter;
+    }
+
+    private function extractFailureMessage(\Throwable $e): string
+    {
+        if ($e->getPrevious() instanceof \Throwable) {
+            $previous = $e->getPrevious()->getMessage();
+            if (str_starts_with($previous, 'watchdog:')) {
+                return $previous;
+            }
+        }
+
+        return $e->getMessage();
     }
 
     /**
@@ -493,7 +555,8 @@ class SubagentOrchestrator
             $msg = strtolower($e->getMessage());
 
             return ! (
-                str_contains($msg, 'unknown dependency')
+                str_contains($msg, 'watchdog:')
+                || str_contains($msg, 'unknown dependency')
                 || str_contains($msg, '401')
                 || str_contains($msg, '403')
                 || str_contains($msg, 'authentication')

@@ -9,6 +9,10 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 
+/**
+ * Displays a list of answered/dismissed questions with their answers. Shown after the agent
+ * has resolved all clarification questions during a task.
+ */
 class AnsweredQuestionsWidget extends AbstractWidget
 {
     /**
@@ -18,6 +22,7 @@ class AnsweredQuestionsWidget extends AbstractWidget
         private readonly array $entries,
     ) {}
 
+    /** Render the answered-questions summary, colouring each entry by its status. */
     public function render(RenderContext $context): array
     {
         $columns = $context->getColumns();
@@ -58,6 +63,8 @@ class AnsweredQuestionsWidget extends AbstractWidget
     }
 
     /**
+     * Word-wrap text with different prefixes on the first and subsequent lines.
+     *
      * @return string[]
      */
     private function wrapWithPrefix(string $text, string $firstPrefix, string $restPrefix, int $columns): array

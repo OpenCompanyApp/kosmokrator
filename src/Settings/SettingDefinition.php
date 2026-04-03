@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Settings;
 
+/**
+ * Declares a single setting in the settings schema (type, allowed values, scopes, etc.).
+ *
+ * Instances are loaded from YAML by SettingsSchema and consumed by SettingsManager
+ * to validate and resolve user-facing configuration values.
+ */
 final readonly class SettingDefinition
 {
     /**

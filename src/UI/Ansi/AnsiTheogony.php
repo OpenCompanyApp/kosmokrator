@@ -72,6 +72,9 @@ class AnsiTheogony
         '       /__|    |__\\',
     ];
 
+    /**
+     * Run the full eight-chapter Theogony animation sequence.
+     */
     public function animate(): void
     {
         $this->termWidth = (int) exec('tput cols') ?: 120;
@@ -126,6 +129,7 @@ class AnsiTheogony
     // Title cards & transitions (unchanged)
     // ──────────────────────────────────────────────────────
 
+    /** Display a chapter title card with fade-in/out and typewriter subtitle. */
     private function titleCard(string $numeral, string $greek, string $subtitle): void
     {
         $r = Theme::reset();
@@ -181,6 +185,7 @@ class AnsiTheogony
         echo Theme::clearScreen();
     }
 
+    /** Brief pause and screen clear between chapters. */
     private function fadeToBlack(): void
     {
         usleep(300000);
@@ -1684,11 +1689,13 @@ class AnsiTheogony
     // Helpers
     // ──────────────────────────────────────────────────────
 
+    /** Check whether a (row, col) position falls within the terminal viewport. */
     private function inBounds(int $row, int $col): bool
     {
         return $row >= 1 && $row <= $this->termHeight && $col >= 1 && $col < $this->termWidth;
     }
 
+    /** Create a random drifting chaos particle with velocity and finite lifespan. */
     private function spawnChaosParticle(): array
     {
         return [
@@ -1702,6 +1709,7 @@ class AnsiTheogony
         ];
     }
 
+    /** Draw a jagged tendril from a starting point at a given angle. */
     private function drawTendril(int $startRow, int $startCol, int $length, int $angle, string $color): void
     {
         $r = Theme::reset();
@@ -1728,6 +1736,7 @@ class AnsiTheogony
         }
     }
 
+    /** Draw a straight line between two points using Bresenham-style interpolation. */
     private function drawLine(int $r1, int $c1, int $r2, int $c2, string $color, string $char): void
     {
         $r = Theme::reset();
@@ -1745,6 +1754,7 @@ class AnsiTheogony
         }
     }
 
+    /** Type a narration string centered on the bottom of the screen. */
     private function typeNarration(string $text, string $color): void
     {
         $r = Theme::reset();
@@ -1757,6 +1767,7 @@ class AnsiTheogony
         }
     }
 
+    /** Animate glowing embers floating upward from a lower region. */
     private function animateEmbers(int $count, int $frames, int $frameDelay): void
     {
         $r = Theme::reset();
@@ -1797,6 +1808,7 @@ class AnsiTheogony
         }
     }
 
+    /** Cellular-automata fire simulation rendered as ANSI characters. */
     private function drawFireSimulation(int $topRow, int $rows, int $width, int $frames): void
     {
         $r = Theme::reset();
@@ -1857,6 +1869,7 @@ class AnsiTheogony
         }
     }
 
+    /** Draw (or erase) an elliptical ring at a given center and radius. */
     private function drawRing(int $cy, int $cx, int $radius, string $char, array $rgb, bool $erase = false): void
     {
         $r = Theme::reset();
@@ -1872,6 +1885,7 @@ class AnsiTheogony
         }
     }
 
+    /** Draw a branching lightning bolt that flashes white then fades to blue. */
     private function drawLightningBolt(int $startRow, int $startCol): void
     {
         $r = Theme::reset();
@@ -1913,6 +1927,7 @@ class AnsiTheogony
         }
     }
 
+    /** Scatter a batch of random stars across the terminal. */
     private function drawStarfield(int $numStars): void
     {
         $r = Theme::reset();
@@ -1928,6 +1943,7 @@ class AnsiTheogony
         }
     }
 
+    /** Draw a bordered rectangle with animated corner ornaments. */
     private function drawAnimatedBorder(int $top, int $left, int $bottom, int $right): void
     {
         $r = Theme::reset();
@@ -1956,6 +1972,7 @@ class AnsiTheogony
         echo $bright.'⟡'.$r;
     }
 
+    /** Draw a zodiac ring of 12 signs with connecting arc dots around a center point. */
     private function drawZodiacRing(int $cy, int $cx, int $availableRows): void
     {
         $r = Theme::reset();

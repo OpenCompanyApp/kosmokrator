@@ -13,6 +13,12 @@ use Symfony\Component\Tui\Widget\FocusableInterface;
 use Symfony\Component\Tui\Widget\FocusableTrait;
 use Symfony\Component\Tui\Widget\KeybindingsTrait;
 
+/**
+ * Full-screen settings editor for provider, model, and agent configuration.
+ * Shown when the user opens the settings workspace (separate from the main conversation).
+ * Renders a two-column layout (categories + fields), an inline value picker, a models browser,
+ * and a details panel. Saves changes to YAML-backed config files.
+ */
 final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableInterface
 {
     use FocusableTrait;
@@ -20,41 +26,56 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
     private int $categoryIndex = 0;
 
+    /** Index of the currently selected field within the visible fields list. */
     private int $fieldIndex = 0;
 
+    /** Whether the user is actively typing into a text field. */
     private bool $editing = false;
 
+    /** Temporary buffer holding the in-progress text while editing a field. */
     private string $editBuffer = '';
 
+    /** Whether the inline option picker overlay is open. */
     private bool $pickerOpen = false;
 
+    /** Field ID that the picker is currently operating on. */
     private string $pickerFieldId = '';
 
-    /** @var list<array{value: string, label: string, description: string}> */
+    /** @var list<array{value: string, label: string, description: string}> Options available in the picker. */
     private array $pickerOptions = [];
 
+    /** Index of the currently highlighted picker option. */
     private int $pickerIndex = 0;
 
+    /** Search/filter string typed by the user to narrow picker options. */
     private string $pickerQuery = '';
 
+    /** Config scope: 'project' or 'global'. */
     private string $scope;
 
-    /** @var array<string, string> */
+    /** Whether provider setup is showing the editable form instead of the provider list. */
+    private bool $providerSetupEditing = false;
+
+    /** Index of the highlighted provider in the provider-setup browser. */
+    private int $providerSetupListIndex = 0;
+
+    /** @var array<string, string> Current field values keyed by field ID. */
     private array $values = [];
 
-    /** @var array<string, string> */
+    /** @var array<string, string> Original values at construction time, used to detect changes. */
     private array $originalValues = [];
 
-    /** @var callable(array<string, mixed>): void|null */
+    /** @var callable(array<string, mixed>): void|null Callback invoked with the save result when the user saves. */
     private $onSaveCallback = null;
 
-    /** @var callable(): void|null */
+    /** @var callable(): void|null Callback invoked when the user cancels/closes settings. */
     private $onCancelCallback = null;
 
+    /** ID of a custom provider the user has marked for deletion, or null. */
     private ?string $deleteCustomProviderId = null;
 
     /**
-     * @param  array<string, mixed>  $view
+     * @param  array<string, mixed>  $view  Settings view data from the handler (categories, options, provider info)
      */
     public function __construct(
         private readonly array $view,
@@ -73,8 +94,11 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
                 $this->originalValues[$id] = $value;
             }
         }
+
+        $this->syncProviderSetupListIndex();
     }
 
+    /** Register the callback invoked when the user saves changes. */
     public function onSave(callable $callback): static
     {
         $this->onSaveCallback = $callback;
@@ -82,6 +106,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $this;
     }
 
+    /** Register the callback invoked when the user cancels/closes settings. */
     public function onCancel(callable $callback): static
     {
         $this->onCancelCallback = $callback;
@@ -89,6 +114,9 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $this;
     }
 
+    /**
+     * Route keyboard input depending on current mode (editing, picker, models browser, or field navigation).
+     */
     public function handleInput(string $data): void
     {
         $kb = $this->getKeybindings();
@@ -273,6 +301,12 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return;
         }
 
+        if ($this->isProviderSetupCategory() && ! $this->providerSetupEditing) {
+            $this->handleProviderSetupBrowserInput($data, $kb);
+
+            return;
+        }
+
         $fields = $this->visibleFields();
 
         if ($fields === []) {
@@ -288,6 +322,14 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         if ($kb->matches($data, 'down')) {
             $this->fieldIndex = ($this->fieldIndex + 1) % count($fields);
+            $this->invalidate();
+
+            return;
+        }
+
+        if ($kb->matches($data, 'left') && $this->isProviderSetupCategory() && $this->providerSetupEditing) {
+            $this->providerSetupEditing = false;
+            $this->fieldIndex = $this->providerSetupListIndex;
             $this->invalidate();
 
             return;
@@ -322,6 +364,12 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
     }
 
+    /**
+     * Render the full settings workspace: header, category nav + fields, and details panel.
+     *
+     * @param  RenderContext  $context  Terminal dimensions
+     * @return list<string>  ANSI-formatted lines
+     */
     public function render(RenderContext $context): array
     {
         $columns = max(90, $context->getColumns());
@@ -477,6 +525,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         ));
     }
 
+    /** Cascade side-effects when a provider-related field changes (e.g. reset model, update auth status). */
     private function handleFieldSideEffects(string $fieldId): void
     {
         if ($fieldId === 'agent.default_provider') {
@@ -587,6 +636,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
     }
 
+    /** Jump to the provider_setup category and pre-fill values for a new custom provider. */
     private function jumpToProviderDraft(): void
     {
         foreach ($this->categories() as $index => $category) {
@@ -595,23 +645,48 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             }
 
             $this->categoryIndex = $index;
-            $this->values['provider.setup_provider'] = '__custom__';
-            $this->values['provider.setup_status'] = 'Not configured';
-            $this->values['provider.setup_auth_mode'] = 'api_key';
-            $this->values['provider.setup_driver'] = 'openai-compatible';
-            $this->values['provider.setup_url'] = '';
-            foreach (['custom_provider.id', 'custom_provider.label', 'custom_provider.driver', 'custom_provider.url', 'custom_provider.auth', 'custom_provider.default_model', 'custom_provider.model_id', 'custom_provider.context', 'custom_provider.max_output', 'custom_provider.input_modalities', 'custom_provider.output_modalities'] as $fieldId) {
-                $this->values[$fieldId] = $fieldId === 'custom_provider.driver' ? 'openai-compatible' : ($fieldId === 'custom_provider.auth' ? 'api_key' : ($fieldId === 'custom_provider.input_modalities' || $fieldId === 'custom_provider.output_modalities' ? 'text' : ''));
-            }
-            $this->fieldIndex = 0;
-            $this->deleteCustomProviderId = null;
-            $this->invalidate();
+            $this->selectProviderSetupItem('__custom__');
 
             return;
         }
     }
 
+    private function selectProviderSetupItem(string $provider): void
+    {
+        $this->values['provider.setup_provider'] = $provider;
+        $this->deleteCustomProviderId = null;
+        $this->providerSetupEditing = true;
+
+        if ($provider === '__custom__') {
+            $this->values['provider.setup_status'] = 'Not configured';
+            $this->values['provider.setup_auth_mode'] = 'api_key';
+            $this->values['provider.setup_driver'] = 'openai-compatible';
+            $this->values['provider.setup_url'] = '';
+            $this->values['provider.secret.api_key'] = '';
+            $this->values['provider.auth_action'] = '';
+            $this->values['custom_provider.id'] = $this->nextCustomProviderId();
+            $this->values['custom_provider.label'] = '';
+            $this->values['custom_provider.driver'] = 'openai-compatible';
+            $this->values['custom_provider.url'] = '';
+            $this->values['custom_provider.auth'] = 'api_key';
+            $this->values['custom_provider.default_model'] = '';
+            $this->values['custom_provider.model_id'] = '';
+            $this->values['custom_provider.context'] = '';
+            $this->values['custom_provider.max_output'] = '';
+            $this->values['custom_provider.input_modalities'] = 'text';
+            $this->values['custom_provider.output_modalities'] = 'text';
+        } else {
+            $this->handleFieldSideEffects('provider.setup_provider');
+        }
+
+        $this->syncProviderSetupListIndex();
+        $this->fieldIndex = 0;
+        $this->invalidate();
+    }
+
     /**
+     * Build the result payload with scope, changed values, custom provider definition, and delete marker.
+     *
      * @return array<string, mixed>
      */
     private function buildResult(): array
@@ -632,6 +707,8 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     }
 
     /**
+     * Assemble a custom provider definition from current field values, or null if incomplete.
+     *
      * @return array<string, mixed>|null
      */
     private function buildCustomProvider(): ?array
@@ -680,6 +757,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
      * @param  string  $csv
      * @return list<string>
      */
+    /** Split a comma-separated string into a trimmed, filtered list of values. */
     private function csvValues(string $csv): array
     {
         $parts = array_map('trim', explode(',', $csv));
@@ -690,6 +768,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Render the top header showing scope, provider, model, and save status. */
     private function renderHeader(int $width): array
     {
         $r = Theme::reset();
@@ -714,6 +793,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Render the left-side category navigation panel. */
     private function renderCategories(int $width, int $height): array
     {
         $lines = [$this->boxHeader('Categories', $width)];
@@ -735,6 +815,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Render the right-side field list, picker overlay, or models browser. */
     private function renderFields(int $width, int $height): array
     {
         $category = $this->selectedCategory();
@@ -746,7 +827,20 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return $this->renderModelsBrowser($width, $height);
         }
 
-        $lines = [$this->boxHeader($category['label'], $width)];
+        if ($this->isProviderSetupCategory() && ! $this->providerSetupEditing) {
+            return $this->renderProviderSetupBrowser($width, $height);
+        }
+
+        $title = $category['label'];
+        if ($this->isProviderSetupCategory()) {
+            $selectedProvider = trim((string) ($this->values['provider.setup_provider'] ?? ''));
+            $title = 'Provider Setup';
+            if ($selectedProvider !== '') {
+                $title .= ' · '.$this->displayLabelForFieldValue('provider.setup_provider', $selectedProvider);
+            }
+        }
+
+        $lines = [$this->boxHeader($title, $width)];
         $fields = $this->visibleFields();
 
         $visibleCount = max(6, $height - 2);
@@ -780,6 +874,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Render the bottom details panel showing field info, provider details, or YAML preview. */
     private function renderDetails(int $width, int $height): array
     {
         $lines = [$this->boxHeader('Details', $width)];
@@ -810,6 +905,10 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         if ($this->isModelsCategory()) {
             return $this->renderModelsDetails($width, $height);
+        }
+
+        if ($this->isProviderSetupCategory() && ! $this->providerSetupEditing) {
+            return $this->renderProviderSetupBrowserDetails($width, $height);
         }
 
         $field = $this->selectedField();
@@ -880,6 +979,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Generate a YAML preview of the current custom provider definition for display in details. */
     private function buildYamlPreview(): array
     {
         $provider = $this->buildCustomProvider();
@@ -905,6 +1005,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         ];
     }
 
+    /** Build the keybinding footer line appropriate for the current mode. */
     private function footer(int $width): string
     {
         $dim = Theme::dim();
@@ -918,6 +1019,22 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             );
         }
 
+        if ($this->isProviderSetupCategory()) {
+            if (! $this->providerSetupEditing) {
+                return AnsiUtils::truncateToWidth(
+                    "{$dim}Tab/Shift+Tab category  ↑↓ browse providers  Enter configure  s save  q cancel  g/p scope  a new custom{$r}",
+                    $width,
+                    '',
+                );
+            }
+
+            return AnsiUtils::truncateToWidth(
+                "{$dim}Tab/Shift+Tab category  ↑↓ fields  ← back to providers  → open list  Enter select/edit  Esc clear/back  s save  q cancel  g/p scope  r reset{$r}",
+                $width,
+                '',
+            );
+        }
+
         return AnsiUtils::truncateToWidth(
             "{$dim}Tab/Shift+Tab category  ↑↓ fields/list  → open list  type to filter  Enter select/edit  Esc clear/back  s save  q cancel  g/p scope  r reset{$r}",
             $width,
@@ -925,6 +1042,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         );
     }
 
+    /** Pad a line to a visible width, accounting for ANSI escape sequences. */
     private function padVisible(string $line, int $width): string
     {
         $visible = AnsiUtils::visibleWidth($line);
@@ -935,11 +1053,13 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $line.str_repeat(' ', $width - $visible);
     }
 
+    /** Truncate a line to a visible width, stripping ANSI sequences correctly. */
     private function truncateVisible(string $line, int $width): string
     {
         return AnsiUtils::truncateToWidth($line, $width, '', false);
     }
 
+    /** Format a two-column entry line with cursor prefix, label, and right-aligned value. */
     private function formatEntryLine(string $prefix, string $left, string $right, int $innerWidth): string
     {
         $prefixWidth = AnsiUtils::visibleWidth($prefix);
@@ -962,6 +1082,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $prefix.$left.str_repeat(' ', $padding).$right;
     }
 
+    /** Cycle to the next/previous category and reset field selection. */
     private function cycleCategory(int $direction): void
     {
         $categories = $this->categories();
@@ -971,12 +1092,15 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         $this->categoryIndex = ($this->categoryIndex + $direction + count($categories)) % count($categories);
         $this->fieldIndex = 0;
+        $this->providerSetupEditing = false;
+        $this->syncProviderSetupListIndex();
         $this->invalidate();
     }
 
     /**
      * @return list<array<string, mixed>>
      */
+    /** Return the list of fields for the current category, filtering provider_setup fields by visibility rules. */
     private function visibleFields(): array
     {
         $fields = $this->selectedCategory()['fields'] ?? [];
@@ -999,7 +1123,6 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             $id = (string) ($field['id'] ?? '');
 
             return match ($id) {
-                'provider.setup_provider',
                 'provider.setup_status',
                 'provider.setup_auth_mode',
                 'provider.setup_driver',
@@ -1015,11 +1138,19 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $visible;
     }
 
+    /** Check whether the currently selected category is the models browser. */
     private function isModelsCategory(): bool
     {
         return (string) ($this->selectedCategory()['id'] ?? '') === 'models';
     }
 
+    /** Check whether the currently selected category is the provider setup browser/form. */
+    private function isProviderSetupCategory(): bool
+    {
+        return (string) ($this->selectedCategory()['id'] ?? '') === 'provider_setup';
+    }
+
+    /** Handle Up/Down/Enter/Right input when the models browser is active. */
     private function handleModelsBrowserInput(string $data, object $kb): void
     {
         $items = $this->modelBrowserItems();
@@ -1065,6 +1196,43 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $this->invalidate();
     }
 
+    /** Handle Up/Down/Enter/Right input when the provider setup browser is active. */
+    private function handleProviderSetupBrowserInput(string $data, object $kb): void
+    {
+        $items = $this->providerSetupItems();
+        if ($items === []) {
+            return;
+        }
+
+        if ($kb->matches($data, 'up')) {
+            $this->fieldIndex = ($this->fieldIndex - 1 + count($items)) % count($items);
+            $this->providerSetupListIndex = $this->fieldIndex;
+            $this->invalidate();
+
+            return;
+        }
+
+        if ($kb->matches($data, 'down')) {
+            $this->fieldIndex = ($this->fieldIndex + 1) % count($items);
+            $this->providerSetupListIndex = $this->fieldIndex;
+            $this->invalidate();
+
+            return;
+        }
+
+        if (! $kb->matches($data, 'confirm') && ! $kb->matches($data, 'right')) {
+            return;
+        }
+
+        $selected = $items[$this->fieldIndex] ?? null;
+        if ($selected === null) {
+            return;
+        }
+
+        $this->selectProviderSetupItem((string) ($selected['value'] ?? ''));
+    }
+
+    /** Check whether a field offers selectable options (choice, toggle, or dynamic_choice). */
     private function fieldSupportsPicker(array $field): bool
     {
         return in_array((string) ($field['type'] ?? 'text'), ['choice', 'toggle', 'dynamic_choice'], true)
@@ -1074,6 +1242,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<array{type:string,provider:string,model:string,label:string,description:string}>
      */
+    /** Build the flat list of provider and model items shown in the models browser. */
     private function modelBrowserItems(): array
     {
         $items = [];
@@ -1110,8 +1279,35 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     }
 
     /**
+     * @return list<array{value:string,label:string,description:string,source:string,auth_status:string}>
+     */
+    private function providerSetupItems(): array
+    {
+        $items = [];
+
+        foreach ($this->view['setup_provider_options'] ?? [] as $option) {
+            $value = (string) ($option['value'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+
+            $providerInfo = $this->view['providers_by_id'][$value] ?? [];
+            $items[] = [
+                'value' => $value,
+                'label' => (string) ($option['label'] ?? $value),
+                'description' => (string) ($option['description'] ?? ''),
+                'source' => (string) ($providerInfo['source'] ?? ($value === '__custom__' ? 'custom' : 'built_in')),
+                'auth_status' => (string) ($providerInfo['auth_status'] ?? ($value === '__custom__' ? 'Not configured' : 'Unknown')),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * @return list<string>
      */
+    /** Render the models browser panel (provider + model tree). */
     private function renderModelsBrowser(int $width, int $height): array
     {
         $lines = [$this->boxHeader('Models', $width)];
@@ -1154,6 +1350,39 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    private function renderProviderSetupBrowser(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Provider Setup', $width)];
+        $items = $this->providerSetupItems();
+        $visibleCount = max(6, $height - 2);
+        $maxIndex = max(0, count($items) - 1);
+        $selectedIndex = min($this->fieldIndex, $maxIndex);
+        $offset = max(0, $selectedIndex - (int) floor($visibleCount / 2));
+        $window = array_slice($items, $offset, $visibleCount);
+        $currentProvider = (string) ($this->values['provider.setup_provider'] ?? '');
+
+        foreach ($window as $relative => $item) {
+            $absoluteIndex = $offset + $relative;
+            $selected = $absoluteIndex === $selectedIndex;
+            $cursor = $selected ? '› ' : '  ';
+            $right = $item['value'] === $currentProvider ? 'selected' : $item['auth_status'];
+            $color = $item['value'] === $currentProvider ? Theme::accent() : Theme::text();
+            $line = $this->formatEntryLine($cursor, $item['label'], $right, max(8, $width - 2));
+            $lines[] = $this->boxLine("{$color}{$line}".Theme::reset(), $width);
+        }
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    /**
+     * @return list<string>
+     */
+    /** Render the details panel content for the models browser (provider/model info). */
     private function renderModelsDetails(int $width, int $height): array
     {
         $lines = [$this->boxHeader('Details', $width)];
@@ -1191,8 +1420,49 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     }
 
     /**
+     * @return list<string>
+     */
+    private function renderProviderSetupBrowserDetails(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Details', $width)];
+        $items = $this->providerSetupItems();
+        $selected = $items[min($this->fieldIndex, max(0, count($items) - 1))] ?? null;
+
+        if ($selected !== null) {
+            $lines[] = $this->boxLine($selected['label'], $width, Theme::accent());
+            $lines[] = $this->boxLine('', $width);
+
+            foreach ($this->wrap($selected['description'], $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+
+            $lines[] = $this->boxLine('', $width);
+            if ($selected['value'] === '__custom__') {
+                $lines[] = $this->boxLine('Enter creates a new custom provider draft.', $width);
+                $lines[] = $this->boxLine('New custom providers are prefilled as custom_1, custom_2, and so on.', $width);
+            } else {
+                $providerInfo = $this->view['providers_by_id'][$selected['value']] ?? [];
+                $lines[] = $this->boxLine('Provider', $width, Theme::accent());
+                $lines[] = $this->boxLine('ID: '.$selected['value'], $width);
+                $lines[] = $this->boxLine('Auth: '.($providerInfo['auth_status'] ?? $selected['auth_status']), $width);
+                $lines[] = $this->boxLine('Driver: '.($providerInfo['driver'] ?? 'unknown'), $width);
+                $lines[] = $this->boxLine('Source: '.(($providerInfo['source'] ?? 'built_in') === 'custom' ? 'Custom YAML' : 'Built-in Relay'), $width);
+                $lines[] = $this->boxLine('Enter opens setup for this provider.', $width);
+            }
+        }
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    /**
      * @param  array<string, mixed>  $field
      */
+    /** Open the inline picker overlay for a field, pre-selecting the current value. */
     private function openPickerForField(array $field): void
     {
         $options = $this->optionsForField($field);
@@ -1214,6 +1484,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $this->invalidate();
     }
 
+    /** Close the inline picker overlay and reset its state. */
     private function closePicker(): void
     {
         $this->pickerOpen = false;
@@ -1235,6 +1506,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Render the inline picker overlay with filtered, scrollable options. */
     private function renderPicker(int $width, int $height): array
     {
         $field = $this->selectedField();
@@ -1272,6 +1544,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<array{value: string, label: string, description: string}>
      */
+    /** Return picker options filtered by the current query string. */
     private function visiblePickerOptions(): array
     {
         if ($this->pickerQuery === '') {
@@ -1290,6 +1563,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         ));
     }
 
+    /** Re-align picker index after query change, keeping current value selected if present. */
     private function resetPickerIndex(): void
     {
         $options = $this->visiblePickerOptions();
@@ -1307,6 +1581,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @param  array<string, mixed>  $field
      */
+    /** Render a human-readable display value for a field, resolving option labels. */
     private function displayValueForField(array $field): string
     {
         $id = (string) ($field['id'] ?? '');
@@ -1322,6 +1597,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $this->displayLabelForFieldValue($id, $value);
     }
 
+    /** Resolve a raw field value to its display label using available options. */
     private function displayLabelForFieldValue(string $fieldId, string $value): string
     {
         if ($value === '') {
@@ -1352,6 +1628,33 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return $value;
     }
 
+    /** Keep the provider-setup browser highlight aligned with the selected provider. */
+    private function syncProviderSetupListIndex(): void
+    {
+        $current = (string) ($this->values['provider.setup_provider'] ?? ($this->values['agent.default_provider'] ?? ''));
+        $items = $this->providerSetupItems();
+        $index = array_search($current, array_map(static fn (array $item): string => $item['value'], $items), true);
+        $this->providerSetupListIndex = $index === false ? 0 : $index;
+
+        if ($this->isProviderSetupCategory() && ! $this->providerSetupEditing) {
+            $this->fieldIndex = $this->providerSetupListIndex;
+        }
+    }
+
+    /** Generate the next available default ID for a new custom provider draft. */
+    private function nextCustomProviderId(): string
+    {
+        $existing = array_keys($this->view['custom_provider_definitions'] ?? []);
+        $next = 1;
+
+        while (in_array('custom_'.$next, $existing, true)) {
+            $next++;
+        }
+
+        return 'custom_'.$next;
+    }
+
+    /** Render a box header line with a titled top border. */
     private function boxHeader(string $title, int $width): string
     {
         $border = Theme::borderAccent();
@@ -1365,6 +1668,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return "{$border}┌{$accent}{$label}{$border}".str_repeat('─', $fill)."┐{$r}";
     }
 
+    /** Render a single boxed content line with vertical borders and padding. */
     private function boxLine(string $content, int $width, string $color = ''): string
     {
         $border = Theme::borderTask();
@@ -1378,6 +1682,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         return "{$border}│{$r}{$text}".str_repeat(' ', $padding)."{$border}│{$r}";
     }
 
+    /** Render a box footer line (bottom border). */
     private function boxFooter(int $width): string
     {
         $border = Theme::borderTask();
@@ -1389,6 +1694,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    /** Word-wrap plain text to the given visible width. */
     private function wrap(string $text, int $width): array
     {
         $text = trim($text);

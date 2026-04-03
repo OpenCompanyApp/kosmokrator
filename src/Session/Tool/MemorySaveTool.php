@@ -8,6 +8,10 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Persists memories (project facts, user preferences, architectural decisions) across sessions.
+ * Exposed as the "memory_save" tool so agents can store knowledge for later recall.
+ */
 class MemorySaveTool implements ToolInterface
 {
     private const VALID_TYPES = ['project', 'user', 'decision'];
@@ -18,16 +22,19 @@ class MemorySaveTool implements ToolInterface
         private readonly SessionManager $session,
     ) {}
 
+    /** @return string Tool identifier used by the agent runtime */
     public function name(): string
     {
         return 'memory_save';
     }
 
+    /** @return string Human-readable description presented to the LLM */
     public function description(): string
     {
         return 'Save or update a persistent memory. Use to store important facts about the project, user preferences, or architectural decisions across sessions.';
     }
 
+    /** @return array<string,array{type:string,description:string}> JSON Schema-style parameter definitions */
     public function parameters(): array
     {
         return [
@@ -41,11 +48,16 @@ class MemorySaveTool implements ToolInterface
         ];
     }
 
+    /** @return list<string> Names of parameters that must be provided */
     public function requiredParameters(): array
     {
         return ['type', 'title', 'content'];
     }
 
+    /**
+     * @param  array{type?:string, title?:string, content?:string, class?:string, pinned?:bool, expires_days?:int, id?:string} $args  Memory fields from the agent call
+     * @return ToolResult Success message with the new/updated memory ID, or an error description
+     */
     public function execute(array $args): ToolResult
     {
         $type = $args['type'] ?? '';

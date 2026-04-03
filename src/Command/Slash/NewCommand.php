@@ -9,6 +9,9 @@ use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 use Kosmokrator\Tool\Permission\PermissionMode;
 
+/**
+ * Clears conversation history and starts a fresh session, resetting costs and permissions.
+ */
 class NewCommand implements SlashCommand
 {
     public function name(): string

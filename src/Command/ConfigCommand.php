@@ -15,6 +15,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Inspects and updates KosmoKrator configuration (show, get, set, unset, edit).
+ */
 #[AsCommand(name: 'config', description: 'Inspect and update KosmoKrator configuration')]
 final class ConfigCommand extends Command
 {
@@ -55,6 +58,9 @@ final class ConfigCommand extends Command
         };
     }
 
+    /**
+     * Lists all settings with their resolved values, sources, and effects.
+     */
     private function show(SettingsManager $settings, SettingsSchema $schema, OutputInterface $output, ?string $filterKey): int
     {
         $rows = [];
@@ -87,6 +93,9 @@ final class ConfigCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Prints the raw resolved value of a single setting key.
+     */
     private function get(SettingsManager $settings, SettingsSchema $schema, OutputInterface $output, ?string $key): int
     {
         if ($key === null || $key === '') {
@@ -107,6 +116,9 @@ final class ConfigCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Persists a setting value to the given scope (project or global config).
+     */
     private function set(SettingsManager $settings, SettingsSchema $schema, OutputInterface $output, ?string $key, mixed $value, string $scope): int
     {
         if ($key === null || $key === '') {
@@ -127,6 +139,9 @@ final class ConfigCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Removes a setting override from the given scope.
+     */
     private function unset(SettingsManager $settings, SettingsSchema $schema, OutputInterface $output, ?string $key, string $scope): int
     {
         if ($key === null || $key === '') {
@@ -147,6 +162,9 @@ final class ConfigCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Opens the config file in the user's $EDITOR (defaults to vi).
+     */
     private function edit(SettingsManager $settings, OutputInterface $output, string $scope): int
     {
         $path = $scope === 'project'

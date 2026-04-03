@@ -16,6 +16,9 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\UIManager;
 
+/**
+ * Immutable value object carrying every dependency a slash command may need (UI, agent loop, sessions, etc.).
+ */
 readonly class SlashCommandContext
 {
     public function __construct(

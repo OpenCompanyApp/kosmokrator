@@ -5,6 +5,11 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Performs a single exact find-and-replace in an existing file.
+ * Use when only one targeted replacement is needed; for multi-hunk or multi-file changes use ApplyPatchTool.
+ * Streams the file to avoid loading it entirely into memory (constant memory regardless of file size).
+ */
 class FileEditTool implements ToolInterface
 {
     private const CHUNK_SIZE = 65536;
@@ -33,6 +38,10 @@ class FileEditTool implements ToolInterface
         return ['path', 'old_string', 'new_string'];
     }
 
+    /**
+     * @param  array{path: string, old_string: string, new_string: string}  $args
+     * @return ToolResult Edit summary with line delta, or error if not found / ambiguous / write failed
+     */
     public function execute(array $args): ToolResult
     {
         $path = $args['path'] ?? '';

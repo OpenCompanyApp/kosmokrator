@@ -8,6 +8,9 @@ use Kosmokrator\Agent\SubagentStats;
 
 /**
  * Subagent swarm display and orchestration feedback.
+ *
+ * Covers subagent spawning indicators, running spinners, batch results,
+ * tree views, and the swarm dashboard. Extended by RendererInterface.
  */
 interface SubagentRendererInterface
 {
@@ -49,6 +52,8 @@ interface SubagentRendererInterface
 
     /**
      * Update the live subagent tree display with current orchestrator state.
+     *
+     * @param array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}> $tree
      */
     public function refreshSubagentTree(array $tree): void;
 

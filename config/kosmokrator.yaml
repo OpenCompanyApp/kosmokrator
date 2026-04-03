@@ -6,6 +6,7 @@ agent:
   subagent_max_depth: 3
   subagent_concurrency: 10     # max concurrent subagents (0 = unlimited)
   subagent_max_retries: 2     # max agent-level retries on transient failure (0 = no retry)
+  subagent_idle_watchdog_seconds: 900   # cancel only when a running subagent shows no activity for too long (0 = disabled)
   system_prompt: |
     You are KosmoKrator, a coding agent operating in the user's terminal.
     You help with software engineering tasks: solving bugs, building features, refactoring code, explaining code, and answering questions.

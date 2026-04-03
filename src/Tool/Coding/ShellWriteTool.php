@@ -8,6 +8,11 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Tool that sends stdin input to a running shell session.
+ *
+ * Enforces read-only mode by blocking mutative commands via PermissionEvaluator.
+ */
 final class ShellWriteTool implements ToolInterface
 {
     public function __construct(
@@ -40,6 +45,11 @@ final class ShellWriteTool implements ToolInterface
         return ['session_id', 'input'];
     }
 
+    /**
+     * Write input to a session's stdin and return any resulting output.
+     *
+     * @param  array<string, mixed>  $args  Tool arguments from the AI agent
+     */
     public function execute(array $args): ToolResult
     {
         $sessionId = trim((string) ($args['session_id'] ?? ''));
@@ -49,6 +59,7 @@ final class ShellWriteTool implements ToolInterface
 
         $input = (string) ($args['input'] ?? '');
         try {
+            // Block mutative commands in read-only sessions
             if ($this->sessions->isReadOnly($sessionId) && $this->permissions?->isMutativeCommand($input)) {
                 return ToolResult::error("Command blocked for read-only shell session '{$sessionId}'.");
             }

@@ -2,8 +2,16 @@
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Gathers host and project metadata (OS, shell, git state, language/framework detection)
+ * into a formatted string for inclusion in the system prompt.
+ * Works alongside ProtectedContextBuilder which handles agent-mode-specific context.
+ */
 class EnvironmentContext
 {
+    /**
+     * Collect and format the full environment context block.
+     */
     public static function gather(): string
     {
         $lines = [];

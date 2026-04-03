@@ -30,6 +30,12 @@ use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Parser\MarkdownParser;
 use Tempest\Highlight\Highlighter;
 
+/**
+ * Converts CommonMark/GFM markdown to ANSI-escaped terminal output.
+ *
+ * Used by the ANSI renderer in the dual TUI/ANSI rendering layer. Parses markdown
+ * via league/commonmark, then walks the AST to emit themed ANSI escape sequences.
+ */
 class MarkdownToAnsi
 {
     private const MARGIN = '  ';
@@ -70,6 +76,13 @@ class MarkdownToAnsi
         $this->termWidth = self::detectTermWidth();
     }
 
+    /**
+     * Renders a markdown string as ANSI-escaped terminal output.
+     * Resets internal state before parsing.
+     *
+     * @param string $markdown CommonMark/GFM markdown source
+     * @return string ANSI-escaped terminal output with newlines
+     */
     public function render(string $markdown): string
     {
         $this->output = '';
@@ -122,6 +135,7 @@ class MarkdownToAnsi
         return $this->output;
     }
 
+    /** Renders a heading with # prefix, using bold white for levels 1-2 and info color for 3+. */
     private function handleHeading(Heading $node, bool $entering): void
     {
         if ($entering) {
@@ -142,6 +156,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Handles paragraph open/close; flushes as list item or standalone paragraph. */
     private function handleParagraph(bool $entering): void
     {
         if ($entering) {
@@ -160,6 +175,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Flushes the inline buffer as a word-wrapped paragraph with indent. */
     private function flushParagraph(): void
     {
         if ($this->inlineBuffer === '') {
@@ -178,6 +194,7 @@ class MarkdownToAnsi
         $this->inlineBuffer = '';
     }
 
+    /** Renders a fenced code block with syntax highlighting, language label, and line gutter. */
     private function handleFencedCode(FencedCode $node): void
     {
         $infoWords = $node->getInfoWords();
@@ -187,12 +204,14 @@ class MarkdownToAnsi
         $this->renderCodeBlock($code, $language);
     }
 
+    /** Renders an indented code block (4-space indent) as an unlabelled code block. */
     private function handleIndentedCode(IndentedCode $node): void
     {
         $code = rtrim($node->getLiteral(), "\n");
         $this->renderCodeBlock($code, '');
     }
 
+    /** Renders a code block with syntax highlighting, border, and optional line wrapping. */
     private function renderCodeBlock(string $code, string $language): void
     {
         $r = Theme::reset();
@@ -236,6 +255,7 @@ class MarkdownToAnsi
         $this->output .= $indent.$dim.'──'.str_repeat('─', 20).$r."\n\n";
     }
 
+    /** Tracks blockquote nesting depth for indent calculation. */
     private function handleBlockQuote(bool $entering): void
     {
         if ($entering) {
@@ -245,6 +265,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Delegates list block enter/exit to ListTracker for bullet/number management. */
     private function handleListBlock(ListBlock $node, bool $entering): void
     {
         $trailing = $this->listTracker->handleListBlock($node, $entering);
@@ -253,6 +274,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Delegates list item enter/exit to ListTracker and resets inline buffer. */
     private function handleListItem(bool $entering): void
     {
         $this->listTracker->handleListItem($entering);
@@ -261,6 +283,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Renders a horizontal rule (━) scaled to terminal width. */
     private function handleThematicBreak(): void
     {
         $indent = $this->indent();
@@ -271,6 +294,7 @@ class MarkdownToAnsi
 
     // ── Table handling ──────────────────────────────────────────────────
 
+    /** Starts/stops table collection via TableCollector; renders on exit. */
     private function handleTable(bool $entering): void
     {
         if ($entering) {
@@ -282,6 +306,7 @@ class MarkdownToAnsi
 
     // ── Inline handling ─────────────────────────────────────────────────
 
+    /** Wraps inline text in bold white on enter, resets on exit. */
     private function handleStrong(bool $entering): void
     {
         if ($entering) {
@@ -291,6 +316,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Toggles italic via ANSI escape code \033[3m (italic on) / \033[23m (italic off). */
     private function handleEmphasis(bool $entering): void
     {
         if ($entering) {
@@ -300,11 +326,13 @@ class MarkdownToAnsi
         }
     }
 
+    /** Renders inline code with theme color and backtick delimiters. */
     private function handleInlineCode(Code $node): void
     {
         $this->appendInline(Theme::code().'`'.$node->getLiteral().'`'.Theme::reset());
     }
 
+    /** Collects link text into a separate buffer, then renders as colored text with URL in parentheses. */
     private function handleLink(Link $node, bool $entering): void
     {
         if ($entering) {
@@ -317,6 +345,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Renders images as dimmed [alt](url) since terminals cannot display images inline. */
     private function handleImage(Image $node, bool $entering): void
     {
         if ($entering) {
@@ -329,6 +358,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Toggles strikethrough via ANSI escape code \033[9m (on) / \033[29m (off). */
     private function handleStrikethrough(bool $entering): void
     {
         if ($entering) {
@@ -338,6 +368,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Renders a task list checkbox as ☑ (checked) or ☐ (unchecked). */
     private function handleTaskListMarker(TaskListItemMarker $node): void
     {
         if ($node->isChecked()) {
@@ -347,11 +378,13 @@ class MarkdownToAnsi
         }
     }
 
+    /** Appends raw text to the inline buffer. */
     private function handleText(Text $node): void
     {
         $this->appendInline($node->getLiteral());
     }
 
+    /** Handles hard breaks as newline, soft breaks as space. */
     private function handleNewline(Newline $node): void
     {
         if ($node->getType() === Newline::HARDBREAK) {
@@ -361,6 +394,7 @@ class MarkdownToAnsi
         }
     }
 
+    /** Routes inline text to the link buffer (when inside a link) or the main inline buffer. */
     private function appendInline(string $text): void
     {
         if ($this->collectingLink) {
@@ -372,6 +406,7 @@ class MarkdownToAnsi
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
+    /** Returns the left margin + blockquote depth indicators (│) for the current nesting level. */
     private function indent(): string
     {
         $indent = self::MARGIN;
@@ -472,6 +507,7 @@ class MarkdownToAnsi
         return $lines ?: [''];
     }
 
+    /** Detects terminal width via posix_get_terminal_size, COLUMNS env, or stty. Defaults to 80. */
     private static function detectTermWidth(): int
     {
         // Try PHP's built-in first (PHP 8.3+)

@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+/**
+ * SQLite-backed persistence layer for sessions, messages, settings, and memories.
+ * Manages schema creation and migration, providing a shared PDO connection for the Session subsystem.
+ */
 class Database
 {
     private \PDO $pdo;
 
     private const SCHEMA_VERSION = 2;
 
+    /**
+     * @param string|null $path Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
+     *                          Defaults to ~/.kosmokrator/data/kosmokrator.db.
+     */
     public function __construct(?string $path = null)
     {
         if ($path === null) {
@@ -27,18 +35,20 @@ class Database
         $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
 
         if (! $isMemory) {
-            $this->pdo->exec('PRAGMA journal_mode=WAL');
+            $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
         }
-        $this->pdo->exec('PRAGMA foreign_keys=ON');
+        $this->pdo->exec('PRAGMA foreign_keys=ON'); // Enforce referential integrity
 
         $this->ensureSchema();
     }
 
+    /** @return \PDO The raw PDO connection for direct queries. */
     public function connection(): \PDO
     {
         return $this->pdo;
     }
 
+    /** Creates or migrates the schema to the current version. */
     private function ensureSchema(): void
     {
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
@@ -56,6 +66,7 @@ class Database
         }
     }
 
+    /** Creates all tables and indexes for a brand-new database. */
     private function createInitialSchema(): void
     {
         $this->pdo->exec('
@@ -94,6 +105,7 @@ class Database
             )
         ');
 
+        // Index for fetching a session's messages, optionally filtered by compaction status
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, compacted)');
 
         $this->pdo->exec('
@@ -116,9 +128,11 @@ class Database
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)');
     }
 
+    /** Runs incremental schema migrations starting from the given version. */
     private function migrate(int $from): void
     {
         if ($from < 2) {
+            // v2: add memory classification and expiration columns
             $this->addColumnIfMissing('memories', 'memory_class', "TEXT NOT NULL DEFAULT 'durable'");
             $this->addColumnIfMissing('memories', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
             $this->addColumnIfMissing('memories', 'expires_at', 'TEXT');
@@ -126,8 +140,10 @@ class Database
         }
     }
 
+    /** Adds a column to a table only if it does not already exist. */
     private function addColumnIfMissing(string $table, string $column, string $definition): void
     {
+        // PRAGMA table_info returns one row per column; check for an existing match
         $stmt = $this->pdo->query("PRAGMA table_info({$table})");
         $rows = $stmt->fetchAll();
         foreach ($rows as $row) {

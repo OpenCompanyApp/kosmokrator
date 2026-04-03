@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Discovers and concatenates instruction files (global, project, directory) into a single
+ * prompt suffix appended to the system prompt by AgentSessionBuilder.
+ * Supports KOSMOKRATOR.md, AGENTS.md, and ~/.kosmokrator/instructions.md.
+ *
+ * @see AgentSessionBuilder
+ */
 class InstructionLoader
 {
     /**
@@ -91,6 +98,7 @@ class InstructionLoader
         return trim($content);
     }
 
+    /** Resolve the git repository root using `git rev-parse --show-toplevel`. */
     public static function gitRoot(): ?string
     {
         $result = trim((string) shell_exec('git rev-parse --show-toplevel 2>/dev/null'));

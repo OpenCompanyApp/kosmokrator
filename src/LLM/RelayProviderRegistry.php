@@ -6,14 +6,25 @@ namespace Kosmokrator\LLM;
 
 use Illuminate\Config\Repository;
 
+/**
+ * Merged registry of built-in and custom LLM provider definitions from PrismRelay config.
+ *
+ * Loads provider specs (driver, URL, auth mode, capabilities, modalities) from the relay.php
+ * config file and merges any user-defined custom providers on top. Queried by
+ * RelayProviderRegistrar (driver selection), ProviderCatalog (UI metadata), and
+ * ProviderCapabilitiesResolver (feature flags). Source of truth for provider wiring.
+ */
 final class RelayProviderRegistry
 {
     /** @var array<string, array<string, mixed>> */
     private array $providers;
 
-    /** @var array<string, string> */
+    /** @var array<string, string> Maps provider ID to "built_in" or "custom" source */
     private array $sources = [];
 
+    /**
+     * @param Repository $config Illuminate config repository for reading relay.providers overrides
+     */
     public function __construct(
         private readonly Repository $config,
     ) {
@@ -137,6 +148,9 @@ final class RelayProviderRegistry
         ];
     }
 
+    /**
+     * Whether the provider can be used with AsyncLlmClient (OpenAI-compatible drivers).
+     */
     public function supportsAsync(string $provider): bool
     {
         return in_array($this->driver($provider), [
@@ -158,6 +172,8 @@ final class RelayProviderRegistry
     }
 
     /**
+     * Deep-merge two provider definition arrays, with $override taking precedence.
+     *
      * @param  array<string, mixed>  $base
      * @param  array<string, mixed>  $override
      * @return array<string, mixed>
@@ -178,6 +194,8 @@ final class RelayProviderRegistry
     }
 
     /**
+     * Coerce a value into a clean list of non-empty strings, defaulting to ["text"].
+     *
      * @param  mixed  $value
      * @return list<string>
      */
@@ -190,6 +208,7 @@ final class RelayProviderRegistry
         return array_values(array_map('strval', array_filter($value, static fn (mixed $item): bool => is_string($item) && $item !== '')));
     }
 
+    /** Guess the Prism driver name from a provider identifier when no explicit driver is configured. */
     private function inferDriver(string $provider): string
     {
         return match ($provider) {

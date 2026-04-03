@@ -16,6 +16,13 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 
+/**
+ * ANSI fallback renderer for Kosmokrator's dual TUI/ANSI rendering layer.
+ *
+ * Outputs directly to stdout via echo and readline. Implements RendererInterface
+ * for environments where the Tempest TUI cannot run (e.g. piped output, basic terminals).
+ * The TUI renderer is the primary interface; this class is the lightweight alternative.
+ */
 class AnsiRenderer implements RendererInterface
 {
     private readonly AnsiIntro $intro;
@@ -36,6 +43,12 @@ class AnsiRenderer implements RendererInterface
 
     private bool $wasActive = false;
 
+    private ?int $lastStatusTokensIn = null;
+
+    private ?float $lastStatusCost = null;
+
+    private ?int $lastStatusMaxContext = null;
+
     /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
     private array $pendingQuestionRecap = [];
 
@@ -44,21 +57,25 @@ class AnsiRenderer implements RendererInterface
         $this->intro = new AnsiIntro;
     }
 
+    /** @param TaskStore $store Shared task store for sticky task bar rendering */
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
     }
 
+    /** No-op: ANSI mode re-renders the task bar on each prompt() call. */
     public function refreshTaskBar(): void
     {
         // ANSI: task bar is rendered fresh on each prompt() call, no explicit refresh needed
     }
 
+    /** No-op: ANSI mode has no widget tree to initialize. */
     public function initialize(): void
     {
         // Nothing needed for ANSI mode
     }
 
+    /** @param bool $animated Whether to play the animated intro or render statically */
     public function renderIntro(bool $animated): void
     {
         if ($animated) {
@@ -68,6 +85,7 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /** Displays the prompt, flushes pending question recaps, and reads user input via readline. @return string Trimmed user input, or '/quit' on EOF */
     public function prompt(): string
     {
         $this->flushPendingQuestionRecap();
@@ -85,12 +103,14 @@ class AnsiRenderer implements RendererInterface
         return trim($input);
     }
 
+    /** No-op: readline already echoes the typed input to stdout. @param string $text The user's message text */
     public function showUserMessage(string $text): void
     {
         $this->flushPendingQuestionRecap();
         // No-op: readline already displays the typed input
     }
 
+    /** Updates the current agent phase. Triggers thinking indicator or terminal notification. @param AgentPhase $phase The new agent phase */
     public function setPhase(AgentPhase $phase): void
     {
         if ($phase === AgentPhase::Thinking || $phase === AgentPhase::Tools) {
@@ -108,6 +128,7 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /** Prints a static "⚡ Thinking..." block header. */
     public function showThinking(): void
     {
         $r = Theme::reset();
@@ -117,11 +138,13 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$dim}  ┌ {$blue}⚡ Thinking...{$r}\n";
     }
 
+    /** No-op: ANSI thinking indicator is static text, no clearing needed. */
     public function clearThinking(): void
     {
         // No-op for ANSI — thinking indicator is static text
     }
 
+    /** Prints a "⧫ Compacting context..." indicator. */
     public function showCompacting(): void
     {
         $r = Theme::reset();
@@ -129,22 +152,26 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$red}  ⧫ Compacting context...{$r}\n";
     }
 
+    /** No-op: ANSI compacting indicator is static text. */
     public function clearCompacting(): void
     {
         // No-op for ANSI — static text
     }
 
+    /** @return Cancellation|null Always null — ANSI mode has no async cancellation support */
     public function getCancellation(): ?Cancellation
     {
         return null;
     }
 
+    /** Buffers a streaming text chunk. Rendered on streamComplete(). @param string $text Raw markdown or ANSI text chunk */
     public function streamChunk(string $text): void
     {
         $this->flushPendingQuestionRecap();
         $this->streamBuffer .= $text;
     }
 
+    /** Flushes the stream buffer: detects raw ANSI vs markdown and outputs accordingly. */
     public function streamComplete(): void
     {
         if ($this->streamBuffer !== '') {
@@ -159,6 +186,13 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /**
+     * Displays a tool call with its arguments in a bordered box format.
+     * Suppresses display for task tools, ask tools, and subagent calls.
+     *
+     * @param string $name Tool name (e.g. 'file_read', 'bash')
+     * @param array<string, mixed> $args Tool arguments
+     */
     public function showToolCall(string $name, array $args): void
     {
         if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
@@ -213,6 +247,14 @@ class AnsiRenderer implements RendererInterface
         echo "\n";
     }
 
+    /**
+     * Displays a tool result with status indicator.
+     * Handles special formatting for file_read (line count) and file_edit (inline diff).
+     *
+     * @param string $name Tool name
+     * @param string $output Raw tool output
+     * @param bool $success Whether the tool execution succeeded
+     */
     public function showToolResult(string $name, string $output, bool $success): void
     {
         if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
@@ -283,6 +325,12 @@ class AnsiRenderer implements RendererInterface
         echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
     }
 
+    /**
+     * Prompts the user for tool permission via readline.
+     * @param string $toolName Tool requesting permission
+     * @param array<string, mixed> $args Tool arguments
+     * @return string One of: 'allow', 'deny', 'always', 'guardian', 'prometheus'
+     */
     public function askToolPermission(string $toolName, array $args): string
     {
         $r = Theme::reset();
@@ -320,25 +368,29 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
-    /**
-     * @return string[]
-     */
+    /** Builds diff lines for inline display of file_edit tool results. @return string[] */
     private function buildDiffLines(string $old, string $new, string $path): array
     {
         return $this->getDiffRenderer()->renderLines($old, $new, $path);
     }
 
+    /** Lazily instantiates the shared DiffRenderer. */
     private function getDiffRenderer(): DiffRenderer
     {
         return $this->diffRenderer ??= new DiffRenderer;
     }
 
+    /** Clears pending question recaps. ANSI prints directly to stdout, so nothing to visually clear. */
     public function clearConversation(): void
     {
         // ANSI renderer prints directly to stdout, no widget tree to clear
         $this->pendingQuestionRecap = [];
     }
 
+    /**
+     * Replays conversation history as ANSI output. Pairs tool calls with their results.
+     * @param list<object> $messages Chronological list of UserMessage, AssistantMessage, ToolResultMessage, SystemMessage
+     */
     public function replayHistory(array $messages): void
     {
         $this->pendingQuestionRecap = [];
@@ -450,6 +502,7 @@ class AnsiRenderer implements RendererInterface
         echo "\n";
     }
 
+    /** Displays a warning-styled notice message. @param string $message Notice text */
     public function showNotice(string $message): void
     {
         $this->flushPendingQuestionRecap();
@@ -458,21 +511,25 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$yellow}  {$message}{$r}\n\n";
     }
 
+    /** Stores the current agent mode label for status bar display. @param string $label Mode label (e.g. 'Edit', 'Plan') */
     public function showMode(string $label, string $color = ''): void
     {
         $this->currentModeLabel = $label;
     }
 
+    /** Stores the permission mode label for status bar display. @param string $label Permission label @param string $color Theme color (unused in ANSI mode) */
     public function setPermissionMode(string $label, string $color): void
     {
         $this->currentPermissionLabel = $label;
     }
 
+    /** No-op: auto-approve status is visible via the permission label in the status bar. */
     public function showAutoApproveIndicator(string $toolName): void
     {
         // Intentionally silent — auto-approve is already visible in the status bar
     }
 
+    /** Prints a "running..." indicator on the current line (overwritten later by tool result). @param string $name Tool name */
     public function showToolExecuting(string $name): void
     {
         // ANSI mode: show a simple "running..." indicator
@@ -485,6 +542,7 @@ class AnsiRenderer implements RendererInterface
         echo "{$border}  ┃ {$dim}running...{$r}\r";
     }
 
+    /** Overwrites the executing indicator with the last non-empty line of incremental output. @param string $output Incremental tool output */
     public function updateToolExecuting(string $output): void
     {
         // ANSI mode: show last line of output
@@ -505,21 +563,25 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /** Clears the executing indicator line using ANSI escape sequence \033[2K (erase entire line). */
     public function clearToolExecuting(): void
     {
         echo "\r\033[2K"; // Clear the running line
     }
 
+    /** @return string|null Always null — ANSI mode is synchronous, no message queue */
     public function consumeQueuedMessage(): ?string
     {
         return null; // ANSI mode is synchronous, no queuing
     }
 
+    /** No-op: ANSI mode is synchronous, immediate commands not supported. @param \Closure|null $handler */
     public function setImmediateCommandHandler(?\Closure $handler): void
     {
         // No-op: ANSI mode is synchronous, immediate commands not supported
     }
 
+    /** Displays an error-styled message. @param string $message Error text */
     public function showError(string $message): void
     {
         $this->flushPendingQuestionRecap();
@@ -528,9 +590,21 @@ class AnsiRenderer implements RendererInterface
         echo "\n{$err}  ✗ Error: {$message}{$r}\n\n";
     }
 
+    /**
+     * Prints a one-line status bar with model, permission mode, context usage, and cost.
+     *
+     * @param string $model Current model identifier
+     * @param int $tokensIn Input tokens consumed
+     * @param int $tokensOut Output tokens generated
+     * @param float $cost Cumulative cost in USD
+     * @param int $maxContext Maximum context window size
+     */
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
         $this->flushPendingQuestionRecap();
+        $this->lastStatusTokensIn = $tokensIn;
+        $this->lastStatusCost = $cost;
+        $this->lastStatusMaxContext = $maxContext;
         $r = Theme::reset();
         $dim = Theme::dim();
         $bar = Theme::contextBar($tokensIn, $maxContext);
@@ -542,6 +616,38 @@ class AnsiRenderer implements RendererInterface
         echo "{$dim}  {$this->currentModeLabel} ·{$permPart} {$model} · {$bar} {$dim}· {$costLabel}{$r}\n\n";
     }
 
+    /**
+     * Updates the status bar when the runtime model changes mid-session.
+     * @param string $provider Provider name
+     * @param string $model Model identifier
+     * @param int $maxContext New maximum context window
+     */
+    public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void
+    {
+        $label = $provider.'/'.$model;
+
+        if ($this->lastStatusMaxContext !== null) {
+            $this->showStatus(
+                $label,
+                min($this->lastStatusTokensIn ?? 0, $maxContext),
+                0,
+                $this->lastStatusCost ?? 0.0,
+                $maxContext,
+            );
+
+            return;
+        }
+
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        echo "{$dim}  Active model: {$label}{$r}\n\n";
+    }
+
+    /**
+     * Interactive settings editor via readline. Prompts for scope and field values.
+     * @param array<string, mixed> $currentSettings Current settings with 'categories' structure
+     * @return array{scope: string, changes: array<string, string>, custom_provider: array|null, delete_custom_provider: null}
+     */
     public function showSettings(array $currentSettings): array
     {
         $r = Theme::reset();
@@ -630,6 +736,11 @@ class AnsiRenderer implements RendererInterface
         ];
     }
 
+    /**
+     * Prompts the user to select a session from a numbered list.
+     * @param list<array{label: string, value: string, description?: string}> $items Available sessions
+     * @return string|null Selected session value, or null if cancelled
+     */
     public function pickSession(array $items): ?string
     {
         if ($items === []) {
@@ -656,12 +767,18 @@ class AnsiRenderer implements RendererInterface
         return $items[$choice - 1]['value'];
     }
 
+    /** No-op: ANSI mode has no interactive plan approval dialog. @return array|null Always null */
     public function approvePlan(string $currentPermissionMode): ?array
     {
         // ANSI fallback: no interactive dialog, user types manually
         return null;
     }
 
+    /**
+     * Prompts the user with a question via readline.
+     * @param string $question Question to display
+     * @return string User's answer (may be empty)
+     */
     public function askUser(string $question): string
     {
         $r = Theme::reset();
@@ -679,6 +796,12 @@ class AnsiRenderer implements RendererInterface
         return $answer;
     }
 
+    /**
+     * Presents a numbered choice list and returns the selected label.
+     * @param string $question Choice question
+     * @param list<array{label: string, detail: string|null, recommended?: bool}> $choices Available options
+     * @return string Selected choice label, or 'dismissed' if user chose dismiss
+     */
     public function askChoice(string $question, array $choices): string
     {
         $r = Theme::reset();
@@ -716,6 +839,10 @@ class AnsiRenderer implements RendererInterface
         return 'dismissed';
     }
 
+    /**
+     * Prints a tree view of subagent statuses with running/done/failed/queued indicators.
+     * @param list<SubagentStats> $stats Per-agent status objects
+     */
     public function showSubagentStatus(array $stats): void
     {
         if (empty($stats)) {
@@ -769,20 +896,30 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /** No-op: ANSI mode prints status inline, nothing to clear. */
     public function clearSubagentStatus(): void
     {
         // ANSI mode: status is printed inline, nothing to clear
     }
 
+    /** No-op in ANSI mode. @param array $tree Agent tree structure (used only by TUI) */
     public function refreshSubagentTree(array $tree): void {}
 
+    /** No-op in ANSI mode. @param \Closure|null $provider Tree data provider callback */
     public function setAgentTreeProvider(?\Closure $provider): void {}
 
+    /**
+     * Displays the agents dashboard with progress, resources, active agents, failures, and type breakdown.
+     * @param array<string, mixed> $summary Aggregated swarm statistics
+     * @param list<SubagentStats> $allStats Per-agent status objects
+     * @param \Closure|null $refresh Refresh callback (unused in ANSI mode)
+     */
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
     {
         echo $this->formatDashboard($summary, $allStats);
     }
 
+    /** Builds the box-drawn agents dashboard string. @param array<string, mixed> $s Summary stats @param list<SubagentStats> $allStats All agent stats */
     private function formatDashboard(array $s, array $allStats): string
     {
         $r = Theme::reset();
@@ -932,6 +1069,7 @@ class AnsiRenderer implements RendererInterface
         return $out;
     }
 
+    /** Formats a single agent line for the dashboard with type, task, elapsed bar, and tool count. */
     private function dashFormatAgentLine(SubagentStats $agent): string
     {
         $r = Theme::reset();
@@ -955,23 +1093,27 @@ class AnsiRenderer implements RendererInterface
         return "{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $filled)."{$dim}".str_repeat('░', $empty)."{$r}  {$dim}{$elapsed} {$tools}{$retryNote}{$r}";
     }
 
+    /** Restores the terminal cursor visibility on shutdown. */
     public function teardown(): void
     {
         echo Theme::showCursor();
     }
 
+    /** Plays the Theogony ASCII animation sequence. */
     public function playTheogony(): void
     {
         $theogony = new AnsiTheogony;
         $theogony->animate();
     }
 
+    /** Plays the Prometheus ASCII animation sequence. */
     public function playPrometheus(): void
     {
         $prometheus = new AnsiPrometheus;
         $prometheus->animate();
     }
 
+    /** Displays the orrery ASCII art and quick reference command guide. */
     public function showWelcome(): void
     {
         $r = Theme::reset();
@@ -1024,6 +1166,7 @@ class AnsiRenderer implements RendererInterface
         echo "  {$text}Type a message to begin. Press {$white}Ctrl+C{$text} to exit.{$r}\n\n";
     }
 
+    /** Plays a scripted demo session with typewriter-style output for showcase purposes. */
     public function seedMockSession(): void
     {
         $r = Theme::reset();
@@ -1168,11 +1311,13 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /** Lazily instantiates the shared MarkdownToAnsi renderer. */
     private function getMarkdownRenderer(): MarkdownToAnsi
     {
         return $this->markdownRenderer ??= new MarkdownToAnsi;
     }
 
+    /** Types text character-by-character with a delay, skipping newlines and spaces for pacing. @param int $charDelay Microseconds per character */
     private function typeOut(string $text, int $charDelay): void
     {
         foreach (mb_str_split($text) as $char) {
@@ -1183,6 +1328,10 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /**
+     * Shows a compact "N agents running..." line for background subagents.
+     * @param list<array<string, mixed>> $entries Subagent spawn entries
+     */
     public function showSubagentRunning(array $entries): void
     {
         if (empty($entries)) {
@@ -1198,6 +1347,10 @@ class AnsiRenderer implements RendererInterface
         echo "{$border}  {$dim}⎿ {$label}{$r}\n";
     }
 
+    /**
+     * Displays spawned subagents as a tree (single agent: one-liner; multiple: tree with connectors).
+     * @param list<array<string, mixed>> $entries Subagent spawn entries with 'args'
+     */
     public function showSubagentSpawn(array $entries): void
     {
         if (empty($entries)) {
@@ -1236,6 +1389,12 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /**
+     * Displays completed subagent results as a tree with success/failure icons, stats, and result previews.
+     * Filters out background acks, only showing failures and awaited results.
+     *
+     * @param list<array{success: bool, result: string, args: array, children?: array}> $entries Completed subagent entries
+     */
     public function showSubagentBatch(array $entries): void
     {
         if (empty($entries)) {
@@ -1304,11 +1463,13 @@ class AnsiRenderer implements RendererInterface
         }
     }
 
+    /** Checks if a tool name is a task management tool (task_create, task_update, task_list, task_get). */
     private function isTaskTool(string $name): bool
     {
         return in_array($name, ['task_create', 'task_update', 'task_list', 'task_get'], true);
     }
 
+    /** Queues a question/answer pair for deferred display before the next output. */
     private function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
     {
         $this->pendingQuestionRecap[] = [
@@ -1319,6 +1480,7 @@ class AnsiRenderer implements RendererInterface
         ];
     }
 
+    /** Flushes all queued question/answer pairs as a formatted block before the next output. */
     private function flushPendingQuestionRecap(): void
     {
         if ($this->pendingQuestionRecap === []) {
@@ -1475,6 +1637,7 @@ class AnsiRenderer implements RendererInterface
         return null;
     }
 
+    /** Prints the sticky task bar from the TaskStore before each prompt. */
     private function echoTaskBar(): void
     {
         if ($this->taskStore === null || $this->taskStore->isEmpty()) {

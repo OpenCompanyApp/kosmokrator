@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Agent role type in the subagent tree: controls allowed tools and child spawning permissions.
+ * General agents can spawn any type; Explore and Plan are read-only leaf roles.
+ * Set via AgentContext and enforced by SubagentFactory.
+ *
+ * @see AgentContext
+ * @see SubagentFactory
+ */
 enum AgentType: string
 {
     case General = 'general';

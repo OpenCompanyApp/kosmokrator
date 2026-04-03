@@ -8,6 +8,14 @@ use Kosmokrator\Session\SettingsRepository;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 
+/**
+ * Persists Codex OAuth tokens via the KosmoKrator SettingsRepository.
+ *
+ * Implements the CodexTokenStore contract from prism-codex by mapping token fields
+ * to individual settings keys under the "provider.codex." namespace. This avoids
+ * file-based token storage and keeps credentials in the same encrypted settings
+ * backend used for all other provider secrets.
+ */
 final class SettingsCodexTokenStore implements CodexTokenStore
 {
     private const PREFIX = 'provider.codex.';
@@ -16,6 +24,9 @@ final class SettingsCodexTokenStore implements CodexTokenStore
         private readonly SettingsRepository $settings,
     ) {}
 
+    /**
+     * Load the current Codex token from settings, or return null if not stored.
+     */
     public function current(): ?CodexToken
     {
         $accessToken = $this->settings->get('global', self::PREFIX.'access_token');
@@ -39,6 +50,12 @@ final class SettingsCodexTokenStore implements CodexTokenStore
         ]);
     }
 
+    /**
+     * Persist a Codex token to settings and return a refreshed instance with updated timestamps.
+     *
+     * @param CodexToken $token The token to persist
+     * @return CodexToken A new token instance with the updated_at timestamp applied
+     */
     public function save(CodexToken $token): CodexToken
     {
         $now = new \DateTimeImmutable;
@@ -78,6 +95,7 @@ final class SettingsCodexTokenStore implements CodexTokenStore
         ]);
     }
 
+    /** Remove all stored Codex token fields from settings. */
     public function clear(): void
     {
         foreach ([

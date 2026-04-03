@@ -20,6 +20,13 @@ use Prism\Prism\Providers\Perplexity\Perplexity;
 use Prism\Prism\Providers\XAI\XAI;
 use Prism\Prism\Providers\Z\Z;
 
+/**
+ * Registers all known LLM providers into the Prism PrismManager at boot time.
+ *
+ * Iterates over RelayProviderRegistry's provider list and instantiates the correct
+ * Prism driver (Anthropic, OpenAI, Codex, etc.) for each one based on its driver type.
+ * Called during application bootstrap to make all providers available via Prism's service locator.
+ */
 final class RelayProviderRegistrar
 {
     public function __construct(
@@ -27,6 +34,11 @@ final class RelayProviderRegistrar
         private readonly CodexOAuthService $codexOAuth,
     ) {}
 
+    /**
+     * Extend the Prism manager with all providers from RelayProviderRegistry.
+     *
+     * @param PrismManager $manager The Prism service manager to register drivers into
+     */
     public function register(PrismManager $manager): void
     {
         foreach ($this->registry->allProviders() as $provider) {

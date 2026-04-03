@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Permission;
 
+/**
+ * The three permission modes that control how tool-call approval works:
+ *   - Guardian:   auto-approve safe operations, ask for risky ones.
+ *   - Argus:      ask the user for every tool call that requires approval.
+ *   - Prometheus: auto-approve everything (full auto-pilot).
+ */
 enum PermissionMode: string
 {
     case Guardian = 'guardian';
     case Argus = 'argus';
     case Prometheus = 'prometheus';
 
+    /** Human-readable mode name. */
     public function label(): string
     {
         return match ($this) {
@@ -19,6 +26,7 @@ enum PermissionMode: string
         };
     }
 
+    /** Unicode symbol representing the mode in the TUI. */
     public function symbol(): string
     {
         return match ($this) {
@@ -28,6 +36,7 @@ enum PermissionMode: string
         };
     }
 
+    /** ANSI 24-bit color code for the mode's UI accent. */
     public function color(): string
     {
         return match ($this) {
@@ -37,6 +46,7 @@ enum PermissionMode: string
         };
     }
 
+    /** Combined label + symbol string for status-bar display. */
     public function statusLabel(): string
     {
         return $this->label().' '.$this->symbol();

@@ -19,6 +19,13 @@ use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use Prism\Prism\ValueObjects\ToolCall;
 
+/**
+ * Non-blocking HTTP client for OpenAI-compatible LLM providers using Amp's async runtime.
+ *
+ * Implements LlmClientInterface by sending raw HTTP requests via Amp\Http\Client,
+ * bypassing the Prism SDK. Used by RetryableLlmClient for providers that support
+ * the OpenAI chat/completions format directly.
+ */
 class AsyncLlmClient implements LlmClientInterface
 {
     private HttpClient $httpClient;
@@ -43,6 +50,12 @@ class AsyncLlmClient implements LlmClientInterface
         'mimo-api',
     ];
 
+    /**
+     * @param string  $apiKey       Provider API key
+     * @param string  $baseUrl      Base URL for the provider's chat completions endpoint
+     * @param string  $model        Model identifier (e.g. "gpt-4o", "deepseek-chat")
+     * @param string  $systemPrompt System prompt prepended to every conversation
+     */
     public function __construct(
         private string $apiKey,
         private string $baseUrl,
@@ -58,6 +71,11 @@ class AsyncLlmClient implements LlmClientInterface
         $this->relay = $relay ?? new Relay;
     }
 
+    /**
+     * Whether this client can handle the given provider via the OpenAI-compatible protocol.
+     *
+     * @param string $provider Provider identifier (e.g. "openai", "deepseek")
+     */
     public static function supportsProvider(string $provider): bool
     {
         return in_array($provider, self::OPENAI_COMPATIBLE_PROVIDERS, true);
@@ -68,6 +86,16 @@ class AsyncLlmClient implements LlmClientInterface
         $this->systemPrompt = $prompt;
     }
 
+    /**
+     * Send a chat-completions request and return the parsed response.
+     *
+     * @param  Message[]    $messages     Conversation history as Prism Message objects
+     * @param  Tool[]       $tools        Available tools for function calling
+     * @param  Cancellation $cancellation Optional Amp cancellation token for aborting the request
+     * @return LlmResponse Parsed response including text, tool calls, and token usage
+     * @throws RetryableHttpException On 429/5xx responses
+     * @throws \RuntimeException On non-retryable HTTP errors
+     */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
         $cachePlan = $this->buildPromptCachePlan($messages);
@@ -111,6 +139,8 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
+     * Convert Prism Message objects to the OpenAI-compatible wire format.
+     *
      * @param  Message[]  $messages
      * @return array<int, array<string, mixed>>
      */
@@ -175,6 +205,10 @@ class AsyncLlmClient implements LlmClientInterface
         $this->maxTokens = $maxTokens;
     }
 
+    /**
+     * Check whether the current provider supports temperature configuration.
+     * Uses RelayProviderRegistry when available, otherwise falls back to ProviderCapabilities.
+     */
     private function supportsTemperature(): bool
     {
         if ($this->registry !== null) {
@@ -184,6 +218,12 @@ class AsyncLlmClient implements LlmClientInterface
         return ProviderCapabilities::for($this->provider, $this->registry)->supportsTemperature();
     }
 
+    /**
+     * Decode the raw HTTP response into an LlmResponse value object.
+     *
+     * Handles error status codes by throwing RetryableHttpException (429/5xx) or RuntimeException.
+     * Extracts token usage, tool calls, and cache/reasoning token details from the response body.
+     */
     private function parseResponse(Response $response, ?Cancellation $cancellation): LlmResponse
     {
         $status = $response->getStatus();
@@ -246,6 +286,11 @@ class AsyncLlmClient implements LlmClientInterface
         );
     }
 
+    /**
+     * Parse Retry-After header from the HTTP response (supports seconds, milliseconds, and HTTP-date formats).
+     *
+     * @return float|null Retry delay in seconds, capped at 300s, or null if no header present
+     */
     private function parseRetryAfter(Response $response): ?float
     {
         // Millisecond header (used by Anthropic, OpenAI)
@@ -274,8 +319,10 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
-     * @param  Message[]  $messages
-     * @return array<int, array<string, mixed>>
+     * Build a PromptCachePlan that splits the system prompt for provider-specific prompt caching.
+     *
+     * @param  Message[] $messages Conversation history
+     * @return \OpenCompany\PrismRelay\Caching\PromptCachePlan
      */
     private function buildPromptCachePlan(array $messages): \OpenCompany\PrismRelay\Caching\PromptCachePlan
     {
@@ -288,6 +335,8 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
+     * Convert Prism Tool objects into the OpenAI function-calling wire format.
+     *
      * @param  Tool[]  $tools
      * @return array<int, array<string, mixed>>
      */

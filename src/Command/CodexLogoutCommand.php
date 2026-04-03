@@ -11,6 +11,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Removes locally stored Codex/OAuth authentication tokens.
+ */
 #[AsCommand(name: 'codex:logout', description: 'Remove stored Codex authentication tokens')]
 final class CodexLogoutCommand extends Command
 {

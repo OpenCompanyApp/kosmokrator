@@ -6,11 +6,27 @@ namespace Kosmokrator\UI;
 
 /**
  * Tool execution display and permission prompts.
+ *
+ * Handles rendering of tool invocations, results, and the interactive
+ * permission flow. Extended by RendererInterface.
  */
 interface ToolRendererInterface
 {
+    /**
+     * Display a tool invocation header.
+     *
+     * @param string               $name Tool identifier
+     * @param array<string, mixed> $args Tool call arguments
+     */
     public function showToolCall(string $name, array $args): void;
 
+    /**
+     * Display the result of a completed tool call.
+     *
+     * @param string $name    Tool identifier
+     * @param string $output  Raw tool output or error text
+     * @param bool   $success Whether the tool call succeeded
+     */
     public function showToolResult(string $name, string $output, bool $success): void;
 
     /**

@@ -13,6 +13,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Authenticates with ChatGPT via OAuth to enable the Codex provider.
+ */
 #[AsCommand(name: 'codex:login', description: 'Authenticate with ChatGPT for the Codex provider')]
 final class CodexLoginCommand extends Command
 {
@@ -36,6 +39,9 @@ final class CodexLoginCommand extends Command
             : $this->browserFlow($auth, $output);
     }
 
+    /**
+     * Opens the browser-based OAuth authorization flow.
+     */
     private function browserFlow(CodexAuthFlow $auth, OutputInterface $output): int
     {
         try {
@@ -54,6 +60,9 @@ final class CodexLoginCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Performs the device-code OAuth flow (for headless / remote environments).
+     */
     private function deviceFlow(CodexAuthFlow $auth, OutputInterface $output): int
     {
         try {
@@ -71,6 +80,9 @@ final class CodexLoginCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Renders a summary table of the authenticated account details.
+     */
     private function renderTokenSummary(OutputInterface $output, ?string $email, ?string $accountId): void
     {
         $rows = [['Status', 'Authenticated']];

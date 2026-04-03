@@ -94,6 +94,8 @@ class NullRenderer implements RendererInterface
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void {}
 
+    public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void {}
+
     public function showSettings(array $currentSettings): array
     {
         return [];

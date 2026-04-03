@@ -8,6 +8,10 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Searches persisted memories and optionally session history by type, class, or free-text query.
+ * Exposed as the "memory_search" tool so agents can recall previously stored knowledge.
+ */
 class MemorySearchTool implements ToolInterface
 {
     private const VALID_TYPES = ['project', 'user', 'decision', 'compaction'];
@@ -20,16 +24,19 @@ class MemorySearchTool implements ToolInterface
         private readonly SessionManager $session,
     ) {}
 
+    /** @return string Tool identifier used by the agent runtime */
     public function name(): string
     {
         return 'memory_search';
     }
 
+    /** @return string Human-readable description presented to the LLM */
     public function description(): string
     {
         return 'Search and list saved memories. Use to recall project facts, user preferences, or past decisions before asking the user.';
     }
 
+    /** @return array<string,array{type:string,description:string}> JSON Schema-style parameter definitions */
     public function parameters(): array
     {
         return [
@@ -40,11 +47,16 @@ class MemorySearchTool implements ToolInterface
         ];
     }
 
+    /** @return list<string> Names of parameters that must be provided */
     public function requiredParameters(): array
     {
         return [];
     }
 
+    /**
+     * @param  array{type?:string, class?:string, query?:string, scope?:string} $args  Optional filters from the agent call
+     * @return ToolResult Formatted list of matching memories/history entries, or a "not found" notice
+     */
     public function execute(array $args): ToolResult
     {
         $type = $args['type'] ?? null;

@@ -13,6 +13,11 @@ use Symfony\Component\Tui\Widget\FocusableInterface;
 use Symfony\Component\Tui\Widget\FocusableTrait;
 use Symfony\Component\Tui\Widget\KeybindingsTrait;
 
+/**
+ * Interactive permission prompt for tool-call approval.
+ * Shown when the agent requests a tool that requires user confirmation (Guardian/Argus mode).
+ * Displays a preview of the tool call and presents Allow/Always/Guardian/Prometheus/Deny options.
+ */
 final class PermissionPromptWidget extends AbstractWidget implements FocusableInterface
 {
     use FocusableTrait;
@@ -28,10 +33,10 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
 
     private int $selectedIndex = 0;
 
-    /** @var callable(string): void|null */
+    /** @var callable(string): void|null Callback invoked with the chosen option value ('allow'|'always'|'guardian'|'prometheus'|'deny'). */
     private $onConfirmCallback = null;
 
-    /** @var callable(): void|null */
+    /** @var callable(): void|null Callback invoked when the user dismisses (Esc). */
     private $onDismissCallback = null;
 
     /**
@@ -47,6 +52,7 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
         private readonly array $preview,
     ) {}
 
+    /** Register the callback invoked when the user confirms an option. */
     public function onConfirm(callable $callback): static
     {
         $this->onConfirmCallback = $callback;
@@ -54,6 +60,7 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
         return $this;
     }
 
+    /** Register the callback invoked when the user dismisses the prompt. */
     public function onDismiss(callable $callback): static
     {
         $this->onDismissCallback = $callback;
@@ -61,6 +68,7 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
         return $this;
     }
 
+    /** Handle arrow/Enter/Esc input to navigate and select an approval option. */
     public function handleInput(string $data): void
     {
         $kb = $this->getKeybindings();
@@ -90,6 +98,12 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
         }
     }
 
+    /**
+     * Render the bordered tool-call preview and selectable approval options.
+     *
+     * @param  RenderContext  $context  Terminal dimensions
+     * @return list<string>  ANSI-formatted lines
+     */
     public function render(RenderContext $context): array
     {
         $columns = $context->getColumns();
@@ -162,6 +176,7 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
     /**
      * @return list<string>
      */
+    /** Word-wrap a text block to fit within a given visible width. */
     private function wrapBlock(string $text, int $width): array
     {
         $trimmed = trim($text);
@@ -199,6 +214,7 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
         return $lines;
     }
 
+    /** Render a single boxed line with left/right borders, padding to innerWidth. */
     private function boxLine(
         string $content,
         int $innerWidth,

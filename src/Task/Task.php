@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Task;
 
+/**
+ * Represents a single unit of work within the KosmoKrator task system.
+ *
+ * Tasks form a parent-child tree, track dependency edges (blockedBy/blocks),
+ * and record timing through status transitions. Managed by TaskStore.
+ */
 class Task
 {
     public string $id;
@@ -33,6 +39,13 @@ class Task
 
     public ?float $completedAt;
 
+    /**
+     * @param string      $subject     Short human-readable title
+     * @param string      $description Optional longer explanation
+     * @param string|null $activeForm  Present-progressive label (e.g. "Running tests")
+     * @param string|null $parentId    ID of the parent task, or null for root tasks
+     * @param string|null $id          Explicit ID, or auto-generated 8-char hex
+     */
     public function __construct(
         string $subject,
         string $description = '',
@@ -54,6 +67,9 @@ class Task
         $this->completedAt = null;
     }
 
+    /**
+     * Move the task to a new status, recording startedAt/completedAt timestamps.
+     */
     public function transitionTo(TaskStatus $status): void
     {
         if ($status === TaskStatus::InProgress && $this->startedAt === null) {
@@ -67,6 +83,11 @@ class Task
         $this->status = $status;
     }
 
+    /**
+     * Seconds elapsed between start and completion (or now if still running).
+     *
+     * @return float|null Seconds rounded to 1 decimal, or null if not yet started
+     */
     public function elapsed(): ?float
     {
         if ($this->startedAt === null) {
@@ -78,6 +99,9 @@ class Task
         return round($end - $this->startedAt, 1);
     }
 
+    /**
+     * One-line status icon + subject with optional elapsed time.
+     */
     public function toSummary(): string
     {
         $line = "{$this->status->icon()} {$this->subject}";
@@ -92,6 +116,9 @@ class Task
         return $line;
     }
 
+    /**
+     * Multi-line detailed view of all task fields.
+     */
     public function toDetail(): string
     {
         $lines = [];

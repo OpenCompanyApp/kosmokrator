@@ -7,10 +7,16 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 
+/**
+ * Generic collapsible content block — shows a header line and a preview of the content,
+ * expanding to full content on toggle. Used for command output, file diffs, and similar
+ * expandable sections in the TUI.
+ */
 class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterface
 {
     private const PREVIEW_LINES = 3;
 
+    /** Whether the widget shows all content or just the preview. */
     private bool $expanded = false;
 
     private string $content;
@@ -30,23 +36,29 @@ class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterf
         $this->content = str_replace("\t", '   ', $content);
     }
 
+    /** Toggle between collapsed (preview) and expanded views. */
     public function toggle(): void
     {
         $this->expanded = ! $this->expanded;
         $this->invalidate();
     }
 
+    /** Explicitly set the expanded/collapsed state. */
     public function setExpanded(bool $expanded): void
     {
         $this->expanded = $expanded;
         $this->invalidate();
     }
 
+    /** Check whether the widget is in expanded mode. */
     public function isExpanded(): bool
     {
         return $this->expanded;
     }
 
+    /**
+     * Render the header plus preview lines or full content, depending on expanded state.
+     */
     public function render(RenderContext $context): array
     {
         $r = Theme::reset();

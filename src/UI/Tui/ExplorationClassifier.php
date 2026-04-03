@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui;
 
+/**
+ * Classifies tool calls as read-only "exploration/omens" operations.
+ *
+ * Used by TuiRenderer to batch read-only tool calls together in the conversation
+ * display via DiscoveryBatchWidget, separate from write/execute tools.
+ */
 final class ExplorationClassifier
 {
     private const SHELL_META_PATTERN = '/[;&|`$><\n]/';
@@ -45,6 +51,11 @@ final class ExplorationClassifier
         'composer outdated',
     ];
 
+    /**
+     * @param  string  $name  Tool name being invoked
+     * @param  array   $args  Tool invocation arguments
+     * @return bool Whether the tool call is a read-only exploration operation
+     */
     public static function isOmensTool(string $name, array $args): bool
     {
         if (in_array($name, self::OMENS_TOOLS, true)) {
@@ -58,6 +69,10 @@ final class ExplorationClassifier
         return self::isExploratoryBashCommand((string) ($args['command'] ?? ''));
     }
 
+    /**
+     * @param  string  $command  The shell command to classify
+     * @return bool Whether the command is a read-only exploratory operation
+     */
     public static function isExploratoryBashCommand(string $command): bool
     {
         $command = trim($command);

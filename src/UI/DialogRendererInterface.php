@@ -6,6 +6,10 @@ namespace Kosmokrator\UI;
 
 /**
  * Interactive dialog and settings display methods.
+ *
+ * Covers blocking user interactions: settings panels, session pickers,
+ * plan approval, free-text questions, and multiple-choice dialogs.
+ * Extended by RendererInterface.
  */
 interface DialogRendererInterface
 {

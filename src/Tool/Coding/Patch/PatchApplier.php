@@ -7,16 +7,24 @@ namespace Kosmokrator\Tool\Coding\Patch;
 use Kosmokrator\Tool\Permission\PathResolver;
 use Kosmokrator\Tool\Permission\PermissionRule;
 
+/**
+ * Applies parsed patch operations to the filesystem — the execution backend for the apply_patch tool.
+ *
+ * Validates paths against blocked patterns, then creates/updates/deletes files
+ * using a custom unified-diff hunk replacement strategy.
+ */
 final class PatchApplier
 {
     /**
-     * @param  string[]  $blockedPaths
+     * @param  string[]  $blockedPaths  Glob patterns for paths that must not be touched
      */
     public function __construct(
         private readonly array $blockedPaths = [],
     ) {}
 
     /**
+     * Execute a batch of patch operations and return a summary counts.
+     *
      * @param  PatchOperation[]  $operations
      * @return array{added:int, updated:int, deleted:int, moved:int}
      */
@@ -39,6 +47,8 @@ final class PatchApplier
     }
 
     /**
+     * Verify every operation targets an allowed (non-blocked) path.
+     *
      * @param  PatchOperation[]  $operations
      */
     private function assertPathsAllowed(array $operations): void
@@ -51,6 +61,9 @@ final class PatchApplier
         }
     }
 
+    /**
+     * Reject a path if it matches any blocked glob pattern (checked against both raw and resolved paths).
+     */
     private function assertPathAllowed(string $path): void
     {
         $path = trim($path);
@@ -58,6 +71,7 @@ final class PatchApplier
             throw new \RuntimeException('Patch contains an invalid file path.');
         }
 
+        // Check both the raw path and any symlink-resolved variant
         $candidates = [$path];
         $resolved = PathResolver::resolve($path);
         if ($resolved !== null && $resolved !== $path) {
@@ -75,6 +89,7 @@ final class PatchApplier
         }
     }
 
+    /** Create a new file with the given body content. */
     private function applyAdd(PatchOperation $operation): int
     {
         if (file_exists($operation->path)) {
@@ -91,6 +106,8 @@ final class PatchApplier
     }
 
     /**
+     * Apply update hunks to an existing file, optionally moving it to a new path.
+     *
      * @param  array{added:int, updated:int, deleted:int, moved:int}  $summary
      */
     private function applyUpdate(PatchOperation $operation, array &$summary): void
@@ -107,6 +124,7 @@ final class PatchApplier
         $updatedContent = $this->applyUpdateHunks($content, $operation->bodyLines, $operation->path);
         $targetPath = $operation->moveTo ?? $operation->path;
 
+        // When moving, verify the destination doesn't already exist before writing
         if ($operation->moveTo !== null && $operation->moveTo !== $operation->path) {
             if (file_exists($operation->moveTo)) {
                 throw new \RuntimeException("Cannot move to '{$operation->moveTo}' because it already exists.");
@@ -118,6 +136,7 @@ final class PatchApplier
             throw new \RuntimeException("Failed to write file '{$targetPath}'.");
         }
 
+        // Remove the original file after a successful move
         if ($operation->moveTo !== null && $operation->moveTo !== $operation->path) {
             if (! unlink($operation->path)) {
                 throw new \RuntimeException("Failed to remove original file '{$operation->path}' after move.");
@@ -128,6 +147,7 @@ final class PatchApplier
         $summary['updated']++;
     }
 
+    /** Delete a single file (directories are not allowed). */
     private function applyDelete(PatchOperation $operation): int
     {
         if (! file_exists($operation->path)) {
@@ -146,6 +166,8 @@ final class PatchApplier
     }
 
     /**
+     * Split body lines into hunks (separated by @@ markers) and apply each via unique string replacement.
+     *
      * @param  string[]  $bodyLines
      */
     private function applyUpdateHunks(string $content, array $bodyLines, string $path): string
@@ -154,6 +176,7 @@ final class PatchApplier
             return $content;
         }
 
+        // Split into per-hunk line arrays, delimited by @@ or @@ <header>
         $chunks = [];
         $current = [];
         foreach ($bodyLines as $line) {
@@ -182,6 +205,7 @@ final class PatchApplier
 
         foreach ($chunks as $chunk) {
             [$old, $new] = $this->buildChunkStrings($chunk);
+            // Skip no-op hunks where old and new are identical
             if ($old === $new) {
                 continue;
             }
@@ -193,8 +217,10 @@ final class PatchApplier
     }
 
     /**
+     * Build the old and new text representations from hunk lines using prefix characters (space/+/-).
+     *
      * @param  string[]  $chunk
-     * @return array{string, string}
+     * @return array{string, string}  [old text, new text]
      */
     private function buildChunkStrings(array $chunk): array
     {
@@ -216,6 +242,9 @@ final class PatchApplier
         return [implode("\n", $oldLines), implode("\n", $newLines)];
     }
 
+    /**
+     * Replace exactly one occurrence of $old with $new; fails if not found or ambiguous.
+     */
     private function replaceUnique(string $content, string $old, string $new, string $path): string
     {
         [$search, $replacement] = $this->resolveLineEndings($content, $old, $new);
@@ -233,7 +262,9 @@ final class PatchApplier
     }
 
     /**
-     * @return array{string, string}
+     * Normalize line endings: try LF first, fall back to CRLF if that's what the file uses.
+     *
+     * @return array{string, string}  [search text, replacement text]
      */
     private function resolveLineEndings(string $content, string $old, string $new): array
     {
@@ -249,6 +280,7 @@ final class PatchApplier
         return [$old, $new];
     }
 
+    /** Recursively create the parent directory if it doesn't exist. */
     private function ensureParentDirectory(string $path): void
     {
         $dir = dirname($path);

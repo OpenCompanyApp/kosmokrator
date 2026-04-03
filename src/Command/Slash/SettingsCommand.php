@@ -19,6 +19,10 @@ use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
+/**
+ * Opens the interactive settings workspace to configure providers, models, permissions,
+ * API keys, and custom provider definitions at global or project scope.
+ */
 final class SettingsCommand implements SlashCommand
 {
     public function __construct(
@@ -48,6 +52,8 @@ final class SettingsCommand implements SlashCommand
 
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
+        // Resolve catalogs and settings manager, then render the settings UI
+
         $catalog = $ctx->providers ?? $this->container->make(ProviderCatalog::class);
         $registry = $this->container->make(RelayRegistry::class);
         $settings = $this->container->make(SettingsManager::class);
@@ -56,6 +62,7 @@ final class SettingsCommand implements SlashCommand
         $view = $this->buildSettingsView($ctx, $catalog, $settings);
         $result = $ctx->ui->showSettings($view);
 
+        // No changes submitted
         if ($result === [] || ! is_array($result)) {
             return SlashCommandResult::continue();
         }
@@ -68,6 +75,7 @@ final class SettingsCommand implements SlashCommand
             ? trim((string) $result['delete_custom_provider'])
             : '';
 
+        // Determine which provider the setup panel is configuring (may be custom)
         $setupProvider = trim((string) ($changes['provider.setup_provider'] ?? $ctx->llm->getProvider()));
         if ($setupProvider === '__custom__') {
             $setupProvider = trim((string) ($customProvider['id'] ?? ''));
@@ -89,7 +97,7 @@ final class SettingsCommand implements SlashCommand
 
         $targetProvider = (string) ($changes['agent.default_provider'] ?? $ctx->llm->getProvider());
         $targetModel = (string) ($changes['agent.default_model'] ?? $ctx->llm->getModel());
-
+        // Fall back to the provider's default model if the selected one isn't supported
         if (! $catalog->supportsModel($targetProvider, $targetModel)) {
             $fallbackModel = $catalog->defaultModel($targetProvider) ?? ($catalog->modelIds($targetProvider)[0] ?? $targetModel);
             $changes['agent.default_model'] = $fallbackModel;
@@ -100,6 +108,7 @@ final class SettingsCommand implements SlashCommand
         foreach ($changes as $id => $value) {
             $stringValue = is_scalar($value) || $value === null ? (string) $value : '';
 
+            // Dispatch each setting change to the appropriate handler
             match ($id) {
                 'agent.mode' => $this->applyMode($ctx, $stringValue, $scope),
                 'tools.default_permission_mode' => $this->applyPermissionMode($ctx, $stringValue, $scope),
@@ -130,6 +139,7 @@ final class SettingsCommand implements SlashCommand
             };
         }
 
+        // Codex requires OAuth; prompt the user to authenticate if credentials are missing
         if (($changes['agent.default_provider'] ?? null) === 'codex' && ! isset($changes['provider.auth_action'])) {
             $flow = $this->container->make(CodexAuthFlow::class);
             if ($flow->current() === null) {
@@ -469,6 +479,7 @@ final class SettingsCommand implements SlashCommand
         ];
     }
 
+    /** Applies a mode change to both the agent loop runtime and persisted settings. */
     private function applyMode(SlashCommandContext $ctx, string $value, string $scope): void
     {
         $mode = AgentMode::from($value);
@@ -477,6 +488,7 @@ final class SettingsCommand implements SlashCommand
         $ctx->sessionManager->setSetting('agent.mode', $value, $scope);
     }
 
+    /** Applies a permission mode change to both the runtime permission manager and persisted settings. */
     private function applyPermissionMode(SlashCommandContext $ctx, string $value, string $scope): void
     {
         $mode = PermissionMode::from($value);
@@ -485,12 +497,14 @@ final class SettingsCommand implements SlashCommand
         $ctx->sessionManager->setSetting('tools.default_permission_mode', $value, $scope);
     }
 
+    /** Updates the LLM temperature at runtime and persists the new value. */
     private function applyTemperature(SlashCommandContext $ctx, string $value, string $scope): void
     {
         $ctx->llm->setTemperature((float) $value);
         $ctx->sessionManager->setSetting('agent.temperature', $value, $scope);
     }
 
+    /** Updates the max output tokens limit at runtime and persists the new value. */
     private function applyMaxTokens(SlashCommandContext $ctx, string $value, string $scope): void
     {
         $tokens = $value !== '' ? (int) $value : null;
@@ -498,6 +512,10 @@ final class SettingsCommand implements SlashCommand
         $ctx->sessionManager->setSetting('agent.max_tokens', $value, $scope);
     }
 
+    /**
+     * Switches the active LLM provider at runtime if possible, otherwise flags
+     * a restart requirement. Updates the base URL and API key on the inner client.
+     */
     private function applyProvider(
         SlashCommandContext $ctx,
         ProviderCatalog $catalog,
@@ -526,6 +544,10 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
+    /**
+     * Persists the selected model and updates it at runtime if the provider
+     * doesn't require a restart.
+     */
     private function applyModel(
         SlashCommandContext $ctx,
         SettingsManager $settings,
@@ -541,6 +563,9 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
+    /**
+     * Stores an API key in the global secret store and applies it to the inner client if hot-reloadable.
+     */
     private function storeApiKey(SlashCommandContext $ctx, ProviderCatalog $catalog, string $provider, string $value): void
     {
         if (
@@ -561,6 +586,10 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
+    /**
+     * Dispatches provider-specific auth workflows: API key management, OAuth browser/device
+     * login flows, and credential status inspection.
+     */
     private function handleAuthAction(SlashCommandContext $ctx, ProviderCatalog $catalog, string $provider, string $action): void
     {
         if ($action === '') {
@@ -633,17 +662,22 @@ final class SettingsCommand implements SlashCommand
 
     private function requiresRestart(LlmClientInterface $llm, RelayRegistry $registry, string $provider): bool
     {
+        // Restart is needed when the client uses async streaming but the provider doesn't support it
+
         $inner = self::innerClient($llm);
 
         return $inner instanceof AsyncLlmClient && ! $registry->supportsAsync($provider);
     }
 
+    /** Unwraps the inner LLM client from the RetryableLlmClient decorator if present. */
     private static function innerClient(LlmClientInterface $llm): LlmClientInterface
     {
         return $llm instanceof RetryableLlmClient ? $llm->inner() : $llm;
     }
 
     /**
+     * Builds a lookup map of provider metadata keyed by provider ID.
+     *
      * @return array<string, mixed>
      */
     private function providersById(ProviderCatalog $catalog): array
@@ -795,6 +829,7 @@ final class SettingsCommand implements SlashCommand
         };
     }
 
+    /** Resolves the current runtime value for a setting, falling back to persisted config. */
     private function runtimeValue(SlashCommandContext $ctx, string $id, mixed $fallback): string
     {
         return match ($id) {

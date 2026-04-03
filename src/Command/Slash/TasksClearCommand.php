@@ -8,6 +8,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Removes all tasks from the task store and refreshes the task bar display.
+ */
 class TasksClearCommand implements SlashCommand
 {
     public function name(): string

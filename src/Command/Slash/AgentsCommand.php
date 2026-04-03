@@ -10,6 +10,9 @@ use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 use Kosmokrator\LLM\ModelCatalog;
 
+/**
+ * Displays a live dashboard of subagent (swarm) progress, costs, and token usage.
+ */
 class AgentsCommand implements SlashCommand
 {
     public function name(): string
@@ -17,22 +20,29 @@ class AgentsCommand implements SlashCommand
         return '/agents';
     }
 
-    /** @return string[] */
+    /** @return string[] Alternative command names */
     public function aliases(): array
     {
         return ['/swarm'];
     }
 
+    /** @return string One-line description for the help listing */
     public function description(): string
     {
         return 'Show swarm progress dashboard';
     }
 
+    /** @return bool Whether this command executes immediately (no agent turn needed) */
     public function immediate(): bool
     {
         return true;
     }
 
+    /**
+     * @param  string               $args  Unused command arguments
+     * @param  SlashCommandContext  $ctx   Current session context with orchestrator access
+     * @return SlashCommandResult   Always continues the session
+     */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $orchestrator = $ctx->orchestrator;

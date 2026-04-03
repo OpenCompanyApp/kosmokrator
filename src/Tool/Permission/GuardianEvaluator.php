@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Permission;
 
+/**
+ * Performs static heuristic analysis to decide if a tool call is safe enough
+ * to auto-approve in Guardian mode — no LLM calls needed.
+ *
+ * Used by PermissionEvaluator when the active mode is Guardian. Also exposes
+ * mutative-command detection used by Ask mode to enforce read-only bash.
+ */
 class GuardianEvaluator
 {
     private const ALWAYS_SAFE = [
@@ -64,6 +71,9 @@ class GuardianEvaluator
         return false;
     }
 
+    /**
+     * Check whether the given path resolves inside the project root.
+     */
     private function isInsideProject(string $path): bool
     {
         if ($path === '') {
@@ -78,6 +88,9 @@ class GuardianEvaluator
         return str_starts_with($resolved, $this->projectRoot.'/');
     }
 
+    /**
+     * Check whether the command matches a safe-command glob and contains no shell operators.
+     */
     private function isSafeCommand(string $command): bool
     {
         $command = trim($command);
@@ -148,6 +161,9 @@ class GuardianEvaluator
         return false;
     }
 
+    /**
+     * Check whether the command text contains shell metacharacters (pipe, redirect, etc.).
+     */
     private function containsShellOperators(string $command): bool
     {
         return (bool) preg_match(self::SHELL_META_PATTERN, $command);

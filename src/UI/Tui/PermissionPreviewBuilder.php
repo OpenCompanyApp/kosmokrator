@@ -6,6 +6,12 @@ namespace Kosmokrator\UI\Tui;
 
 use Kosmokrator\UI\Theme;
 
+/**
+ * Builds a structured preview of a tool-call permission request for the TUI approval screen.
+ *
+ * Produces the title, summary, scope description, and content preview shown to the operator
+ * before approving or denying a tool invocation (e.g. shell commands, file edits, patches).
+ */
 final class PermissionPreviewBuilder
 {
     /**
@@ -82,6 +88,7 @@ final class PermissionPreviewBuilder
         };
     }
 
+    /** Returns the dialog title based on whether the tool modifies files. */
     private function titleFor(string $toolName): string
     {
         return in_array($toolName, ['file_write', 'file_edit', 'apply_patch'], true)
@@ -89,6 +96,7 @@ final class PermissionPreviewBuilder
             : 'Invocation Request';
     }
 
+    /** Returns a human-readable one-line description of what the tool does. */
     private function summaryFor(string $toolName): string
     {
         return match ($toolName) {
@@ -193,6 +201,7 @@ final class PermissionPreviewBuilder
         return $preview !== [] ? $preview : ['structured patch with file updates'];
     }
 
+    /** Infers the expected outcome of a bash command from its content. */
     private function expectedResultForBash(string $command): string
     {
         $command = trim($command);
@@ -209,6 +218,7 @@ final class PermissionPreviewBuilder
         return 'runs the requested shell command and prints the result';
     }
 
+    /** Determines the filesystem scope of a bash command (read-only vs. write). */
     private function bashScope(string $command): string
     {
         $command = trim($command);
@@ -264,6 +274,7 @@ final class PermissionPreviewBuilder
         ];
     }
 
+    /** Returns the first non-empty line from a multi-line string. */
     private function firstMeaningfulLine(string $text): string
     {
         foreach (preg_split('/\R/', $text) ?: [] as $line) {
@@ -276,6 +287,7 @@ final class PermissionPreviewBuilder
         return trim($text);
     }
 
+    /** Truncates a line to the given display width, appending an ellipsis if needed. */
     private function truncateLine(string $line, int $limit = 96): string
     {
         return mb_strwidth($line) > $limit

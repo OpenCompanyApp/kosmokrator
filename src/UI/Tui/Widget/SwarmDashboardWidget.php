@@ -14,19 +14,29 @@ use Symfony\Component\Tui\Widget\FocusableInterface;
 use Symfony\Component\Tui\Widget\FocusableTrait;
 use Symfony\Component\Tui\Widget\KeybindingsTrait;
 
+/**
+ * Full-screen dashboard overlay for swarm (multi-agent) mode.
+ * Displays aggregate progress, resource usage, active/failed agents, and per-type breakdowns.
+ * Auto-refreshes and dismisses on Esc/q.
+ */
 class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
 {
     use FocusableTrait;
     use KeybindingsTrait;
 
-    /** @var callable|null */
+    /** @var callable|null Callback invoked when the user dismisses the dashboard. */
     private $onDismissCallback = null;
 
+    /**
+     * @param  array<string, mixed>  $summary  Aggregate swarm stats (done, running, failed, tokens, etc.)
+     * @param  array<string, mixed>  $allStats  Per-agent detailed statistics
+     */
     public function __construct(
         private array $summary,
         private array $allStats,
     ) {}
 
+    /** Update the dashboard data (called on each refresh cycle). */
     public function setData(array $summary, array $allStats): void
     {
         $this->summary = $summary;
@@ -34,6 +44,7 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         $this->invalidate();
     }
 
+    /** Register the callback invoked when the user dismisses the dashboard. */
     public function onDismiss(callable $callback): static
     {
         $this->onDismissCallback = $callback;
@@ -41,6 +52,7 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         return $this;
     }
 
+    /** Handle Esc/q to dismiss the dashboard. */
     public function handleInput(string $data): void
     {
         $kb = $this->getKeybindings();
@@ -52,6 +64,12 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         }
     }
 
+    /**
+     * Render the bordered dashboard with progress bar, status counts, resources, active agents, failures, and type breakdown.
+     *
+     * @param  RenderContext  $context  Terminal dimensions
+     * @return list<string>  ANSI-formatted lines
+     */
     public function render(RenderContext $context): array
     {
         $s = $this->summary;
@@ -213,6 +231,7 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         );
     }
 
+    /** Pad content with spaces and border pipes to a fixed visible width. */
     private function padToWidth(string $content, int $width, string $reset, string $border): string
     {
         $visible = AnsiUtils::visibleWidth($content);

@@ -18,6 +18,12 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
  *   status: 'pending'|'success'|'error'
  * }
  */
+
+/**
+ * Displays a batch of file-read / glob / grep / bash / memory-search operations performed
+ * during the discovery phase ("reading the omens"). Shown while the agent is gathering context
+ * before acting on a task.
+ */
 class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInterface
 {
     private bool $expanded = false;
@@ -33,18 +39,21 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
         $this->setItems($items);
     }
 
+    /** Toggle between collapsed summary and expanded detail view. */
     public function toggle(): void
     {
         $this->expanded = ! $this->expanded;
         $this->invalidate();
     }
 
+    /** Explicitly set the expanded/collapsed state. */
     public function setExpanded(bool $expanded): void
     {
         $this->expanded = $expanded;
         $this->invalidate();
     }
 
+    /** Check whether the widget is currently expanded. */
     public function isExpanded(): bool
     {
         return $this->expanded;
@@ -64,6 +73,9 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
         $this->invalidate();
     }
 
+    /**
+     * Render the discovery batch: a header line, tool summary, and per-item labels or details.
+     */
     public function render(RenderContext $context): array
     {
         $r = Theme::reset();
@@ -106,6 +118,9 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
         return $this->truncateLines($lines, $cols);
     }
 
+    /**
+     * Build a human-readable summary counting each tool type in the batch.
+     */
     private function formatSummary(): string
     {
         $counts = [
@@ -143,6 +158,8 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
     }
 
     /**
+     * Render a single expanded item header with status icon, friendly tool name, label, and optional meta.
+     *
      * @param  array{name: string, label: string, detail: string, summary: string, status: 'pending'|'success'|'error'}  $item
      */
     private function formatExpandedHeader(array $item): string
@@ -168,6 +185,8 @@ class DiscoveryBatchWidget extends AbstractWidget implements ToggleableWidgetInt
     }
 
     /**
+     * Truncate every rendered line that exceeds the terminal column width.
+     *
      * @param  string[]  $lines
      * @return string[]
      */

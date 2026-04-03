@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Command;
 
+/**
+ * Name/alias → SlashCommand lookup used by the REPL to dispatch user-entered slash commands.
+ */
 class SlashCommandRegistry
 {
     /** @var array<string, SlashCommand> name → command */

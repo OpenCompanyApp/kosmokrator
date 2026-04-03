@@ -2,6 +2,12 @@
 
 namespace Kosmokrator\Tool\Permission;
 
+/**
+ * A single permission rule that binds a tool name to an action (Ask / Deny),
+ * optionally carrying deny-pattern globs that block specific command arguments.
+ *
+ * Evaluated by PermissionEvaluator during the rule-matching phase.
+ */
 class PermissionRule
 {
     /**

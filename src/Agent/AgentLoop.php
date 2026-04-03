@@ -18,6 +18,16 @@ use Prism\Prism\ValueObjects\ToolCall;
 use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Core agent loop: sends conversation history to the LLM, executes tool calls via ToolExecutor,
+ * and manages context through ContextManager. Delegates stuck detection to StuckDetector.
+ * Used by AgentSession for interactive REPL and by SubagentFactory for headless execution.
+ *
+ * @see ToolExecutor
+ * @see ContextManager
+ * @see StuckDetector
+ * @see AgentSession
+ */
 class AgentLoop
 {
     private ConversationHistory $history;
@@ -94,11 +104,13 @@ class AgentLoop
         }
     }
 
+    /** Set the subagent tree context (root for top-level, child for subagents). */
     public function setAgentContext(?AgentContext $context): void
     {
         $this->agentContext = $context;
     }
 
+    /** Attach a stats collector for headless subagent token tracking. */
     public function setStats(?SubagentStats $stats): void
     {
         $this->stats = $stats;
@@ -134,6 +146,12 @@ class AgentLoop
         ));
     }
 
+    /**
+     * Run the interactive agent loop: send user input, execute tool calls, repeat until final response.
+     * Handles context overflow via compaction/trimming and persists messages via SessionManager.
+     *
+     * @param  string  $userInput  The raw user message to process
+     */
     public function run(string $userInput): void
     {
         $this->log->debug('User input', ['input' => $userInput]);
@@ -346,6 +364,7 @@ class AgentLoop
 
         while (true) {
             $round++;
+            $this->stats?->touchActivity();
 
             $this->log->debug('Headless round start', [
                 'round' => $round,
@@ -372,6 +391,7 @@ class AgentLoop
                 $this->sessionTokensIn += $response->promptTokens;
                 $this->sessionTokensOut += $response->completionTokens;
                 $this->stats?->addTokens($response->promptTokens, $response->completionTokens);
+                $this->stats?->touchActivity();
 
                 $this->log->debug('Headless LLM response', [
                     'round' => $round,
@@ -381,7 +401,21 @@ class AgentLoop
                     'prompt_tokens' => $response->promptTokens,
                     'completion_tokens' => $response->completionTokens,
                 ]);
-            } catch (CancelledException) {
+            } catch (CancelledException $e) {
+                $watchdogReason = $this->watchdogCancellationReason($e);
+
+                if ($watchdogReason !== null) {
+                    $this->log->warning('Headless agent cancelled by watchdog', [
+                        'round' => $round,
+                        'reason' => $watchdogReason,
+                    ]);
+                    if ($this->stats !== null) {
+                        $this->stats->error = $watchdogReason;
+                    }
+
+                    throw new \RuntimeException($watchdogReason, previous: $e);
+                }
+
                 $this->log->info('Headless agent cancelled', ['round' => $round]);
 
                 return '(cancelled)';
@@ -428,6 +462,7 @@ class AgentLoop
                 }
 
                 $this->history->addToolResults($toolResults);
+                $this->stats?->touchActivity();
 
                 $this->injectPendingBackgroundResults();
 
@@ -481,6 +516,7 @@ class AgentLoop
                 'total_tokens_out' => $this->sessionTokensOut,
                 'response_length' => strlen($fullText),
             ]);
+            $this->stats?->touchActivity();
             $this->history->addAssistant($fullText);
 
             return $fullText;
@@ -502,6 +538,7 @@ class AgentLoop
         return $this->calculateSessionCost(display: true);
     }
 
+    /** Compute session cost combining this loop's tokens with subagent orchestrator totals. */
     private function calculateSessionCost(bool $display): float
     {
         $tokensIn = $this->sessionTokensIn;
@@ -536,6 +573,18 @@ class AgentLoop
     public function getSessionTokensOut(): int
     {
         return $this->sessionTokensOut;
+    }
+
+    private function watchdogCancellationReason(CancelledException $e): ?string
+    {
+        $previous = $e->getPrevious();
+        if (! $previous instanceof \Throwable) {
+            return null;
+        }
+
+        $message = $previous->getMessage();
+
+        return str_starts_with($message, 'watchdog:') ? $message : null;
     }
 
     public function getPruner(): ?ContextPruner
@@ -628,6 +677,7 @@ class AgentLoop
         return $modelName;
     }
 
+    /** Invalidate tool caches after compaction rewrites history (tools may hold stale references). */
     private function resetToolCachesAfterCompaction(): void
     {
         foreach ($this->allTools as $tool) {
@@ -637,6 +687,7 @@ class AgentLoop
         }
     }
 
+    /** Heuristic check: does this exception indicate the context window was exceeded? */
     private function isContextOverflow(\Throwable $e): bool
     {
         $message = strtolower($e->getMessage());
@@ -725,11 +776,13 @@ class AgentLoop
         }
     }
 
+    /** Persist a message to session storage if SessionManager is available. */
     private function persistMessage(Message $message, int $tokensIn = 0, int $tokensOut = 0): void
     {
         $this->sessionManager?->saveMessage($message, $tokensIn, $tokensOut);
     }
 
+    /** Manually trigger history compaction (e.g. from a /compact slash command). */
     public function performCompaction(): void
     {
         [$tokensIn, $tokensOut] = $this->contextManager->performCompaction($this->history);

@@ -8,6 +8,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Seeds a mock session for development and UI testing purposes.
+ */
 class SeedCommand implements SlashCommand
 {
     public function name(): string

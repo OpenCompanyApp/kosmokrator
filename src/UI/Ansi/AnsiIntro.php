@@ -4,6 +4,10 @@ namespace Kosmokrator\UI\Ansi;
 
 use Kosmokrator\UI\Theme;
 
+/**
+ * Animated ASCII intro sequence with starfield, logo, orrery, and zodiac ring.
+ * Falls back to a static render when the user presses any key.
+ */
 class AnsiIntro
 {
     private int $termWidth = 120;
@@ -18,7 +22,9 @@ class AnsiIntro
     private ?string $originalTtyMode = null;
 
     /**
-     * @return bool true if the animation was skipped by a keypress
+     * Run the full intro animation, with optional skip via keypress.
+     *
+     * @return bool True if the animation was skipped by a keypress
      */
     public function animate(): bool
     {
@@ -94,6 +100,7 @@ class AnsiIntro
         }
     }
 
+    /** Check whether a key has been pressed (non-blocking). */
     private function keyPressed(): bool
     {
         if ($this->stdinStream === null) {
@@ -114,6 +121,7 @@ class AnsiIntro
         return false;
     }
 
+    /** Put STDIN into raw, non-blocking mode for keypress detection. */
     private function enableNonBlockingInput(): void
     {
         if (! defined('STDIN') || ! posix_isatty(STDIN)) {
@@ -128,6 +136,7 @@ class AnsiIntro
         stream_set_blocking($this->stdinStream, false);
     }
 
+    /** Restore STDIN to its original blocking mode. */
     private function restoreInput(): void
     {
         if ($this->originalTtyMode !== null) {
@@ -141,6 +150,9 @@ class AnsiIntro
         }
     }
 
+    /**
+     * Render the intro as a static (non-animated) display with logo, planets, zodiac, and orrery.
+     */
     public function renderStatic(): void
     {
         $r = Theme::reset();
@@ -591,6 +603,7 @@ class AnsiIntro
         }
     }
 
+    /** Check whether a (row, col) position falls within the terminal viewport. */
     private function inBounds(int $row, int $col): bool
     {
         return $row >= 1 && $row <= $this->termHeight && $col >= 1 && $col < $this->termWidth;

@@ -2,6 +2,13 @@
 
 namespace Kosmokrator\Tool\Permission;
 
+/**
+ * Central permission decision engine: evaluates every tool call against rules,
+ * blocked paths, session grants, and the active PermissionMode to produce a
+ * PermissionResult (Allow / Ask / Deny).
+ *
+ * Lives in the tool-call hot path — called before every tool execution.
+ */
 class PermissionEvaluator
 {
     private PermissionMode $permissionMode = PermissionMode::Guardian;
@@ -17,6 +24,12 @@ class PermissionEvaluator
         private readonly ?GuardianEvaluator $guardian = null,
     ) {}
 
+    /**
+     * Run the full evaluation pipeline for a tool call and return the final decision.
+     *
+     * @param  string  $toolName  Name of the tool being called
+     * @param  array   $args      Named arguments passed to the tool
+     */
     public function evaluate(string $toolName, array $args): PermissionResult
     {
         // 1. Blocked paths — absolute deny, checked before everything
@@ -138,26 +151,31 @@ class PermissionEvaluator
         return null;
     }
 
+    /** Switch the active permission mode at runtime. */
     public function setPermissionMode(PermissionMode $mode): void
     {
         $this->permissionMode = $mode;
     }
 
+    /** Return the currently active permission mode. */
     public function getPermissionMode(): PermissionMode
     {
         return $this->permissionMode;
     }
 
+    /** Mark a tool as session-approved so future calls skip the Ask prompt. */
     public function grantSession(string $toolName): void
     {
         $this->grants->grant($toolName);
     }
 
+    /** Clear all session grants. */
     public function resetGrants(): void
     {
         $this->grants->reset();
     }
 
+    /** Delegate mutative-command check to the Guardian evaluator. */
     public function isMutativeCommand(string $command): bool
     {
         return $this->guardian?->isMutativeCommand($command) ?? false;

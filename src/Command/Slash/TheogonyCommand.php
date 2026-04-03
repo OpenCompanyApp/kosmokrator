@@ -8,6 +8,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Plays the Theogony startup animation (themed cinematic intro).
+ */
 class TheogonyCommand implements SlashCommand
 {
     public function name(): string

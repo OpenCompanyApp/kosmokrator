@@ -25,6 +25,24 @@ use Psr\Log\LoggerInterface;
  */
 class SubagentFactory
 {
+    /**
+     * @param ToolRegistry                    $rootRegistry          Tool set inherited from the root agent
+     * @param LoggerInterface                 $log                   Logger for factory lifecycle events
+     * @param ModelCatalog|null               $models                LLM model catalog for compaction model selection
+     * @param OutputTruncator|null            $truncator             Truncates oversized tool output
+     * @param PermissionEvaluator|null        $permissions           Permission policy evaluator
+     * @param Closure|Cancellation|null       $rootCancellation      Cancellation token from the root session
+     * @param string                          $llmClientClass        'async' or 'prism' — determines client type
+     * @param string                          $apiKey                LLM API key
+     * @param string                          $baseUrl               LLM API base URL
+     * @param string                          $model                 LLM model identifier
+     * @param int|null                        $maxTokens             Maximum response tokens
+     * @param int|float|null                  $temperature           LLM sampling temperature
+     * @param string                          $provider              LLM provider name (e.g. 'openai', 'anthropic')
+     * @param ContextBudget|null              $budget                Token budget for context compaction
+     * @param ProtectedContextBuilder|null    $protectedContextBuilder  Builds immutable context sections
+     * @param Relay|null                      $relay                 Prism relay for LLM communication
+     */
     public function __construct(
         private readonly ToolRegistry $rootRegistry,
         private readonly LoggerInterface $log,
@@ -100,6 +118,9 @@ class SubagentFactory
         return $loop->runHeadless($task);
     }
 
+    /**
+     * Instantiate a fresh LLM client with the same config as the root agent.
+     */
     private function createLlmClient(): LlmClientInterface
     {
         if ($this->llmClientClass === 'async') {
@@ -127,6 +148,9 @@ class SubagentFactory
         return new RetryableLlmClient($inner, $this->log);
     }
 
+    /**
+     * Build the subagent system prompt with role-specific instructions and environment context.
+     */
     private function buildSystemPrompt(AgentContext $context): string
     {
         $cwd = getcwd() ?: '.';

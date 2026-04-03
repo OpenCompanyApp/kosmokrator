@@ -105,11 +105,13 @@ final class TableCollector
         };
     }
 
+    /** Track whether the current section is the table header. */
     private function handleSection(TableSection $node, bool $entering): void
     {
         $this->inHead = $entering && $node->isHead();
     }
 
+    /** Start or finalize a row, routing it to head/body storage. */
     private function handleRow(bool $entering): void
     {
         if ($entering) {
@@ -123,6 +125,7 @@ final class TableCollector
         }
     }
 
+    /** Open/close a cell buffer, capturing alignment metadata for header cells. */
     private function handleCell(TableCell $node, bool $entering): void
     {
         if ($entering) {

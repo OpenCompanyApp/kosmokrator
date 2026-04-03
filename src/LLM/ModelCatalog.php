@@ -6,6 +6,13 @@ namespace Kosmokrator\LLM;
 
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 
+/**
+ * Central registry of model specifications — context windows, pricing, and capabilities.
+ *
+ * Merges model data from the PrismRelay ProviderMeta (built-in) with local config overrides.
+ * Provides cost estimation (actual and display), cache savings calculation, and feature
+ * lookups (thinking, streaming). Used for token budgeting and cost display in the TUI.
+ */
 class ModelCatalog
 {
     /** @var array<string, array<string, mixed>> */
@@ -15,13 +22,17 @@ class ModelCatalog
 
     private ?ProviderMeta $providerMeta;
 
-    /** @var array<string, string> */
+    /** @var array<string, string> Maps provider aliases to their canonical name (e.g. "z-api" => "z") */
     private array $providerAliases = [
         'z-api' => 'z',
         'kimi-coding' => 'kimi',
         'minimax-cn' => 'minimax',
     ];
 
+    /**
+     * @param array        $config       Model catalog config section (models list + defaults)
+     * @param ProviderMeta $providerMeta Optional relay metadata for built-in model discovery
+     */
     public function __construct(array $config, ?ProviderMeta $providerMeta = null)
     {
         $this->providerMeta = $providerMeta;
@@ -33,6 +44,10 @@ class ModelCatalog
         $this->models = $this->buildModelMap($config['models'] ?? []);
     }
 
+    /**
+     * @param string $model Model identifier (e.g. "claude-sonnet-4-20250514")
+     * @return int Context window size in tokens
+     */
     public function contextWindow(string $model): int
     {
         $spec = $this->resolve($model);
@@ -40,6 +55,18 @@ class ModelCatalog
         return (int) ($spec['context'] ?? $this->default['context']);
     }
 
+    /**
+     * Calculate the actual cost in USD for a completion request.
+     * Alias for estimateActualCost() for backward compatibility.
+     *
+     * @param string $model      Model identifier
+     * @param int    $tokensIn   Total input tokens billed
+     * @param int    $tokensOut  Total output tokens billed
+     * @param int    $cacheReadInputTokens  Tokens served from cache
+     * @param int    $cacheWriteInputTokens Tokens written to cache
+     * @param string $provider   Optional provider override for provider-specific pricing
+     * @return float Cost in USD
+     */
     public function estimateCost(
         string $model,
         int $tokensIn,
@@ -52,6 +79,21 @@ class ModelCatalog
         return $this->estimateActualCost($model, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $provider);
     }
 
+    /**
+     * Calculate the actual cost in USD for a completion request, respecting pricing_kind.
+     *
+     * Models with pricing_kind "token_plan" are treated as zero-cost.
+     * All other models use their configured per-million-token rates, with separate
+     * rates for cached read/write tokens when available.
+     *
+     * @param string $model      Model identifier
+     * @param int    $tokensIn   Total input tokens billed
+     * @param int    $tokensOut  Total output tokens billed
+     * @param int    $cacheReadInputTokens  Tokens served from cache
+     * @param int    $cacheWriteInputTokens Tokens written to cache
+     * @param string $provider   Optional provider for provider-specific model lookup
+     * @return float Cost in USD
+     */
     public function estimateActualCost(
         string $model,
         int $tokensIn,
@@ -81,6 +123,20 @@ class ModelCatalog
         );
     }
 
+    /**
+     * Calculate a display-friendly cost using reference pricing for coding-plan models.
+     *
+     * For "coding_plan" models, uses reference prices instead of actual prices so users
+     * see an equivalent pay-as-you-go cost. For all other pricing kinds, delegates to estimateActualCost().
+     *
+     * @param string $model      Model identifier
+     * @param int    $tokensIn   Total input tokens
+     * @param int    $tokensOut  Total output tokens
+     * @param int    $cacheReadInputTokens  Tokens served from cache
+     * @param int    $cacheWriteInputTokens Tokens written to cache
+     * @param string $provider   Optional provider for provider-specific model lookup
+     * @return float Cost in USD
+     */
     public function estimateDisplayCost(
         string $model,
         int $tokensIn,
@@ -115,6 +171,16 @@ class ModelCatalog
         );
     }
 
+    /**
+     * Calculate the dollar savings from prompt caching compared to full-price input tokens.
+     *
+     * @param string $model      Model identifier
+     * @param int    $tokensIn   Total input tokens (including cached)
+     * @param int    $cacheReadInputTokens  Tokens served from cache
+     * @param int    $cacheWriteInputTokens Tokens written to cache
+     * @param string $provider   Optional provider for provider-specific model lookup
+     * @return float Savings in USD (non-negative)
+     */
     public function estimateCacheSavings(
         string $model,
         int $tokensIn,
@@ -142,17 +208,22 @@ class ModelCatalog
         return round(max(0.0, $baseline - $actual), 4);
     }
 
+    /** @param string $model Model identifier */
     public function supportsThinking(string $model): bool
     {
         return (bool) ($this->resolve($model)['thinking'] ?? false);
     }
 
+    /** @param string $model Model identifier */
     public function supportsStreaming(string $model): bool
     {
         return (bool) ($this->resolve($model)['streaming'] ?? true);
     }
 
     /**
+     * List all model identifiers available under a given provider.
+     *
+     * @param string $provider Provider identifier
      * @return list<string>
      */
     public function modelsForProvider(string $provider): array
@@ -175,6 +246,8 @@ class ModelCatalog
     }
 
     /**
+     * Group all models by their provider identifier (including aliases).
+     *
      * @return array<string, list<string>>
      */
     public function modelsByProvider(): array
@@ -237,6 +310,7 @@ class ModelCatalog
         return $this->default;
     }
 
+    /** Resolve a provider alias to its canonical name via ProviderMeta or local alias map. */
     private function canonicalProvider(string $provider): string
     {
         if ($this->providerMeta !== null && $this->providerMeta->has($provider)) {
@@ -254,6 +328,8 @@ class ModelCatalog
     }
 
     /**
+     * Expand a canonical provider name to all its registration names (including aliases).
+     *
      * @return list<string>
      */
     private function providersForCanonical(string $provider): array
@@ -288,6 +364,8 @@ class ModelCatalog
     }
 
     /**
+     * Merge built-in ProviderMeta models with local config overrides into a flat lookup map.
+     *
      * @param  array<string, array<string, mixed>>  $localModels
      * @return array<string, array<string, mixed>>
      */
@@ -330,6 +408,7 @@ class ModelCatalog
                 continue;
             }
 
+            // Local config can only override streaming flags on built-in models
             foreach (['streaming', 'tool_streaming'] as $overrideKey) {
                 if (array_key_exists($overrideKey, $spec)) {
                     $models[$key][$overrideKey] = $spec[$overrideKey];

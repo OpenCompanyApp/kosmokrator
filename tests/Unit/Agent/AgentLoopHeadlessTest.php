@@ -2,6 +2,7 @@
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Amp\CancelledException;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\LLM\LlmClientInterface;
@@ -137,5 +138,17 @@ class AgentLoopHeadlessTest extends TestCase
 
         $messages = $this->loop->history()->messages();
         $this->assertCount(2, $messages); // user + assistant
+    }
+
+    public function test_watchdog_cancellation_becomes_runtime_failure(): void
+    {
+        $this->llm->method('chat')->willThrowException(
+            new CancelledException(new \RuntimeException('watchdog: subagent idle for 901.2s with no activity')),
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('watchdog: subagent idle for 901.2s with no activity');
+
+        $this->loop->runHeadless('Do something');
     }
 }

@@ -4,10 +4,20 @@ namespace Kosmokrator\UI\Ansi;
 
 use Kosmokrator\UI\Theme;
 
+/**
+ * Renders markdown tables as box-drawing ANSI art for the ANSI rendering path.
+ *
+ * Part of the dual TUI/ANSI rendering layer. Also provides shared utilities
+ * (visibleWidth) used by MarkdownToAnsi for column measurement.
+ */
 class AnsiTableRenderer
 {
     /**
-     * @param  array{alignments: list<string|null>, head: list<list<string>>, body: list<list<string>>}  $table
+     * Renders a parsed markdown table as box-drawing ANSI art.
+     *
+     * @param  array{alignments: list<string|null>, head: list<list<string>>, body: list<list<string>>}  $table Table structure with column alignments, header rows, and body rows
+     * @param  string  $prefix  Left-margin prefix for each output line (default: 2 spaces)
+     * @return string ANSI-escaped table string with trailing newline, or empty string if no rows
      */
     public function render(array $table, string $prefix = '  '): string
     {
@@ -79,6 +89,7 @@ class AnsiTableRenderer
         return $output;
     }
 
+    /** Pads a cell string to the target width with ANSI-aware alignment (left, right, center). */
     private static function alignCell(string $text, int $width, ?string $align): string
     {
         $visible = self::visibleWidth($text);
@@ -91,6 +102,13 @@ class AnsiTableRenderer
         };
     }
 
+    /**
+     * Calculates the visible (non-ANSI) width of a string by stripping escape sequences.
+     * Shared utility used across the ANSI rendering layer for column alignment and wrapping.
+     *
+     * @param string $text String that may contain ANSI escape sequences (\033[...m)
+     * @return int Visible character width using mb_strwidth
+     */
     public static function visibleWidth(string $text): int
     {
         $stripped = preg_replace('/\033\[[0-9;]*m/', '', $text);

@@ -7,6 +7,11 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Tool that reads any new (unread) output from a running or exited shell session.
+ *
+ * Non-destructive: calling read does not consume or alter the session state.
+ */
 final class ShellReadTool implements ToolInterface
 {
     public function __construct(
@@ -36,6 +41,11 @@ final class ShellReadTool implements ToolInterface
         return ['session_id'];
     }
 
+    /**
+     * Read unread output from the given session.
+     *
+     * @param  array<string, mixed>  $args  Tool arguments from the AI agent
+     */
     public function execute(array $args): ToolResult
     {
         $sessionId = trim((string) ($args['session_id'] ?? ''));

@@ -4,10 +4,21 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+/**
+ * Persists and retrieves session records from the SQLite database.
+ *
+ * Part of the Session subsystem — used by session management commands
+ * to create, find, list, and update conversation sessions.
+ */
 class SessionRepository
 {
     public function __construct(private Database $db) {}
 
+    /**
+     * @param string $project  Project root path identifying the workspace
+     * @param string $model    LLM model identifier to associate with the session
+     * @return string          The newly generated session UUID
+     */
     public function create(string $project, string $model): string
     {
         $id = $this->uuid();
@@ -26,6 +37,10 @@ class SessionRepository
         return $id;
     }
 
+    /**
+     * @param string $id  Full session UUID
+     * @return array|null Session row as associative array, or null if not found
+     */
     public function find(string $id): ?array
     {
         $stmt = $this->db->connection()->prepare('SELECT * FROM sessions WHERE id = :id');
@@ -50,6 +65,10 @@ class SessionRepository
         return count($rows) === 1 ? $rows[0] : null;
     }
 
+    /**
+     * @param string $id     Session UUID
+     * @param string $title  Human-readable title to store
+     */
     public function updateTitle(string $id, string $title): void
     {
         $stmt = $this->db->connection()->prepare(
@@ -58,6 +77,7 @@ class SessionRepository
         $stmt->execute(['id' => $id, 'title' => $title, 'now' => $this->now()]);
     }
 
+    /** Bump the updated_at timestamp to mark the session as recently active. */
     public function touch(string $id): void
     {
         $stmt = $this->db->connection()->prepare(
@@ -67,10 +87,13 @@ class SessionRepository
     }
 
     /**
-     * @return array[]
+     * @param string $project  Project root path to filter by
+     * @param int    $limit    Maximum number of sessions to return
+     * @return array[]         List of session rows with aggregated message_count and last_user_message
      */
     public function listByProject(string $project, int $limit = 20): array
     {
+        // Correlated subqueries: count messages and fetch the most recent user message per session
         $stmt = $this->db->connection()->prepare('
             SELECT s.*,
                 (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count,
@@ -85,6 +108,10 @@ class SessionRepository
         return $stmt->fetchAll();
     }
 
+    /**
+     * @param string $project  Project root path to filter by
+     * @return array|null      Most recently updated session row, or null if none exist
+     */
     public function latest(string $project): ?array
     {
         $stmt = $this->db->connection()->prepare(
@@ -96,11 +123,13 @@ class SessionRepository
         return $row ?: null;
     }
 
+    /** Returns the current timestamp as a high-precision Unix float string. */
     private function now(): string
     {
         return number_format(microtime(true), 6, '.', '');
     }
 
+    /** Generates a version-4 UUID from random bytes. */
     private function uuid(): string
     {
         $data = random_bytes(16);

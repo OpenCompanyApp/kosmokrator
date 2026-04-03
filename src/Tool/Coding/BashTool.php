@@ -11,6 +11,11 @@ use Revolt\EventLoop;
 
 use function Amp\ByteStream\buffer;
 
+/**
+ * Executes shell commands via `sh -c` and returns combined stdout/stderr with the exit code.
+ * Use for running tests, git operations, package installs, and other CLI tasks.
+ * Streams output in real time via an optional progress callback; enforces a configurable timeout.
+ */
 class BashTool implements ToolInterface
 {
     /** @var (\Closure(string): void)|null */
@@ -20,6 +25,10 @@ class BashTool implements ToolInterface
 
     private LoggerInterface $log;
 
+    /**
+     * @param int               $timeout Default per-command timeout in seconds
+     * @param LoggerInterface|null $log  Optional PSR-3 logger
+     */
     public function __construct(int $timeout = 120, ?LoggerInterface $log = null)
     {
         $this->timeout = $timeout;
@@ -49,6 +58,10 @@ class BashTool implements ToolInterface
         return ['command'];
     }
 
+    /**
+     * @param  array{command: string, timeout?: int}  $args  Command and optional timeout override
+     * @return ToolResult Combined stdout+stderr output with exit code, or error on timeout/failure
+     */
     public function execute(array $args): ToolResult
     {
         $command = trim($args['command'] ?? '');

@@ -9,6 +9,14 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 
+/**
+ * Fast, non-LLM context pruning: replaces old tool result content with lightweight placeholders
+ * to reclaim tokens without the cost of a full LLM compaction.
+ *
+ * Protects the last 2 user turns and their surrounding context. Ranks candidates by an
+ * importance score (tool type weight + whether the result is referenced by subsequent assistant messages).
+ * Used by ContextManager as a first-pass before LLM-based compaction.
+ */
 class ContextPruner
 {
     private const DEFAULT_PROTECT_TOKENS = 40_000;
@@ -17,6 +25,7 @@ class ContextPruner
 
     public const PLACEHOLDER = '[Old tool result content cleared]';
 
+    /** Tool types weighted by typical output size — higher weight = less important to keep. */
     private const TOOL_WEIGHTS = [
         'bash' => 70,
         'shell_read' => 65,
@@ -55,8 +64,11 @@ class ContextPruner
     }
 
     /**
-     * Prune old tool results from conversation history.
-     * Returns the estimated number of tokens saved.
+     * Scan old tool results, score them by importance, and replace the least important
+     * with placeholders. Only prunes if estimated savings exceed minSavings.
+     *
+     * @param  ConversationHistory  $history  The conversation to prune (mutated in place)
+     * @return int Estimated tokens reclaimed, or 0 if pruning was skipped
      */
     public function prune(ConversationHistory $history): int
     {
@@ -134,6 +146,7 @@ class ContextPruner
 
     /**
      * Find the message index where protection starts (the 2nd user turn from the end).
+     * All tool results before this index are candidates for pruning.
      *
      * @param  array<int, Message>  $messages
      */
@@ -154,6 +167,10 @@ class ContextPruner
     }
 
     /**
+     * Score a tool result's importance: higher = less likely to be pruned.
+     * Considers tool type weight, whether the result is referenced in later assistant messages,
+     * and content overlap with reasoning patterns.
+     *
      * @param  array<int, Message>  $messages
      */
     private function importanceScore(array $messages, int $messageIndex, int $protectFrom, string $toolName, array $args, string $result): int
@@ -185,6 +202,9 @@ class ContextPruner
         return $score;
     }
 
+    /**
+     * Generate a context-aware placeholder string for a pruned tool result.
+     */
     private function placeholderFor(string $toolName, array $args): string
     {
         $path = (string) ($args['path'] ?? '');

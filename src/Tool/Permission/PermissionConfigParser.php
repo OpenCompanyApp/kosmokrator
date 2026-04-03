@@ -4,9 +4,17 @@ namespace Kosmokrator\Tool\Permission;
 
 use Illuminate\Config\Repository;
 
+/**
+ * Reads the kosmokrator.tools config section and converts it into the structured
+ * arrays and PermissionRule objects consumed by PermissionEvaluator.
+ *
+ * Single entry-point for turning raw config into permission infrastructure.
+ */
 class PermissionConfigParser
 {
     /**
+     * Parse the config repository into rules, blocked paths, and Guardian-safe commands.
+     *
      * @return array{rules: PermissionRule[], blocked_paths: string[], guardian_safe_commands: string[], default_permission_mode: string}
      */
     public function parse(Repository $config): array

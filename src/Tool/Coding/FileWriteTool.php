@@ -5,6 +5,11 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Writes entire file contents, creating the file and any missing parent directories.
+ * Use for new files or complete overwrites; for targeted edits prefer FileEditTool or ApplyPatchTool.
+ * Overwrites existing files without confirmation — the LLM should read first to avoid data loss.
+ */
 class FileWriteTool implements ToolInterface
 {
     public function name(): string
@@ -30,6 +35,10 @@ class FileWriteTool implements ToolInterface
         return ['path', 'content'];
     }
 
+    /**
+     * @param  array{path: string, content: string}  $args  File path and full content to write
+     * @return ToolResult Summary with line count, or error if write or directory creation failed
+     */
     public function execute(array $args): ToolResult
     {
         $path = $args['path'] ?? '';

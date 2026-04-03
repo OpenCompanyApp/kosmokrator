@@ -7,6 +7,13 @@ namespace Kosmokrator\Agent;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\ToolResult;
 
+/**
+ * Replaces superseded tool results in ConversationHistory with compact placeholders,
+ * reducing context sent to the LLM. Applies three tiers of deduplication:
+ *   1) Exact duplicates (same tool + args + result),
+ *   2) Stale file_reads where the file was edited between reads,
+ *   3) Grep results subsumed by a later file_read of the same file.
+ */
 class ToolResultDeduplicator
 {
     private const EXACT_SUPERSEDE = '[Superseded — identical result returned by later call]';

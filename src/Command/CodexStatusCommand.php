@@ -12,6 +12,9 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Displays the current Codex authentication status and token expiry details.
+ */
 #[AsCommand(name: 'codex:status', description: 'Show Codex authentication status')]
 final class CodexStatusCommand extends Command
 {

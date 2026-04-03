@@ -12,8 +12,21 @@ use Prism\Prism\Exceptions\PrismRateLimitedException;
 use Prism\Prism\Exceptions\PrismServerException;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Retrying decorator around LlmClientInterface with exponential backoff and jitter.
+ *
+ * Wraps any LlmClientInterface (AsyncLlmClient, PrismService) and automatically
+ * retries on rate-limit (429), server errors (5xx), and network failures.
+ * Honors Retry-After headers from providers and PrismRateLimitedException hints.
+ */
 class RetryableLlmClient implements LlmClientInterface
 {
+    /**
+     * @param LlmClientInterface $inner       The underlying client to delegate calls to
+     * @param LoggerInterface    $log         Logger for retry warnings
+     * @param int                $maxAttempts Maximum retry attempts (0 = unlimited)
+     * @param \Closure|null      $onRetry     Optional callback invoked as (int $attempt, float $delay, string $error) on each retry
+     */
     public function __construct(
         private readonly LlmClientInterface $inner,
         private readonly LoggerInterface $log,
@@ -31,6 +44,13 @@ class RetryableLlmClient implements LlmClientInterface
         $this->maxAttempts = $maxAttempts;
     }
 
+    /**
+     * Send a chat request with automatic retry on transient failures.
+     *
+     * @param  Message[]    $messages     Conversation history
+     * @param  Tool[]       $tools        Available tools for function calling
+     * @param  Cancellation $cancellation Optional Amp cancellation token
+     */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
         $attempt = 0;
@@ -63,6 +83,12 @@ class RetryableLlmClient implements LlmClientInterface
         }
     }
 
+    /**
+     * Determine if an exception represents a transient failure worth retrying.
+     *
+     * Recognizes Prism rate-limit/server exceptions, RetryableHttpException, ProviderError,
+     * Amp HttpException (network-level), and legacy RuntimeException with retryable status codes.
+     */
     private function isRetryable(\Throwable $e): bool
     {
         if ($e instanceof PrismRateLimitedException
@@ -92,6 +118,12 @@ class RetryableLlmClient implements LlmClientInterface
         return false;
     }
 
+    /**
+     * Compute the delay before the next retry attempt.
+     *
+     * Honors provider-supplied Retry-After hints first, then falls back to
+     * exponential backoff with ±30% jitter (2s, 4s, 8s, 16s, 32s, capped at 60s).
+     */
     private function calculateDelay(\Throwable $e, int $attempt): float
     {
         // Honor rate limit hint from Prism
@@ -174,6 +206,7 @@ class RetryableLlmClient implements LlmClientInterface
         $this->inner->setMaxTokens($maxTokens);
     }
 
+    /** Get the underlying client for direct access when needed (e.g. stream()). */
     public function inner(): LlmClientInterface
     {
         return $this->inner;

@@ -2,6 +2,12 @@
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Operational mode for the top-level agent loop: determines which tools are available
+ * and appends a mode-specific system prompt suffix. Switched at runtime via /mode commands.
+ *
+ * @see AgentLoop::setMode()
+ */
 enum AgentMode: string
 {
     case Edit = 'edit';
@@ -30,6 +36,11 @@ enum AgentMode: string
 
     private const MEMORY_WRITE_TOOLS = ['memory_save'];
 
+    /**
+     * Tool names permitted in this mode. Used by AgentLoop::applyModeFilter().
+     *
+     * @return string[]
+     */
     public function allowedTools(): array
     {
         return match ($this) {

@@ -4,23 +4,41 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Task;
 
+/**
+ * In-memory repository and rendering engine for the task tree.
+ *
+ * Owns all Task instances, enforces dependency edges, auto-completes
+ * parent tasks when children finish, and provides plain-text/ANSI
+ * tree rendering for terminal output.
+ */
 class TaskStore
 {
     /** @var array<string, Task> */
     private array $tasks = [];
 
+    /**
+     * Register a task in the store, keyed by its ID.
+     */
     public function add(Task $task): void
     {
         $this->tasks[$task->id] = $task;
     }
 
+    /**
+     * Retrieve a task by ID, or null if not found.
+     */
     public function get(string $id): ?Task
     {
         return $this->tasks[$id] ?? null;
     }
 
     /**
-     * @param  array<string, mixed>  $changes
+     * Apply a set of field changes to a task, maintaining bidirectional dependency edges.
+     *
+     * When a status change makes all children terminal, the parent is auto-completed.
+     *
+     * @param  array<string, mixed>  $changes  Associative map of field names to new values
+     * @return Task|null The updated task, or null if the ID was not found
      */
     public function update(string $id, array $changes): ?Task
     {
@@ -78,7 +96,7 @@ class TaskStore
     }
 
     /**
-     * @return Task[]
+     * @return Task[] All tasks in insertion order
      */
     public function all(): array
     {
@@ -86,7 +104,7 @@ class TaskStore
     }
 
     /**
-     * @return Task[]
+     * @return Task[] Root tasks (those without a parent)
      */
     public function roots(): array
     {
@@ -97,7 +115,8 @@ class TaskStore
     }
 
     /**
-     * @return Task[]
+     * @param  string  $parentId  ID of the parent task
+     * @return Task[]  Direct children of the given parent
      */
     public function children(string $parentId): array
     {
@@ -107,11 +126,17 @@ class TaskStore
         ));
     }
 
+    /**
+     * Whether the store contains no tasks at all.
+     */
     public function isEmpty(): bool
     {
         return $this->tasks === [];
     }
 
+    /**
+     * Whether any task is currently in the InProgress state.
+     */
     public function hasInProgress(): bool
     {
         foreach ($this->tasks as $task) {
@@ -123,6 +148,9 @@ class TaskStore
         return false;
     }
 
+    /**
+     * Whether a task has at least one non-terminal blocker in its blockedBy list.
+     */
     public function isBlocked(string $id): bool
     {
         $task = $this->tasks[$id] ?? null;
@@ -140,6 +168,9 @@ class TaskStore
         return false;
     }
 
+    /**
+     * Render the full task tree as plain text, skipping cancelled tasks.
+     */
     public function renderTree(): string
     {
         if ($this->tasks === []) {
@@ -155,6 +186,8 @@ class TaskStore
     }
 
     /**
+     * Append a single task node (and its children) to the lines array.
+     *
      * @param  string[]  $lines
      */
     private function renderNode(Task $task, int $depth, array &$lines): void
@@ -179,6 +212,9 @@ class TaskStore
 
     /**
      * Render tree with ANSI colors for terminal display.
+     *
+     * @param  string|null $inProgressColor  Optional ANSI escape sequence to override the in-progress color
+     * @return string      ANSI-colored tree, or empty string when no tasks exist
      */
     public function renderAnsiTree(?string $inProgressColor = null): string
     {
@@ -195,6 +231,8 @@ class TaskStore
     }
 
     /**
+     * Append a single ANSI-colored task node (and its children) to the lines array.
+     *
      * @param  string[]  $lines
      */
     private function renderAnsiNode(Task $task, int $depth, array &$lines, ?string $inProgressColor = null): void
@@ -269,6 +307,9 @@ class TaskStore
         $this->tasks = [];
     }
 
+    /**
+     * Recursively check whether a task has any non-terminal descendants.
+     */
     private function hasActiveChildren(string $taskId): bool
     {
         foreach ($this->children($taskId) as $child) {
@@ -283,6 +324,10 @@ class TaskStore
         return false;
     }
 
+    /**
+     * Transition a parent to Completed when all its children are terminal.
+     * Recurses upward through grandparent tasks.
+     */
     private function maybeCompleteParent(string $parentId): void
     {
         $parent = $this->tasks[$parentId] ?? null;

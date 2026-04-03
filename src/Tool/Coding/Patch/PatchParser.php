@@ -4,9 +4,18 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding\Patch;
 
+/**
+ * Parses the custom *** Begin Patch / *** End Patch text format into PatchOperation DTOs.
+ *
+ * This is the parsing frontend for the apply_patch tool — the format uses a simple
+ * line-based protocol with *** headers and unified-diff-style body prefixes.
+ */
 final class PatchParser
 {
     /**
+     * Parse a raw patch string into an ordered list of operations.
+     *
+     * @param  string  $patch  Raw patch text bounded by *** Begin Patch / *** End Patch
      * @return PatchOperation[]
      */
     public function parse(string $patch): array
@@ -73,7 +82,10 @@ final class PatchParser
     }
 
     /**
-     * @return string[]
+     * Convenience method: parse a patch and return all file paths it touches (including move destinations).
+     *
+     * @param  string  $patch  Raw patch text
+     * @return string[]  Unique list of file paths
      */
     public function extractTargetPaths(string $patch): array
     {
@@ -89,8 +101,10 @@ final class PatchParser
     }
 
     /**
+     * Parse an *** Add File section: every body line must start with '+'.
+     *
      * @param  string[]  $lines
-     * @return array{PatchOperation, int}
+     * @return array{PatchOperation, int}  [operation, next line index]
      */
     private function parseAdd(array $lines, int $index, int $last): array
     {
@@ -119,8 +133,10 @@ final class PatchParser
     }
 
     /**
+     * Parse an *** Update File section, optionally including a *** Move to directive and hunk body.
+     *
      * @param  string[]  $lines
-     * @return array{PatchOperation, int}
+     * @return array{PatchOperation, int}  [operation, next line index]
      */
     private function parseUpdate(array $lines, int $index, int $last): array
     {
@@ -170,6 +186,7 @@ final class PatchParser
         return [new PatchOperation('update', $path, $body, $moveTo), $index];
     }
 
+    /** Check whether a line is a top-level operation header (Add/Update/Delete). */
     private function isHeader(string $line): bool
     {
         return str_starts_with($line, '*** Add File: ')

@@ -8,6 +8,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Lists all stored memories for the current project with their IDs, types, and titles.
+ */
 class MemoriesCommand implements SlashCommand
 {
     public function name(): string
@@ -15,22 +18,29 @@ class MemoriesCommand implements SlashCommand
         return '/memories';
     }
 
-    /** @return string[] */
+    /** @return string[] Alternative command names */
     public function aliases(): array
     {
         return [];
     }
 
+    /** @return string One-line description for the help listing */
     public function description(): string
     {
         return 'List stored memories';
     }
 
+    /** @return bool Whether this command executes immediately (no agent turn needed) */
     public function immediate(): bool
     {
         return true;
     }
 
+    /**
+     * @param  string               $args  Unused command arguments
+     * @param  SlashCommandContext  $ctx   Current session context
+     * @return SlashCommandResult   Always continues the session
+     */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $memories = $ctx->sessionManager->getMemories();

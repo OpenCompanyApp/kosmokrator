@@ -12,6 +12,13 @@ use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Manages the conversation context window: pre-flight checks, auto-compaction, pruning, and system prompt assembly.
+ *
+ * Called before each LLM turn by AgentLoop. Delegates to ContextCompactor (LLM-based summarization),
+ * ContextPruner (fast token recovery), ContextBudget (threshold calculation), and ProtectedContextBuilder
+ * (preserved system messages). Maintains a circuit breaker that disables auto-compaction after 3 consecutive failures.
+ */
 final class ContextManager
 {
     private int $consecutiveCompactionFailures = 0;
@@ -19,6 +26,11 @@ final class ContextManager
     /** @var array<string, int|float|string|bool> */
     private array $lastBudgetSnapshot = [];
 
+    /**
+     * @param  string  $baseSystemPrompt  The core instruction prompt loaded from config
+     * @param  int  $memoryInjectLimit  Max memories to inject into the system prompt
+     * @param  int  $sessionRecallLimit  Max past sessions to recall via semantic search
+     */
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -36,7 +48,11 @@ final class ContextManager
     ) {}
 
     /**
-     * @return array{int, int}
+     * Pre-flight context window check — runs before each LLM turn.
+     * Tries micro-pruning first, then LLM-based compaction if still over threshold.
+     * Returns [tokensIn, tokensOut] from any compaction LLM calls.
+     *
+     * @return array{int, int} [compaction_tokens_in, compaction_tokens_out]
      */
     public function preFlightCheck(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
     {
@@ -95,16 +111,16 @@ final class ContextManager
         }
     }
 
-    /**
-     * @return array{int, int}
-     */
+    /** Pre-flight check for headless (subagent) loops — same logic as preFlightCheck. */
     public function headlessPreFlightCheck(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
     {
         return $this->preFlightCheck($history, $mode, $agentContext);
     }
 
     /**
-     * @return array{int, int}
+     * Perform LLM-based context compaction: summarize old messages, extract memories, persist results.
+     *
+     * @return array{int, int} [compaction_tokens_in, compaction_tokens_out]
      */
     public function performCompaction(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
     {
@@ -186,11 +202,17 @@ final class ContextManager
         }
     }
 
+    /** Push the rebuilt system prompt (with memories, mode suffix, tasks) to the LLM client. */
     public function refreshSystemPrompt(AgentMode $mode, ?ConversationHistory $history = null, ?AgentContext $agentContext = null): void
     {
         $this->llm->setSystemPrompt($this->buildSystemPrompt($mode, $history, $agentContext));
     }
 
+    /**
+     * Assemble the full system prompt: base instructions + relevant memories + session recall + mode suffix + tasks + parent brief.
+     *
+     * @param  bool  $markSurfacedMemories  Whether to tag injected memories as "surfaced" for deduplication
+     */
     public function buildSystemPrompt(
         AgentMode $mode,
         ?ConversationHistory $history = null,
@@ -224,6 +246,9 @@ final class ContextManager
         return $prompt;
     }
 
+    /**
+     * Check whether the conversation history exceeds the auto-compact threshold.
+     */
     public function shouldCompactHistory(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): bool
     {
         $snapshot = $this->snapshot($history, $mode, $agentContext);
@@ -263,9 +288,7 @@ final class ContextManager
         return $this->lastBudgetSnapshot;
     }
 
-    /**
-     * @return array<string, int|float|string|bool>
-     */
+    /** Build a budget snapshot with threshold flags, used to decide compaction/pruning strategy. */
     private function snapshot(ConversationHistory $history, AgentMode $mode, ?AgentContext $agentContext): array
     {
         $estimated = $this->estimateContextTokens($history, $mode, $agentContext);
@@ -293,6 +316,9 @@ final class ContextManager
         return $snapshot;
     }
 
+    /**
+     * Estimate total tokens the next LLM call will consume (system prompt + conversation messages).
+     */
     private function estimateContextTokens(ConversationHistory $history, AgentMode $mode, ?AgentContext $agentContext): int
     {
         $prompt = $this->buildSystemPrompt($mode, $history, $agentContext, false);
@@ -300,6 +326,9 @@ final class ContextManager
         return TokenEstimator::estimate($prompt) + TokenEstimator::estimateMessages($history->messages());
     }
 
+    /**
+     * Reset the compaction failure counter once context pressure drops below the warning threshold.
+     */
     private function resetCircuitBreakerIfHealthy(): void
     {
         if ($this->consecutiveCompactionFailures <= 0) {

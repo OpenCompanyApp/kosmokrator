@@ -8,6 +8,11 @@ use Kosmokrator\Tool\ToolResult;
 
 use function Amp\ByteStream\buffer;
 
+/**
+ * Searches file contents for a regex pattern, returning matching lines with file paths and line numbers.
+ * Automatically uses ripgrep (`rg`) when available for faster searches, falling back to GNU `grep`.
+ * Use to find usages, trace code paths, or locate patterns across the codebase.
+ */
 class GrepTool implements ToolInterface
 {
     public function __construct(
@@ -38,6 +43,10 @@ class GrepTool implements ToolInterface
         return ['pattern'];
     }
 
+    /**
+     * @param  array{pattern: string, path?: string, glob?: string}  $args  Regex pattern, search path, and optional file filter
+     * @return ToolResult Matching lines (up to 100), or "no matches" / error message
+     */
     public function execute(array $args): ToolResult
     {
         $pattern = $args['pattern'] ?? '';
@@ -85,6 +94,7 @@ class GrepTool implements ToolInterface
         return ToolResult::success($result ?: "No matches found for '{$pattern}'");
     }
 
+    /** Checks whether ripgrep is available on the system PATH. */
     private function hasRipgrep(): bool
     {
         $process = Process::start(['which', 'rg']);

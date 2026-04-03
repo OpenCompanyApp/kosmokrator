@@ -637,7 +637,7 @@ class SubagentOrchestratorTest extends TestCase
         )->await();
 
         $this->assertNotNull($bgCancellation, 'Background agent should get a dedicated cancellation token');
-        $this->assertNull($awaitCancellation, 'Await agent should have null cancellation (uses parent closure)');
+        $this->assertNotNull($awaitCancellation, 'Await agent should also get a dedicated cancellation token');
     }
 
     public function test_cancel_all_cancels_background_agents(): void
@@ -687,7 +687,7 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertSame('failed', $orchestrator->getStats('cancel-2')->status);
     }
 
-    public function test_cancel_all_does_not_affect_await_agents(): void
+    public function test_cancel_all_cancels_await_agents_too(): void
     {
         $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 0);
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
@@ -695,16 +695,80 @@ class SubagentOrchestratorTest extends TestCase
         $future = $orchestrator->spawnAgent(
             $context, 'await task', AgentType::Explore, 'await', 'await-safe', [], null,
             function ($ctx, $task) {
-                \Amp\delay(0.05);
+                \Amp\delay(10, cancellation: $ctx->cancellation);
 
                 return 'completed safely';
             },
         );
 
-        // Cancel background agents (there are none, but this tests that await is unaffected)
+        // Awaited subagents are part of the same swarm and should be cancelled on teardown too.
+        \Amp\delay(0.01);
         $orchestrator->cancelAll();
 
-        $this->assertSame('completed safely', $future->await());
+        $this->expectException(CancelledException::class);
+        $future->await();
+    }
+
+    public function test_watchdog_runtime_exception_is_not_retried(): void
+    {
+        $attempts = 0;
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 3);
+
+        $future = $orchestrator->spawnAgent(
+            $this->rootContext,
+            'watchdog task',
+            AgentType::Explore,
+            'await',
+            'watchdog-no-retry',
+            [],
+            null,
+            function ($ctx, $task) use (&$attempts) {
+                $attempts++;
+
+                throw new \RuntimeException('watchdog: subagent exceeded 10.0s without finishing');
+            },
+        );
+
+        try {
+            $future->await();
+            $this->fail('Expected watchdog exception');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('watchdog:', $e->getMessage());
+        }
+
+        $this->assertSame(1, $attempts);
+        $this->assertSame('failed', $orchestrator->getStats('watchdog-no-retry')?->status);
+    }
+
+    public function test_idle_watchdog_cancels_truly_inactive_agent(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 0, 0.05);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $future = $orchestrator->spawnAgent(
+            $context,
+            'idle task',
+            AgentType::Explore,
+            'await',
+            'idle-watchdog',
+            [],
+            null,
+            function ($ctx, $task) {
+                \Amp\delay(1, cancellation: $ctx->cancellation);
+
+                return 'should not reach';
+            },
+        );
+
+        try {
+            $future->await();
+            $this->fail('Expected idle watchdog cancellation');
+        } catch (CancelledException $e) {
+            $this->assertStringContainsString('watchdog: subagent idle for', $e->getPrevious()?->getMessage() ?? '');
+        }
+
+        $this->assertSame('failed', $orchestrator->getStats('idle-watchdog')?->status);
+        $this->assertStringContainsString('watchdog: subagent idle for', $orchestrator->getStats('idle-watchdog')?->error ?? '');
     }
 
     public function test_cancellation_cleanup_after_completion(): void

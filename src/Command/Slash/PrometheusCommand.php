@@ -9,6 +9,9 @@ use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 use Kosmokrator\Tool\Permission\PermissionMode;
 
+/**
+ * Switches to Prometheus permission mode where all tool calls are auto-approved.
+ */
 class PrometheusCommand implements SlashCommand
 {
     public function name(): string

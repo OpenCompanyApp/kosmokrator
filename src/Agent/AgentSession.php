@@ -10,7 +10,11 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\UIManager;
 
 /**
- * Value object holding all components needed for an interactive agent session.
+ * Immutable value object holding all wired components for an interactive agent session.
+ * Built by AgentSessionBuilder and consumed by AgentCommand to drive the REPL.
+ *
+ * @see AgentSessionBuilder
+ * @see AgentLoop
  */
 readonly class AgentSession
 {

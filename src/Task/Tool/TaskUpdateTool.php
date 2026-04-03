@@ -8,22 +8,29 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Updates a task's status, subject, description, or dependency links.
+ * Part of the task management toolset exposed to the AI agent.
+ */
 class TaskUpdateTool implements ToolInterface
 {
     public function __construct(
         private readonly TaskStore $store,
     ) {}
 
+    /** @return string Tool identifier used by the agent */
     public function name(): string
     {
         return 'task_update';
     }
 
+    /** @return string Human-readable description for the agent's tool catalog */
     public function description(): string
     {
         return 'Update a task\'s status, subject, description, or dependencies. Status flow: pending -> in_progress -> completed | cancelled.';
     }
 
+    /** @return array<string,array<string,string>> JSON Schema-style parameter definitions */
     public function parameters(): array
     {
         return [
@@ -37,11 +44,16 @@ class TaskUpdateTool implements ToolInterface
         ];
     }
 
+    /** @return list<string> Parameters that must always be provided */
     public function requiredParameters(): array
     {
         return ['id'];
     }
 
+    /**
+     * @param  array<string,mixed> $args Tool call arguments from the agent
+     * @return ToolResult           Updated task detail with tree view or error message
+     */
     public function execute(array $args): ToolResult
     {
         $id = $args['id'] ?? '';

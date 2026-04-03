@@ -16,8 +16,17 @@ use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SettingsListWidget;
 
+/**
+ * Defines the visual style sheet for the KosmoKrator TUI.
+ *
+ * Maps widget class names and style-class selectors to Style objects controlling
+ * colors, padding, borders, and layout for all terminal UI elements.
+ */
 class KosmokratorStyleSheet
 {
+    /**
+     * @return StyleSheet The fully configured style sheet for the KosmoKrator TUI
+     */
     public static function create(): StyleSheet
     {
         return new StyleSheet([

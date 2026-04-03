@@ -16,6 +16,12 @@ use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Central facade for session, message, setting, and memory operations.
+ *
+ * Coordinates the repositories that back a single conversation session,
+ * including history persistence, compaction, and project-scoped settings.
+ */
 class SessionManager
 {
     private ?string $currentSessionId = null;
@@ -33,6 +39,11 @@ class SessionManager
         private readonly ?SettingsManager $configSettings = null,
     ) {}
 
+    /**
+     * Set the active project directory and derive its settings scope.
+     *
+     * @param string $project Absolute path to the project root
+     */
     public function setProject(string $project): void
     {
         $this->project = $project;
@@ -40,16 +51,28 @@ class SessionManager
         $this->configSettings?->setProjectRoot($project);
     }
 
+    /**
+     * Get the active project directory path.
+     */
     public function getProject(): ?string
     {
         return $this->project;
     }
 
+    /**
+     * Get the derived settings scope key for the current project.
+     */
     public function getProjectScope(): ?string
     {
         return $this->projectScope;
     }
 
+    /**
+     * Create a new session for the current project and model.
+     *
+     * @param string $model LLM model identifier to associate with the session
+     * @return string The newly created session ID
+     */
     public function createSession(string $model): string
     {
         $id = $this->sessions->create($this->project ?? getcwd(), $model);
@@ -59,16 +82,33 @@ class SessionManager
         return $id;
     }
 
+    /**
+     * Get the ID of the currently active session.
+     */
     public function currentSessionId(): ?string
     {
         return $this->currentSessionId;
     }
 
+    /**
+     * Switch the active session to an existing one.
+     *
+     * @param string $id Session ID to activate
+     */
     public function setCurrentSession(string $id): void
     {
         $this->currentSessionId = $id;
     }
 
+    /**
+     * Persist a conversation message and update session metadata.
+     *
+     * Automatically sets the session title from the first user message.
+     *
+     * @param Message $message Prism message to persist
+     * @param int $tokensIn Input tokens consumed by this message
+     * @param int $tokensOut Output tokens generated for this message
+     */
     public function saveMessage(Message $message, int $tokensIn = 0, int $tokensOut = 0): void
     {
         if ($this->currentSessionId === null) {
@@ -89,6 +129,7 @@ class SessionManager
 
         $this->sessions->touch($this->currentSessionId);
 
+        // Auto-title: use the first user message as the session title
         $session = $this->sessions->find($this->currentSessionId);
         if ($session !== null && $session['title'] === null && $role === 'user' && $content !== null) {
             $title = mb_substr($content, 0, 80);
@@ -96,6 +137,12 @@ class SessionManager
         }
     }
 
+    /**
+     * Reconstruct the conversation history for a session, with deduplication.
+     *
+     * @param string $sessionId Session ID to load history from
+     * @return ConversationHistory Rebuilt history ready for the agent
+     */
     public function loadHistory(string $sessionId): ConversationHistory
     {
         $messages = $this->messages->loadActive($sessionId);
@@ -110,6 +157,9 @@ class SessionManager
         return $history;
     }
 
+    /**
+     * Find the most recent session ID for the current project.
+     */
     public function latestSession(): ?string
     {
         $session = $this->sessions->latest($this->project ?? getcwd());
@@ -117,6 +167,12 @@ class SessionManager
         return $session ? $session['id'] : null;
     }
 
+    /**
+     * Look up a session by exact ID or unique prefix.
+     *
+     * @param string $idOrPrefix Full session ID or a unique prefix
+     * @return array<string, mixed>|null Session data or null if not found
+     */
     public function findSession(string $idOrPrefix): ?array
     {
         $session = $this->sessions->find($idOrPrefix);
@@ -124,6 +180,12 @@ class SessionManager
         return $session ?? $this->sessions->findByPrefix($idOrPrefix);
     }
 
+    /**
+     * Reactivate an existing session and reload its conversation history.
+     *
+     * @param string $sessionId Session ID to resume
+     * @return ConversationHistory The restored conversation history
+     */
     public function resumeSession(string $sessionId): ConversationHistory
     {
         $this->currentSessionId = $sessionId;
@@ -133,6 +195,9 @@ class SessionManager
     }
 
     /**
+     * List recent sessions for the current project.
+     *
+     * @param int $limit Maximum number of sessions to return
      * @return array<int, array<string, mixed>>
      */
     public function listSessions(int $limit = 20): array
@@ -140,8 +205,14 @@ class SessionManager
         return $this->sessions->listByProject($this->project ?? getcwd(), $limit);
     }
 
+    /**
+     * Resolve a setting value, checking config file then project/global DB scopes.
+     *
+     * @param string $key Dot-notation setting key
+     */
     public function getSetting(string $key): ?string
     {
+        // Config file settings take priority over DB-stored settings
         if ($this->configSettings !== null) {
             $value = $this->configSettings->get($key);
             if ($value !== null) {
@@ -156,6 +227,13 @@ class SessionManager
         return $this->settings->resolve($key, $this->projectScope);
     }
 
+    /**
+     * Store a setting value in the given scope.
+     *
+     * @param string $key Dot-notation setting key
+     * @param string $value Setting value to store
+     * @param string $scope Either 'project' or 'global'
+     */
     public function setSetting(string $key, string $value, string $scope = 'project'): void
     {
         if ($this->configSettings !== null) {
@@ -172,6 +250,8 @@ class SessionManager
     }
 
     /**
+     * Retrieve all active memories for the current project.
+     *
      * @return array<int, array<string, mixed>>
      */
     public function getMemories(): array
@@ -181,6 +261,17 @@ class SessionManager
         return $this->memories->forProject($this->project);
     }
 
+    /**
+     * Store a new memory entry.
+     *
+     * @param string $type Memory type (project, user, decision, compaction)
+     * @param string $title Short descriptive title
+     * @param string $content Full memory content
+     * @param string $memoryClass Retention class ('durable', 'working', 'priority')
+     * @param bool $pinned Whether the memory is pinned for priority recall
+     * @param string|null $expiresAt ISO timestamp for expiration, or null for no expiry
+     * @return int The newly created memory ID
+     */
     public function addMemory(
         string $type,
         string $title,
@@ -201,11 +292,27 @@ class SessionManager
         );
     }
 
+    /**
+     * Look up a single memory by ID.
+     *
+     * @param int $id Memory ID
+     * @return array<string, mixed>|null Memory data or null if not found
+     */
     public function findMemory(int $id): ?array
     {
         return $this->memories->find($id);
     }
 
+    /**
+     * Update an existing memory's content and optional metadata.
+     *
+     * @param int $id Memory ID to update
+     * @param string $content New memory content
+     * @param string|null $title Updated title, or null to keep existing
+     * @param string|null $memoryClass Updated retention class, or null to keep existing
+     * @param bool|null $pinned Updated pinned flag, or null to keep existing
+     * @param string|null $expiresAt Updated expiration, or null to keep existing
+     */
     public function updateMemory(
         int $id,
         string $content,
@@ -218,6 +325,12 @@ class SessionManager
     }
 
     /**
+     * Search memories by type, query text, and/or class.
+     *
+     * @param string|null $type Filter by memory type
+     * @param string|null $query Search text for title/content matching
+     * @param int $limit Maximum results to return
+     * @param string|null $memoryClass Filter by retention class
      * @return array<int, array<string, mixed>>
      */
     public function searchMemories(?string $type = null, ?string $query = null, int $limit = 20, ?string $memoryClass = null): array
@@ -225,12 +338,21 @@ class SessionManager
         return $this->memories->search($this->project, $type, $query, $limit, $memoryClass);
     }
 
+    /**
+     * Delete a memory entry by ID.
+     *
+     * @param int $id Memory ID to delete
+     */
     public function deleteMemory(int $id): void
     {
         $this->memories->delete($id);
     }
 
     /**
+     * Select contextually relevant memories and mark them as surfaced.
+     *
+     * @param string|null $query Query text for relevance scoring
+     * @param int $limit Maximum memories to return
      * @return array<int, array<string, mixed>>
      */
     public function getRelevantMemories(?string $query = null, int $limit = 6): array
@@ -239,6 +361,11 @@ class SessionManager
     }
 
     /**
+     * Use the MemorySelector to pick the most relevant memories for the current context.
+     *
+     * @param string|null $query Query text for relevance scoring
+     * @param int $limit Maximum memories to return
+     * @param bool $markSurfaced Whether to update the surfaced_at timestamp on selected memories
      * @return array<int, array<string, mixed>>
      */
     public function selectRelevantMemories(?string $query = null, int $limit = 6, bool $markSurfaced = true): array
@@ -254,6 +381,10 @@ class SessionManager
     }
 
     /**
+     * Full-text search across all session messages in the current project.
+     *
+     * @param string $query Search terms
+     * @param int $limit Maximum results to return
      * @return array<int, array<string, mixed>>
      */
     public function searchSessionHistory(string $query, int $limit = 5): array
@@ -265,6 +396,11 @@ class SessionManager
         return $this->messages->searchProjectHistory($this->project, $query, $this->currentSessionId, $limit);
     }
 
+    /**
+     * Remove expired and excess compaction memories for the current project.
+     *
+     * @return int Number of memories removed
+     */
     public function consolidateMemories(): int
     {
         $removed = $this->memories->pruneExpired($this->project);
@@ -274,6 +410,8 @@ class SessionManager
     }
 
     /**
+     * Sum token usage for the current session.
+     *
      * @return array{tokens_in: int, tokens_out: int}
      */
     public function getSessionTokenTotals(): array
@@ -285,6 +423,15 @@ class SessionManager
         return $this->messages->sumTokens($this->currentSessionId);
     }
 
+    /**
+     * Compact older messages into a summary, keeping the most recent user turns intact.
+     *
+     * Walks backward through raw messages to find the boundary after N user turns,
+     * then replaces everything before that boundary with the summary.
+     *
+     * @param string $summary Compacted summary of older messages
+     * @param int $keepRecentTurns Number of recent user turns to preserve
+     */
     public function persistCompaction(string $summary, int $keepRecentTurns = 3): void
     {
         if ($summary === '' || $this->currentSessionId === null) {
@@ -296,6 +443,7 @@ class SessionManager
             return;
         }
 
+        // Walk backward to find the compaction boundary after N user turns
         $turnsFound = 0;
         $boundaryId = null;
         for ($i = count($raw) - 1; $i >= 0; $i--) {
@@ -312,6 +460,7 @@ class SessionManager
             return;
         }
 
+        // Collect all message IDs before the boundary and compact them
         $ids = array_map(
             fn (array $row): int => (int) $row['id'],
             array_values(array_filter($raw, fn (array $row): bool => (int) $row['id'] < $boundaryId))
@@ -324,6 +473,11 @@ class SessionManager
         ]);
     }
 
+    /**
+     * Apply a structured compaction plan that specifies how many messages to compact.
+     *
+     * @param CompactionPlan $plan Plan containing the summary and message count to compact
+     */
     public function persistCompactionPlan(CompactionPlan $plan): void
     {
         if ($this->currentSessionId === null || $plan->isEmpty()) {
@@ -347,6 +501,8 @@ class SessionManager
     }
 
     /**
+     * Decompose a Prism Message into a storable tuple of role, content, tool calls, and tool results.
+     *
      * @return array{string, ?string, ?array, ?array}
      */
     private function decomposeMessage(Message $message): array

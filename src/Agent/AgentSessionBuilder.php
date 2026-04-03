@@ -170,7 +170,9 @@ final class AgentSessionBuilder
             ?? $config->get('kosmokrator.agent.subagent_concurrency', 10));
         $subagentMaxRetries = (int) ($sessionManager->getSetting('subagent_max_retries')
             ?? $config->get('kosmokrator.agent.subagent_max_retries', 2));
-        $orchestrator = new SubagentOrchestrator($log, $maxDepth, $concurrency, $subagentMaxRetries);
+        $subagentIdleWatchdogSeconds = (int) ($sessionManager->getSetting('subagent_idle_watchdog_seconds')
+            ?? $config->get('kosmokrator.agent.subagent_idle_watchdog_seconds', 900));
+        $orchestrator = new SubagentOrchestrator($log, $maxDepth, $concurrency, $subagentMaxRetries, $subagentIdleWatchdogSeconds);
         $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
 
         $llmClientClass = $useAsyncClient ? 'async' : 'prism';

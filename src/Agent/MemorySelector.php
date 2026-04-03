@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+/**
+ * Scores and ranks memories for relevance before injection.
+ * Considers memory class (priority > durable > working), type, pinned status,
+ * and term overlap with the current query. Used by MemoryInjector to pick the
+ * most relevant subset.
+ */
 final class MemorySelector
 {
     /**
-     * @param  array<int, array<string, mixed>>  $memories
-     * @return array<int, array<string, mixed>>
+     * @param  array<int, array<string, mixed>>  $memories  Candidate memories from the store
+     * @param  string|null  $query  Free-text query to boost relevance scoring
+     * @param  int  $limit  Maximum number of memories to return
+     * @return array<int, array<string, mixed>>  Top-scoring memories, sorted descending
      */
     public function select(array $memories, ?string $query, int $limit = 6): array
     {
@@ -33,7 +41,9 @@ final class MemorySelector
     }
 
     /**
-     * @param  string[]  $terms
+     * Compute a relevance score for a single memory based on class, type, pinned status, and query term overlap.
+     *
+     * @param  string[]  $terms  Lowercased query terms extracted by terms()
      */
     private function score(array $memory, array $terms): int
     {

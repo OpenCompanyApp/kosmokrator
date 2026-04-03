@@ -37,6 +37,9 @@ class AnsiPrometheus
 
     private const STREAK_CHARS = ['─', '━', '═', '—', '╌'];
 
+    /**
+     * Run the full Prometheus animation sequence (fireball → flash → chain break → title).
+     */
     public function animate(): void
     {
         $this->termWidth = (int) exec('tput cols') ?: 120;

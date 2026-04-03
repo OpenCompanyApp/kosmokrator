@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Tui;
 
 use Kosmokrator\UI\AgentDisplayFormatter;
+use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Psr\Log\LoggerInterface;
@@ -134,23 +135,7 @@ final class SubagentDisplayManager
 
         $container = $this->container;
 
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $cyan = "\033[38;2;100;200;220m";
-
-        $count = count($entries);
-
-        if ($count === 1) {
-            [$label] = AgentDisplayFormatter::formatAgentLabel($entries[0]['args']);
-            $text = "{$cyan}⏺{$r} {$label}";
-        } else {
-            $lines = ["{$cyan}⏺ {$count} agents{$r}"];
-            foreach ($entries as $entry) {
-                [$label] = AgentDisplayFormatter::formatAgentLabel($entry['args']);
-                $lines[] = "  {$cyan}●{$r} {$label}";
-            }
-            $text = implode("\n", $lines);
-        }
+        $text = $this->renderLiveTree(AgentTreeBuilder::buildSpawnTree($entries));
 
         if ($this->treeWidget !== null) {
             $container->remove($this->treeWidget);
@@ -202,6 +187,17 @@ final class SubagentDisplayManager
         $this->cachedLoaderLabel = $label;
 
         $container->add($this->loader);
+
+        if ($this->treeProvider !== null) {
+            try {
+                $tree = ($this->treeProvider)();
+                if ($tree !== []) {
+                    $this->refreshTree($tree);
+                }
+            } catch (\Throwable $e) {
+                $this->log?->warning('Tree provider error during subagent start', ['error' => $e->getMessage()]);
+            }
+        }
 
         // Breathing timer — blue color modulation at ~20fps, label update every ~1s
         $this->elapsedTimerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {

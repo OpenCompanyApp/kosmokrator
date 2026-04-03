@@ -22,6 +22,8 @@ class SubagentStats
 
     public float $endTime = 0.0;
 
+    public float $lastActivityTime = 0.0;
+
     public string $task = '';
 
     public string $agentType = '';
@@ -41,6 +43,7 @@ class SubagentStats
 
     public function __construct(public readonly string $id) {}
 
+    /** Returns elapsed seconds since start, or 0 if not yet started. */
     public function elapsed(): float
     {
         if ($this->startTime === 0.0) {
@@ -61,5 +64,19 @@ class SubagentStats
     {
         $this->tokensIn += $in;
         $this->tokensOut += $out;
+    }
+
+    public function touchActivity(): void
+    {
+        $this->lastActivityTime = microtime(true);
+    }
+
+    public function idleSeconds(): float
+    {
+        if ($this->lastActivityTime === 0.0) {
+            return 0.0;
+        }
+
+        return microtime(true) - $this->lastActivityTime;
     }
 }

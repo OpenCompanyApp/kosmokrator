@@ -9,22 +9,29 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Tool for creating tasks — either a single task or a batch via JSON array.
+ * Part of the task management toolset exposed to the AI agent.
+ */
 class TaskCreateTool implements ToolInterface
 {
     public function __construct(
         private readonly TaskStore $store,
     ) {}
 
+    /** @return string Tool identifier used by the agent */
     public function name(): string
     {
         return 'task_create';
     }
 
+    /** @return string Human-readable description for the agent's tool catalog */
     public function description(): string
     {
         return 'Create one or more tasks to track work progress. Use "subject" for a single task, or "tasks" (JSON array) to create multiple at once. Each task can optionally be nested under a parent.';
     }
 
+    /** @return array<string,array<string,string>> JSON Schema-style parameter definitions */
     public function parameters(): array
     {
         return [
@@ -36,11 +43,16 @@ class TaskCreateTool implements ToolInterface
         ];
     }
 
+    /** @return list<string> Parameters that must always be provided */
     public function requiredParameters(): array
     {
         return [];
     }
 
+    /**
+     * @param  array<string,mixed> $args Tool call arguments from the agent
+     * @return ToolResult           Created task summary or error message
+     */
     public function execute(array $args): ToolResult
     {
         $hasSubject = isset($args['subject']) && $args['subject'] !== '';
@@ -61,6 +73,7 @@ class TaskCreateTool implements ToolInterface
         return $this->createBatch($args['tasks']);
     }
 
+    /** Create a single task from scalar arguments. */
     private function createSingle(array $args): ToolResult
     {
         $parentId = $args['parent_id'] ?? null;
@@ -79,6 +92,7 @@ class TaskCreateTool implements ToolInterface
         return ToolResult::success("Created task {$task->id}: {$task->subject}\n\n".$this->store->renderTree());
     }
 
+    /** Parse a JSON array of task definitions and persist them all. */
     private function createBatch(string $json): ToolResult
     {
         $items = json_decode($json, true);

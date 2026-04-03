@@ -6,6 +6,12 @@ namespace Kosmokrator\Tool;
 
 use Kosmokrator\UI\RendererInterface;
 
+/**
+ * Interactive tool that presents a multiple-choice prompt to the user and returns
+ * the selected option. Supports optional detail/mockup per choice and a recommended flag.
+ *
+ * Delegates rendering to the UI layer via RendererInterface.
+ */
 class AskChoiceTool implements ToolInterface
 {
     public function __construct(

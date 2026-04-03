@@ -8,6 +8,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Terminates the agent session and exits the application.
+ */
 class QuitCommand implements SlashCommand
 {
     public function name(): string

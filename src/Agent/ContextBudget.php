@@ -6,6 +6,13 @@ namespace Kosmokrator\Agent;
 
 use Kosmokrator\LLM\ModelCatalog;
 
+/**
+ * Calculates context window thresholds: warning, auto-compact, and blocking limits.
+ *
+ * Each threshold is derived from the model's context window minus a configurable buffer.
+ * Used by ContextManager to decide when to prune or compact. The snapshot() method
+ * returns a single array with all threshold flags for a given estimated token count.
+ */
 final class ContextBudget
 {
     public function __construct(
@@ -16,32 +23,47 @@ final class ContextBudget
         private readonly int $blockingBufferTokens = 0,
     ) {}
 
+    /** Raw model context window size (tokens). */
     public function contextWindow(string $model): int
     {
         return $this->models?->contextWindow($model) ?? 200_000;
     }
 
+    /** Context window minus reserved output tokens — the usable input budget. */
     public function effectiveContextWindow(string $model): int
     {
         return max(1, $this->contextWindow($model) - max(0, $this->reserveOutputTokens));
     }
 
+    /**
+     * Token count at which a warning should be logged.
+     */
     public function warningThreshold(string $model): int
     {
         return max(1, $this->effectiveContextWindow($model) - max(0, $this->warningBufferTokens));
     }
 
+    /**
+     * Token count at which auto-compaction should trigger.
+     */
     public function autoCompactThreshold(string $model): int
     {
         return max(1, $this->effectiveContextWindow($model) - max(0, $this->autoCompactBufferTokens));
     }
 
+    /**
+     * Token count at which the context is considered full and action is mandatory.
+     */
     public function blockingThreshold(string $model): int
     {
         return max(1, $this->effectiveContextWindow($model) - max(0, $this->blockingBufferTokens));
     }
 
     /**
+     * Compute a budget snapshot with all thresholds and boolean flags for the given token estimate.
+     *
+     * @param  int  $estimatedTokens  Current estimated token usage
+     * @param  string  $model  Model identifier for context-window lookup
      * @return array{
      *   estimated_tokens:int,
      *   context_window:int,

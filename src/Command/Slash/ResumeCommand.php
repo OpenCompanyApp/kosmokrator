@@ -8,6 +8,9 @@ use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
+/**
+ * Resumes a previous session either by interactive picker or by matching a query string.
+ */
 class ResumeCommand implements SlashCommand
 {
     public function name(): string
@@ -34,7 +37,7 @@ class ResumeCommand implements SlashCommand
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $sessionId = null;
-
+        // No args → show interactive session picker
         if ($args === '') {
             // Interactive picker
             $sessions = $ctx->sessionManager->listSessions(10);

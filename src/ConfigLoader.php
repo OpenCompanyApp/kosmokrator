@@ -5,12 +5,24 @@ namespace Kosmokrator;
 use Illuminate\Config\Repository;
 use Symfony\Component\Yaml\Yaml;
 
+/**
+ * Loads and merges configuration from three layers: bundled defaults (config/*.yaml),
+ * user-level overrides (~/.kosmokrator/config.yaml), and project-level overrides
+ * (.kosmokrator/config.yaml walked up from cwd). Runs early in the boot sequence,
+ * before any services are registered.
+ */
 class ConfigLoader
 {
+    /** @param string $configPath Absolute path to the bundled config/ directory */
     public function __construct(
         private readonly string $configPath,
     ) {}
 
+    /**
+     * Build the final config repository by merging bundled → user → project layers.
+     *
+     * @return Repository The fully merged config repository
+     */
     public function load(): Repository
     {
         $config = [];
@@ -35,7 +47,9 @@ class ConfigLoader
     }
 
     /**
-     * @return array<string, string>
+     * Discover all *.yaml files in a directory, keyed by filename without extension.
+     *
+     * @return array<string, string> Map of config key → absolute file path
      */
     private function discoverFiles(string $path): array
     {
@@ -49,6 +63,7 @@ class ConfigLoader
         return $files;
     }
 
+    /** Parse a YAML file, resolving ${ENV_VAR} placeholders from the process environment. */
     private function parseYaml(string $path): array
     {
         $content = file_get_contents($path);
@@ -63,6 +78,7 @@ class ConfigLoader
         return Yaml::parse($content) ?? [];
     }
 
+    /** Load and merge user-level configs from ~/.kosmokrator/ and ~/.config/kosmokrator/. */
     private function loadUserConfig(): ?array
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
@@ -84,6 +100,7 @@ class ConfigLoader
         return $merged;
     }
 
+    /** Load and merge project-level configs by walking from cwd up to root. */
     private function loadProjectConfig(): ?array
     {
         $merged = null;
@@ -100,6 +117,9 @@ class ConfigLoader
     }
 
     /**
+     * Build candidate config file paths by walking from cwd to filesystem root,
+     * producing outermost (root) paths first so deeper configs override.
+     *
      * @return list<string>
      */
     private function projectConfigCandidates(): array
@@ -129,6 +149,10 @@ class ConfigLoader
         return $paths;
     }
 
+    /**
+     * Restructure a flat external config into the canonical namespace structure
+     * (prism.providers, kosmokrator, relay) expected by the rest of the codebase.
+     */
     private function normalizeExternalConfig(array $data): array
     {
         $knownRoots = ['app', 'kosmokrator', 'prism', 'models', 'relay'];
@@ -162,6 +186,7 @@ class ConfigLoader
         return $result;
     }
 
+    /** Recursively merge $override into $base; scalar values in $override win. */
     private function mergeDeep(array $base, array $override): array
     {
         foreach ($override as $key => $value) {

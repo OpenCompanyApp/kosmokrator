@@ -7,6 +7,11 @@ namespace Kosmokrator\Tool\Coding;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolResult;
 
+/**
+ * Tool that spawns a long-running interactive shell session (bash, python, etc.).
+ *
+ * Returns a session ID for use with ShellWriteTool, ShellReadTool, and ShellKillTool.
+ */
 final class ShellStartTool implements ToolInterface
 {
     public function __construct(
@@ -39,6 +44,11 @@ final class ShellStartTool implements ToolInterface
         return ['command'];
     }
 
+    /**
+     * Start a new shell session and return initial output.
+     *
+     * @param  array<string, mixed>  $args  Tool arguments from the AI agent
+     */
     public function execute(array $args): ToolResult
     {
         $command = trim((string) ($args['command'] ?? ''));

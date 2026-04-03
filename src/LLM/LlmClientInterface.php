@@ -6,11 +6,21 @@ use Amp\Cancellation;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Tool;
 
+/**
+ * Contract for LLM chat clients in the KosmoKrator LLM layer.
+ *
+ * Implemented by PrismService (via Prism SDK) and AsyncLlmClient (raw HTTP).
+ * Decorated by RetryableLlmClient for automatic retry on transient failures.
+ */
 interface LlmClientInterface
 {
     /**
-     * @param  Message[]  $messages
-     * @param  Tool[]  $tools
+     * Send a chat-completion request to the LLM provider.
+     *
+     * @param  Message[]    $messages     Conversation history as Prism Message objects
+     * @param  Tool[]       $tools        Available tools for function calling
+     * @param  Cancellation $cancellation Optional Amp cancellation token
+     * @return LlmResponse Parsed response with text, tool calls, and usage data
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse;
 
@@ -18,6 +28,7 @@ interface LlmClientInterface
 
     public function getProvider(): string;
 
+    /** @param string $provider Provider identifier to switch to (e.g. "anthropic", "openai") */
     public function setProvider(string $provider): void;
 
     public function getModel(): string;

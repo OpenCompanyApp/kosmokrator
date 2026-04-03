@@ -16,6 +16,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Manages provider authentication — shows status, performs login (API key or OAuth), and logout.
+ */
 #[AsCommand(name: 'auth', description: 'Manage provider authentication')]
 final class AuthCommand extends Command
 {
@@ -51,6 +54,9 @@ final class AuthCommand extends Command
         };
     }
 
+    /**
+     * Displays authentication status for one or all providers.
+     */
     private function status(ProviderCatalog $catalog, OutputInterface $output, string $provider): int
     {
         if ($provider !== '') {
@@ -72,6 +78,9 @@ final class AuthCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Authenticates a provider via OAuth browser/device flow or stores an API key.
+     */
     private function login(ProviderCatalog $catalog, SettingsRepository $settings, CodexAuthFlow $codex, InputInterface $input, OutputInterface $output, string $provider): int
     {
         if ($provider === '') {
@@ -117,6 +126,9 @@ final class AuthCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Removes stored credentials for a provider (OAuth token or API key).
+     */
     private function logout(ProviderCatalog $catalog, SettingsRepository $settings, CodexAuthFlow $codex, OutputInterface $output, string $provider): int
     {
         if ($provider === '') {

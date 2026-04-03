@@ -73,16 +73,25 @@ use Revolt\EventLoop;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Yaml\Yaml;
 
+/**
+ * Application kernel — wires the Laravel DI container and orchestrates the full
+ * boot sequence: env, config, database, LLM/Prism, tool registry, and console.
+ * This is the single entry point invoked by the bin/kosmokrator script.
+ */
 class Kernel
 {
     private Container $container;
 
     private Application $console;
 
+    /** @param string $basePath Root directory of the KosmoKrator installation (contains config/, vendor/) */
     public function __construct(
         private readonly string $basePath,
     ) {}
 
+    /**
+     * Run the full boot sequence. Must be called once before using getConsole() or getContainer().
+     */
     public function boot(): void
     {
         $this->container = new LaravelApp($this->basePath);
@@ -101,16 +110,19 @@ class Kernel
         $this->registerRevoltErrorHandler();
     }
 
+    /** @return Application The Symfony console application ready to run */
     public function getConsole(): Application
     {
         return $this->console;
     }
 
+    /** @return Container The initialized Laravel IoC container */
     public function getContainer(): Container
     {
         return $this->container;
     }
 
+    /** Load .env file from the base path if it exists. */
     private function loadEnv(): void
     {
         if (file_exists($this->basePath.'/.env')) {
@@ -118,6 +130,7 @@ class Kernel
         }
     }
 
+    /** Create a rotating file logger under ~/.kosmokrator/logs. */
     private function registerLogger(): void
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
@@ -135,6 +148,7 @@ class Kernel
         $this->container->alias('log', Logger::class);
     }
 
+    /** Build the config repository from bundled defaults and set up Codex OAuth config. */
     private function registerConfig(): void
     {
         $loader = new ConfigLoader($this->basePath.'/config');
@@ -159,6 +173,7 @@ class Kernel
         ]);
     }
 
+    /** Register SQLite-backed session/settings databases and Codex OAuth services. */
     private function registerDatabase(): void
     {
         $this->container->singleton(SessionDatabase::class, fn () => new SessionDatabase);
@@ -179,6 +194,7 @@ class Kernel
         ));
     }
 
+    /** Inject legacy SQLite-stored preferences and API keys into the config repository. */
     private function injectSqliteSettings(): void
     {
         $config = $this->container->make('config');
@@ -213,6 +229,10 @@ class Kernel
         $this->migrateYamlKeys($config, $settings);
     }
 
+    /**
+     * One-time migration: move API keys from YAML config into SQLite so secrets
+     * no longer live on disk in plaintext.
+     */
     private function migrateYamlKeys(Repository $config, SettingsRepository $settings): void
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
@@ -268,6 +288,7 @@ class Kernel
         }
     }
 
+    /** Bind core infrastructure: paths, events, filesystem, HTTP, settings, relay registry, and provider catalog. */
     private function registerCoreServices(): void
     {
         // App instance bindings that Prism/Laravel expects
@@ -326,6 +347,7 @@ class Kernel
         ));
     }
 
+    /** Register the Prism LLM service provider and extend it with relay/codex drivers. */
     private function registerPrism(): void
     {
         // Simulate Laravel's Application interface just enough for PrismServiceProvider
@@ -349,6 +371,7 @@ class Kernel
         });
     }
 
+    /** Wire Laravel facades to the container so Http, Config etc. resolve correctly. */
     private function registerFacades(): void
     {
         /** @var \Illuminate\Contracts\Foundation\Application $app */
@@ -356,6 +379,10 @@ class Kernel
         Facade::setFacadeApplication($app);
     }
 
+    /**
+     * Register all agent-layer services: LLM clients (sync + async), tool registry,
+     * session persistence, and the permission evaluator.
+     */
     private function registerAgentServices(): void
     {
         $config = $this->container->make('config');
@@ -502,6 +529,7 @@ class Kernel
         });
     }
 
+    /** Instantiate the Symfony console application with the configured name and version. */
     private function buildConsole(): void
     {
         $appName = $this->container->make('config')->get('app.name', 'KosmoKrator');
@@ -510,6 +538,7 @@ class Kernel
         $this->console = new Application($appName, $version);
     }
 
+    /** Resolve the app version — either a static string or a git tag/describe. */
     private function resolveVersion(): string
     {
         $versionConfig = $this->container->make('config')->get('app.version', 'dev');

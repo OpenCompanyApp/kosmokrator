@@ -13,6 +13,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Interactive first-run wizard for selecting a provider, model, and authentication method.
+ */
 #[AsCommand(name: 'setup', description: 'Configure KosmoKrator (API keys, provider, model)')]
 class SetupCommand extends Command
 {

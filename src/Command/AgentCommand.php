@@ -18,6 +18,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Main entry point — launches the interactive KosmoKrator coding agent REPL.
+ */
 #[AsCommand(name: 'agent', description: 'Launch the KosmoKrator coding agent')]
 class AgentCommand extends Command
 {
@@ -27,6 +30,9 @@ class AgentCommand extends Command
         parent::__construct();
     }
 
+    /**
+     * Registers CLI options for renderer selection, animation toggle, and session resumption.
+     */
     protected function configure(): void
     {
         $this->addOption('no-animation', null, InputOption::VALUE_NONE, 'Skip the intro animation');
@@ -37,6 +43,8 @@ class AgentCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // Build the agent session (UI + LLM + permissions) from container bindings.
+        // Falls back to a friendly error when the provider is not yet configured.
         $config = $this->container->make('config');
         $rendererPref = $input->getOption('renderer') ?: $config->get('kosmokrator.ui.renderer', 'auto');
         $animated = ! $input->getOption('no-animation') && $config->get('kosmokrator.ui.intro_animated', true);
@@ -57,7 +65,7 @@ class AgentCommand extends Command
             return Command::FAILURE;
         }
 
-        // Session: resume or create new
+        // Resume an existing session by ID or pick the latest one for this project.
         $resumeId = $input->getOption('session');
         if ($resumeId === null && $input->getOption('resume')) {
             $resumeId = $session->sessionManager->latestSession();
@@ -79,6 +87,9 @@ class AgentCommand extends Command
         return $this->repl($session);
     }
 
+    /**
+     * Core REPL loop — reads user input, dispatches slash commands, and drives the agent.
+     */
     private function repl(AgentSession $session): int
     {
         $taskStore = $this->container->make(TaskStore::class);
@@ -93,7 +104,7 @@ class AgentCommand extends Command
         $nextInput = null;
         $nextInputShown = false;
 
-        // Wire immediate command handler -- dispatches slash commands during agent execution
+        // Dispatch immediate slash commands (e.g. /guardian) even while the agent is mid-run.
         $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx): bool {
             $command = $registry->resolve($input);
             if ($command === null || ! $command->immediate()) {
@@ -118,7 +129,7 @@ class AgentCommand extends Command
                 continue;
             }
 
-            // Slash command dispatch
+            // Slash command dispatch — non-immediate commands are only processed here at the prompt.
             $command = $registry->resolve($input);
             if ($command !== null) {
                 $args = $registry->extractArgs($input, $command);
@@ -146,11 +157,14 @@ class AgentCommand extends Command
 
                 if ($approval !== null) {
                     if ($approval['context'] === 'compact') {
+                        // Compact conversation history to free context window.
                         $session->agentLoop->performCompaction();
                     } elseif ($approval['context'] === 'clear') {
+                        // Drop all history except the last assistant message.
                         $session->agentLoop->history()->clearKeepingLast();
                     }
 
+                    // Switch to Edit mode and apply the user-chosen permission level.
                     $editMode = AgentMode::Edit;
                     $session->agentLoop->setMode($editMode);
                     $session->ui->showMode($editMode->label(), $editMode->color());
@@ -178,11 +192,16 @@ class AgentCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Registers all available slash commands into a new registry.
+     */
     private function buildSlashCommandRegistry(): SlashCommandRegistry
     {
         $registry = new SlashCommandRegistry;
 
+        // Core commands
         $registry->register(new Slash\QuitCommand);
+        // Session management commands
         $registry->register(new Slash\ClearCommand);
         $registry->register(new Slash\SeedCommand);
         $registry->register(new Slash\TheogonyCommand);
@@ -191,12 +210,16 @@ class AgentCommand extends Command
         $registry->register(new Slash\MemoriesCommand);
         $registry->register(new Slash\SessionsCommand);
         $registry->register(new Slash\ForgetCommand);
+
+        // Agent mode switches
         $registry->register(new Slash\GuardianCommand);
         $registry->register(new Slash\ArgusCommand);
         $registry->register(new Slash\PrometheusCommand);
         $registry->register(new Slash\ModeCommand(AgentMode::Edit));
         $registry->register(new Slash\ModeCommand(AgentMode::Plan));
         $registry->register(new Slash\ModeCommand(AgentMode::Ask));
+
+        // Utility commands
         $registry->register(new Slash\NewCommand);
         $registry->register(new Slash\ResumeCommand);
         $registry->register(new Slash\SettingsCommand($this->container));

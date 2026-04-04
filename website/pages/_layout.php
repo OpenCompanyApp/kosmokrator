@@ -50,7 +50,12 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YcnS/1tvYC6j7+neBYOaulkM2/TVY4vIBY6I" crossorigin="anonymous">
+
     <style>
+        /* ── Custom properties ── */
         :root {
             --space-black: #07070d;
             --space-dark: #0e0e18;
@@ -70,8 +75,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             --border-hover: rgba(220, 20, 60, 0.35);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
+        /* ── Base resets over Bootstrap ── */
         html {
             scroll-behavior: smooth;
             scroll-padding-top: 5rem;
@@ -92,33 +96,26 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             pointer-events: none;
         }
 
-        /* Navigation */
-        nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
+        /* ── Navigation (Bootstrap navbar + custom glassmorphism) ── */
+        .navbar-kosmo {
             padding: 1rem 2rem;
             background: rgba(7, 7, 13, 0.7);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
             border-bottom: 1px solid transparent;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
         }
 
-        nav.scrolled {
-            padding: 0.6rem 2rem;
+        .navbar-kosmo.scrolled {
+            padding-top: 0.6rem;
+            padding-bottom: 0.6rem;
             background: rgba(7, 7, 13, 0.92);
             border-bottom-color: var(--border);
         }
 
-        nav .nav-inner {
+        .navbar-kosmo > .container-xl {
             max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
 
         .nav-brand {
@@ -133,24 +130,59 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             transition: opacity 0.2s;
         }
 
-        .nav-brand:hover { opacity: 0.85; }
+        .nav-brand:hover { opacity: 0.85; color: var(--star-white); }
 
-        .nav-links {
-            display: flex;
-            gap: 2.5rem;
-            list-style: none;
+        /* Custom hamburger bars inside Bootstrap toggler */
+        .navbar-kosmo .navbar-toggler {
+            border: none;
+            padding: 4px;
+            box-shadow: none;
         }
 
-        .nav-links a {
-            color: var(--text-muted);
-            text-decoration: none;
+        .navbar-kosmo .navbar-toggler:focus { box-shadow: none; }
+
+        .navbar-kosmo .navbar-toggler-icon {
+            background-image: none;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 22px;
+            height: auto;
+        }
+
+        .navbar-kosmo .toggler-bar {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--star-white);
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .navbar-kosmo .navbar-toggler[aria-expanded="true"] .toggler-bar:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        .navbar-kosmo .navbar-toggler[aria-expanded="true"] .toggler-bar:nth-child(2) {
+            opacity: 0;
+        }
+        .navbar-kosmo .navbar-toggler[aria-expanded="true"] .toggler-bar:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+
+        .navbar-kosmo .navbar-collapse { flex-grow: 0; }
+
+        .navbar-kosmo .navbar-nav { gap: 2.5rem; }
+
+        .navbar-kosmo .nav-link {
+            color: var(--text-muted) !important;
             font-size: 0.9rem;
             font-weight: 500;
             transition: color 0.2s;
             position: relative;
+            padding: 0;
         }
 
-        .nav-links a::after {
+        .navbar-kosmo .nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -161,43 +193,35 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             transition: width 0.3s ease;
         }
 
-        .nav-links a:hover { color: var(--crimson-light); }
-        .nav-links a:hover::after { width: 100%; }
-        .nav-links a.active { color: var(--crimson-light); }
-        .nav-links a.active::after { width: 100%; }
+        .navbar-kosmo .nav-link:hover { color: var(--crimson-light) !important; }
+        .navbar-kosmo .nav-link:hover::after { width: 100%; }
+        .navbar-kosmo .nav-link.active { color: var(--crimson-light) !important; }
+        .navbar-kosmo .nav-link.active::after { width: 100%; }
 
-        .nav-hamburger {
-            display: none;
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            flex-direction: column;
-            gap: 5px;
+        /* Mobile collapse panel */
+        @media (max-width: 991.98px) {
+            .navbar-kosmo .navbar-collapse {
+                background: rgba(7, 7, 13, 0.97);
+                backdrop-filter: blur(20px);
+                padding: 1.5rem 2rem;
+                margin: 0.5rem -2rem 0;
+                border-bottom: 1px solid var(--border);
+            }
+            .navbar-kosmo .navbar-nav { gap: 1rem; }
+            .navbar-kosmo .nav-link { padding: 0.25rem 0; }
         }
 
-        .nav-hamburger span {
-            display: block;
-            width: 22px;
-            height: 2px;
-            background: var(--star-white);
-            border-radius: 2px;
-            transition: all 0.3s;
-        }
-
-        .nav-hamburger.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
-        .nav-hamburger.active span:nth-child(2) { opacity: 0; }
-        .nav-hamburger.active span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
-
+        /* ── Container (override Bootstrap responsive widths) ── */
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 2rem;
             position: relative;
             z-index: 1;
+            width: 100%;
         }
 
-        /* Hero */
+        /* ── Hero ── */
         .hero {
             min-height: 100vh;
             display: flex;
@@ -318,6 +342,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             animation: hero-fade-in 0.8s ease 1.1s forwards;
         }
 
+        /* ── Buttons (override Bootstrap .btn) ── */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -331,29 +356,33 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
             border: none;
+            line-height: 1.5;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--crimson), var(--crimson-light));
-            color: white;
+            background: linear-gradient(135deg, var(--crimson), var(--crimson-light)) !important;
+            color: white !important;
             box-shadow: 0 4px 24px var(--crimson-glow);
+            border: none !important;
         }
 
         .btn-primary:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 40px rgba(220, 20, 60, 0.55);
+            color: white !important;
         }
 
         .btn-secondary {
-            background: var(--surface);
-            color: var(--star-white);
-            border: 1px solid var(--border);
+            background: var(--surface) !important;
+            color: var(--star-white) !important;
+            border: 1px solid var(--border) !important;
         }
 
         .btn-secondary:hover {
-            border-color: var(--border-hover);
-            background: var(--surface-hover);
+            border-color: var(--border-hover) !important;
+            background: var(--surface-hover) !important;
             transform: translateY(-3px);
+            color: var(--star-white) !important;
         }
 
         .scroll-indicator {
@@ -399,6 +428,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             50% { transform: translateX(-50%) translateY(10px); }
         }
 
+        /* ── Sections ── */
         .section-sep {
             width: 60px;
             height: 2px;
@@ -448,10 +478,10 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             line-height: 1.7;
         }
 
+        /* ── Features grid (Bootstrap row + col) ── */
         .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 1.25rem;
+            --bs-gutter-x: 1.25rem;
+            --bs-gutter-y: 1.25rem;
         }
 
         .feature-card {
@@ -462,6 +492,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            height: 100%;
         }
 
         .feature-card::before {
@@ -520,6 +551,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             z-index: 1;
         }
 
+        /* ── Terminal mockup ── */
         .terminal-mockup {
             background: var(--space-dark);
             border-radius: 14px;
@@ -605,11 +637,11 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             51%, 100% { opacity: 0; }
         }
 
+        /* ── Stats row (Bootstrap row + col) ── */
         .stats-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1.5rem;
             margin-top: 4rem;
+            --bs-gutter-x: 1.5rem;
+            --bs-gutter-y: 1.5rem;
         }
 
         .stat-item {
@@ -644,11 +676,11 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             margin-top: 0.5rem;
         }
 
+        /* ── Modes grid (Bootstrap row + col) ── */
         .modes-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.5rem;
             margin-top: 3rem;
+            --bs-gutter-x: 1.5rem;
+            --bs-gutter-y: 1.5rem;
         }
 
         .mode-card {
@@ -660,6 +692,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            height: 100%;
         }
 
         .mode-card:hover {
@@ -713,6 +746,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             list-style: none;
             margin-top: 1.25rem;
             text-align: left;
+            padding-left: 0;
         }
 
         .mode-features li {
@@ -731,6 +765,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             font-size: 0.85rem;
         }
 
+        /* ── Agent table ── */
         .agent-table {
             width: 100%;
             max-width: 900px;
@@ -785,6 +820,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
         .badge-explore { color: #00ff88; background: rgba(0, 255, 136, 0.1); }
         .badge-plan { color: #5b9aff; background: rgba(91, 154, 255, 0.1); }
 
+        /* ── Quickstart code ── */
         .quickstart-code {
             background: var(--space-dark);
             border-radius: 14px;
@@ -812,6 +848,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
         .code-highlight { color: var(--crimson-light); }
         .code-string { color: var(--terminal-green); }
 
+        /* ── Architecture flow ── */
         .arch-flow {
             display: flex;
             align-items: center;
@@ -848,6 +885,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
 
         .arch-arrow { color: var(--text-dim); font-size: 1.2rem; }
 
+        /* ── Back to top ── */
         .back-to-top {
             position: fixed;
             bottom: 2rem;
@@ -883,6 +921,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             transform: translateY(-3px);
         }
 
+        /* ── Footer ── */
         footer {
             border-top: 1px solid var(--border);
             padding: 4rem 0;
@@ -923,6 +962,8 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             display: flex;
             gap: 1.5rem;
             list-style: none;
+            padding-left: 0;
+            margin-bottom: 0;
         }
 
         .footer-links a {
@@ -941,6 +982,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             margin-top: 1rem;
         }
 
+        /* ── Scroll reveal ── */
         .reveal {
             opacity: 0;
             transform: translateY(30px);
@@ -974,20 +1016,16 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
         .docs-page .container { max-width: 1280px; }
 
         .docs-layout {
-            display: grid;
-            grid-template-columns: 240px minmax(0, 1fr);
-            gap: 3rem;
             padding-top: 7rem;
             padding-bottom: 4rem;
             min-height: 100vh;
+            --bs-gutter-x: 3rem;
             align-items: start;
         }
 
         .docs-sidebar {
             position: sticky;
             top: 5rem;
-            width: 240px;
-            max-width: 240px;
         }
 
         .docs-nav {
@@ -1144,6 +1182,12 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             margin-bottom: 0.4rem;
         }
 
+        /* Docs tables: Bootstrap table-responsive wrapper + custom theme */
+        .docs-content .table-responsive {
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 1.5rem;
+        }
+
         .docs-content .table-wrap {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -1201,7 +1245,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             color: var(--crimson-light);
         }
 
-        /* Install tabs */
+        /* ── Install tabs ── */
         .install-tabs {
             display: flex;
             gap: 0;
@@ -1238,7 +1282,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             display: block;
         }
 
-        /* Docs index cards */
+        /* ── Docs index cards ── */
         .docs-index-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1283,7 +1327,7 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             display: block;
         }
 
-        /* Mobile docs toggle */
+        /* ── Mobile docs toggle ── */
         .docs-mobile-toggle {
             display: none;
             background: var(--surface);
@@ -1299,50 +1343,28 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             margin-bottom: 1rem;
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
+        /* ── Responsive ── */
+        @media (max-width: 767.98px) {
             .hero { padding: 7rem 1.5rem 3rem; }
 
-            .nav-links {
-                display: none;
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: rgba(7, 7, 13, 0.97);
-                backdrop-filter: blur(20px);
-                flex-direction: column;
-                padding: 1.5rem 2rem;
-                gap: 1rem;
-                border-bottom: 1px solid var(--border);
-            }
-
-            .nav-links.open { display: flex; }
-            .nav-hamburger { display: flex; }
-
-            .features-grid { grid-template-columns: 1fr; }
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
             .arch-flow { flex-direction: column; }
             .arch-arrow { transform: rotate(90deg); }
             .container { padding: 0 1.5rem; }
             .footer-inner { flex-direction: column; text-align: center; }
-            .modes-grid { grid-template-columns: 1fr; }
 
             .agent-table { font-size: 0.82rem; }
             .agent-table th, .agent-table td { padding: 0.75rem 1rem; }
+        }
 
-            /* Docs responsive */
+        @media (max-width: 991.98px) {
+            /* Docs responsive: sidebar collapses below lg */
             .docs-layout {
-                grid-template-columns: 1fr;
-                gap: 0;
                 padding-top: 5.5rem;
             }
 
             .docs-sidebar {
                 position: relative;
                 top: auto;
-                width: 100%;
-                max-width: 100%;
             }
 
             .docs-sidebar .docs-nav {
@@ -1368,12 +1390,8 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             }
         }
 
-        @media (max-width: 480px) {
-            .stats-row { grid-template-columns: 1fr; }
-        }
-
         @media print {
-            #starfield, nav, .scroll-indicator, .back-to-top { display: none; }
+            #starfield, .navbar-kosmo, .scroll-indicator, .back-to-top { display: none; }
             body { background: white; color: black; }
             .terminal-mockup, .feature-card, .stat-item, .mode-card { border: 1px solid #ccc; background: white; }
         }
@@ -1382,18 +1400,24 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
 <body class="<?= $pageClass ?>">
     <canvas id="starfield"></canvas>
 
-    <nav>
-        <div class="nav-inner">
-            <a href="/" class="nav-brand">KosmoKrator</a>
-            <button class="nav-hamburger" aria-label="Menu">
-                <span></span><span></span><span></span>
+    <nav class="navbar navbar-dark navbar-expand-lg fixed-top navbar-kosmo">
+        <div class="container-xl" style="max-width: 1200px;">
+            <a href="/" class="navbar-brand nav-brand">KosmoKrator</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Menu">
+                <span class="navbar-toggler-icon">
+                    <span class="toggler-bar"></span>
+                    <span class="toggler-bar"></span>
+                    <span class="toggler-bar"></span>
+                </span>
             </button>
-            <ul class="nav-links">
-                <li><a href="<?= $isDocsPage ? '/' : '' ?>#features">Features</a></li>
-                <li><a href="<?= $isDocsPage ? '/' : '' ?>#quickstart">Install</a></li>
-                <li><a href="/docs"<?= $isDocsPage ? ' class="active"' : '' ?>>Docs</a></li>
-                <li><a href="https://github.com/OpenCompanyApp/kosmokrator" target="_blank" rel="noopener">GitHub</a></li>
-            </ul>
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="<?= $isDocsPage ? '/' : '' ?>#features">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="<?= $isDocsPage ? '/' : '' ?>#quickstart">Install</a></li>
+                    <li class="nav-item"><a class="nav-link<?= $isDocsPage ? ' active' : '' ?>" href="/docs">Docs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="https://github.com/OpenCompanyApp/kosmokrator" target="_blank" rel="noopener">GitHub</a></li>
+                </ul>
+            </div>
         </div>
     </nav>
 
@@ -1415,6 +1439,9 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             </div>
         </footer>
     </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 
     <script>
         // Starfield
@@ -1503,24 +1530,21 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
         })();
 
         // Nav scroll
-        const nav = document.querySelector('nav');
+        const navEl = document.querySelector('.navbar-kosmo');
         window.addEventListener('scroll', () => {
-            nav.classList.toggle('scrolled', window.scrollY > 50);
+            navEl.classList.toggle('scrolled', window.scrollY > 50);
         }, { passive: true });
 
-        // Hamburger
-        const hamburger = document.querySelector('.nav-hamburger');
-        const navLinks = document.querySelector('.nav-links');
-        hamburger.addEventListener('click', () => {
-            hamburger.classList.toggle('active');
-            navLinks.classList.toggle('open');
-        });
-        navLinks.querySelectorAll('a').forEach(a => {
-            a.addEventListener('click', () => {
-                hamburger.classList.remove('active');
-                navLinks.classList.remove('open');
+        // Close Bootstrap collapse on nav link click (mobile)
+        const navbarCollapse = document.getElementById('navbarNav');
+        if (navbarCollapse) {
+            navbarCollapse.querySelectorAll('.nav-link').forEach(a => {
+                a.addEventListener('click', () => {
+                    const bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+                    if (bsCollapse) bsCollapse.hide();
+                });
             });
-        });
+        }
 
         // Scroll reveal
         const reveals = document.querySelectorAll('.reveal, .reveal-stagger');
@@ -1553,6 +1577,17 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
                 nav.classList.toggle('open');
             });
         }
+
+        // Auto-wrap docs tables with Bootstrap table-responsive
+        document.querySelectorAll('.docs-content table').forEach(table => {
+            if (!table.parentElement.classList.contains('table-responsive') &&
+                !table.parentElement.classList.contains('table-wrap')) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'table-responsive';
+                table.parentNode.insertBefore(wrapper, table);
+                wrapper.appendChild(table);
+            }
+        });
     </script>
 
     <?= $extraScript ?>

@@ -21,17 +21,17 @@ $topics = [
 
 ob_start();
 ?>
-<div class="docs-layout">
-    <aside class="docs-sidebar">
+<div class="docs-layout row">
+    <aside class="docs-sidebar col-lg-3">
         <button class="docs-mobile-toggle">Menu</button>
-        <nav class="docs-nav">
+        <nav class="docs-nav flex-column">
             <a href="/docs" class="docs-nav-heading">Documentation</a>
 <?php foreach ($topics as $slug => $info): ?>
             <a href="/docs/<?= $slug ?>" class="docs-nav-item<?= $slug === $docSlug ? ' active' : '' ?>"><?= $info[0] ?></a>
 <?php endforeach; ?>
         </nav>
     </aside>
-    <main class="docs-content">
+    <main class="docs-content col-lg-9">
         <div class="docs-breadcrumb">
             <a href="/">Home</a> &rsaquo; <a href="/docs">Docs</a> &rsaquo; <?= htmlspecialchars($docTitle) ?>
         </div>

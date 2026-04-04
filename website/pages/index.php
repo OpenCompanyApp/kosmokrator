@@ -68,46 +68,62 @@ ob_start();
                     <h2>Celestial Capabilities</h2>
                     <p class="section-desc">Everything you need for AI-powered coding, from autonomous agents to fine-grained permissions.</p>
                 </div>
-                <div class="features-grid reveal-stagger">
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1FAB6;</span>
-                        <h3>Featherweight Runtime</h3>
-                        <p>~50MB RAM footprint. Pure PHP &mdash; no Node.js, Python, or Electron bloat. Static binary with zero system dependencies. Starts in under a second.</p>
+                <div class="row features-grid reveal-stagger">
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1FAB6;</span>
+                            <h3>Featherweight Runtime</h3>
+                            <p>~50MB RAM footprint. Pure PHP &mdash; no Node.js, Python, or Electron bloat. Static binary with zero system dependencies. Starts in under a second.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F465;</span>
-                        <h3>Subagent Swarm</h3>
-                        <p>Spawn parallel child agents with dependency chains, sequential groups, and automatic retries. Up to 10 concurrent agents.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F465;</span>
+                            <h3>Subagent Swarm</h3>
+                            <p>Spawn parallel child agents with dependency chains, sequential groups, and automatic retries. Up to 10 concurrent agents.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F6E1;&#xFE0F;</span>
-                        <h3>Permission System</h3>
-                        <p>Guardian, Argus, and Prometheus modes. Auto-approve safe ops, approve each action, or go fully autonomous.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F6E1;&#xFE0F;</span>
+                            <h3>Permission System</h3>
+                            <p>Guardian, Argus, and Prometheus modes. Auto-approve safe ops, approve each action, or go fully autonomous.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F50C;</span>
-                        <h3>40+ LLM Providers</h3>
-                        <p>OpenAI, Anthropic, Google, DeepSeek, Groq, Ollama, xAI, Mistral, OpenRouter, StepFun, and many more through native SDKs and OpenAI-compatible APIs.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F50C;</span>
+                            <h3>40+ LLM Providers</h3>
+                            <p>OpenAI, Anthropic, Google, DeepSeek, Groq, Ollama, xAI, Mistral, OpenRouter, StepFun, and many more through native SDKs and OpenAI-compatible APIs.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F9E0;</span>
-                        <h3>Smart Context</h3>
-                        <p>Importance-scored pruning, tool result deduplication, LLM-based compaction, and persistent memory extraction across sessions.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F9E0;</span>
+                            <h3>Smart Context</h3>
+                            <p>Importance-scored pruning, tool result deduplication, LLM-based compaction, and persistent memory extraction across sessions.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F4AD;</span>
-                        <h3>Reasoning &amp; Thinking</h3>
-                        <p>Native support for extended thinking and reasoning tokens. See the model's chain-of-thought with configurable budget controls.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F4AD;</span>
+                            <h3>Reasoning &amp; Thinking</h3>
+                            <p>Native support for extended thinking and reasoning tokens. See the model's chain-of-thought with configurable budget controls.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F5A5;&#xFE0F;</span>
-                        <h3>Terminal-Native</h3>
-                        <p>Full TUI with Symfony Console or pure ANSI fallback. Works in any terminal, looks stunning in modern ones.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F5A5;&#xFE0F;</span>
+                            <h3>Terminal-Native</h3>
+                            <p>Full TUI with Symfony Console or pure ANSI fallback. Works in any terminal, looks stunning in modern ones.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x26A1;</span>
-                        <h3>Power Commands</h3>
-                        <p>20+ workflow shortcuts with unique animations: <code>:unleash</code>, <code>:review</code>, <code>:deep-dive</code>, <code>:research</code>, and more. Combinable.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x26A1;</span>
+                            <h3>Power Commands</h3>
+                            <p>20+ workflow shortcuts with unique animations: <code>:unleash</code>, <code>:review</code>, <code>:deep-dive</code>, <code>:research</code>, and more. Combinable.</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -133,22 +149,30 @@ ob_start();
                     </div>
                 </div>
 
-                <div class="stats-row reveal-stagger">
-                    <div class="stat-item reveal-child">
-                        <div class="stat-number" data-count="50">0</div>
-                        <div class="stat-label">~MB RAM Usage</div>
+                <div class="row stats-row reveal-stagger">
+                    <div class="col-6 col-md-3 reveal-child">
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="50">0</div>
+                            <div class="stat-label">~MB RAM Usage</div>
+                        </div>
                     </div>
-                    <div class="stat-item reveal-child">
-                        <div class="stat-number" data-count="40">0</div>
-                        <div class="stat-label">LLM Providers</div>
+                    <div class="col-6 col-md-3 reveal-child">
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="40">0</div>
+                            <div class="stat-label">LLM Providers</div>
+                        </div>
                     </div>
-                    <div class="stat-item reveal-child">
-                        <div class="stat-number" data-count="10">0</div>
-                        <div class="stat-label">Parallel Agents</div>
+                    <div class="col-6 col-md-3 reveal-child">
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="10">0</div>
+                            <div class="stat-label">Parallel Agents</div>
+                        </div>
                     </div>
-                    <div class="stat-item reveal-child">
-                        <div class="stat-number" data-count="3">0</div>
-                        <div class="stat-label">Permission Modes</div>
+                    <div class="col-6 col-md-3 reveal-child">
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="3">0</div>
+                            <div class="stat-label">Permission Modes</div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -162,39 +186,45 @@ ob_start();
                     <h2>Choose Your Trust Level</h2>
                     <p class="section-desc">Three modes that balance safety and autonomy, from cautious to fully autonomous.</p>
                 </div>
-                <div class="modes-grid reveal-stagger">
-                    <div class="mode-card reveal-child">
-                        <div class="mode-icon">&#x1F6E1;&#xFE0F;</div>
-                        <div class="mode-name">Guardian</div>
-                        <div class="mode-tagline">Smart Auto-Approve</div>
-                        <div class="mode-desc">Auto-approves known-safe operations. Asks for writes, edits, and unknown commands.</div>
-                        <ul class="mode-features">
-                            <li>Safe commands auto-approved</li>
-                            <li>Writes and unknowns gated</li>
-                            <li>Best for daily use (default)</li>
-                        </ul>
+                <div class="row modes-grid reveal-stagger">
+                    <div class="col-md-4 reveal-child">
+                        <div class="mode-card">
+                            <div class="mode-icon">&#x1F6E1;&#xFE0F;</div>
+                            <div class="mode-name">Guardian</div>
+                            <div class="mode-tagline">Smart Auto-Approve</div>
+                            <div class="mode-desc">Auto-approves known-safe operations. Asks for writes, edits, and unknown commands.</div>
+                            <ul class="mode-features">
+                                <li>Safe commands auto-approved</li>
+                                <li>Writes and unknowns gated</li>
+                                <li>Best for daily use (default)</li>
+                            </ul>
+                        </div>
                     </div>
-                    <div class="mode-card featured reveal-child">
-                        <div class="mode-icon">&#x1F441;&#xFE0F;</div>
-                        <div class="mode-name">Argus</div>
-                        <div class="mode-tagline">Ask For Everything</div>
-                        <div class="mode-desc">Every governed tool call requires explicit approval. Full visibility into every action.</div>
-                        <ul class="mode-features">
-                            <li>Approve every tool call</li>
-                            <li>Full audit trail</li>
-                            <li>Best for learning / exploring</li>
-                        </ul>
+                    <div class="col-md-4 reveal-child">
+                        <div class="mode-card featured">
+                            <div class="mode-icon">&#x1F441;&#xFE0F;</div>
+                            <div class="mode-name">Argus</div>
+                            <div class="mode-tagline">Ask For Everything</div>
+                            <div class="mode-desc">Every governed tool call requires explicit approval. Full visibility into every action.</div>
+                            <ul class="mode-features">
+                                <li>Approve every tool call</li>
+                                <li>Full audit trail</li>
+                                <li>Best for learning / exploring</li>
+                            </ul>
+                        </div>
                     </div>
-                    <div class="mode-card reveal-child">
-                        <div class="mode-icon">&#x1F525;</div>
-                        <div class="mode-name">Prometheus</div>
-                        <div class="mode-tagline">Full Autonomy</div>
-                        <div class="mode-desc">Unrestricted execution. The agent works independently with no approval prompts.</div>
-                        <ul class="mode-features">
-                            <li>No approval required</li>
-                            <li>Maximum speed</li>
-                            <li>Best for trusted CI/CD</li>
-                        </ul>
+                    <div class="col-md-4 reveal-child">
+                        <div class="mode-card">
+                            <div class="mode-icon">&#x1F525;</div>
+                            <div class="mode-name">Prometheus</div>
+                            <div class="mode-tagline">Full Autonomy</div>
+                            <div class="mode-desc">Unrestricted execution. The agent works independently with no approval prompts.</div>
+                            <ul class="mode-features">
+                                <li>No approval required</li>
+                                <li>Maximum speed</li>
+                                <li>Best for trusted CI/CD</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -242,51 +272,69 @@ ob_start();
                     </table>
                 </div>
 
-                <div class="features-grid reveal-stagger" style="margin-top: 3rem;">
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F500;</span>
-                        <h3>Dependency DAGs</h3>
-                        <p>Agents declare <code>depends_on</code> with automatic circular-dependency detection. Upstream results inject into downstream task prompts.</p>
+                <div class="row features-grid reveal-stagger" style="margin-top: 3rem;">
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F500;</span>
+                            <h3>Dependency DAGs</h3>
+                            <p>Agents declare <code>depends_on</code> with automatic circular-dependency detection. Upstream results inject into downstream task prompts.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F4E6;</span>
-                        <h3>Sequential Groups</h3>
-                        <p>Assign a <code>group</code> to run agents serially within a parallel swarm. Ordered pipelines without sacrificing overall concurrency.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F4E6;</span>
+                            <h3>Sequential Groups</h3>
+                            <p>Assign a <code>group</code> to run agents serially within a parallel swarm. Ordered pipelines without sacrificing overall concurrency.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x23F3;</span>
-                        <h3>Await &amp; Background</h3>
-                        <p><code>await</code> blocks until the agent finishes. <code>background</code> returns immediately &mdash; results inject on the next LLM turn.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x23F3;</span>
+                            <h3>Await &amp; Background</h3>
+                            <p><code>await</code> blocks until the agent finishes. <code>background</code> returns immediately &mdash; results inject on the next LLM turn.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F504;</span>
-                        <h3>Auto-Retry with Backoff</h3>
-                        <p>Failed agents retry with exponential backoff + jitter. Auth errors (401/403) are never retried.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F504;</span>
+                            <h3>Auto-Retry with Backoff</h3>
+                            <p>Failed agents retry with exponential backoff + jitter. Auth errors (401/403) are never retried.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F6A6;</span>
-                        <h3>Concurrency Control</h3>
-                        <p>Global semaphore caps concurrent agents. Per-group semaphores enforce ordering. Configurable depth limits.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F6A6;</span>
+                            <h3>Concurrency Control</h3>
+                            <p>Global semaphore caps concurrent agents. Per-group semaphores enforce ordering. Configurable depth limits.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1FA91;</span>
-                        <h3>Slot Yielding</h3>
-                        <p>Parents yield their concurrency slot to children and reclaim it after, preventing deadlocks when the pool is full.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1FA91;</span>
+                            <h3>Slot Yielding</h3>
+                            <p>Parents yield their concurrency slot to children and reclaim it after, preventing deadlocks when the pool is full.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F9E0;</span>
-                        <h3>Stuck Detection</h3>
-                        <p>Rolling-window repetition detection for headless agents: nudge &rarr; final notice &rarr; force return. No infinite loops.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F9E0;</span>
+                            <h3>Stuck Detection</h3>
+                            <p>Rolling-window repetition detection for headless agents: nudge &rarr; final notice &rarr; force return. No infinite loops.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F4E1;</span>
-                        <h3>Watchdog Timers</h3>
-                        <p>Configurable idle timeout per agent. Stuck agents are killed automatically without manual intervention.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F4E1;</span>
+                            <h3>Watchdog Timers</h3>
+                            <p>Configurable idle timeout per agent. Stuck agents are killed automatically without manual intervention.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F512;</span>
-                        <h3>Permission Narrowing</h3>
-                        <p>Children can only reduce capabilities, never escalate. An Explore agent can only spawn more Explore agents.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F512;</span>
+                            <h3>Permission Narrowing</h3>
+                            <p>Children can only reduce capabilities, never escalate. An Explore agent can only spawn more Explore agents.</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -325,21 +373,27 @@ ob_start();
 <span style="color:#6e7681;">Esc/q close  &#183;  auto-refreshes every 2s</span></pre>
                 </div>
 
-                <div class="features-grid reveal-stagger" style="margin-top: 2.5rem;">
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F4CA;</span>
-                        <h3>Live Progress</h3>
-                        <p>Global progress bar and per-agent status. See running, done, queued, and failed counts at a glance.</p>
+                <div class="row features-grid reveal-stagger" style="margin-top: 2.5rem;">
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F4CA;</span>
+                            <h3>Live Progress</h3>
+                            <p>Global progress bar and per-agent status. See running, done, queued, and failed counts at a glance.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F333;</span>
-                        <h3>Tree View</h3>
-                        <p>Hierarchical display with status icons &mdash; running, done, failed, waiting on dependencies. Toggle with ctrl+a.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F333;</span>
+                            <h3>Tree View</h3>
+                            <p>Hierarchical display with status icons &mdash; running, done, failed, waiting on dependencies. Toggle with ctrl+a.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x23F1;&#xFE0F;</span>
-                        <h3>Resource Tracking</h3>
-                        <p>Token usage, cost breakdown, elapsed time, and agent throughput rate &mdash; all auto-refreshing in real time.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x23F1;&#xFE0F;</span>
+                            <h3>Resource Tracking</h3>
+                            <p>Token usage, cost breakdown, elapsed time, and agent throughput rate &mdash; all auto-refreshing in real time.</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -445,21 +499,27 @@ ob_start();
                     <div class="arch-node">UIManager</div>
                 </div>
 
-                <div class="features-grid reveal-stagger" style="margin-top: 3rem;">
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F504;</span>
-                        <h3>Agent Loop</h3>
-                        <p>A ~570-line REPL orchestrator that manages the conversation, delegates tool calls, handles streaming, and coordinates subagents.</p>
+                <div class="row features-grid reveal-stagger" style="margin-top: 3rem;">
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F504;</span>
+                            <h3>Agent Loop</h3>
+                            <p>A ~570-line REPL orchestrator that manages the conversation, delegates tool calls, handles streaming, and coordinates subagents.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F500;</span>
-                        <h3>Subagent System</h3>
-                        <p>Three agent types with dependency resolution, concurrency semaphores, retry policies, and stuck detection.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F500;</span>
+                            <h3>Subagent System</h3>
+                            <p>Three agent types with dependency resolution, concurrency semaphores, retry policies, and stuck detection.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F4BE;</span>
-                        <h3>Session Persistence</h3>
-                        <p>SQLite-backed storage for sessions, messages, memories, and settings. Resume conversations and recall context.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F4BE;</span>
+                            <h3>Session Persistence</h3>
+                            <p>SQLite-backed storage for sessions, messages, memories, and settings. Resume conversations and recall context.</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -473,26 +533,34 @@ ob_start();
                     <h2>Built With Cosmic Power</h2>
                     <p class="section-desc">Modern PHP 8.4 with async I/O, rich terminal UI, and first-class LLM SDK support.</p>
                 </div>
-                <div class="features-grid reveal-stagger">
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F718;</span>
-                        <h3>PHP 8.4</h3>
-                        <p>Strict types, enums, readonly classes, and property hooks throughout the entire codebase.</p>
+                <div class="row features-grid reveal-stagger">
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F718;</span>
+                            <h3>PHP 8.4</h3>
+                            <p>Strict types, enums, readonly classes, and property hooks throughout the entire codebase.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x26A1;</span>
-                        <h3>Amp / Revolt</h3>
-                        <p>Async HTTP streaming with non-blocking I/O. Responsive interactions even with long-running LLM requests.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x26A1;</span>
+                            <h3>Amp / Revolt</h3>
+                            <p>Async HTTP streaming with non-blocking I/O. Responsive interactions even with long-running LLM requests.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F3A8;</span>
-                        <h3>Symfony TUI</h3>
-                        <p>Rich full-screen terminal UI with widgets, dialogs, animations, markdown rendering, and an inline editor.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F3A8;</span>
+                            <h3>Symfony TUI</h3>
+                            <p>Rich full-screen terminal UI with widgets, dialogs, animations, markdown rendering, and an inline editor.</p>
+                        </div>
                     </div>
-                    <div class="feature-card reveal-child">
-                        <span class="feature-icon">&#x1F52E;</span>
-                        <h3>Prism PHP</h3>
-                        <p>First-class SDK for Anthropic, OpenAI, and other native providers with structured output and tool calling.</p>
+                    <div class="col-md-6 col-lg-4 reveal-child">
+                        <div class="feature-card">
+                            <span class="feature-icon">&#x1F52E;</span>
+                            <h3>Prism PHP</h3>
+                            <p>First-class SDK for Anthropic, OpenAI, and other native providers with structured output and tool calling.</p>
+                        </div>
                     </div>
                 </div>
             </section>

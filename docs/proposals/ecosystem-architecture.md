@@ -31,7 +31,7 @@ KosmoKrator is not just a CLI coding agent — it's a runtime that can host any 
                               MCP Client MCP Client
 ```
 
-KosmoKrator is one engine with multiple surfaces. Tools are written once as Composer packages. OpenCompany is an optional cloud backend for hosted integrations. See `docs/desktop-app.md` for the desktop surface architecture.
+KosmoKrator is one engine with multiple surfaces. Tools are written once as Composer packages. OpenCompany is an optional cloud backend for hosted integrations. See `docs/proposals/desktop-app.md` for the desktop surface architecture.
 
 ---
 

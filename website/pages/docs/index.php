@@ -3,7 +3,8 @@ $pageTitle = 'Documentation — KosmoKrator';
 $pageClass = 'docs-page';
 
 $topics = [
-    'installation'  => ['Installation',     'Get up and running with static binaries, PHAR, or from source. First-run setup and CLI options.', '&#x1F4E5;'],
+    'getting-started' => ['Getting Started', 'Five-minute quickstart: install, configure, and make your first AI-assisted code change.', '&#x1F680;'],
+    'installation'    => ['Installation',     'Get up and running with static binaries, PHAR, or from source. First-run setup and CLI options.', '&#x1F4E5;'],
     'configuration' => ['Configuration',    'Config file layering, all settings categories, environment variables, and YAML examples.', '&#x2699;&#xFE0F;'],
     'tools'         => ['Tools',            'Complete reference for all built-in tools: file ops, search, bash, shell sessions, and more.', '&#x1F6E0;&#xFE0F;'],
     'providers'     => ['Providers',        '40+ LLM providers, authentication setup, custom endpoints, and per-depth model overrides.', '&#x1F50C;'],
@@ -11,6 +12,9 @@ $topics = [
     'permissions'   => ['Permissions',      'Guardian, Argus, and Prometheus modes. Evaluation chain, heuristics, and approval flows.', '&#x1F6E1;&#xFE0F;'],
     'context'       => ['Context & Memory', 'Context pipeline, token budgets, compaction, pruning, and persistent memory system.', '&#x1F9E0;'],
     'commands'      => ['Commands',         'All slash commands, power commands, and keyboard shortcuts with usage examples.', '&#x26A1;'],
+    'patterns'      => ['Advanced Patterns', 'Real-world recipes: CI/CD, cost optimization, code review, swarm orchestration, and more.', '&#x1F373;'],
+    'ui-guide'      => ['UI Guide',         'TUI and ANSI renderers, terminal compatibility, and output display.', '&#x1F5A5;&#xFE0F;'],
+    'architecture'  => ['Architecture',      'Request lifecycle, key directories, rendering layer, agent loop, and session persistence.', '&#x1F3D7;&#xFE0F;'],
 ];
 
 ob_start();

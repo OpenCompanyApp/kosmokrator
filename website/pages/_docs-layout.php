@@ -9,7 +9,8 @@ $pageTitle = $docTitle . ' — KosmoKrator Docs';
 $pageClass = 'docs-page';
 
 $topics = [
-    'installation'  => ['Installation',       'Get up and running'],
+    'getting-started' => ['Getting Started',   'Quick-start guide'],
+    'installation'    => ['Installation',       'Get up and running'],
     'configuration' => ['Configuration',       'Settings and config files'],
     'tools'         => ['Tools',               'Built-in tool reference'],
     'providers'     => ['Providers',           'LLM providers and models'],
@@ -17,6 +18,9 @@ $topics = [
     'permissions'   => ['Permissions',         'Permission modes and rules'],
     'context'       => ['Context & Memory',    'Context management pipeline'],
     'commands'      => ['Commands',            'Slash and power commands'],
+    'patterns'      => ['Advanced Patterns',    'Real-world usage recipes'],
+    'ui-guide'      => ['UI Guide',            'TUI and ANSI renderers, terminal compatibility'],
+    'architecture'  => ['Architecture',         'Request lifecycle, rendering layer, agent loop internals'],
 ];
 
 ob_start();

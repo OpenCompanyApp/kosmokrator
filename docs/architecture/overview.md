@@ -1,8 +1,8 @@
 # KosmoKrator Overview
 
-KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, a tool-driven agent loop, session persistence, context management, slash commands, and a subagent system.
+KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
 
-This document is the current-state architecture summary. Proposal and roadmap material lives in other docs and is explicitly labeled there.
+This document is the current-state architecture summary. Proposal and roadmap material lives in `docs/proposals/` and is explicitly labeled there.
 
 ## Current Implementation
 
@@ -30,6 +30,7 @@ KosmoKrator ships with two renderers behind `RendererInterface`:
 
 - `TuiRenderer` for the interactive Symfony TUI experience
 - `AnsiRenderer` for ANSI/readline fallback
+- `NullRenderer` for headless subagent loops (auto-approves permissions)
 
 The shared UI layer also includes diff rendering, theming, terminal notifications, subagent tree formatting, and modal/dialog helpers for settings, approvals, and dashboards.
 
@@ -37,9 +38,11 @@ The shared UI layer also includes diff rendering, theming, terminal notification
 
 Built-in tool families:
 
-- Coding tools: `file_read`, `file_write`, `file_edit`, `glob`, `grep`, `bash`
-- Coordination tools: `subagent`, `task_*`
+- Coding tools: `file_read`, `file_write`, `file_edit`, `apply_patch`, `glob`, `grep`, `bash`
+- Shell session tools: `shell_start`, `shell_write`, `shell_read`, `shell_kill`
+- Coordination tools: `subagent`, `task_create`, `task_update`, `task_get`, `task_list`
 - Interactive tools: `ask_user`, `ask_choice`
+- Memory tools: `memory_save`, `memory_search`
 
 Interactive agent modes:
 
@@ -76,7 +79,7 @@ The current context pipeline is layered:
 - LLM-based compaction with optional memory extraction
 - oldest-turn trimming as an overflow fallback
 
-This is implemented today. Future context experiments live in `docs/context-management-strategies.md` and are not part of the shipped behavior unless stated otherwise.
+This is implemented today. Future context experiments live in `docs/proposals/context-management-strategies.md` and are not part of the shipped behavior unless stated otherwise.
 
 ### Subagents
 
@@ -90,7 +93,26 @@ KosmoKrator ships with a working subagent system:
 - concurrency limiting
 - live tree/dashboard rendering via `/agents`
 
-See `AGENTS.md` and `docs/subagent-architecture.md` for implementation details.
+See `AGENTS.md` and `docs/architecture/subagent-architecture.md` for implementation details.
+
+### Key Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/Agent/` | Agent core: AgentLoop, ToolExecutor, ContextManager, StuckDetector, subagent system, events |
+| `src/LLM/` | LLM clients: AsyncLlmClient, PrismService, RetryableLlmClient, model catalog, pricing |
+| `src/UI/` | Rendering: TuiRenderer, AnsiRenderer, NullRenderer, diff rendering, theming |
+| `src/Tool/` | Tool implementations and permission system |
+| `src/Command/` | AgentCommand, SetupCommand, AuthCommand, slash commands, power commands |
+| `src/Command/Slash/` | 20 interactive slash commands (`/edit`, `/compact`, `/settings`, etc.) |
+| `src/Command/Power/` | 20 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
+| `src/Session/` | SQLite persistence: sessions, messages, memories, settings |
+| `src/Task/` | Task tracking with tree structure and dependency enforcement |
+| `src/Skill/` | Skill system: YAML-based custom prompts with `$skillname` dispatch |
+| `src/Settings/` | Layered settings resolution (project → global → default) |
+| `src/Provider/` | Service providers for DI container wiring (9 providers) |
+| `src/Update/` | Self-updater with GitHub release checking |
+| `src/Audio/` | Completion sounds (LLM-composed MIDI per session) |
 
 ## What Is Not Implemented
 
@@ -102,7 +124,7 @@ These are still proposal or future-work areas, not shipped runtime features:
 - desktop app surface
 - provider failover across multiple backends in the main runtime
 
-Documents that discuss these topics are design docs, not current feature docs.
+Documents that discuss these topics are design docs in `docs/proposals/`, not current feature docs.
 
 ## Configuration
 
@@ -122,18 +144,13 @@ Environment variables in YAML are expanded using `${VAR_NAME}`.
 
 ## Documentation Map
 
-Use these docs by intent:
+See [docs/README.md](../README.md) for the full documentation index.
+
+Current-truth docs:
 
 - `README.md`: installation, usage, and high-level architecture
 - `AGENTS.md`: subagent architecture and orchestration model
-- `docs/permission-modes.md`: agent-mode and permission-mode behavior
-- `docs/subagent-architecture.md`: current subagent behavior and configuration
+- `docs/architecture/permission-modes.md`: agent-mode and permission-mode behavior
+- `docs/architecture/subagent-architecture.md`: current subagent behavior and configuration
 
-The following docs are reference or proposal material:
-
-- `docs/context-management-strategies.md`
-- `docs/desktop-app.md`
-- `docs/ecosystem-architecture.md`
-- `docs/integration-refactor-plan.md`
-- `docs/plans/*`
-- audit reports under `docs/*audit*` and `DEEP_AUDIT_REPORT.md`
+Proposal and reference material lives in `docs/proposals/`. Historical audits live in `docs/audits/`.

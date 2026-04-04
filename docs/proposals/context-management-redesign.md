@@ -546,7 +546,7 @@ Signals:
 - tool-type weight
 - downstream dependency
 
-This idea already exists in `docs/context-management-strategies.md` and remains compatible with this redesign.
+This idea already exists in `docs/proposals/context-management-strategies.md` and remains compatible with this redesign.
 
 ### 2. Sliding Context Tiers
 
@@ -698,8 +698,8 @@ That sequence improves correctness first and opens the door for the rest.
 
 ## Relationship to Existing Docs
 
-- `docs/overview.md` remains the current-state document
-- `docs/plans/context-compaction.md` is a historical snapshot of the first compaction design
-- `docs/context-management-strategies.md` remains a useful experimental appendix for heuristics like semantic importance scoring and sliding tiers
+- `docs/architecture/overview.md` remains the current-state document
+- `docs/proposals/context-compaction.md` is a historical snapshot of the first compaction design
+- `docs/proposals/context-management-strategies.md` remains a useful experimental appendix for heuristics like semantic importance scoring and sliding tiers
 
 This document is intended to become the main future-state reference for context-management redesign work.

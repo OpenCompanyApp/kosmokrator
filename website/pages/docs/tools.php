@@ -874,6 +874,187 @@ subagent task="Design a unified event system based on the auth, payment, and not
     choice.
 </div>
 
+<!-- ------------------------------------------------------------------ -->
+<h2 id="tool-internals">Tool Internals</h2>
+
+<p>
+    This section describes how KosmoKrator executes tool calls under the hood.
+    Understanding the pipeline is helpful when debugging unexpected behaviour,
+    tuning performance, or writing custom tool integrations.
+</p>
+
+<h3 id="tool-execution-pipeline">Tool Execution Pipeline</h3>
+
+<p>
+    When the LLM response contains one or more tool calls, KosmoKrator processes
+    them through a multi-stage pipeline:
+</p>
+
+<ol>
+    <li>
+        <strong>ToolExecutor receives tool calls</strong> &mdash; the executor
+        collects all tool calls from the parsed LLM response. Each call includes
+        the tool name and a map of parameters.
+    </li>
+    <li>
+        <strong>Permission check</strong> &mdash; before any tool runs, the
+        <a href="/docs/permissions">Permissions</a> system validates the call
+        against the active policy. Calls that require approval are queued for
+        user confirmation (or rejected outright in strict mode).
+    </li>
+    <li>
+        <strong>Concurrent partitioning</strong> &mdash; independent tool calls
+        are grouped and executed in parallel (see
+        <a href="#concurrent-execution">Concurrent Execution</a> below).
+    </li>
+    <li>
+        <strong>Results streamed back</strong> &mdash; tool results are returned
+        to the LLM as part of the conversation, enabling the next reasoning step.
+    </li>
+</ol>
+
+<div class="tip">
+    <p>
+        <strong>Tip:</strong> The entire pipeline is visible in the TUI's
+        <strong>Tools</strong> panel. You can watch each stage &mdash; permission
+        check, execution, and result &mdash; in real time as the agent works.
+    </p>
+</div>
+
+<h3 id="concurrent-execution">Concurrent Execution</h3>
+
+<p>
+    The executor partitions tool calls into groups based on their dependencies
+    and runs independent groups concurrently:
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Partition</th>
+            <th>Behaviour</th>
+            <th>Examples</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Independent calls</strong></td>
+            <td>Run in parallel when no file paths overlap.</td>
+            <td>Reading <code>src/A.php</code> and <code>src/B.php</code> simultaneously.</td>
+        </tr>
+        <tr>
+            <td><strong>Overlapping file calls</strong></td>
+            <td>Serialized to prevent race conditions.</td>
+            <td>A <code>file_read</code> followed by <code>file_edit</code> on the same file.</td>
+        </tr>
+        <tr>
+            <td><strong>Subagent spawns</strong></td>
+            <td>Handled on a separate worker pool; do not block regular tools.</td>
+            <td><code>subagent</code> calls for parallel research or delegated work.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>
+    Maximum parallelism is configurable via the
+    <code>--max-parallel-tools</code> CLI flag (default: 4). Increasing this
+    value can speed up large refactoring tasks but consumes more memory and API
+    tokens.
+</p>
+
+<h3 id="output-management">Output Management</h3>
+
+<p>
+    Every tool result passes through a series of post-processors before being
+    added to the conversation context:
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Stage</th>
+            <th>Limits</th>
+            <th>Purpose</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>OutputTruncator</strong></td>
+            <td>2,000 lines / 50 KB cap</td>
+            <td>
+                Prevents oversized results from flooding the context window.
+                The full output is saved to a temporary file on disk and a
+                summary is injected in place.
+            </td>
+        </tr>
+        <tr>
+            <td><strong>ToolResultDeduplicator</strong></td>
+            <td>&mdash;</td>
+            <td>
+                Removes results that have been superseded by a later call to
+                the same tool with the same parameters (e.g. re-reading a file
+                after editing it).
+            </td>
+        </tr>
+        <tr>
+            <td><strong>ContextPruner</strong></td>
+            <td>Configurable budget</td>
+            <td>
+                Replaces old, low-value tool results with short placeholders
+                to free up context window space for new information.
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="tip">
+    <p>
+        <strong>Tip:</strong> For a deep dive into how context is managed, see
+        the <a href="/docs/context-and-memory">Context &amp; Memory</a> documentation.
+        It covers the pruning strategy, memory persistence, and how to tune
+        the context budget for your workflow.
+    </p>
+</div>
+
+<h3 id="file-change-detection">File Change Detection</h3>
+
+<p>
+    The <code>file_read</code> tool maintains a lightweight cache of previously
+    read files. On subsequent reads:
+</p>
+
+<ul>
+    <li>
+        If the file has not been modified since the last read, the tool returns
+        <strong>"unchanged since last read"</strong> instead of re-sending the
+        full content &mdash; saving context window tokens and reducing latency.
+    </li>
+    <li>
+        If the file has been modified (by <code>file_edit</code>,
+        <code>file_write</code>, or an external process), the full updated
+        content is returned.
+    </li>
+    <li>
+        Large files exceeding <strong>10 MB</strong> are streamed line-by-line
+        to avoid memory spikes and to respect the OutputTruncator limits.
+    </li>
+</ul>
+
+<p>
+    This caching behaviour is automatic and transparent to the LLM. The agent
+    always sees the correct file state, but avoids wasting context on redundant
+    re-reads.
+</p>
+
+<div class="tip">
+    <p>
+        <strong>Tip:</strong> If you need to force a fresh read (for example,
+        after an external build tool modifies a generated file), the agent can
+        use <code>file_read</code> with <code>offset=1</code> to bypass the
+        cache.
+    </p>
+</div>
+
 <?php
 $docContent = ob_get_clean();
 include __DIR__ . '/../_docs-layout.php';

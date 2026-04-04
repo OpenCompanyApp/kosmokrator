@@ -1,12 +1,12 @@
 kosmokrator:
   agent:
-    mode: ask
-    default_provider: z
-    default_model: glm-5.1
+    mode: edit
+    default_provider: z-api
+    default_model: glm-5-turbo
   tools:
     default_permission_mode: prometheus
   provider_state:
     stepfun-plan:
       last_model: step-3.5-flash-2603
     z-api:
-      last_model: glm-5.1
+      last_model: glm-5-turbo

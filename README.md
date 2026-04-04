@@ -262,7 +262,7 @@ Regardless of permission mode:
 - **Blocked bash patterns** are always denied
 - **Session grants** persist for the duration of the session — approve once, the tool is approved until you close
 
-See [docs/permission-modes.md](docs/permission-modes.md) for the full evaluation order and interaction with agent modes.
+See [docs/architecture/permission-modes.md](docs/architecture/permission-modes.md) for the full evaluation order and interaction with agent modes.
 
 ## Subagent System
 

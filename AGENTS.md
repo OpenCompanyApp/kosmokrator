@@ -75,7 +75,7 @@ php vendor/bin/pint             # Code style (Laravel Pint)
 
 Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/config.yaml` or `.kosmokrator.yaml` in the working directory.
 
-`README.md`, `docs/overview.md`, `docs/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/plans/` and several architecture/audit docs are proposals or historical notes unless explicitly marked otherwise.
+`README.md`, `docs/architecture/overview.md`, `docs/architecture/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/proposals/` and `docs/audits/` are proposals or historical notes unless explicitly marked otherwise.
 
 ### Building a PHAR
 

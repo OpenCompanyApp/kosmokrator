@@ -14,7 +14,7 @@ final class HistoryStatusWidgetTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->widget = new HistoryStatusWidget();
+        $this->widget = new HistoryStatusWidget;
     }
 
     // ── Visibility / hide logic ──────────────────────────────────────────

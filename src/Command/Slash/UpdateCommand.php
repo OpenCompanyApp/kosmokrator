@@ -75,7 +75,7 @@ class UpdateCommand implements SlashCommand
         }
 
         try {
-            $updater = new SelfUpdater();
+            $updater = new SelfUpdater;
             $message = $updater->update($latestNormalized);
             $ctx->ui->showNotice($message);
         } catch (\Throwable $e) {

@@ -35,7 +35,7 @@ class ProtectedContextBuilderTest extends TestCase
 
     public function test_build_returns_array_with_one_system_message(): void
     {
-        $builder = new ProtectedContextBuilder();
+        $builder = new ProtectedContextBuilder;
         $messages = $builder->build(AgentMode::Edit);
 
         $this->assertIsArray($messages);
@@ -45,7 +45,7 @@ class ProtectedContextBuilderTest extends TestCase
 
     public function test_system_message_contains_protected_context_header(): void
     {
-        $builder = new ProtectedContextBuilder();
+        $builder = new ProtectedContextBuilder;
         $messages = $builder->build(AgentMode::Edit);
         $content = $messages[0]->content;
 
@@ -54,7 +54,7 @@ class ProtectedContextBuilderTest extends TestCase
 
     public function test_system_message_contains_mode_label(): void
     {
-        $builder = new ProtectedContextBuilder();
+        $builder = new ProtectedContextBuilder;
 
         foreach (AgentMode::cases() as $mode) {
             $messages = $builder->build($mode);
@@ -64,7 +64,7 @@ class ProtectedContextBuilderTest extends TestCase
 
     public function test_system_message_contains_working_directory(): void
     {
-        $builder = new ProtectedContextBuilder();
+        $builder = new ProtectedContextBuilder;
         $messages = $builder->build(AgentMode::Edit);
         $cwd = getcwd() ?: '.';
 
@@ -76,7 +76,7 @@ class ProtectedContextBuilderTest extends TestCase
         $orchestrator = new SubagentOrchestrator(new NullLogger, 5);
         $agentContext = new AgentContext(AgentType::General, 2, 5, $orchestrator, 'test-id', 'test task');
 
-        $builder = new ProtectedContextBuilder();
+        $builder = new ProtectedContextBuilder;
         $messages = $builder->build(AgentMode::Edit, $agentContext);
         $content = $messages[0]->content;
 
@@ -86,7 +86,7 @@ class ProtectedContextBuilderTest extends TestCase
 
     public function test_without_agent_context_no_type_or_depth_info(): void
     {
-        $builder = new ProtectedContextBuilder();
+        $builder = new ProtectedContextBuilder;
         $messages = $builder->build(AgentMode::Edit);
         $content = $messages[0]->content;
 

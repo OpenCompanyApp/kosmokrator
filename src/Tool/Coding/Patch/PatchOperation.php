@@ -12,10 +12,10 @@ namespace Kosmokrator\Tool\Coding\Patch;
 final class PatchOperation
 {
     /**
-     * @param  string       $kind       One of 'add', 'update', 'delete'
-     * @param  string       $path       Target file path
-     * @param  string[]     $bodyLines  Lines of content (add) or hunk lines with prefixes (update)
-     * @param  string|null  $moveTo     Destination path for a move-rename during update, or null
+     * @param  string  $kind  One of 'add', 'update', 'delete'
+     * @param  string  $path  Target file path
+     * @param  string[]  $bodyLines  Lines of content (add) or hunk lines with prefixes (update)
+     * @param  string|null  $moveTo  Destination path for a move-rename during update, or null
      */
     public function __construct(
         public readonly string $kind,

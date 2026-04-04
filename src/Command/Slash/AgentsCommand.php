@@ -39,9 +39,9 @@ class AgentsCommand implements SlashCommand
     }
 
     /**
-     * @param  string               $args  Unused command arguments
-     * @param  SlashCommandContext  $ctx   Current session context with orchestrator access
-     * @return SlashCommandResult   Always continues the session
+     * @param  string  $args  Unused command arguments
+     * @param  SlashCommandContext  $ctx  Current session context with orchestrator access
+     * @return SlashCommandResult Always continues the session
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {

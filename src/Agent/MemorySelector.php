@@ -16,7 +16,7 @@ final class MemorySelector
      * @param  array<int, array<string, mixed>>  $memories  Candidate memories from the store
      * @param  string|null  $query  Free-text query to boost relevance scoring
      * @param  int  $limit  Maximum number of memories to return
-     * @return array<int, array<string, mixed>>  Top-scoring memories, sorted descending
+     * @return array<int, array<string, mixed>> Top-scoring memories, sorted descending
      */
     public function select(array $memories, ?string $query, int $limit = 6): array
     {

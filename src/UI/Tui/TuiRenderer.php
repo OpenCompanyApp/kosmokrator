@@ -184,6 +184,11 @@ class TuiRenderer implements RendererInterface
         $this->core->playAnimation($animation);
     }
 
+    public function setSkillCompletions(array $completions): void
+    {
+        $this->core->setSkillCompletions($completions);
+    }
+
     // ── ToolRendererInterface ───────────────────────────────────────────
 
     public function showToolCall(string $name, array $args): void

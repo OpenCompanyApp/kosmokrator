@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Command;
 
-use Illuminate\Container\Container;
 use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
 use Kosmokrator\Command\ConfigCommand;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
@@ -29,15 +29,15 @@ class ConfigCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/kosmokrator_test_config_' . uniqid();
-        mkdir($this->tmpDir . '/.kosmokrator', 0777, true);
+        $this->tmpDir = sys_get_temp_dir().'/kosmokrator_test_config_'.uniqid();
+        mkdir($this->tmpDir.'/.kosmokrator', 0777, true);
 
         $this->schema = new SettingsSchema;
         $store = new YamlConfigStore;
         $config = new Repository;
 
         // Use the project's config directory as the base config path
-        $baseConfigPath = dirname(__DIR__, 3) . '/config';
+        $baseConfigPath = dirname(__DIR__, 3).'/config';
         $this->manager = new SettingsManager($config, $this->schema, $store, $baseConfigPath);
 
         $this->container = new Container;
@@ -69,7 +69,7 @@ class ConfigCommandTest extends TestCase
             if ($item === '.' || $item === '..') {
                 continue;
             }
-            $path = $dir . '/' . $item;
+            $path = $dir.'/'.$item;
             is_dir($path) ? $this->rmDir($path) : @unlink($path);
         }
         @rmdir($dir);

@@ -155,4 +155,6 @@ class NullRenderer implements RendererInterface
     public function playUnleash(): void {}
 
     public function playAnimation(AnsiAnimation $animation): void {}
+
+    public function setSkillCompletions(array $completions): void {}
 }

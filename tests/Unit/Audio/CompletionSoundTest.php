@@ -13,6 +13,7 @@ use Psr\Log\LoggerInterface;
 class CompletionSoundTest extends TestCase
 {
     private LlmClientInterface&MockObject $llm;
+
     private LoggerInterface&MockObject $log;
 
     protected function setUp(): void
@@ -189,7 +190,7 @@ class CompletionSoundTest extends TestCase
     {
         // Has addNote and fluidsynth but no midiutil/MIDIFile
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 import subprocess
 midi.addNote(0, 0, 60, 0, 1, 100)
 subprocess.run(['fluidsynth', '-q', 'a.sf2', 'b.mid'])
@@ -198,10 +199,10 @@ PY);
         $this->assertFalse($result);
     }
 
-    public function test_validate_script_rejects_without_addNote(): void
+    public function test_validate_script_rejects_without_add_note(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 from midiutil.MIDIFile import MIDIFile
 subprocess.run(['fluidsynth', '-q', 'a.sf2', 'b.mid'])
 PY);
@@ -228,7 +229,7 @@ PY;
     public function test_validate_script_rejects_forbidden_socket(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 import socket
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)
@@ -242,7 +243,7 @@ PY);
     public function test_validate_script_rejects_forbidden_urllib(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 import urllib.request
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)
@@ -256,7 +257,7 @@ PY);
     public function test_validate_script_rejects_forbidden_eval(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)
 midi.addNote(0, 0, 60, 0, 1, 100)
@@ -270,7 +271,7 @@ PY);
     public function test_validate_script_rejects_forbidden_exec(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)
 midi.addNote(0, 0, 60, 0, 1, 100)
@@ -284,7 +285,7 @@ PY);
     public function test_validate_script_rejects_forbidden_requests(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 import requests
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)
@@ -298,7 +299,7 @@ PY);
     public function test_validate_script_rejects_forbidden_os_system(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)
 midi.addNote(0, 0, 60, 0, 1, 100)
@@ -312,7 +313,7 @@ PY);
     public function test_validate_script_rejects_forbidden_rmtree(): void
     {
         $sound = $this->createSound();
-        $result = $this->invokeValidateScript($sound, <<<PY
+        $result = $this->invokeValidateScript($sound, <<<'PY'
 import shutil
 from midiutil.MIDIFile import MIDIFile
 midi = MIDIFile(1)

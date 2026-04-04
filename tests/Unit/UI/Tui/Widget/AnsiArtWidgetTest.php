@@ -12,7 +12,7 @@ final class AnsiArtWidgetTest extends TestCase
 {
     public function test_constructor_default_empty_text(): void
     {
-        $widget = new AnsiArtWidget();
+        $widget = new AnsiArtWidget;
         $this->assertSame('', $widget->getText());
     }
 
@@ -24,7 +24,7 @@ final class AnsiArtWidgetTest extends TestCase
 
     public function test_set_text_updates_text(): void
     {
-        $widget = new AnsiArtWidget();
+        $widget = new AnsiArtWidget;
         $result = $widget->setText('updated');
         $this->assertSame('updated', $widget->getText());
         $this->assertSame($widget, $result);
@@ -32,7 +32,7 @@ final class AnsiArtWidgetTest extends TestCase
 
     public function test_set_text_returns_static(): void
     {
-        $widget = new AnsiArtWidget();
+        $widget = new AnsiArtWidget;
         $returned = $widget->setText('x');
         $this->assertSame($widget, $returned);
     }
@@ -46,7 +46,7 @@ final class AnsiArtWidgetTest extends TestCase
 
     public function test_render_default_empty_returns_empty_array(): void
     {
-        $widget = new AnsiArtWidget();
+        $widget = new AnsiArtWidget;
         $context = new RenderContext(80, 24);
         $this->assertSame([], $widget->render($context));
     }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\Command\Slash;
 
 use Kosmokrator\Command\Slash\ClearCommand;
-use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandAction;
+use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 use PHPUnit\Framework\TestCase;
 

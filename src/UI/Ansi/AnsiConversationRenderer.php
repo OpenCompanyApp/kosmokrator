@@ -29,7 +29,6 @@ final class AnsiConversationRenderer implements ConversationRendererInterface
     /** @var \Closure(string, string, bool, bool): void */
     private \Closure $queueQuestionRecapCallback;
 
-    /** @var AnsiToolRenderer */
     private AnsiToolRenderer $toolRenderer;
 
     public function __construct(

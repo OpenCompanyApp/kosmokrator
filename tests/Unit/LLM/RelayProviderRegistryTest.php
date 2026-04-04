@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class RelayProviderRegistryTest extends TestCase
 {
     private Repository $emptyConfig;
+
     private RelayProviderRegistry $registry;
 
     protected function setUp(): void
@@ -40,7 +41,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertArrayHasKey('z', $all);
     }
 
-    public function test_allProviders_returns_provider_names(): void
+    public function test_all_providers_returns_provider_names(): void
     {
         $names = $this->registry->allProviders();
 
@@ -102,12 +103,12 @@ final class RelayProviderRegistryTest extends TestCase
     // 3. authMode() returns correct values
     // ---------------------------------------------------------------
 
-    public function test_authMode_returns_oauth_for_codex(): void
+    public function test_auth_mode_returns_oauth_for_codex(): void
     {
         $this->assertSame('oauth', $this->registry->authMode('codex'));
     }
 
-    public function test_authMode_returns_api_key_for_others(): void
+    public function test_auth_mode_returns_api_key_for_others(): void
     {
         $this->assertSame('api_key', $this->registry->authMode('openai'));
         $this->assertSame('api_key', $this->registry->authMode('anthropic'));
@@ -156,7 +157,7 @@ final class RelayProviderRegistryTest extends TestCase
     // 5. supportsAsync() for various providers
     // ---------------------------------------------------------------
 
-    public function test_supportsAsync_returns_true_for_openai_compatible_drivers(): void
+    public function test_supports_async_returns_true_for_openai_compatible_drivers(): void
     {
         $this->assertTrue($this->registry->supportsAsync('openai'));
         $this->assertTrue($this->registry->supportsAsync('deepseek'));
@@ -169,7 +170,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertTrue($this->registry->supportsAsync('perplexity'));
     }
 
-    public function test_supportsAsync_returns_false_for_non_async_drivers(): void
+    public function test_supports_async_returns_false_for_non_async_drivers(): void
     {
         $this->assertFalse($this->registry->supportsAsync('anthropic'));
         $this->assertFalse($this->registry->supportsAsync('codex'));
@@ -180,7 +181,7 @@ final class RelayProviderRegistryTest extends TestCase
     // 6. providerModalities() structure
     // ---------------------------------------------------------------
 
-    public function test_providerModalities_returns_input_output_structure(): void
+    public function test_provider_modalities_returns_input_output_structure(): void
     {
         $modalities = $this->registry->providerModalities('openai');
 
@@ -189,7 +190,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertCount(2, $modalities);
     }
 
-    public function test_providerModalities_defaults_to_text(): void
+    public function test_provider_modalities_defaults_to_text(): void
     {
         // Providers without explicit modalities default to text
         $modalities = $this->registry->providerModalities('openai');
@@ -198,7 +199,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertSame(['text'], $modalities['output']);
     }
 
-    public function test_providerModalities_with_explicit_modalities(): void
+    public function test_provider_modalities_with_explicit_modalities(): void
     {
         // mimo has explicit modalities in built-in config
         $modalities = $this->registry->providerModalities('mimo');
@@ -208,7 +209,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertSame(['text'], $modalities['output']);
     }
 
-    public function test_modelModalities_falls_back_to_provider_modalities(): void
+    public function test_model_modalities_falls_back_to_provider_modalities(): void
     {
         $modalities = $this->registry->modelModalities('openai', 'gpt-4o');
 
@@ -218,7 +219,7 @@ final class RelayProviderRegistryTest extends TestCase
         $this->assertSame(['text'], $modalities['output']);
     }
 
-    public function test_modelModalities_for_unknown_model_returns_provider_defaults(): void
+    public function test_model_modalities_for_unknown_model_returns_provider_defaults(): void
     {
         $modalities = $this->registry->modelModalities('openai', 'nonexistent-model');
 

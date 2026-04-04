@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 class SlashCommandActionTest extends TestCase
 {
-    public function testCasesReturnsAllThreeCases(): void
+    public function test_cases_returns_all_three_cases(): void
     {
         $cases = SlashCommandAction::cases();
 
@@ -19,7 +19,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame(SlashCommandAction::Inject, $cases[2]);
     }
 
-    public function testContinueCaseExists(): void
+    public function test_continue_case_exists(): void
     {
         $case = SlashCommandAction::Continue;
 
@@ -27,7 +27,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame('Continue', $case->name);
     }
 
-    public function testQuitCaseExists(): void
+    public function test_quit_case_exists(): void
     {
         $case = SlashCommandAction::Quit;
 
@@ -35,7 +35,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame('Quit', $case->name);
     }
 
-    public function testInjectCaseExists(): void
+    public function test_inject_case_exists(): void
     {
         $case = SlashCommandAction::Inject;
 
@@ -43,7 +43,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame('Inject', $case->name);
     }
 
-    public function testMatchExpressionOnContinue(): void
+    public function test_match_expression_on_continue(): void
     {
         $result = match (SlashCommandAction::Continue) {
             SlashCommandAction::Continue => 'continue',
@@ -54,7 +54,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame('continue', $result);
     }
 
-    public function testMatchExpressionOnQuit(): void
+    public function test_match_expression_on_quit(): void
     {
         $result = match (SlashCommandAction::Quit) {
             SlashCommandAction::Continue => 'continue',
@@ -65,7 +65,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame('quit', $result);
     }
 
-    public function testMatchExpressionOnInject(): void
+    public function test_match_expression_on_inject(): void
     {
         $result = match (SlashCommandAction::Inject) {
             SlashCommandAction::Continue => 'continue',
@@ -76,7 +76,7 @@ class SlashCommandActionTest extends TestCase
         $this->assertSame('inject', $result);
     }
 
-    public function testEnumIsNotBacked(): void
+    public function test_enum_is_not_backed(): void
     {
         $ref = new \ReflectionEnum(SlashCommandAction::class);
 

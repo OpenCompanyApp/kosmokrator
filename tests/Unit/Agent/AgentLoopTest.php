@@ -4,6 +4,7 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Amp\CancelledException;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
@@ -215,7 +216,7 @@ class AgentLoopTest extends TestCase
             'You are a test assistant.',
             new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
-        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Plan);
+        $this->loop->setMode(AgentMode::Plan);
 
         $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: '{"command":"touch tmp.txt"}');
 
@@ -256,7 +257,7 @@ class AgentLoopTest extends TestCase
             'You are a test assistant.',
             new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
-        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Ask);
+        $this->loop->setMode(AgentMode::Ask);
 
         $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: '{"command":"git commit -m \\"x\\""}');
 
@@ -297,7 +298,7 @@ class AgentLoopTest extends TestCase
             'You are a test assistant.',
             new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
-        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Plan);
+        $this->loop->setMode(AgentMode::Plan);
 
         $toolCall = new ToolCall(id: 'tc_1', name: 'shell_start', arguments: '{"command":"touch tmp.txt"}');
 
@@ -338,7 +339,7 @@ class AgentLoopTest extends TestCase
             'You are a test assistant.',
             new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
-        $this->loop->setMode(\Kosmokrator\Agent\AgentMode::Ask);
+        $this->loop->setMode(AgentMode::Ask);
 
         $toolCall = new ToolCall(id: 'tc_1', name: 'shell_write', arguments: '{"session_id":"sh_1","input":"git commit -m \\"x\\""}');
 

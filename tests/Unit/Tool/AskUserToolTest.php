@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 class AskUserToolTest extends TestCase
 {
     private RendererInterface $ui;
+
     private AskUserTool $tool;
 
     protected function setUp(): void
@@ -35,12 +36,12 @@ class AskUserToolTest extends TestCase
         $this->assertArrayHasKey('question', $params);
     }
 
-    public function test_requiredParameters_contains_question(): void
+    public function test_required_parameters_contains_question(): void
     {
         $this->assertContains('question', $this->tool->requiredParameters());
     }
 
-    public function test_execute_with_valid_question_calls_askUser_and_returns_success(): void
+    public function test_execute_with_valid_question_calls_ask_user_and_returns_success(): void
     {
         $this->ui->expects($this->once())
             ->method('askUser')

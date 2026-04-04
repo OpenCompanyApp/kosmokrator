@@ -73,8 +73,8 @@ PROMPT;
     /**
      * Check whether the current prompt size exceeds the compaction threshold for the given model.
      *
-     * @param  int     $promptTokens  Current token count of the prompt to be sent
-     * @param  string  $model         Model identifier used to look up context window size
+     * @param  int  $promptTokens  Current token count of the prompt to be sent
+     * @param  string  $model  Model identifier used to look up context window size
      */
     public function needsCompaction(int $promptTokens, string $model): bool
     {
@@ -87,7 +87,7 @@ PROMPT;
      * Uses the lower of the percentage-based threshold and the ContextBudget limit (if provided).
      *
      * @param  string  $model  Model identifier used to look up context window size
-     * @return int     Token count threshold
+     * @return int Token count threshold
      */
     public function getThresholdTokens(string $model): int
     {
@@ -114,9 +114,8 @@ PROMPT;
     /**
      * Summarize old messages in the conversation history.
      *
-     * @param  ConversationHistory  $history     Full conversation to compact
-     * @param  int                   $keepRecent  Number of most-recent messages to preserve unchanged
-     *
+     * @param  ConversationHistory  $history  Full conversation to compact
+     * @param  int  $keepRecent  Number of most-recent messages to preserve unchanged
      * @return array{summary: string, tokens_in: int, tokens_out: int} Compaction result with LLM token usage
      */
     public function compact(ConversationHistory $history, int $keepRecent = 3): array
@@ -133,10 +132,9 @@ PROMPT;
     /**
      * Build a CompactionPlan describing how to replace old messages with a summary.
      *
-     * @param  ConversationHistory  $history             Full conversation to compact
-     * @param  Message[]            $protectedMessages   Messages that must appear at the top of the replacement list
-     * @param  int                  $keepRecent          Number of most-recent messages to preserve unchanged
-     *
+     * @param  ConversationHistory  $history  Full conversation to compact
+     * @param  Message[]  $protectedMessages  Messages that must appear at the top of the replacement list
+     * @param  int  $keepRecent  Number of most-recent messages to preserve unchanged
      * @return CompactionPlan Plan with replacement messages, summary, and token usage
      */
     public function buildPlan(ConversationHistory $history, array $protectedMessages = [], int $keepRecent = 3): CompactionPlan
@@ -197,7 +195,6 @@ PROMPT;
      * Extract durable memories from a compaction summary.
      *
      * @param  string  $summary  The compaction summary produced by compact() or buildPlan()
-     *
      * @return array{memories: array<array{type: string, title: string, content: string}>, tokens_in: int, tokens_out: int}
      */
     public function extractMemories(string $summary): array

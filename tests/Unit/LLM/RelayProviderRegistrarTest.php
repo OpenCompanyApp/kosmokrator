@@ -4,13 +4,25 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\LLM;
 
+use Illuminate\Config\Repository;
 use InvalidArgumentException;
 use Kosmokrator\LLM\RelayProviderRegistrar;
 use Kosmokrator\LLM\RelayProviderRegistry;
+use OpenCompany\PrismCodex\Codex;
 use OpenCompany\PrismCodex\CodexOAuthService;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\PrismManager;
+use Prism\Prism\Providers\Anthropic\Anthropic;
+use Prism\Prism\Providers\DeepSeek\DeepSeek;
+use Prism\Prism\Providers\Gemini\Gemini;
+use Prism\Prism\Providers\Groq\Groq;
+use Prism\Prism\Providers\Mistral\Mistral;
+use Prism\Prism\Providers\Ollama\Ollama;
+use Prism\Prism\Providers\OpenAI\OpenAI;
+use Prism\Prism\Providers\OpenRouter\OpenRouter;
+use Prism\Prism\Providers\Perplexity\Perplexity;
+use Prism\Prism\Providers\XAI\XAI;
+use Prism\Prism\Providers\Z\Z;
 
 final class RelayProviderRegistrarTest extends TestCase
 {
@@ -20,7 +32,7 @@ final class RelayProviderRegistrarTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->registry = new RelayProviderRegistry(new \Illuminate\Config\Repository([]));
+        $this->registry = new RelayProviderRegistry(new Repository([]));
         $this->codexOAuth = $this->createStub(CodexOAuthService::class);
     }
 
@@ -82,28 +94,28 @@ final class RelayProviderRegistrarTest extends TestCase
     {
         $result = $this->invokeFactoryForProvider('anthropic', ['api_key' => 'test-key']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Anthropic\Anthropic::class, $result);
+        $this->assertInstanceOf(Anthropic::class, $result);
     }
 
     public function test_openai_driver_creates_openai_instance(): void
     {
         $result = $this->invokeFactoryForProvider('openai', ['api_key' => 'sk-test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\OpenAI\OpenAI::class, $result);
+        $this->assertInstanceOf(OpenAI::class, $result);
     }
 
     public function test_codex_driver_creates_codex_instance(): void
     {
         $result = $this->invokeFactoryForProvider('codex', []);
 
-        $this->assertInstanceOf(\OpenCompany\PrismCodex\Codex::class, $result);
+        $this->assertInstanceOf(Codex::class, $result);
     }
 
     public function test_gemini_driver_creates_gemini_instance(): void
     {
         $result = $this->invokeFactoryForProvider('gemini', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Gemini\Gemini::class, $result);
+        $this->assertInstanceOf(Gemini::class, $result);
     }
 
     public function test_deepseek_driver_creates_openai_instance(): void
@@ -111,70 +123,70 @@ final class RelayProviderRegistrarTest extends TestCase
         // deepseek now uses 'openai-compatible' driver from upstream
         $result = $this->invokeFactoryForProvider('deepseek', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\OpenAI\OpenAI::class, $result);
+        $this->assertInstanceOf(OpenAI::class, $result);
     }
 
     public function test_groq_driver_creates_groq_instance(): void
     {
         $result = $this->invokeFactoryForProvider('groq', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Groq\Groq::class, $result);
+        $this->assertInstanceOf(Groq::class, $result);
     }
 
     public function test_mistral_driver_creates_mistral_instance(): void
     {
         $result = $this->invokeFactoryForProvider('mistral', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Mistral\Mistral::class, $result);
+        $this->assertInstanceOf(Mistral::class, $result);
     }
 
     public function test_ollama_driver_creates_ollama_instance(): void
     {
         $result = $this->invokeFactoryForProvider('ollama', ['api_key' => '']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Ollama\Ollama::class, $result);
+        $this->assertInstanceOf(Ollama::class, $result);
     }
 
     public function test_openrouter_driver_creates_openrouter_instance(): void
     {
         $result = $this->invokeFactoryForProvider('openrouter', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\OpenRouter\OpenRouter::class, $result);
+        $this->assertInstanceOf(OpenRouter::class, $result);
     }
 
     public function test_perplexity_driver_creates_perplexity_instance(): void
     {
         $result = $this->invokeFactoryForProvider('perplexity', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Perplexity\Perplexity::class, $result);
+        $this->assertInstanceOf(Perplexity::class, $result);
     }
 
     public function test_xai_driver_creates_xai_instance(): void
     {
         $result = $this->invokeFactoryForProvider('xai', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\XAI\XAI::class, $result);
+        $this->assertInstanceOf(XAI::class, $result);
     }
 
     public function test_z_driver_creates_z_instance(): void
     {
         $result = $this->invokeFactoryForProvider('z', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Z\Z::class, $result);
+        $this->assertInstanceOf(Z::class, $result);
     }
 
     public function test_kimi_driver_creates_deepseek_instance(): void
     {
         $result = $this->invokeFactoryForProvider('kimi', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\DeepSeek\DeepSeek::class, $result);
+        $this->assertInstanceOf(DeepSeek::class, $result);
     }
 
     public function test_kimi_coding_driver_creates_deepseek_instance(): void
     {
         $result = $this->invokeFactoryForProvider('kimi-coding', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\DeepSeek\DeepSeek::class, $result);
+        $this->assertInstanceOf(DeepSeek::class, $result);
     }
 
     public function test_z_api_driver_creates_z_instance(): void
@@ -182,7 +194,7 @@ final class RelayProviderRegistrarTest extends TestCase
         // z-api maps to the 'glm' driver which resolves to Z class
         $result = $this->invokeFactoryForProvider('z-api', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Z\Z::class, $result);
+        $this->assertInstanceOf(Z::class, $result);
     }
 
     public function test_minimax_driver_creates_anthropic_instance(): void
@@ -190,7 +202,7 @@ final class RelayProviderRegistrarTest extends TestCase
         // minimax uses 'anthropic-compatible' driver which resolves to Anthropic class
         $result = $this->invokeFactoryForProvider('minimax', ['api_key' => 'test']);
 
-        $this->assertInstanceOf(\Prism\Prism\Providers\Anthropic\Anthropic::class, $result);
+        $this->assertInstanceOf(Anthropic::class, $result);
     }
 
     // ---------------------------------------------------------------
@@ -200,7 +212,7 @@ final class RelayProviderRegistrarTest extends TestCase
     public function test_unknown_driver_throws_invalid_argument_exception(): void
     {
         // Register a custom provider with an unsupported driver via config
-        $registry = new RelayProviderRegistry(new \Illuminate\Config\Repository([
+        $registry = new RelayProviderRegistry(new Repository([
             'relay' => [
                 'providers' => [
                     'mystery-provider' => [

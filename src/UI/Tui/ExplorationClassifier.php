@@ -53,7 +53,7 @@ final class ExplorationClassifier
 
     /**
      * @param  string  $name  Tool name being invoked
-     * @param  array   $args  Tool invocation arguments
+     * @param  array  $args  Tool invocation arguments
      * @return bool Whether the tool call is a read-only exploration operation
      */
     public static function isOmensTool(string $name, array $args): bool

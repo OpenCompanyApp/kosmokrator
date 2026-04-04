@@ -14,15 +14,15 @@ use Prism\Prism\ValueObjects\ToolCall;
 readonly class LlmResponse
 {
     /**
-     * @param string       $text                     Assistant reply text (empty when tool_calls is non-empty)
-     * @param FinishReason $finishReason             Why the model stopped generating
-     * @param ToolCall[]   $toolCalls                Requested function calls from the model
-     * @param int          $promptTokens             Input tokens billed for this request
-     * @param int          $completionTokens          Output tokens billed for this request
-     * @param int          $cacheWriteInputTokens    Input tokens written to provider cache (often discounted)
-     * @param int          $cacheReadInputTokens     Input tokens served from provider cache (often discounted)
-     * @param int          $thoughtTokens            Reasoning/thinking tokens used by extended-thinking models
-     * @param string       $reasoningContent         Raw reasoning/thinking text returned by extended-thinking models
+     * @param  string  $text  Assistant reply text (empty when tool_calls is non-empty)
+     * @param  FinishReason  $finishReason  Why the model stopped generating
+     * @param  ToolCall[]  $toolCalls  Requested function calls from the model
+     * @param  int  $promptTokens  Input tokens billed for this request
+     * @param  int  $completionTokens  Output tokens billed for this request
+     * @param  int  $cacheWriteInputTokens  Input tokens written to provider cache (often discounted)
+     * @param  int  $cacheReadInputTokens  Input tokens served from provider cache (often discounted)
+     * @param  int  $thoughtTokens  Reasoning/thinking tokens used by extended-thinking models
+     * @param  string  $reasoningContent  Raw reasoning/thinking text returned by extended-thinking models
      */
     public function __construct(
         public string $text,

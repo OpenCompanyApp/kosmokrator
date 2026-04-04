@@ -18,8 +18,11 @@ final class SubagentDisplayManagerTest extends TestCase
     }
 
     private ContainerWidget $conversation;
+
     private string $breathColor;
+
     private bool $renderCalled;
+
     private bool $spinnersEnsured;
 
     private function createManager(): SubagentDisplayManager
@@ -32,8 +35,12 @@ final class SubagentDisplayManagerTest extends TestCase
         return new SubagentDisplayManager(
             conversation: $this->conversation,
             breathColorProvider: fn (): string => $this->breathColor,
-            renderCallback: function (): void { $this->renderCalled = true; },
-            ensureSpinners: function (): void { $this->spinnersEnsured = true; },
+            renderCallback: function (): void {
+                $this->renderCalled = true;
+            },
+            ensureSpinners: function (): void {
+                $this->spinnersEnsured = true;
+            },
             log: null,
         );
     }
@@ -239,6 +246,7 @@ final class SubagentDisplayManagerTest extends TestCase
         $called = false;
         $manager->setTreeProvider(function () use (&$called): array {
             $called = true;
+
             return [];
         });
         $manager->tickTreeRefresh();
@@ -259,6 +267,7 @@ final class SubagentDisplayManagerTest extends TestCase
         $called = false;
         $manager->setTreeProvider(function () use (&$called): array {
             $called = true;
+
             return [];
         });
 

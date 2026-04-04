@@ -26,7 +26,7 @@ final class SelfUpdater
     {
         $binaryPath = $this->resolveBinaryPath();
         $asset = $this->resolveAssetName();
-        $url = "https://github.com/".self::GITHUB_REPO."/releases/download/v{$targetVersion}/{$asset}";
+        $url = 'https://github.com/'.self::GITHUB_REPO."/releases/download/v{$targetVersion}/{$asset}";
 
         $tmpPath = $binaryPath.'.tmp.'.getmypid();
 

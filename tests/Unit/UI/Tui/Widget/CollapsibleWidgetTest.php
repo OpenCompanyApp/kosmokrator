@@ -44,7 +44,7 @@ final class CollapsibleWidgetTest extends TestCase
         $this->assertFalse($widget->isExpanded());
     }
 
-    public function test_setExpanded_explicitly_sets_state(): void
+    public function test_set_expanded_explicitly_sets_state(): void
     {
         $widget = new CollapsibleWidget('✓', 'content', 1);
 

@@ -43,8 +43,6 @@ class RenameCommand implements SlashCommand
         if ($title === '') {
             $ctx->ui->showNotice('Usage: /rename <new title>');
 
-
-
             return SlashCommandResult::continue();
         }
 

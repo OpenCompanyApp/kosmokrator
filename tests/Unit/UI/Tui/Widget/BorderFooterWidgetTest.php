@@ -12,7 +12,7 @@ final class BorderFooterWidgetTest extends TestCase
 {
     public function test_constructor_default_no_border_color(): void
     {
-        $widget = new BorderFooterWidget();
+        $widget = new BorderFooterWidget;
         $context = new RenderContext(80, 24);
         $result = $widget->render($context);
         $this->assertCount(1, $result);
@@ -28,7 +28,7 @@ final class BorderFooterWidgetTest extends TestCase
 
     public function test_render_produces_single_line(): void
     {
-        $widget = new BorderFooterWidget();
+        $widget = new BorderFooterWidget;
         $context = new RenderContext(80, 24);
         $result = $widget->render($context);
         $this->assertCount(1, $result);
@@ -36,7 +36,7 @@ final class BorderFooterWidgetTest extends TestCase
 
     public function test_render_line_starts_with_border_corner(): void
     {
-        $widget = new BorderFooterWidget();
+        $widget = new BorderFooterWidget;
         $context = new RenderContext(80, 24);
         $result = $widget->render($context);
 
@@ -47,7 +47,7 @@ final class BorderFooterWidgetTest extends TestCase
 
     public function test_render_contains_horizontal_fill(): void
     {
-        $widget = new BorderFooterWidget();
+        $widget = new BorderFooterWidget;
         $context = new RenderContext(80, 24);
         $result = $widget->render($context);
 
@@ -56,7 +56,7 @@ final class BorderFooterWidgetTest extends TestCase
 
     public function test_render_adapts_to_terminal_width(): void
     {
-        $widget = new BorderFooterWidget();
+        $widget = new BorderFooterWidget;
         $narrow = new RenderContext(40, 24);
         $wide = new RenderContext(120, 24);
 
@@ -73,7 +73,7 @@ final class BorderFooterWidgetTest extends TestCase
 
     public function test_render_width_equals_terminal_columns(): void
     {
-        $widget = new BorderFooterWidget();
+        $widget = new BorderFooterWidget;
         $columns = 80;
         $context = new RenderContext($columns, 24);
         $result = $widget->render($context);

@@ -37,7 +37,7 @@ final class RelayProviderRegistrar
     /**
      * Extend the Prism manager with all providers from RelayProviderRegistry.
      *
-     * @param PrismManager $manager The Prism service manager to register drivers into
+     * @param  PrismManager  $manager  The Prism service manager to register drivers into
      */
     public function register(PrismManager $manager): void
     {

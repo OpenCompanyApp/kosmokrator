@@ -24,8 +24,8 @@ final class StuckDetector
     private int $turnsSinceEscalation = 0;
 
     /**
-     * @param int $windowSize           Number of recent tool call signatures to track
-     * @param int $repetitionThreshold  Times the same signature must appear to trigger stuck detection
+     * @param  int  $windowSize  Number of recent tool call signatures to track
+     * @param  int  $repetitionThreshold  Times the same signature must appear to trigger stuck detection
      */
     public function __construct(
         private readonly int $windowSize = 8,

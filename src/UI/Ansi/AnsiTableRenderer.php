@@ -15,7 +15,7 @@ class AnsiTableRenderer
     /**
      * Renders a parsed markdown table as box-drawing ANSI art.
      *
-     * @param  array{alignments: list<string|null>, head: list<list<string>>, body: list<list<string>>}  $table Table structure with column alignments, header rows, and body rows
+     * @param  array{alignments: list<string|null>, head: list<list<string>>, body: list<list<string>>}  $table  Table structure with column alignments, header rows, and body rows
      * @param  string  $prefix  Left-margin prefix for each output line (default: 2 spaces)
      * @return string ANSI-escaped table string with trailing newline, or empty string if no rows
      */
@@ -106,7 +106,7 @@ class AnsiTableRenderer
      * Calculates the visible (non-ANSI) width of a string by stripping escape sequences.
      * Shared utility used across the ANSI rendering layer for column alignment and wrapping.
      *
-     * @param string $text String that may contain ANSI escape sequences (\033[...m)
+     * @param  string  $text  String that may contain ANSI escape sequences (\033[...m)
      * @return int Visible character width using mb_strwidth
      */
     public static function visibleWidth(string $text): int

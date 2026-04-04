@@ -39,7 +39,7 @@ final class DiscoveryBatchWidgetTest extends TestCase
 
     public function test_constructor_with_default_empty_items(): void
     {
-        $widget = new DiscoveryBatchWidget();
+        $widget = new DiscoveryBatchWidget;
 
         $lines = $widget->render(new RenderContext(80, 24));
 
@@ -49,14 +49,14 @@ final class DiscoveryBatchWidgetTest extends TestCase
 
     public function test_default_state_is_collapsed(): void
     {
-        $widget = new DiscoveryBatchWidget();
+        $widget = new DiscoveryBatchWidget;
 
         $this->assertFalse($widget->isExpanded());
     }
 
     public function test_toggle_switches_state(): void
     {
-        $widget = new DiscoveryBatchWidget();
+        $widget = new DiscoveryBatchWidget;
 
         $widget->toggle();
         $this->assertTrue($widget->isExpanded());
@@ -65,9 +65,9 @@ final class DiscoveryBatchWidgetTest extends TestCase
         $this->assertFalse($widget->isExpanded());
     }
 
-    public function test_setExpanded_sets_state(): void
+    public function test_set_expanded_sets_state(): void
     {
-        $widget = new DiscoveryBatchWidget();
+        $widget = new DiscoveryBatchWidget;
 
         $widget->setExpanded(true);
         $this->assertTrue($widget->isExpanded());
@@ -76,9 +76,9 @@ final class DiscoveryBatchWidgetTest extends TestCase
         $this->assertFalse($widget->isExpanded());
     }
 
-    public function test_setItems_normalizes_tabs_in_detail(): void
+    public function test_set_items_normalizes_tabs_in_detail(): void
     {
-        $widget = new DiscoveryBatchWidget();
+        $widget = new DiscoveryBatchWidget;
         $widget->setItems([
             $this->makeItem(detail: "col1\tcol2\tcol3"),
         ]);

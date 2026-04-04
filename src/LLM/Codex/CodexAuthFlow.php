@@ -46,8 +46,9 @@ final class CodexAuthFlow
      * HTTP server on localhost to receive the callback, and exchanges the auth code
      * for access/refresh tokens.
      *
-     * @param  callable(string): void|null  $notify Optional callback for TUI status messages
+     * @param  callable(string): void|null  $notify  Optional callback for TUI status messages
      * @return CodexToken The newly obtained and persisted token
+     *
      * @throws \RuntimeException If authentication fails or times out
      */
     public function browserLogin(?callable $notify = null): CodexToken
@@ -88,9 +89,10 @@ final class CodexAuthFlow
      * Initiates a device auth request, displays a user code and URL, then polls
      * the token endpoint until the user completes authorization or the timeout expires.
      *
-     * @param callable(string): void|null $notify       Optional callback for TUI status messages
-     * @param int                         $maxWaitSeconds Maximum time to wait for user authorization (default 300s)
+     * @param  callable(string): void|null  $notify  Optional callback for TUI status messages
+     * @param  int  $maxWaitSeconds  Maximum time to wait for user authorization (default 300s)
      * @return CodexToken The newly obtained and persisted token
+     *
      * @throws \RuntimeException If authorization times out
      */
     public function deviceLogin(?callable $notify = null, int $maxWaitSeconds = 300): CodexToken
@@ -138,8 +140,8 @@ final class CodexAuthFlow
      * Listens for a single connection on the given port, validates the state parameter,
      * and returns the authorization code. Sends a simple HTML success/failure page back.
      *
-     * @param int    $port          Localhost port for the callback server
-     * @param string $expectedState CSRF state value to validate against
+     * @param  int  $port  Localhost port for the callback server
+     * @param  string  $expectedState  CSRF state value to validate against
      * @return string|null The authorization code, or null if the callback was invalid
      */
     private function waitForCallback(int $port, string $expectedState): ?string

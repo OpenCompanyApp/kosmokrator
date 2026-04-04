@@ -9,6 +9,7 @@ use Amp\DeferredCancellation;
 use Amp\Future;
 use Amp\Http\Client\HttpException;
 use Amp\Sync\LocalSemaphore;
+use Amp\Sync\Lock;
 use Kosmokrator\LLM\RetryableHttpException;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
@@ -36,7 +37,7 @@ class SubagentOrchestrator
     /** @var array<string, DeferredCancellation> Dedicated subagent cancellation tokens */
     private array $cancellations = [];
 
-    /** @var array<string, \Amp\Sync\Lock> Active global semaphore locks keyed by agent ID (for slot yielding) */
+    /** @var array<string, Lock> Active global semaphore locks keyed by agent ID (for slot yielding) */
     private array $globalLocks = [];
 
     private int $autoIdCounter = 0;
@@ -44,12 +45,12 @@ class SubagentOrchestrator
     private ?LocalSemaphore $globalSemaphore;
 
     /**
-     * @param LoggerInterface $log  Logger for orchestrator lifecycle events
-     * @param int $maxDepth         Maximum nesting depth for subagent trees
-     * @param int $concurrency      Max parallel agents (0 = unlimited)
-     * @param int $maxRetries       Retry attempts per agent on transient failures
-     * @param int|float $watchdogSeconds Idle watchdog threshold for an individual running agent (0 = disabled)
-     * @param (\Closure(int): float)|null $retryDelayFunction Override for retry delay calculation (useful in tests)
+     * @param  LoggerInterface  $log  Logger for orchestrator lifecycle events
+     * @param  int  $maxDepth  Maximum nesting depth for subagent trees
+     * @param  int  $concurrency  Max parallel agents (0 = unlimited)
+     * @param  int  $maxRetries  Retry attempts per agent on transient failures
+     * @param  int|float  $watchdogSeconds  Idle watchdog threshold for an individual running agent (0 = disabled)
+     * @param  (\Closure(int): float)|null  $retryDelayFunction  Override for retry delay calculation (useful in tests)
      */
     public function __construct(
         private readonly LoggerInterface $log,
@@ -413,6 +414,37 @@ class SubagentOrchestrator
      *
      * @return array<string, string> agentId => result text
      */
+    /**
+     * Check whether any completed background results are waiting to be collected.
+     */
+    public function hasPendingResults(?string $parentId = null): bool
+    {
+        if ($parentId !== null) {
+            return ! empty($this->pendingResults[$parentId]);
+        }
+
+        return $this->pendingResults !== [];
+    }
+
+    /**
+     * Check whether any background agents are still running for a given parent.
+     */
+    public function hasRunningBackgroundAgents(?string $parentId = null): bool
+    {
+        foreach ($this->stats as $stats) {
+            if ($stats->status !== 'running') {
+                continue;
+            }
+            if ($parentId !== null && $stats->parentId !== $parentId) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
     public function collectPendingResults(?string $parentId = null): array
     {
         if ($parentId !== null) {

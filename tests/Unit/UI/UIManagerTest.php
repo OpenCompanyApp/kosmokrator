@@ -41,12 +41,12 @@ class UIManagerTest extends TestCase
     public function test_constructor_default_preference_is_auto(): void
     {
         // Default 'auto' — resolves to either 'tui' or 'ansi'
-        $manager = new UIManager();
+        $manager = new UIManager;
         $active = $manager->getActiveRenderer();
         $this->assertContains($active, ['tui', 'ansi']);
     }
 
-    public function test_getActiveRenderer_returns_string(): void
+    public function test_get_active_renderer_returns_string(): void
     {
         $manager = new UIManager('ansi');
         $this->assertIsString($manager->getActiveRenderer());
@@ -56,7 +56,7 @@ class UIManagerTest extends TestCase
     // Delegation: void methods
     // ------------------------------------------------------------------
 
-    public function test_setTaskStore_delegates(): void
+    public function test_set_task_store_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $store = $this->createMock(TaskStore::class);
@@ -65,7 +65,7 @@ class UIManagerTest extends TestCase
         $manager->setTaskStore($store);
     }
 
-    public function test_refreshTaskBar_delegates(): void
+    public function test_refresh_task_bar_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -81,7 +81,7 @@ class UIManagerTest extends TestCase
         $manager->initialize();
     }
 
-    public function test_renderIntro_delegates(): void
+    public function test_render_intro_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -89,7 +89,7 @@ class UIManagerTest extends TestCase
         $manager->renderIntro(true);
     }
 
-    public function test_showUserMessage_delegates(): void
+    public function test_show_user_message_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -97,7 +97,7 @@ class UIManagerTest extends TestCase
         $manager->showUserMessage('hello');
     }
 
-    public function test_setPhase_delegates(): void
+    public function test_set_phase_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -105,7 +105,7 @@ class UIManagerTest extends TestCase
         $manager->setPhase(AgentPhase::Thinking);
     }
 
-    public function test_showThinking_delegates(): void
+    public function test_show_thinking_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -113,7 +113,7 @@ class UIManagerTest extends TestCase
         $manager->showThinking();
     }
 
-    public function test_clearThinking_delegates(): void
+    public function test_clear_thinking_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -121,7 +121,7 @@ class UIManagerTest extends TestCase
         $manager->clearThinking();
     }
 
-    public function test_showCompacting_delegates(): void
+    public function test_show_compacting_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -129,7 +129,7 @@ class UIManagerTest extends TestCase
         $manager->showCompacting();
     }
 
-    public function test_clearCompacting_delegates(): void
+    public function test_clear_compacting_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -137,7 +137,7 @@ class UIManagerTest extends TestCase
         $manager->clearCompacting();
     }
 
-    public function test_streamChunk_delegates(): void
+    public function test_stream_chunk_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -145,7 +145,7 @@ class UIManagerTest extends TestCase
         $manager->streamChunk('chunk');
     }
 
-    public function test_streamComplete_delegates(): void
+    public function test_stream_complete_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -153,7 +153,7 @@ class UIManagerTest extends TestCase
         $manager->streamComplete();
     }
 
-    public function test_showToolCall_delegates(): void
+    public function test_show_tool_call_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -161,7 +161,7 @@ class UIManagerTest extends TestCase
         $manager->showToolCall('read', ['path' => '/foo']);
     }
 
-    public function test_showToolResult_delegates(): void
+    public function test_show_tool_result_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -169,7 +169,7 @@ class UIManagerTest extends TestCase
         $manager->showToolResult('read', 'output', true);
     }
 
-    public function test_showAutoApproveIndicator_delegates(): void
+    public function test_show_auto_approve_indicator_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -177,7 +177,7 @@ class UIManagerTest extends TestCase
         $manager->showAutoApproveIndicator('bash');
     }
 
-    public function test_showToolExecuting_delegates(): void
+    public function test_show_tool_executing_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -185,7 +185,7 @@ class UIManagerTest extends TestCase
         $manager->showToolExecuting('bash');
     }
 
-    public function test_updateToolExecuting_delegates(): void
+    public function test_update_tool_executing_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -193,7 +193,7 @@ class UIManagerTest extends TestCase
         $manager->updateToolExecuting('output');
     }
 
-    public function test_clearToolExecuting_delegates(): void
+    public function test_clear_tool_executing_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -201,7 +201,7 @@ class UIManagerTest extends TestCase
         $manager->clearToolExecuting();
     }
 
-    public function test_clearConversation_delegates(): void
+    public function test_clear_conversation_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -209,7 +209,7 @@ class UIManagerTest extends TestCase
         $manager->clearConversation();
     }
 
-    public function test_replayHistory_delegates(): void
+    public function test_replay_history_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $messages = [['role' => 'user', 'text' => 'hi']];
@@ -218,7 +218,7 @@ class UIManagerTest extends TestCase
         $manager->replayHistory($messages);
     }
 
-    public function test_showNotice_delegates(): void
+    public function test_show_notice_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -226,7 +226,7 @@ class UIManagerTest extends TestCase
         $manager->showNotice('notice');
     }
 
-    public function test_showMode_delegates(): void
+    public function test_show_mode_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -234,7 +234,7 @@ class UIManagerTest extends TestCase
         $manager->showMode('edit', 'green');
     }
 
-    public function test_showMode_delegates_with_default_color(): void
+    public function test_show_mode_delegates_with_default_color(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -242,7 +242,7 @@ class UIManagerTest extends TestCase
         $manager->showMode('plan');
     }
 
-    public function test_setPermissionMode_delegates(): void
+    public function test_set_permission_mode_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -250,7 +250,7 @@ class UIManagerTest extends TestCase
         $manager->setPermissionMode('guardian', 'red');
     }
 
-    public function test_setImmediateCommandHandler_delegates(): void
+    public function test_set_immediate_command_handler_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $handler = fn (): string => '';
@@ -259,7 +259,7 @@ class UIManagerTest extends TestCase
         $manager->setImmediateCommandHandler($handler);
     }
 
-    public function test_setImmediateCommandHandler_delegates_null(): void
+    public function test_set_immediate_command_handler_delegates_null(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -267,7 +267,7 @@ class UIManagerTest extends TestCase
         $manager->setImmediateCommandHandler(null);
     }
 
-    public function test_showError_delegates(): void
+    public function test_show_error_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -275,7 +275,7 @@ class UIManagerTest extends TestCase
         $manager->showError('oops');
     }
 
-    public function test_showStatus_delegates(): void
+    public function test_show_status_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -283,7 +283,7 @@ class UIManagerTest extends TestCase
         $manager->showStatus('gpt-4', 100, 200, 0.05, 128000);
     }
 
-    public function test_refreshRuntimeSelection_delegates(): void
+    public function test_refresh_runtime_selection_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -291,7 +291,7 @@ class UIManagerTest extends TestCase
         $manager->refreshRuntimeSelection('openai', 'gpt-4', 128000);
     }
 
-    public function test_showSubagentStatus_delegates(): void
+    public function test_show_subagent_status_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $stats = ['running' => 3];
@@ -300,7 +300,7 @@ class UIManagerTest extends TestCase
         $manager->showSubagentStatus($stats);
     }
 
-    public function test_clearSubagentStatus_delegates(): void
+    public function test_clear_subagent_status_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -308,7 +308,7 @@ class UIManagerTest extends TestCase
         $manager->clearSubagentStatus();
     }
 
-    public function test_showSubagentRunning_delegates(): void
+    public function test_show_subagent_running_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $entries = [['id' => 'a1']];
@@ -317,7 +317,7 @@ class UIManagerTest extends TestCase
         $manager->showSubagentRunning($entries);
     }
 
-    public function test_showSubagentSpawn_delegates(): void
+    public function test_show_subagent_spawn_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $entries = [['id' => 'a1']];
@@ -326,7 +326,7 @@ class UIManagerTest extends TestCase
         $manager->showSubagentSpawn($entries);
     }
 
-    public function test_showSubagentBatch_delegates(): void
+    public function test_show_subagent_batch_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $entries = [['id' => 'a1']];
@@ -335,7 +335,7 @@ class UIManagerTest extends TestCase
         $manager->showSubagentBatch($entries);
     }
 
-    public function test_refreshSubagentTree_delegates(): void
+    public function test_refresh_subagent_tree_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $tree = ['root' => []];
@@ -344,7 +344,7 @@ class UIManagerTest extends TestCase
         $manager->refreshSubagentTree($tree);
     }
 
-    public function test_setAgentTreeProvider_delegates(): void
+    public function test_set_agent_tree_provider_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $provider = fn (): array => [];
@@ -353,7 +353,7 @@ class UIManagerTest extends TestCase
         $manager->setAgentTreeProvider($provider);
     }
 
-    public function test_setAgentTreeProvider_delegates_null(): void
+    public function test_set_agent_tree_provider_delegates_null(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -361,7 +361,7 @@ class UIManagerTest extends TestCase
         $manager->setAgentTreeProvider(null);
     }
 
-    public function test_showAgentsDashboard_delegates(): void
+    public function test_show_agents_dashboard_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $summary = ['total' => 5];
@@ -379,7 +379,7 @@ class UIManagerTest extends TestCase
         $manager->teardown();
     }
 
-    public function test_showWelcome_delegates(): void
+    public function test_show_welcome_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -387,7 +387,7 @@ class UIManagerTest extends TestCase
         $manager->showWelcome();
     }
 
-    public function test_playTheogony_delegates(): void
+    public function test_play_theogony_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -395,7 +395,7 @@ class UIManagerTest extends TestCase
         $manager->playTheogony();
     }
 
-    public function test_playPrometheus_delegates(): void
+    public function test_play_prometheus_delegates(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -415,7 +415,7 @@ class UIManagerTest extends TestCase
         $this->assertSame('user input', $manager->prompt());
     }
 
-    public function test_getCancellation_delegates_and_returns_null(): void
+    public function test_get_cancellation_delegates_and_returns_null(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -423,7 +423,7 @@ class UIManagerTest extends TestCase
         $this->assertNull($manager->getCancellation());
     }
 
-    public function test_getCancellation_delegates_and_returns_cancellation(): void
+    public function test_get_cancellation_delegates_and_returns_cancellation(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $cancellation = $this->createMock(Cancellation::class);
@@ -432,7 +432,7 @@ class UIManagerTest extends TestCase
         $this->assertSame($cancellation, $manager->getCancellation());
     }
 
-    public function test_askToolPermission_delegates_and_returns_value(): void
+    public function test_ask_tool_permission_delegates_and_returns_value(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -440,7 +440,7 @@ class UIManagerTest extends TestCase
         $this->assertSame('allow', $manager->askToolPermission('bash', ['cmd' => 'ls']));
     }
 
-    public function test_consumeQueuedMessage_delegates_and_returns_null(): void
+    public function test_consume_queued_message_delegates_and_returns_null(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -448,7 +448,7 @@ class UIManagerTest extends TestCase
         $this->assertNull($manager->consumeQueuedMessage());
     }
 
-    public function test_consumeQueuedMessage_delegates_and_returns_message(): void
+    public function test_consume_queued_message_delegates_and_returns_message(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -456,7 +456,7 @@ class UIManagerTest extends TestCase
         $this->assertSame('queued msg', $manager->consumeQueuedMessage());
     }
 
-    public function test_showSettings_delegates_and_returns_array(): void
+    public function test_show_settings_delegates_and_returns_array(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $current = ['model' => 'gpt-4'];
@@ -466,7 +466,7 @@ class UIManagerTest extends TestCase
         $this->assertSame($result, $manager->showSettings($current));
     }
 
-    public function test_pickSession_delegates_and_returns_null(): void
+    public function test_pick_session_delegates_and_returns_null(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $items = ['sess-1', 'sess-2'];
@@ -475,7 +475,7 @@ class UIManagerTest extends TestCase
         $this->assertNull($manager->pickSession($items));
     }
 
-    public function test_pickSession_delegates_and_returns_session_id(): void
+    public function test_pick_session_delegates_and_returns_session_id(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $items = ['sess-1', 'sess-2'];
@@ -484,7 +484,7 @@ class UIManagerTest extends TestCase
         $this->assertSame('sess-1', $manager->pickSession($items));
     }
 
-    public function test_approvePlan_delegates_and_returns_null(): void
+    public function test_approve_plan_delegates_and_returns_null(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -492,7 +492,7 @@ class UIManagerTest extends TestCase
         $this->assertNull($manager->approvePlan('guardian'));
     }
 
-    public function test_approvePlan_delegates_and_returns_array(): void
+    public function test_approve_plan_delegates_and_returns_array(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $result = ['approved' => true];
@@ -501,7 +501,7 @@ class UIManagerTest extends TestCase
         $this->assertSame($result, $manager->approvePlan('auto'));
     }
 
-    public function test_askUser_delegates_and_returns_value(): void
+    public function test_ask_user_delegates_and_returns_value(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
 
@@ -509,7 +509,7 @@ class UIManagerTest extends TestCase
         $this->assertSame('Kosmo', $manager->askUser('name?'));
     }
 
-    public function test_askChoice_delegates_and_returns_value(): void
+    public function test_ask_choice_delegates_and_returns_value(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         $choices = ['a', 'b'];
@@ -522,7 +522,7 @@ class UIManagerTest extends TestCase
     // seedMockSession with non-AnsiRenderer mock
     // ------------------------------------------------------------------
 
-    public function test_seedMockSession_does_nothing_with_non_ansi_renderer(): void
+    public function test_seed_mock_session_does_nothing_with_non_ansi_renderer(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         // Mock RendererInterface has no seedMockSession, so it must not be called.
@@ -535,7 +535,7 @@ class UIManagerTest extends TestCase
     // getActiveRenderer with injected mock returns class name
     // ------------------------------------------------------------------
 
-    public function test_getActiveRenderer_returns_class_name_for_unknown_renderer(): void
+    public function test_get_active_renderer_returns_class_name_for_unknown_renderer(): void
     {
         [$manager, $mock] = $this->createManagerWithMock();
         // The mock is neither TuiRenderer nor AnsiRenderer, so getActiveRenderer returns class name

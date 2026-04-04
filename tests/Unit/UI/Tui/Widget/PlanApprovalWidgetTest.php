@@ -41,7 +41,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame('guardian', $widget->getPermissionId());
     }
 
-    public function test_getContextId_defaults_to_keep(): void
+    public function test_get_context_id_defaults_to_keep(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 
@@ -82,7 +82,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertStringContainsString('keep context', $content);
     }
 
-    public function test_onConfirm_registers_callback(): void
+    public function test_on_confirm_registers_callback(): void
     {
         $widget = new PlanApprovalWidget('guardian');
         $called = false;
@@ -96,7 +96,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertTrue($called, 'Expected confirm callback to be invoked');
     }
 
-    public function test_onDismiss_registers_callback(): void
+    public function test_on_dismiss_registers_callback(): void
     {
         $widget = new PlanApprovalWidget('guardian');
         $called = false;
@@ -114,7 +114,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertTrue($called, 'Expected dismiss callback to be invoked on row 3 + Enter');
     }
 
-    public function test_handleInput_escape_triggers_dismiss(): void
+    public function test_handle_input_escape_triggers_dismiss(): void
     {
         $widget = new PlanApprovalWidget('guardian');
         $called = false;
@@ -128,7 +128,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertTrue($called, 'Expected dismiss callback on Escape');
     }
 
-    public function test_handleInput_navigates_rows_with_up_down(): void
+    public function test_handle_input_navigates_rows_with_up_down(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 
@@ -141,7 +141,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame('compact', $widget->getContextId());
     }
 
-    public function test_handleInput_left_cycles_permission_backwards(): void
+    public function test_handle_input_left_cycles_permission_backwards(): void
     {
         $widget = new PlanApprovalWidget('prometheus');
 
@@ -151,7 +151,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame('argus', $widget->getPermissionId());
     }
 
-    public function test_handleInput_right_cycles_permission_forward(): void
+    public function test_handle_input_right_cycles_permission_forward(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 
@@ -161,7 +161,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame('argus', $widget->getPermissionId());
     }
 
-    public function test_handleInput_cycles_context(): void
+    public function test_handle_input_cycles_context(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 
@@ -178,7 +178,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame('keep', $widget->getContextId());
     }
 
-    public function test_handleInput_up_wraps_from_row_0_to_row_3(): void
+    public function test_handle_input_up_wraps_from_row_0_to_row_3(): void
     {
         $widget = new PlanApprovalWidget('guardian');
         $dismissCalled = false;
@@ -193,7 +193,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertTrue($dismissCalled, 'Expected dismiss when on row 3 (wrapping from 0)');
     }
 
-    public function test_handleInput_down_wraps_from_row_3_to_row_0(): void
+    public function test_handle_input_down_wraps_from_row_3_to_row_0(): void
     {
         $widget = new PlanApprovalWidget('guardian');
         $confirmCalled = false;
@@ -211,7 +211,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertTrue($confirmCalled, 'Expected confirm after wrapping from row 3 to 0');
     }
 
-    public function test_handleInput_left_right_does_nothing_on_row_0(): void
+    public function test_handle_input_left_right_does_nothing_on_row_0(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 
@@ -224,7 +224,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame('keep', $widget->getContextId());
     }
 
-    public function test_onConfirm_returns_static_for_chaining(): void
+    public function test_on_confirm_returns_static_for_chaining(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 
@@ -233,7 +233,7 @@ final class PlanApprovalWidgetTest extends TestCase
         $this->assertSame($widget, $result);
     }
 
-    public function test_onDismiss_returns_static_for_chaining(): void
+    public function test_on_dismiss_returns_static_for_chaining(): void
     {
         $widget = new PlanApprovalWidget('guardian');
 

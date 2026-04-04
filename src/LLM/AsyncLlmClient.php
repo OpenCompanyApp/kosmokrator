@@ -7,17 +7,15 @@ use Amp\Http\Client\HttpClient;
 use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
+use OpenCompany\PrismRelay\Caching\PromptCachePlan;
+use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
+use OpenCompany\PrismRelay\Reasoning\ReasoningStrategy;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
-use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
-use OpenCompany\PrismRelay\Reasoning\ReasoningStrategy;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use Prism\Prism\ValueObjects\ToolCall;
 
 /**
@@ -54,10 +52,10 @@ class AsyncLlmClient implements LlmClientInterface
     ];
 
     /**
-     * @param string  $apiKey       Provider API key
-     * @param string  $baseUrl      Base URL for the provider's chat completions endpoint
-     * @param string  $model        Model identifier (e.g. "gpt-4o", "deepseek-chat")
-     * @param string  $systemPrompt System prompt prepended to every conversation
+     * @param  string  $apiKey  Provider API key
+     * @param  string  $baseUrl  Base URL for the provider's chat completions endpoint
+     * @param  string  $model  Model identifier (e.g. "gpt-4o", "deepseek-chat")
+     * @param  string  $systemPrompt  System prompt prepended to every conversation
      */
     public function __construct(
         private string $apiKey,
@@ -78,7 +76,7 @@ class AsyncLlmClient implements LlmClientInterface
     /**
      * Whether this client can handle the given provider via the OpenAI-compatible protocol.
      *
-     * @param string $provider Provider identifier (e.g. "openai", "deepseek")
+     * @param  string  $provider  Provider identifier (e.g. "openai", "deepseek")
      */
     public static function supportsProvider(string $provider): bool
     {
@@ -93,10 +91,11 @@ class AsyncLlmClient implements LlmClientInterface
     /**
      * Send a chat-completions request and return the parsed response.
      *
-     * @param  Message[]    $messages     Conversation history as Prism Message objects
-     * @param  Tool[]       $tools        Available tools for function calling
-     * @param  Cancellation $cancellation Optional Amp cancellation token for aborting the request
+     * @param  Message[]  $messages  Conversation history as Prism Message objects
+     * @param  Tool[]  $tools  Available tools for function calling
+     * @param  Cancellation  $cancellation  Optional Amp cancellation token for aborting the request
      * @return LlmResponse Parsed response including text, tool calls, and token usage
+     *
      * @throws RetryableHttpException On 429/5xx responses
      * @throws \RuntimeException On non-retryable HTTP errors
      */
@@ -346,10 +345,9 @@ class AsyncLlmClient implements LlmClientInterface
     /**
      * Build a PromptCachePlan that splits the system prompt for provider-specific prompt caching.
      *
-     * @param  Message[] $messages Conversation history
-     * @return \OpenCompany\PrismRelay\Caching\PromptCachePlan
+     * @param  Message[]  $messages  Conversation history
      */
-    private function buildPromptCachePlan(array $messages): \OpenCompany\PrismRelay\Caching\PromptCachePlan
+    private function buildPromptCachePlan(array $messages): PromptCachePlan
     {
         return $this->relay->planPromptCache(
             provider: $this->provider,

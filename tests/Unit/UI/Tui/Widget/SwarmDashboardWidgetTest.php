@@ -144,7 +144,7 @@ final class SwarmDashboardWidgetTest extends TestCase
         $this->assertStringContainsString('Esc/q close', $content);
     }
 
-    public function test_setData_updates_summary(): void
+    public function test_set_data_updates_summary(): void
     {
         $widget = new SwarmDashboardWidget($this->makeSummary(), []);
 
@@ -157,7 +157,7 @@ final class SwarmDashboardWidgetTest extends TestCase
         $this->assertStringContainsString('8 of 10 agents completed', $content);
     }
 
-    public function test_onDismiss_callback_invoked_on_escape(): void
+    public function test_on_dismiss_callback_invoked_on_escape(): void
     {
         $widget = new SwarmDashboardWidget($this->makeSummary(), []);
         $called = false;
@@ -171,7 +171,7 @@ final class SwarmDashboardWidgetTest extends TestCase
         $this->assertTrue($called);
     }
 
-    public function test_onDismiss_callback_invoked_on_q(): void
+    public function test_on_dismiss_callback_invoked_on_q(): void
     {
         $widget = new SwarmDashboardWidget($this->makeSummary(), []);
         $called = false;
@@ -185,7 +185,7 @@ final class SwarmDashboardWidgetTest extends TestCase
         $this->assertTrue($called);
     }
 
-    public function test_onDismiss_returns_static_for_chaining(): void
+    public function test_on_dismiss_returns_static_for_chaining(): void
     {
         $widget = new SwarmDashboardWidget($this->makeSummary(), []);
 
@@ -194,7 +194,7 @@ final class SwarmDashboardWidgetTest extends TestCase
         $this->assertSame($widget, $result);
     }
 
-    public function test_handleInput_ignores_unknown_keys(): void
+    public function test_handle_input_ignores_unknown_keys(): void
     {
         $widget = new SwarmDashboardWidget($this->makeSummary(), []);
         $called = false;
@@ -210,10 +210,14 @@ final class SwarmDashboardWidgetTest extends TestCase
 
     public function test_render_shows_active_section_when_running(): void
     {
-        $agent = new class {
+        $agent = new class
+        {
             public string $status = 'running';
+
             public string $agentType = 'general';
+
             public string $task = 'Explore codebase';
+
             public int $toolCalls = 5;
 
             public function elapsed(): float
@@ -238,10 +242,14 @@ final class SwarmDashboardWidgetTest extends TestCase
 
     public function test_render_shows_failures_section(): void
     {
-        $agent = new class {
+        $agent = new class
+        {
             public string $status = 'failed';
+
             public string $agentType = 'general';
+
             public string $task = 'Broken task';
+
             public ?string $error = 'timeout exceeded';
         };
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Prism\Prism\Contracts\Message;
+use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
@@ -185,7 +186,7 @@ class ContextPruner
             }
 
             $message = $messages[$i];
-            if ($message instanceof \Prism\Prism\ValueObjects\Messages\AssistantMessage) {
+            if ($message instanceof AssistantMessage) {
                 $content = mb_strtolower($message->content);
                 if ($basename !== '' && str_contains($content, mb_strtolower($basename))) {
                     $score += 15;

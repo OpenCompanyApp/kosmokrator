@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 final class SettingDefinitionTest extends TestCase
 {
-    public function testConstructorWithRequiredArgsOnly(): void
+    public function test_constructor_with_required_args_only(): void
     {
         $def = new SettingDefinition(
             id: 'app.name',
@@ -26,7 +26,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame('general', $def->category);
     }
 
-    public function testDefaultValues(): void
+    public function test_default_values(): void
     {
         $def = new SettingDefinition(
             id: 'test',
@@ -43,7 +43,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertNull($def->default);
     }
 
-    public function testCustomValuesForAllProperties(): void
+    public function test_custom_values_for_all_properties(): void
     {
         $def = new SettingDefinition(
             id: 'theme.mode',
@@ -70,7 +70,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame('auto', $def->default);
     }
 
-    public function testTypeText(): void
+    public function test_type_text(): void
     {
         $def = new SettingDefinition(
             id: 'user.name',
@@ -84,7 +84,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame('text', $def->type);
     }
 
-    public function testTypeSelectWithOptions(): void
+    public function test_type_select_with_options(): void
     {
         $options = ['option_a', 'option_b', 'option_c'];
 
@@ -102,7 +102,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame($options, $def->options);
     }
 
-    public function testTypeBoolean(): void
+    public function test_type_boolean(): void
     {
         $def = new SettingDefinition(
             id: 'debug.enabled',
@@ -118,7 +118,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertFalse($def->default);
     }
 
-    public function testScopeGlobalOnly(): void
+    public function test_scope_global_only(): void
     {
         $def = new SettingDefinition(
             id: 'api.key',
@@ -132,7 +132,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame(['global'], $def->scopes);
     }
 
-    public function testScopeProjectOnly(): void
+    public function test_scope_project_only(): void
     {
         $def = new SettingDefinition(
             id: 'project.root',
@@ -146,7 +146,7 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame(['project'], $def->scopes);
     }
 
-    public function testScopeBothGlobalAndProject(): void
+    public function test_scope_both_global_and_project(): void
     {
         $def = new SettingDefinition(
             id: 'editor.tab_size',
@@ -160,14 +160,14 @@ final class SettingDefinitionTest extends TestCase
         $this->assertSame(['global', 'project'], $def->scopes);
     }
 
-    public function testClassIsReadonly(): void
+    public function test_class_is_readonly(): void
     {
         $reflection = new \ReflectionClass(SettingDefinition::class);
 
         $this->assertTrue($reflection->isReadOnly());
     }
 
-    public function testClassIsFinal(): void
+    public function test_class_is_final(): void
     {
         $reflection = new \ReflectionClass(SettingDefinition::class);
 

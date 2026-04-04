@@ -220,7 +220,7 @@ final class PatchApplier
      * Build the old and new text representations from hunk lines using prefix characters (space/+/-).
      *
      * @param  string[]  $chunk
-     * @return array{string, string}  [old text, new text]
+     * @return array{string, string} [old text, new text]
      */
     private function buildChunkStrings(array $chunk): array
     {
@@ -264,7 +264,7 @@ final class PatchApplier
     /**
      * Normalize line endings: try LF first, fall back to CRLF if that's what the file uses.
      *
-     * @return array{string, string}  [search text, replacement text]
+     * @return array{string, string} [search text, replacement text]
      */
     private function resolveLineEndings(string $content, string $old, string $new): array
     {

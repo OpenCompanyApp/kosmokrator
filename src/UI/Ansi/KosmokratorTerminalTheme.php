@@ -22,7 +22,7 @@ class KosmokratorTerminalTheme implements TerminalTheme
      * Returns the ANSI escape sequence to apply before a highlighted token.
      * Maps each Tempest token type to a Kosmokrator Theme color.
      *
-     * @param TokenType $tokenType Syntax token type from the highlighter
+     * @param  TokenType  $tokenType  Syntax token type from the highlighter
      * @return string ANSI escape sequence (empty string for unstyled tokens)
      */
     public function before(TokenType $tokenType): string
@@ -54,7 +54,7 @@ class KosmokratorTerminalTheme implements TerminalTheme
     /**
      * Maps a file extension to the corresponding Tempest Highlight language identifier.
      *
-     * @param string $path File path or filename with extension
+     * @param  string  $path  File path or filename with extension
      * @return string Language identifier (e.g. 'php', 'javascript') or empty string if unknown
      */
     public static function detectLanguage(string $path): string

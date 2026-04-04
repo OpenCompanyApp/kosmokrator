@@ -10,6 +10,9 @@ use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepositoryInterface;
+use Kosmokrator\Skill\SkillDispatcher;
+use Kosmokrator\Skill\SkillLoader;
+use Kosmokrator\Skill\SkillRegistry;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Permission\PermissionMode;
@@ -109,6 +112,18 @@ class AgentCommand extends Command
 
         $providers = $this->container->make(ProviderCatalog::class);
 
+        // Build skill system (user-defined $skills)
+        // Discovers from: .kosmokrator/skills/, .agents/skills/, ~/.kosmokrator/skills/
+        $projectRoot = $this->container->make('path.base');
+        $skillLoader = new SkillLoader(
+            $projectRoot,
+            ($_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp').'/.kosmokrator/skills',
+        );
+        $skillRegistry = new SkillRegistry;
+        $skillRegistry->load($skillLoader);
+        $skillDispatcher = new SkillDispatcher($skillRegistry, $skillLoader, $session->ui);
+        $session->ui->setSkillCompletions($skillRegistry->completions());
+
         $registry = $this->buildSlashCommandRegistry();
         $powerRegistry = $this->buildPowerCommandRegistry();
         $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models, $providers);
@@ -140,9 +155,14 @@ class AgentCommand extends Command
                 continue;
             }
 
-            // User skill dispatch — '$' prefix (future).
+            // User skill dispatch — '$' prefix.
             if (str_starts_with($input, '$')) {
-                $session->ui->showNotice('User skills ($) coming soon.');
+                $result = $skillDispatcher->dispatch(substr($input, 1));
+                if ($result !== null) {
+                    $nextInput = $result;
+                }
+                // Refresh completions in case skills were created or deleted
+                $session->ui->setSkillCompletions($skillRegistry->completions());
 
                 continue;
             }
@@ -203,6 +223,18 @@ class AgentCommand extends Command
                 $session->ui->showUserMessage($input);
             }
             $session->agentLoop->run($input);
+
+            // Auto-continue: if background subagents are running, wait for them
+            // to finish, then feed their results back to the LLM automatically
+            // so it can synthesize without requiring the user to type anything.
+            if ($session->agentLoop->hasRunningBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
+                while ($session->agentLoop->hasRunningBackgroundAgents()) {
+                    \Amp\delay(1.0);
+                }
+                if ($session->agentLoop->hasPendingBackgroundResults()) {
+                    $session->agentLoop->run('[system: all background agents have completed — their results follow]');
+                }
+            }
 
             // Completion sound: compose and play a musical piece reflecting what happened
             try {
@@ -328,6 +360,15 @@ class AgentCommand extends Command
         $registry->register(new Power\TeamCommand);
         $registry->register(new Power\UltraQaCommand);
         $registry->register(new Power\InterviewCommand);
+
+        // Extended
+        $registry->register(new Power\ReviewCommand);
+        $registry->register(new Power\ResearchCommand);
+        $registry->register(new Power\DeepDiveCommand);
+        $registry->register(new Power\BabysitCommand);
+        $registry->register(new Power\ReleaseCommand);
+        $registry->register(new Power\DocsCommand);
+        $registry->register(new Power\ConsensusCommand);
 
         // Future
         $registry->register(new Power\DoctorCommand);

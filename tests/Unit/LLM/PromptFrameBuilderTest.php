@@ -32,7 +32,7 @@ final class PromptFrameBuilderTest extends TestCase
     {
         $stable = 'You are a helpful assistant.';
         $volatile = '- Do something';
-        $prompt = $stable . "\n\n## Current Tasks\n" . $volatile;
+        $prompt = $stable."\n\n## Current Tasks\n".$volatile;
 
         $result = PromptFrameBuilder::splitSystemPrompt($prompt);
 
@@ -45,7 +45,7 @@ final class PromptFrameBuilderTest extends TestCase
     {
         $stable = 'You are a helpful assistant.';
         $volatile = '- Do something';
-        $prompt = $stable . "\n\n## Current Tasks\n" . $volatile;
+        $prompt = $stable."\n\n## Current Tasks\n".$volatile;
 
         $result = PromptFrameBuilder::splitSystemPrompt($prompt);
 
@@ -56,25 +56,25 @@ final class PromptFrameBuilderTest extends TestCase
     {
         $stable = 'You are a helpful assistant.';
         $volatile = '- Do something';
-        $prompt = $stable . "\n\n## Current Tasks\n" . $volatile;
+        $prompt = $stable."\n\n## Current Tasks\n".$volatile;
 
         $result = PromptFrameBuilder::splitSystemPrompt($prompt);
 
         // substr($splitOffset + 2) skips the leading "\n\n" of the marker
-        $this->assertSame("## Current Tasks\n" . $volatile, $result[1]->content);
+        $this->assertSame("## Current Tasks\n".$volatile, $result[1]->content);
     }
 
     public function test_multiple_markers_only_first_one_splits(): void
     {
         $stable = 'You are a helpful assistant.';
         $volatile = "- Task one\n\n## Current Tasks\n- Task two";
-        $prompt = $stable . "\n\n## Current Tasks\n" . $volatile;
+        $prompt = $stable."\n\n## Current Tasks\n".$volatile;
 
         $result = PromptFrameBuilder::splitSystemPrompt($prompt);
 
         $this->assertCount(2, $result);
         $this->assertSame($stable, $result[0]->content);
-        $this->assertSame("## Current Tasks\n" . $volatile, $result[1]->content);
+        $this->assertSame("## Current Tasks\n".$volatile, $result[1]->content);
     }
 
     public function test_marker_at_beginning_of_string_returns_single_message(): void

@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 final class TableCollectorTest extends TestCase
 {
-    public function testInitialStateIsNotCollecting(): void
+    public function test_initial_state_is_not_collecting(): void
     {
         $renderer = $this->createStub(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -22,7 +22,7 @@ final class TableCollectorTest extends TestCase
         $this->assertFalse($collector->isCollecting());
     }
 
-    public function testStartSetsCollectingToTrue(): void
+    public function test_start_sets_collecting_to_true(): void
     {
         $renderer = $this->createStub(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -31,7 +31,7 @@ final class TableCollectorTest extends TestCase
         $this->assertTrue($collector->isCollecting());
     }
 
-    public function testFinishSetsCollectingToFalse(): void
+    public function test_finish_sets_collecting_to_false(): void
     {
         $renderer = $this->createStub(AnsiTableRenderer::class);
         $renderer->method('render')->willReturn('RENDERED');
@@ -43,7 +43,7 @@ final class TableCollectorTest extends TestCase
         $this->assertFalse($collector->isCollecting());
     }
 
-    public function testFinishCallsRendererWithHeadBodyAlignments(): void
+    public function test_finish_calls_renderer_with_head_body_alignments(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $renderer
@@ -66,7 +66,7 @@ final class TableCollectorTest extends TestCase
         $this->assertSame('RENDERED', $result);
     }
 
-    public function testHandleNodeWithTableSectionSetsInHead(): void
+    public function test_handle_node_with_table_section_sets_in_head(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -78,7 +78,7 @@ final class TableCollectorTest extends TestCase
         $collector->handleNode($section, true);
 
         // Should route the next row to head
-        $row = new TableRow();
+        $row = new TableRow;
         $collector->handleNode($row, true);
         $headerCell = new TableCell(TableCell::TYPE_HEADER, 'left');
         $collector->handleNode($headerCell, true);
@@ -105,7 +105,7 @@ final class TableCollectorTest extends TestCase
         $collector->finish('');
     }
 
-    public function testHandleNodeWithTableRowCollectsRows(): void
+    public function test_handle_node_with_table_row_collects_rows(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -115,7 +115,7 @@ final class TableCollectorTest extends TestCase
         $section = new TableSection(TableSection::TYPE_BODY);
         $collector->handleNode($section, true);
 
-        $row = new TableRow();
+        $row = new TableRow;
         $collector->handleNode($row, true);
 
         $cell = new TableCell('td');
@@ -142,7 +142,7 @@ final class TableCollectorTest extends TestCase
         $collector->finish('');
     }
 
-    public function testHandleNodeWithTableCellCapturesAlignmentForHeaderCells(): void
+    public function test_handle_node_with_table_cell_captures_alignment_for_header_cells(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -151,7 +151,7 @@ final class TableCollectorTest extends TestCase
         $section = new TableSection(TableSection::TYPE_HEAD);
         $collector->handleNode($section, true);
 
-        $row = new TableRow();
+        $row = new TableRow;
         $collector->handleNode($row, true);
 
         $cell1 = new TableCell(TableCell::TYPE_HEADER, 'left');
@@ -183,7 +183,7 @@ final class TableCollectorTest extends TestCase
         $collector->finish('');
     }
 
-    public function testHandleNodeWithTextAppendsToCellBufferWhenCollectingCell(): void
+    public function test_handle_node_with_text_appends_to_cell_buffer_when_collecting_cell(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -192,7 +192,7 @@ final class TableCollectorTest extends TestCase
         $section = new TableSection(TableSection::TYPE_BODY);
         $collector->handleNode($section, true);
 
-        $row = new TableRow();
+        $row = new TableRow;
         $collector->handleNode($row, true);
 
         $cell = new TableCell('td');
@@ -220,7 +220,7 @@ final class TableCollectorTest extends TestCase
         $collector->finish('');
     }
 
-    public function testFullCycleFromStartToFinish(): void
+    public function test_full_cycle_from_start_to_finish(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -231,7 +231,7 @@ final class TableCollectorTest extends TestCase
         $headSection = new TableSection(TableSection::TYPE_HEAD);
         $collector->handleNode($headSection, true);
 
-        $headRow = new TableRow();
+        $headRow = new TableRow;
         $collector->handleNode($headRow, true);
 
         $hCell1 = new TableCell(TableCell::TYPE_HEADER, 'left');
@@ -251,7 +251,7 @@ final class TableCollectorTest extends TestCase
         $bodySection = new TableSection(TableSection::TYPE_BODY);
         $collector->handleNode($bodySection, true);
 
-        $bodyRow1 = new TableRow();
+        $bodyRow1 = new TableRow;
         $collector->handleNode($bodyRow1, true);
 
         $bCell1 = new TableCell('td');
@@ -286,7 +286,7 @@ final class TableCollectorTest extends TestCase
         $this->assertFalse($collector->isCollecting());
     }
 
-    public function testStartResetsStateFromPreviousCollection(): void
+    public function test_start_resets_state_from_previous_collection(): void
     {
         $renderer = $this->createMock(AnsiTableRenderer::class);
         $collector = new TableCollector($renderer);
@@ -297,7 +297,7 @@ final class TableCollectorTest extends TestCase
         $headSection = new TableSection(TableSection::TYPE_HEAD);
         $collector->handleNode($headSection, true);
 
-        $row = new TableRow();
+        $row = new TableRow;
         $collector->handleNode($row, true);
         $cell = new TableCell(TableCell::TYPE_HEADER, 'center');
         $collector->handleNode($cell, true);

@@ -19,7 +19,7 @@ final class ProtectedContextBuilder
     /**
      * @param  AgentMode  $mode  Current agent operating mode
      * @param  AgentContext|null  $agentContext  Nesting depth context for sub-agents
-     * @return list<SystemMessage>  System messages containing the protected context
+     * @return list<SystemMessage> System messages containing the protected context
      */
     public function build(AgentMode $mode, ?AgentContext $agentContext = null): array
     {

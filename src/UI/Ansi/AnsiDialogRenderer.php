@@ -15,7 +15,7 @@ use Kosmokrator\UI\Theme;
  */
 final class AnsiDialogRenderer implements DialogRendererInterface
 {
-    /** @var \Closure(string $question, string $answer, bool $answered, bool $recommended): void */
+    /** @var \Closure(string, string, booled, bool): void */
     private \Closure $queueQuestionRecapCallback;
 
     public function __construct(\Closure $queueQuestionRecapCallback)

@@ -15,8 +15,8 @@ class Database
     private const SCHEMA_VERSION = 2;
 
     /**
-     * @param string|null $path Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
-     *                          Defaults to ~/.kosmokrator/data/kosmokrator.db.
+     * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
+     *                             Defaults to ~/.kosmokrator/data/kosmokrator.db.
      */
     public function __construct(?string $path = null)
     {

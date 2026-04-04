@@ -122,4 +122,11 @@ interface CoreRendererInterface
 
     /** Play a generic AnsiAnimation (used by power commands). */
     public function playAnimation(AnsiAnimation $animation): void;
+
+    /**
+     * Set the available skill completions for autocomplete.
+     *
+     * @param  array<array{value: string, label: string, description: string}>  $completions
+     */
+    public function setSkillCompletions(array $completions): void;
 }

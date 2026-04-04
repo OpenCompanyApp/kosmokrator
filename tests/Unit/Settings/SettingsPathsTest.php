@@ -9,34 +9,34 @@ use PHPUnit\Framework\TestCase;
 
 final class SettingsPathsTest extends TestCase
 {
-    public function testConstructorWithNullProjectRoot(): void
+    public function test_constructor_with_null_project_root(): void
     {
         $paths = new SettingsPaths(null);
 
         $this->assertNull($paths->projectWritePath());
     }
 
-    public function testConstructorWithProjectRoot(): void
+    public function test_constructor_with_project_root(): void
     {
         $paths = new SettingsPaths('/tmp/my-project');
 
         $this->assertSame('/tmp/my-project/.kosmokrator/config.yaml', $paths->projectWritePath());
     }
 
-    public function testGlobalWritePathReturnsPathWithHome(): void
+    public function test_global_write_path_returns_path_with_home(): void
     {
-        $paths = new SettingsPaths();
+        $paths = new SettingsPaths;
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
 
         $this->assertSame(
-            $home . '/.config/kosmokrator/config.yaml',
+            $home.'/.config/kosmokrator/config.yaml',
             $paths->globalWritePath(),
         );
     }
 
-    public function testGlobalCandidatesReturnsTwoPaths(): void
+    public function test_global_candidates_returns_two_paths(): void
     {
-        $paths = new SettingsPaths();
+        $paths = new SettingsPaths;
         $candidates = $paths->globalCandidates();
 
         $this->assertCount(2, $candidates);
@@ -44,14 +44,14 @@ final class SettingsPathsTest extends TestCase
         $this->assertStringContainsString('/.kosmokrator/config.yaml', $candidates[1]);
     }
 
-    public function testProjectCandidatesWithNullRootReturnsEmpty(): void
+    public function test_project_candidates_with_null_root_returns_empty(): void
     {
         $paths = new SettingsPaths(null);
 
         $this->assertSame([], $paths->projectCandidates());
     }
 
-    public function testProjectCandidatesWithRootReturnsTwoPaths(): void
+    public function test_project_candidates_with_root_returns_two_paths(): void
     {
         $paths = new SettingsPaths('/tmp/my-project');
         $candidates = $paths->projectCandidates();
@@ -61,23 +61,23 @@ final class SettingsPathsTest extends TestCase
         $this->assertSame('/tmp/my-project/.kosmokrator.yaml', $candidates[1]);
     }
 
-    public function testProjectWritePathWithNullRootReturnsNull(): void
+    public function test_project_write_path_with_null_root_returns_null(): void
     {
         $paths = new SettingsPaths(null);
 
         $this->assertNull($paths->projectWritePath());
     }
 
-    public function testProjectWritePathWithRootReturnsCorrectPath(): void
+    public function test_project_write_path_with_root_returns_correct_path(): void
     {
         $paths = new SettingsPaths('/tmp/my-project');
 
         $this->assertSame('/tmp/my-project/.kosmokrator/config.yaml', $paths->projectWritePath());
     }
 
-    public function testGlobalReadPathReturnsNullWhenNoConfigFilesExist(): void
+    public function test_global_read_path_returns_null_when_no_config_files_exist(): void
     {
-        $home = sys_get_temp_dir() . '/kosmokrator_test_' . uniqid();
+        $home = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($home, 0777, true);
 
         // Override HOME temporarily
@@ -85,7 +85,7 @@ final class SettingsPathsTest extends TestCase
         putenv("HOME=$home");
 
         try {
-            $paths = new SettingsPaths();
+            $paths = new SettingsPaths;
 
             $this->assertNull($paths->globalReadPath());
         } finally {
@@ -94,9 +94,9 @@ final class SettingsPathsTest extends TestCase
         }
     }
 
-    public function testProjectReadPathReturnsNullWhenNoConfigFilesExist(): void
+    public function test_project_read_path_returns_null_when_no_config_files_exist(): void
     {
-        $projectRoot = sys_get_temp_dir() . '/kosmokrator_project_test_' . uniqid();
+        $projectRoot = sys_get_temp_dir().'/kosmokrator_project_test_'.uniqid();
         mkdir($projectRoot, 0777, true);
 
         try {

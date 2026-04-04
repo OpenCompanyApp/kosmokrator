@@ -17,7 +17,7 @@ final class YamlConfigStoreTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->store = new YamlConfigStore();
+        $this->store = new YamlConfigStore;
     }
 
     protected function tearDown(): void
@@ -36,7 +36,7 @@ final class YamlConfigStoreTest extends TestCase
     /** Helper: create a temp file path and register it for cleanup. */
     private function tmpFile(string $suffix = '.yaml'): string
     {
-        $path = sys_get_temp_dir() . '/' . uniqid('yaml_test_') . $suffix;
+        $path = sys_get_temp_dir().'/'.uniqid('yaml_test_').$suffix;
         $this->tmpPaths[] = $path;
 
         return $path;
@@ -45,7 +45,7 @@ final class YamlConfigStoreTest extends TestCase
     /** Helper: create a temp directory path and register it for cleanup. */
     private function tmpDir(string $prefix = 'yaml_test_dir_'): string
     {
-        $path = sys_get_temp_dir() . '/' . uniqid($prefix);
+        $path = sys_get_temp_dir().'/'.uniqid($prefix);
         $this->tmpPaths[] = $path;
 
         return $path;
@@ -55,21 +55,21 @@ final class YamlConfigStoreTest extends TestCase
     // load()
     // ---------------------------------------------------------------
 
-    public function testLoadNullPathReturnsEmptyArray(): void
+    public function test_load_null_path_returns_empty_array(): void
     {
         $result = $this->store->load(null);
 
         $this->assertSame([], $result);
     }
 
-    public function testLoadNonExistentFileReturnsEmptyArray(): void
+    public function test_load_non_existent_file_returns_empty_array(): void
     {
         $result = $this->store->load('/no/such/file.yaml');
 
         $this->assertSame([], $result);
     }
 
-    public function testLoadValidYamlFileReturnsParsedData(): void
+    public function test_load_valid_yaml_file_returns_parsed_data(): void
     {
         $path = $this->tmpFile();
         file_put_contents($path, "kosmokrator:\n  agent:\n    mode: autonomous\n");
@@ -85,7 +85,7 @@ final class YamlConfigStoreTest extends TestCase
         ], $result);
     }
 
-    public function testLoadEmptyFileReturnsEmptyArray(): void
+    public function test_load_empty_file_returns_empty_array(): void
     {
         $path = $this->tmpFile();
         file_put_contents($path, '');
@@ -99,7 +99,7 @@ final class YamlConfigStoreTest extends TestCase
     // save()
     // ---------------------------------------------------------------
 
-    public function testSaveWritesYamlToFile(): void
+    public function test_save_writes_yaml_to_file(): void
     {
         $path = $this->tmpFile();
         $data = ['kosmokrator' => ['debug' => true]];
@@ -110,7 +110,7 @@ final class YamlConfigStoreTest extends TestCase
         $this->assertSame($data, Yaml::parse(file_get_contents($path)));
     }
 
-    public function testSaveEmptyArrayDeletesFile(): void
+    public function test_save_empty_array_deletes_file(): void
     {
         $path = $this->tmpFile();
         file_put_contents($path, "key: value\n");
@@ -122,11 +122,11 @@ final class YamlConfigStoreTest extends TestCase
         $this->assertFileDoesNotExist($path);
     }
 
-    public function testSaveCreatesParentDirectory(): void
+    public function test_save_creates_parent_directory(): void
     {
         $dir = $this->tmpDir();
-        $path = $dir . '/nested/config.yaml';
-        $this->tmpPaths[] = $dir . '/nested';
+        $path = $dir.'/nested/config.yaml';
+        $this->tmpPaths[] = $dir.'/nested';
         $this->tmpPaths[] = $dir;
 
         $data = ['setting' => 'value'];
@@ -141,7 +141,7 @@ final class YamlConfigStoreTest extends TestCase
     // get()
     // ---------------------------------------------------------------
 
-    public function testGetRetrievesNestedValueByDotPath(): void
+    public function test_get_retrieves_nested_value_by_dot_path(): void
     {
         $data = [
             'kosmokrator' => [
@@ -154,7 +154,7 @@ final class YamlConfigStoreTest extends TestCase
         $this->assertSame('autonomous', $this->store->get($data, 'kosmokrator.agent.mode'));
     }
 
-    public function testGetReturnsNullForMissingPath(): void
+    public function test_get_returns_null_for_missing_path(): void
     {
         $data = ['kosmokrator' => ['agent' => ['mode' => 'autonomous']]];
 
@@ -166,7 +166,7 @@ final class YamlConfigStoreTest extends TestCase
     // set()
     // ---------------------------------------------------------------
 
-    public function testSetCreatesNestedStructure(): void
+    public function test_set_creates_nested_structure(): void
     {
         $data = [];
 
@@ -181,7 +181,7 @@ final class YamlConfigStoreTest extends TestCase
         ], $data);
     }
 
-    public function testSetOverwritesExistingValue(): void
+    public function test_set_overwrites_existing_value(): void
     {
         $data = [
             'kosmokrator' => [
@@ -200,7 +200,7 @@ final class YamlConfigStoreTest extends TestCase
     // unset()
     // ---------------------------------------------------------------
 
-    public function testUnsetRemovesValueAndCleansUpEmptyParents(): void
+    public function test_unset_removes_value_and_cleans_up_empty_parents(): void
     {
         $data = [
             'kosmokrator' => [
@@ -215,7 +215,7 @@ final class YamlConfigStoreTest extends TestCase
         $this->assertSame([], $data);
     }
 
-    public function testUnsetNonExistentPathDoesNothing(): void
+    public function test_unset_non_existent_path_does_nothing(): void
     {
         $data = ['kosmokrator' => ['agent' => ['mode' => 'autonomous']]];
 

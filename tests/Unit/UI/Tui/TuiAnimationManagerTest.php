@@ -12,11 +12,17 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
 final class TuiAnimationManagerTest extends TestCase
 {
     private ContainerWidget $thinkingBar;
+
     private bool $hasTasks;
+
     private bool $hasSubagentActivity;
+
     private bool $refreshCalled;
+
     private bool $forceRenderCalled;
+
     private bool $subagentTickCalled;
+
     private bool $subagentCleanupCalled;
 
     private function createManager(): TuiAnimationManager
@@ -33,11 +39,21 @@ final class TuiAnimationManagerTest extends TestCase
             thinkingBar: $this->thinkingBar,
             hasTasksProvider: fn (): bool => $this->hasTasks,
             hasSubagentActivityProvider: fn (): bool => $this->hasSubagentActivity,
-            refreshTaskBarCallback: function (): void { $this->refreshCalled = true; },
-            subagentTickCallback: function (): void { $this->subagentTickCalled = true; },
-            subagentCleanupCallback: function (): void { $this->subagentCleanupCalled = true; },
-            renderCallback: function (): void { $this->refreshCalled = true; },
-            forceRenderCallback: function (): void { $this->forceRenderCalled = true; },
+            refreshTaskBarCallback: function (): void {
+                $this->refreshCalled = true;
+            },
+            subagentTickCallback: function (): void {
+                $this->subagentTickCalled = true;
+            },
+            subagentCleanupCallback: function (): void {
+                $this->subagentCleanupCalled = true;
+            },
+            renderCallback: function (): void {
+                $this->refreshCalled = true;
+            },
+            forceRenderCallback: function (): void {
+                $this->forceRenderCalled = true;
+            },
         );
     }
 

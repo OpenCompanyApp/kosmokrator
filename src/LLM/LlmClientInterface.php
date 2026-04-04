@@ -17,9 +17,9 @@ interface LlmClientInterface
     /**
      * Send a chat-completion request to the LLM provider.
      *
-     * @param  Message[]    $messages     Conversation history as Prism Message objects
-     * @param  Tool[]       $tools        Available tools for function calling
-     * @param  Cancellation $cancellation Optional Amp cancellation token
+     * @param  Message[]  $messages  Conversation history as Prism Message objects
+     * @param  Tool[]  $tools  Available tools for function calling
+     * @param  Cancellation  $cancellation  Optional Amp cancellation token
      * @return LlmResponse Parsed response with text, tool calls, and usage data
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse;

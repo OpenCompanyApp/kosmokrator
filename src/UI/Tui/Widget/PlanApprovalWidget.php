@@ -153,7 +153,7 @@ class PlanApprovalWidget extends AbstractWidget implements FocusableInterface
      * Render the full-width bordered approval box with Implement/Dismiss options.
      *
      * @param  RenderContext  $context  Terminal dimensions
-     * @return list<string>  ANSI-formatted lines
+     * @return list<string> ANSI-formatted lines
      */
     public function render(RenderContext $context): array
     {

@@ -85,7 +85,7 @@ final class PatchParser
      * Convenience method: parse a patch and return all file paths it touches (including move destinations).
      *
      * @param  string  $patch  Raw patch text
-     * @return string[]  Unique list of file paths
+     * @return string[] Unique list of file paths
      */
     public function extractTargetPaths(string $patch): array
     {
@@ -104,7 +104,7 @@ final class PatchParser
      * Parse an *** Add File section: every body line must start with '+'.
      *
      * @param  string[]  $lines
-     * @return array{PatchOperation, int}  [operation, next line index]
+     * @return array{PatchOperation, int} [operation, next line index]
      */
     private function parseAdd(array $lines, int $index, int $last): array
     {
@@ -136,7 +136,7 @@ final class PatchParser
      * Parse an *** Update File section, optionally including a *** Move to directive and hunk body.
      *
      * @param  string[]  $lines
-     * @return array{PatchOperation, int}  [operation, next line index]
+     * @return array{PatchOperation, int} [operation, next line index]
      */
     private function parseUpdate(array $lines, int $index, int $last): array
     {

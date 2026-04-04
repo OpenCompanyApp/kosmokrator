@@ -35,28 +35,28 @@ class TheogonyCommandTest extends TestCase
 
     public function test_name(): void
     {
-        $command = new TheogonyCommand();
+        $command = new TheogonyCommand;
 
         $this->assertSame('/theogony', $command->name());
     }
 
     public function test_aliases(): void
     {
-        $command = new TheogonyCommand();
+        $command = new TheogonyCommand;
 
         $this->assertSame(['/cosmogony'], $command->aliases());
     }
 
     public function test_description(): void
     {
-        $command = new TheogonyCommand();
+        $command = new TheogonyCommand;
 
         $this->assertSame('Play the Theogony', $command->description());
     }
 
     public function test_immediate(): void
     {
-        $command = new TheogonyCommand();
+        $command = new TheogonyCommand;
 
         $this->assertTrue($command->immediate());
     }
@@ -67,7 +67,7 @@ class TheogonyCommandTest extends TestCase
         $ui->expects($this->once())
             ->method('playTheogony');
 
-        $command = new TheogonyCommand();
+        $command = new TheogonyCommand;
         $ctx = $this->makeContext(ui: $ui);
 
         $command->execute('', $ctx);
@@ -75,7 +75,7 @@ class TheogonyCommandTest extends TestCase
 
     public function test_execute_returns_continue(): void
     {
-        $command = new TheogonyCommand();
+        $command = new TheogonyCommand;
         $ctx = $this->makeContext();
 
         $result = $command->execute('', $ctx);

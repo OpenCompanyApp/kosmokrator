@@ -37,9 +37,9 @@ class SessionsCommand implements SlashCommand
     }
 
     /**
-     * @param  string               $args  Unused command arguments
-     * @param  SlashCommandContext  $ctx   Current session context
-     * @return SlashCommandResult   Always continues the session
+     * @param  string  $args  Unused command arguments
+     * @param  SlashCommandContext  $ctx  Current session context
+     * @return SlashCommandResult Always continues the session
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
@@ -61,8 +61,8 @@ class SessionsCommand implements SlashCommand
     /**
      * Formats a single session row for display, highlighting the active session.
      *
-     * @param  array<string, mixed>  $session    Session data from SessionManager
-     * @param  string|null           $currentId  ID of the currently active session, if any
+     * @param  array<string, mixed>  $session  Session data from SessionManager
+     * @param  string|null  $currentId  ID of the currently active session, if any
      * @return string Formatted line e.g. "a1b2c3d4  Fix the bug  (12 msgs, 5m ago) ←"
      */
     private static function formatSessionLine(array $session, ?string $currentId): string

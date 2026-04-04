@@ -364,7 +364,7 @@ class AnsiTheogonyTest extends TestCase
         $positions = [];
         for ($i = 0; $i < 20; $i++) {
             $p = $this->callSpawnChaosParticle();
-            $positions[] = $p['row'] . ',' . $p['col'];
+            $positions[] = $p['row'].','.$p['col'];
         }
 
         // With 20 random particles, positions should not all be identical

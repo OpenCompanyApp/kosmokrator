@@ -16,9 +16,9 @@ class Theme
     /**
      * Build a 24-bit foreground color escape sequence.
      *
-     * @param int $r Red channel (0–255)
-     * @param int $g Green channel (0–255)
-     * @param int $b Blue channel (0–255)
+     * @param  int  $r  Red channel (0–255)
+     * @param  int  $g  Green channel (0–255)
+     * @param  int  $b  Blue channel (0–255)
      * @return string ANSI escape sequence
      */
     public static function rgb(int $r, int $g, int $b): string
@@ -29,9 +29,9 @@ class Theme
     /**
      * Build a 24-bit background color escape sequence.
      *
-     * @param int $r Red channel (0–255)
-     * @param int $g Green channel (0–255)
-     * @param int $b Blue channel (0–255)
+     * @param  int  $r  Red channel (0–255)
+     * @param  int  $g  Green channel (0–255)
+     * @param  int  $b  Blue channel (0–255)
      * @return string ANSI escape sequence
      */
     public static function bgRgb(int $r, int $g, int $b): string
@@ -42,7 +42,7 @@ class Theme
     /**
      * Build a 256-color foreground escape sequence.
      *
-     * @param int $code 256-color palette index (0–255)
+     * @param  int  $code  256-color palette index (0–255)
      * @return string ANSI escape sequence
      */
     public static function color256(int $code): string
@@ -231,8 +231,8 @@ class Theme
     /**
      * Move the cursor to an absolute row/column position.
      *
-     * @param int $row 1-based row
-     * @param int $col 1-based column
+     * @param  int  $row  1-based row
+     * @param  int  $col  1-based column
      * @return string ANSI cursor positioning sequence
      */
     public static function moveTo(int $row, int $col): string
@@ -244,7 +244,7 @@ class Theme
     /**
      * Return the Unicode icon for a given tool name.
      *
-     * @param string $name Internal tool identifier (e.g. 'file_read', 'bash')
+     * @param  string  $name  Internal tool identifier (e.g. 'file_read', 'bash')
      * @return string Single Unicode glyph
      */
     public static function toolIcon(string $name): string
@@ -274,7 +274,7 @@ class Theme
     /**
      * Return a human-readable label for a given tool name.
      *
-     * @param string $name Internal tool identifier
+     * @param  string  $name  Internal tool identifier
      * @return string Display label (e.g. 'Read', 'Bash', 'Agent')
      */
     public static function toolLabel(string $name): string
@@ -303,7 +303,7 @@ class Theme
     /**
      * Return a color indicating context window usage (green → yellow → red).
      *
-     * @param float $ratio Usage ratio 0.0–1.0
+     * @param  float  $ratio  Usage ratio 0.0–1.0
      * @return string ANSI color escape sequence
      */
     public static function contextColor(float $ratio): string
@@ -320,8 +320,8 @@ class Theme
     /**
      * Render a horizontal context-usage bar with token counts and percentage.
      *
-     * @param int $tokensIn   Tokens currently consumed
-     * @param int $maxContext Maximum context window size
+     * @param  int  $tokensIn  Tokens currently consumed
+     * @param  int  $maxContext  Maximum context window size
      * @return string Formatted ANSI string (bar + label + percentage)
      */
     public static function contextBar(int $tokensIn, int $maxContext): string
@@ -343,7 +343,7 @@ class Theme
     /**
      * Format a token count as a human-readable string (e.g. "1.2k", "3.5M").
      *
-     * @param int $tokens Raw token count
+     * @param  int  $tokens  Raw token count
      * @return string Abbreviated representation
      */
     public static function formatTokenCount(int $tokens): string
@@ -361,7 +361,7 @@ class Theme
     /**
      * Format a USD cost value with appropriate precision.
      *
-     * @param float $cost Cost in USD
+     * @param  float  $cost  Cost in USD
      * @return string Formatted string (e.g. "$0.0042", "$1.23")
      */
     public static function formatCost(float $cost): string

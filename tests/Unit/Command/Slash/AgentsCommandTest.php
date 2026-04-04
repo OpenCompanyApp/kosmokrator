@@ -124,6 +124,7 @@ class AgentsCommandTest extends TestCase
         $orchestrator = $this->createMock(SubagentOrchestrator::class);
         $orchestrator->method('allStats')->willReturnCallback(function () use (&$callCount, $stat1, $stat2) {
             $callCount++;
+
             return $callCount === 1 ? ['a1' => $stat1] : ['a1' => $stat1, 'a2' => $stat2];
         });
 
@@ -152,7 +153,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — empty stats
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_empty_stats_returns_zeros(): void
+    public function test_build_summary_empty_stats_returns_zeros(): void
     {
         $result = AgentsCommand::buildSummary([], null, 'model');
 
@@ -183,7 +184,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — status counts
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_counts_statuses(): void
+    public function test_build_summary_counts_statuses(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done'),
@@ -208,7 +209,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame(1, $result['retrying']);
     }
 
-    public function test_buildSummary_unknown_status_ignored(): void
+    public function test_build_summary_unknown_status_ignored(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'unknown_status'),
@@ -226,7 +227,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — token and tool sums
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_sums_tokens_and_tools(): void
+    public function test_build_summary_sums_tokens_and_tools(): void
     {
         $stats = [
             'a' => $this->makeStat('a', tokensIn: 100, tokensOut: 50, toolCalls: 3),
@@ -244,7 +245,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — retriedAndRecovered
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_retried_and_recovered(): void
+    public function test_build_summary_retried_and_recovered(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done', retries: 2),
@@ -262,7 +263,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — byType breakdown
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_by_type_breakdown(): void
+    public function test_build_summary_by_type_breakdown(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done', agentType: 'explore', tokensIn: 100, tokensOut: 50),
@@ -291,7 +292,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame(100, $general['tokensOut']);
     }
 
-    public function test_buildSummary_by_type_empty_agent_type_becomes_unknown(): void
+    public function test_build_summary_by_type_empty_agent_type_becomes_unknown(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done', agentType: ''),
@@ -307,7 +308,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — active agents sorted by elapsed desc
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_active_agents_sorted_by_elapsed_desc(): void
+    public function test_build_summary_active_agents_sorted_by_elapsed_desc(): void
     {
         $now = microtime(true);
         $stats = [
@@ -325,7 +326,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame('a', $result['active'][2]->id);
     }
 
-    public function test_buildSummary_active_excludes_non_running(): void
+    public function test_build_summary_active_excludes_non_running(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done'),
@@ -342,7 +343,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — failures sorted by endTime desc
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_failures_sorted_by_end_time_desc(): void
+    public function test_build_summary_failures_sorted_by_end_time_desc(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'failed', endTime: 1000.0),
@@ -359,7 +360,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame('a', $result['failures'][2]->id);
     }
 
-    public function test_buildSummary_failures_excludes_non_failed(): void
+    public function test_build_summary_failures_excludes_non_failed(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done', endTime: 5000.0),
@@ -375,7 +376,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — ETA and rate calculations
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_rate_and_eta_with_done_agents(): void
+    public function test_build_summary_rate_and_eta_with_done_agents(): void
     {
         $now = microtime(true);
         $startTime = $now - 120.0; // 2 minutes ago
@@ -400,7 +401,7 @@ class AgentsCommandTest extends TestCase
         $this->assertEqualsWithDelta(60.0, $result['eta'], 5.0);
     }
 
-    public function test_buildSummary_rate_zero_when_no_done(): void
+    public function test_build_summary_rate_zero_when_no_done(): void
     {
         $now = microtime(true);
         $stats = [
@@ -413,7 +414,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame(0, $result['eta']);
     }
 
-    public function test_buildSummary_eta_excludes_failed_and_cancelled(): void
+    public function test_build_summary_eta_excludes_failed_and_cancelled(): void
     {
         $now = microtime(true);
         $startTime = $now - 60.0;
@@ -437,7 +438,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — cost estimation
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_cost_with_model_catalog(): void
+    public function test_build_summary_cost_with_model_catalog(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done', tokensIn: 1000, tokensOut: 500),
@@ -457,7 +458,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame(0.21, $result['avgCost']);
     }
 
-    public function test_buildSummary_cost_zero_when_no_models(): void
+    public function test_build_summary_cost_zero_when_no_models(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'done', tokensIn: 1000, tokensOut: 500),
@@ -469,7 +470,7 @@ class AgentsCommandTest extends TestCase
         $this->assertSame(0.0, $result['avgCost']);
     }
 
-    public function test_buildSummary_avg_cost_zero_when_no_done(): void
+    public function test_build_summary_avg_cost_zero_when_no_done(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'running', tokensIn: 1000, tokensOut: 500),
@@ -488,7 +489,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — elapsed calculation
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_elapsed_from_earliest_start(): void
+    public function test_build_summary_elapsed_from_earliest_start(): void
     {
         $now = microtime(true);
         $stats = [
@@ -502,7 +503,7 @@ class AgentsCommandTest extends TestCase
         $this->assertEqualsWithDelta(100.0, $result['elapsed'], 2.0);
     }
 
-    public function test_buildSummary_elapsed_zero_when_no_start_times(): void
+    public function test_build_summary_elapsed_zero_when_no_start_times(): void
     {
         $stats = [
             'a' => $this->makeStat('a', status: 'queued', startTime: 0.0),
@@ -528,7 +529,7 @@ class AgentsCommandTest extends TestCase
     // buildSummary() — comprehensive integration scenario
     // ---------------------------------------------------------------
 
-    public function test_buildSummary_comprehensive_scenario(): void
+    public function test_build_summary_comprehensive_scenario(): void
     {
         $now = microtime(true);
 

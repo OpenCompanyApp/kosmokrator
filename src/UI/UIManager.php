@@ -362,6 +362,12 @@ class UIManager implements RendererInterface
         $this->renderer->playAnimation($animation);
     }
 
+    /** {@inheritDoc} */
+    public function setSkillCompletions(array $completions): void
+    {
+        $this->renderer->setSkillCompletions($completions);
+    }
+
     /**
      * Resolve the preference string to a concrete renderer instance.
      *

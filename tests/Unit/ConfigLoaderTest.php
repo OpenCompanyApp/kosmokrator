@@ -232,7 +232,7 @@ class ConfigLoaderTest extends TestCase
     {
         $fakeHome = $this->tempDir.'/relay_home';
         mkdir($fakeHome.'/.config/kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.config/kosmokrator/config.yaml', <<<YAML
+        file_put_contents($fakeHome.'/.config/kosmokrator/config.yaml', <<<'YAML'
 relay:
   providers:
     mimo:

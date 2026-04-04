@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class ProviderCapabilitiesResolverTest extends TestCase
 {
     private RelayProviderRegistry $registry;
+
     private ProviderCapabilitiesResolver $resolver;
 
     protected function setUp(): void

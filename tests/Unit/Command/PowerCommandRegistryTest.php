@@ -159,17 +159,35 @@ class PowerCommandRegistryTest extends TestCase
                 private readonly bool $cmdRequiresArgs,
             ) {}
 
-            public function name(): string { return $this->cmdName; }
+            public function name(): string
+            {
+                return $this->cmdName;
+            }
 
-            public function aliases(): array { return $this->cmdAliases; }
+            public function aliases(): array
+            {
+                return $this->cmdAliases;
+            }
 
-            public function description(): string { return 'Test'; }
+            public function description(): string
+            {
+                return 'Test';
+            }
 
-            public function requiresArgs(): bool { return $this->cmdRequiresArgs; }
+            public function requiresArgs(): bool
+            {
+                return $this->cmdRequiresArgs;
+            }
 
-            public function animationClass(): string { return AnsiAnimation::class; }
+            public function animationClass(): string
+            {
+                return AnsiAnimation::class;
+            }
 
-            public function buildPrompt(string $args): string { return "prompt: {$args}"; }
+            public function buildPrompt(string $args): string
+            {
+                return "prompt: {$args}";
+            }
         };
     }
 }

@@ -116,7 +116,7 @@ class TaskStore
 
     /**
      * @param  string  $parentId  ID of the parent task
-     * @return Task[]  Direct children of the given parent
+     * @return Task[] Direct children of the given parent
      */
     public function children(string $parentId): array
     {
@@ -213,8 +213,8 @@ class TaskStore
     /**
      * Render tree with ANSI colors for terminal display.
      *
-     * @param  string|null $inProgressColor  Optional ANSI escape sequence to override the in-progress color
-     * @return string      ANSI-colored tree, or empty string when no tasks exist
+     * @param  string|null  $inProgressColor  Optional ANSI escape sequence to override the in-progress color
+     * @return string ANSI-colored tree, or empty string when no tasks exist
      */
     public function renderAnsiTree(?string $inProgressColor = null): string
     {

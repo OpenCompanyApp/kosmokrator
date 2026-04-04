@@ -576,7 +576,9 @@ final class SettingsWorkspaceWidgetTest extends TestCase
     {
         $widget = $this->createWidget([]);
         $called = false;
-        $widget->onSave(static function () use (&$called): void { $called = true; });
+        $widget->onSave(static function () use (&$called): void {
+            $called = true;
+        });
 
         // Trigger save via handleInput
         $widget->handleInput('s');
@@ -588,7 +590,9 @@ final class SettingsWorkspaceWidgetTest extends TestCase
     {
         $widget = $this->createWidget([]);
         $called = false;
-        $widget->onCancel(static function () use (&$called): void { $called = true; });
+        $widget->onCancel(static function () use (&$called): void {
+            $called = true;
+        });
 
         $widget->handleInput('q');
         $this->assertTrue($called, 'onCancel callback should have been invoked');

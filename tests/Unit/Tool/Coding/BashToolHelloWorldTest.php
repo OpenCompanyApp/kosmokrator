@@ -10,7 +10,7 @@ class BashToolHelloWorldTest extends TestCase
     public function test_echo_hello_world(): void
     {
         $tool = new BashTool;
-        $result = $tool->execute(['command' => 'echo "Hello World"']);
+        $result = \Amp\async(fn () => $tool->execute(['command' => 'echo "Hello World"']))->await();
 
         $this->assertTrue($result->success, 'Command should succeed');
         $this->assertStringContainsString('Hello World', $result->output, 'Output should contain Hello World');

@@ -35,14 +35,14 @@ final class CodexAuthFlowTest extends TestCase
         );
     }
 
-    public function testCurrentReturnsNullWhenStoreHasNoToken(): void
+    public function test_current_returns_null_when_store_has_no_token(): void
     {
         $this->tokens->method('current')->willReturn(null);
 
         $this->assertNull($this->flow->current());
     }
 
-    public function testCurrentReturnsTokenWhenStoreHasOne(): void
+    public function test_current_returns_token_when_store_has_one(): void
     {
         $token = new CodexToken(
             accessToken: 'access-123',
@@ -58,14 +58,14 @@ final class CodexAuthFlowTest extends TestCase
         $this->assertSame('access-123', $result->accessToken);
     }
 
-    public function testLogoutCallsStoreClear(): void
+    public function test_logout_calls_store_clear(): void
     {
         $this->tokens->expects($this->once())->method('clear');
 
         $this->flow->logout();
     }
 
-    public function testConstructorAcceptsExpectedDependencies(): void
+    public function test_constructor_accepts_expected_dependencies(): void
     {
         $flow = new CodexAuthFlow(
             $this->oauth,

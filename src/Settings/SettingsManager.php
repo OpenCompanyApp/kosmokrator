@@ -83,8 +83,8 @@ final class SettingsManager
     }
 
     /**
-     * @param  string  $id     Setting identifier defined in the schema.
-     * @param  mixed   $value  The raw value to persist.
+     * @param  string  $id  Setting identifier defined in the schema.
+     * @param  mixed  $value  The raw value to persist.
      * @param  string  $scope  'project' or 'global' — which config layer to write to.
      *
      * @throws \InvalidArgumentException If the setting identifier is not defined in the schema.
@@ -104,7 +104,7 @@ final class SettingsManager
     }
 
     /**
-     * @param  string  $id     Setting identifier defined in the schema.
+     * @param  string  $id  Setting identifier defined in the schema.
      * @param  string  $scope  'project' or 'global' — which config layer to remove the value from.
      */
     public function delete(string $id, string $scope = 'project'): void
@@ -132,8 +132,8 @@ final class SettingsManager
 
     /**
      * @param  string  $provider  Provider identifier.
-     * @param  string  $model     Model identifier to remember.
-     * @param  string  $scope     'project' or 'global' — which config layer to persist in.
+     * @param  string  $model  Model identifier to remember.
+     * @param  string  $scope  'project' or 'global' — which config layer to persist in.
      */
     public function setProviderLastModel(string $provider, string $model, string $scope = 'global'): void
     {
@@ -151,9 +151,9 @@ final class SettingsManager
     }
 
     /**
-     * @param  string               $providerId  Unique identifier for the custom provider.
-     * @param  array<string, mixed> $definition  Provider configuration (url, headers, etc.).
-     * @param  string               $scope       'project' or 'global' — which config layer to persist in.
+     * @param  string  $providerId  Unique identifier for the custom provider.
+     * @param  array<string, mixed>  $definition  Provider configuration (url, headers, etc.).
+     * @param  string  $scope  'project' or 'global' — which config layer to persist in.
      */
     public function saveCustomProvider(string $providerId, array $definition, string $scope = 'project'): void
     {
@@ -167,7 +167,7 @@ final class SettingsManager
 
     /**
      * @param  string  $providerId  Custom provider identifier to remove.
-     * @param  string  $scope       'project' or 'global' — which config layer to remove from.
+     * @param  string  $scope  'project' or 'global' — which config layer to remove from.
      */
     public function deleteCustomProvider(string $providerId, string $scope = 'project'): void
     {
@@ -200,8 +200,8 @@ final class SettingsManager
     /**
      * Write a raw value to a config layer by dot-path.
      *
-     * @param  string  $path   Dot-notation config path.
-     * @param  mixed   $value  Value to persist.
+     * @param  string  $path  Dot-notation config path.
+     * @param  mixed  $value  Value to persist.
      * @param  string  $scope  'project' or 'global'.
      */
     public function setRaw(string $path, mixed $value, string $scope = 'project'): void
@@ -216,7 +216,7 @@ final class SettingsManager
     /**
      * Remove a raw value from a config layer by dot-path.
      *
-     * @param  string  $path   Dot-notation config path.
+     * @param  string  $path  Dot-notation config path.
      * @param  string  $scope  'project' or 'global'.
      */
     public function unsetRaw(string $path, string $scope = 'project'): void

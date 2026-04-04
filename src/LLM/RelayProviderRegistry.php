@@ -23,7 +23,7 @@ final class RelayProviderRegistry
     private array $sources = [];
 
     /**
-     * @param Repository $config Illuminate config repository for reading relay.providers overrides
+     * @param  Repository  $config  Illuminate config repository for reading relay.providers overrides
      */
     public function __construct(
         private readonly Repository $config,
@@ -196,7 +196,6 @@ final class RelayProviderRegistry
     /**
      * Coerce a value into a clean list of non-empty strings, defaulting to ["text"].
      *
-     * @param  mixed  $value
      * @return list<string>
      */
     private function stringList(mixed $value): array

@@ -117,6 +117,32 @@ class AgentLoop
         $this->agentContext = $context;
     }
 
+    /**
+     * Whether background subagents are still running.
+     * Used by the REPL to wait before collecting results.
+     */
+    public function hasRunningBackgroundAgents(): bool
+    {
+        if ($this->agentContext === null) {
+            return false;
+        }
+
+        return $this->agentContext->orchestrator->hasRunningBackgroundAgents($this->agentContext->id);
+    }
+
+    /**
+     * Whether completed background agents have uncollected results.
+     * Used by the REPL to decide whether to auto-continue after all agents finish.
+     */
+    public function hasPendingBackgroundResults(): bool
+    {
+        if ($this->agentContext === null) {
+            return false;
+        }
+
+        return $this->agentContext->orchestrator->hasPendingResults($this->agentContext->id);
+    }
+
     /** Attach a stats collector for headless subagent token tracking. */
     public function setStats(?SubagentStats $stats): void
     {

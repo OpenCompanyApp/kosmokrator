@@ -39,28 +39,28 @@ class ArgusCommandTest extends TestCase
 
     public function test_name(): void
     {
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
 
         $this->assertSame('/argus', $command->name());
     }
 
     public function test_aliases(): void
     {
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
 
         $this->assertSame([], $command->aliases());
     }
 
     public function test_description(): void
     {
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
 
         $this->assertSame('Switch to Argus permission mode', $command->description());
     }
 
     public function test_immediate(): void
     {
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
 
         $this->assertTrue($command->immediate());
     }
@@ -72,7 +72,7 @@ class ArgusCommandTest extends TestCase
             ->method('setPermissionMode')
             ->with(PermissionMode::Argus);
 
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
         $ctx = $this->makeContext(permissions: $permissions);
 
         $command->execute('', $ctx);
@@ -88,7 +88,7 @@ class ArgusCommandTest extends TestCase
                 PermissionMode::Argus->color(),
             );
 
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
         $ctx = $this->makeContext(ui: $ui);
 
         $command->execute('', $ctx);
@@ -101,7 +101,7 @@ class ArgusCommandTest extends TestCase
             ->method('setSetting')
             ->with('permission_mode', 'argus');
 
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
         $ctx = $this->makeContext(sessionManager: $sessionManager);
 
         $command->execute('', $ctx);
@@ -114,7 +114,7 @@ class ArgusCommandTest extends TestCase
             ->method('showNotice')
             ->with('◉ Argus mode — all write operations require approval.');
 
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
         $ctx = $this->makeContext(ui: $ui);
 
         $command->execute('', $ctx);
@@ -122,7 +122,7 @@ class ArgusCommandTest extends TestCase
 
     public function test_execute_returns_continue(): void
     {
-        $command = new ArgusCommand();
+        $command = new ArgusCommand;
         $ctx = $this->makeContext();
 
         $result = $command->execute('', $ctx);

@@ -46,9 +46,11 @@ class ShellKillToolTest extends TestCase
 
     public function test_execute_calls_kill_and_returns_success(): void
     {
-        $start = $this->sessions->start('sleep 10', waitMs: 100);
+        $result = \Amp\async(function () {
+            $start = $this->sessions->start('sleep 10', waitMs: 100);
 
-        $result = $this->tool->execute(['session_id' => $start['id']]);
+            return $this->tool->execute(['session_id' => $start['id']]);
+        })->await();
 
         $this->assertTrue($result->success);
     }

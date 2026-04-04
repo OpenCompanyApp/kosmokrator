@@ -1,10 +1,12 @@
 kosmokrator:
   agent:
-    mode: edit
-    default_provider: stepfun-plan
-    default_model: step-3.5-flash-2603
+    mode: ask
+    default_provider: z
+    default_model: glm-5.1
   tools:
     default_permission_mode: prometheus
   provider_state:
     stepfun-plan:
       last_model: step-3.5-flash-2603
+    z-api:
+      last_model: glm-5.1

@@ -104,6 +104,9 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?SelectListWidget $slashCompletion = null;
 
+    /** @var array<array{value: string, label: string, description: string}> */
+    private array $skillCompletions = [];
+
     private ?TaskStore $taskStore = null;
 
     /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
@@ -151,6 +154,21 @@ final class TuiCoreRenderer implements CoreRendererInterface
         ['value' => ':learner', 'label' => ':learner', 'description' => 'Extract a reusable pattern from this conversation'],
         ['value' => ':cancel', 'label' => ':cancel', 'description' => 'Gracefully cancel any active workflow or swarm'],
         ['value' => ':replay', 'label' => ':replay', 'description' => 'Replay and modify a previous workflow'],
+        ['value' => ':review', 'label' => ':review', 'description' => 'Parallel code review across 4 dimensions'],
+        ['value' => ':research', 'label' => ':research', 'description' => 'Parallel research agents for investigation'],
+        ['value' => ':deepdive', 'label' => ':deepdive', 'description' => 'Trace the WHY, then define the WHAT'],
+        ['value' => ':babysit', 'label' => ':babysit', 'description' => 'Monitor a PR until merged'],
+        ['value' => ':release', 'label' => ':release', 'description' => 'Automated release: bump, test, tag, publish'],
+        ['value' => ':docs', 'label' => ':docs', 'description' => 'Audit and refresh documentation'],
+        ['value' => ':consensus', 'label' => ':consensus', 'description' => 'Planner → Architect → Critic deliberation'],
+    ];
+
+    private const DOLLAR_COMMANDS = [
+        ['value' => '$list', 'label' => '$list', 'description' => 'List all available skills'],
+        ['value' => '$create', 'label' => '$create', 'description' => 'Create a new skill'],
+        ['value' => '$show', 'label' => '$show', 'description' => 'Show skill details'],
+        ['value' => '$edit', 'label' => '$edit', 'description' => 'Edit an existing skill'],
+        ['value' => '$delete', 'label' => '$delete', 'description' => 'Delete a skill'],
     ];
 
     // ── Public accessors for shared state ───────────────────────────────
@@ -677,6 +695,11 @@ HELP;
         echo "\033[2J\033[H";
         $this->tui->start();
         $this->forceRender();
+    }
+
+    public function setSkillCompletions(array $completions): void
+    {
+        $this->skillCompletions = $completions;
     }
 
     public function refreshTaskBar(): void

@@ -243,7 +243,7 @@ final class TuiRendererTest extends TestCase
 
     public function test_summarize_discovery_result_glob_single_file(): void
     {
-        $output = "src/A.php";
+        $output = 'src/A.php';
         $result = $this->invokeTool('summarizeDiscoveryResult', 'glob', $output, true);
         $this->assertSame('1 file', $result);
     }
@@ -490,7 +490,7 @@ final class TuiRendererTest extends TestCase
 
     public function test_summarize_counted_result_single(): void
     {
-        $result = $this->invokeTool('summarizeCountedResult', "onlyone", 'item', 'items', 'None');
+        $result = $this->invokeTool('summarizeCountedResult', 'onlyone', 'item', 'items', 'None');
         $this->assertSame('1 item', $result);
     }
 

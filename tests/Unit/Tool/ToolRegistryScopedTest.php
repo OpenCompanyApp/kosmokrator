@@ -6,9 +6,12 @@ use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\Session\MemoryRepository;
+use Kosmokrator\Session\MessageRepository;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\Tool\MemorySaveTool;
+use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Tool\Coding\ApplyPatchTool;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
@@ -24,8 +27,6 @@ use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Coding\ShellStartTool;
 use Kosmokrator\Tool\Coding\ShellWriteTool;
 use Kosmokrator\Tool\Coding\SubagentTool;
-use Kosmokrator\Session\Tool\MemorySaveTool;
-use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Tool\ToolRegistry;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -53,7 +54,7 @@ class ToolRegistryScopedTest extends TestCase
         $this->registry->register(new ShellKillTool($shells));
         $sessionManager = new SessionManager(
             $this->createStub(SessionRepository::class),
-            $this->createStub(\Kosmokrator\Session\MessageRepository::class),
+            $this->createStub(MessageRepository::class),
             $this->createStub(SettingsRepository::class),
             $this->createStub(MemoryRepository::class),
             new NullLogger,

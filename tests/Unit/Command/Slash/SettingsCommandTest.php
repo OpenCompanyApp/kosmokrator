@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Command\Slash;
 
+use Amp\Cancellation;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentLoop;
@@ -152,7 +153,7 @@ final class SettingsCommandTest extends TestCase
 
             public string $baseUrl = 'https://z.example/v1';
 
-            public function chat(array $messages, array $tools = [], ?\Amp\Cancellation $cancellation = null): LlmResponse
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
             {
                 throw new \RuntimeException('not used');
             }

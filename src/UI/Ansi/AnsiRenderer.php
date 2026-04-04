@@ -198,6 +198,8 @@ class AnsiRenderer implements RendererInterface
         $this->core->playAnimation($animation);
     }
 
+    public function setSkillCompletions(array $completions): void {}
+
     // ── ToolRendererInterface ───────────────────────────────────────────
 
     public function showToolCall(string $name, array $args): void

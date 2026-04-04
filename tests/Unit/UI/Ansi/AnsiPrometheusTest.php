@@ -72,7 +72,7 @@ class AnsiPrometheusTest extends TestCase
         foreach (['FIRE_CHARS', 'CHAIN_CHARS', 'CORE_CHARS', 'TRAIL_CHARS', 'STREAK_CHARS'] as $name) {
             $chars = $this->getConstant($name);
             foreach ($chars as $char) {
-                $this->assertSame(1, mb_strlen($char), "Character in {$name} should be exactly 1 mb_char: " . bin2hex($char));
+                $this->assertSame(1, mb_strlen($char), "Character in {$name} should be exactly 1 mb_char: ".bin2hex($char));
             }
         }
     }

@@ -40,7 +40,7 @@ class SafeDisplayTest extends TestCase
             ->method('warning')
             ->with(
                 'Display call failed',
-                $this->callback(function (array $context) use ($exception, $expectedLine): bool {
+                $this->callback(function (array $context) use ($exception): bool {
                     return $context['error'] === 'display error'
                         && $context['file'] === $exception->getFile()
                         && $context['line'] === $exception->getLine();

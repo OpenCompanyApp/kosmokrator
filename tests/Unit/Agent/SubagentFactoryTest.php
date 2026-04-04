@@ -9,6 +9,7 @@ use Kosmokrator\Agent\ContextBudget;
 use Kosmokrator\Agent\OutputTruncator;
 use Kosmokrator\Agent\ProtectedContextBuilder;
 use Kosmokrator\Agent\SubagentFactory;
+use Kosmokrator\Agent\SubagentModelConfig;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
@@ -19,13 +20,15 @@ use Psr\Log\NullLogger;
 class SubagentFactoryTest extends TestCase
 {
     private ToolRegistry $registry;
+
     private NullLogger $log;
+
     private \Closure $cancellation;
 
     protected function setUp(): void
     {
-        $this->registry = new ToolRegistry();
-        $this->log = new NullLogger();
+        $this->registry = new ToolRegistry;
+        $this->log = new NullLogger;
         $this->cancellation = fn (): bool => false;
     }
 
@@ -36,8 +39,14 @@ class SubagentFactoryTest extends TestCase
         $permissions = $this->createStub(PermissionEvaluator::class);
         $cancellation = $this->createStub(Cancellation::class);
         $budget = new ContextBudget(null);
-        $protectedContextBuilder = new ProtectedContextBuilder();
+        $protectedContextBuilder = new ProtectedContextBuilder;
         $relay = $this->createStub(Relay::class);
+        $modelConfig = new SubagentModelConfig(
+            defaultProvider: 'openai',
+            defaultModel: 'gpt-4',
+            defaultApiKey: 'sk-test-key',
+            defaultBaseUrl: 'https://api.example.com',
+        );
 
         $factory = new SubagentFactory(
             rootRegistry: $this->registry,
@@ -47,12 +56,9 @@ class SubagentFactoryTest extends TestCase
             permissions: $permissions,
             rootCancellation: $cancellation,
             llmClientClass: 'async',
-            apiKey: 'sk-test-key',
-            baseUrl: 'https://api.example.com',
-            model: 'gpt-4',
+            modelConfig: $modelConfig,
             maxTokens: 4096,
             temperature: 0.7,
-            provider: 'openai',
             budget: $budget,
             protectedContextBuilder: $protectedContextBuilder,
             relay: $relay,
@@ -63,6 +69,13 @@ class SubagentFactoryTest extends TestCase
 
     public function test_constructor_with_minimal_parameters(): void
     {
+        $modelConfig = new SubagentModelConfig(
+            defaultProvider: 'anthropic',
+            defaultModel: 'claude-3',
+            defaultApiKey: 'test-key',
+            defaultBaseUrl: 'https://api.test.com',
+        );
+
         $factory = new SubagentFactory(
             rootRegistry: $this->registry,
             log: $this->log,
@@ -71,12 +84,9 @@ class SubagentFactoryTest extends TestCase
             permissions: null,
             rootCancellation: $this->cancellation,
             llmClientClass: 'prism',
-            apiKey: 'test-key',
-            baseUrl: 'https://api.test.com',
-            model: 'claude-3',
+            modelConfig: $modelConfig,
             maxTokens: null,
             temperature: null,
-            provider: 'anthropic',
         );
 
         $this->assertInstanceOf(SubagentFactory::class, $factory);
@@ -84,6 +94,13 @@ class SubagentFactoryTest extends TestCase
 
     public function test_constructor_with_null_cancellation(): void
     {
+        $modelConfig = new SubagentModelConfig(
+            defaultProvider: 'openai',
+            defaultModel: 'model',
+            defaultApiKey: 'key',
+            defaultBaseUrl: 'https://api.test.com',
+        );
+
         $factory = new SubagentFactory(
             rootRegistry: $this->registry,
             log: $this->log,
@@ -92,12 +109,9 @@ class SubagentFactoryTest extends TestCase
             permissions: null,
             rootCancellation: null,
             llmClientClass: 'async',
-            apiKey: 'key',
-            baseUrl: 'https://api.test.com',
-            model: 'model',
+            modelConfig: $modelConfig,
             maxTokens: null,
             temperature: null,
-            provider: 'openai',
         );
 
         $this->assertInstanceOf(SubagentFactory::class, $factory);
@@ -105,6 +119,13 @@ class SubagentFactoryTest extends TestCase
 
     public function test_constructor_defaults_optional_parameters_to_null(): void
     {
+        $modelConfig = new SubagentModelConfig(
+            defaultProvider: 'openai',
+            defaultModel: 'model',
+            defaultApiKey: 'key',
+            defaultBaseUrl: 'https://api.test.com',
+        );
+
         $factory = new SubagentFactory(
             rootRegistry: $this->registry,
             log: $this->log,
@@ -113,12 +134,9 @@ class SubagentFactoryTest extends TestCase
             permissions: null,
             rootCancellation: null,
             llmClientClass: 'async',
-            apiKey: 'key',
-            baseUrl: 'https://api.test.com',
-            model: 'model',
+            modelConfig: $modelConfig,
             maxTokens: null,
             temperature: null,
-            provider: 'openai',
         );
 
         // Factory was created with defaults — budget, protectedContextBuilder, relay are null

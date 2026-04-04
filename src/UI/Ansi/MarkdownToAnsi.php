@@ -80,7 +80,7 @@ class MarkdownToAnsi
      * Renders a markdown string as ANSI-escaped terminal output.
      * Resets internal state before parsing.
      *
-     * @param string $markdown CommonMark/GFM markdown source
+     * @param  string  $markdown  CommonMark/GFM markdown source
      * @return string ANSI-escaped terminal output with newlines
      */
     public function render(string $markdown): string

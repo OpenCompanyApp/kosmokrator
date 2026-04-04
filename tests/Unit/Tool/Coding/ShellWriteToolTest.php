@@ -55,17 +55,21 @@ class ShellWriteToolTest extends TestCase
 
     public function test_execute_calls_write_and_returns_success(): void
     {
-        $start = $this->sessions->start('cat', waitMs: 200);
+        $result = \Amp\async(function () {
+            $start = $this->sessions->start('cat', waitMs: 200);
 
-        $result = $this->tool->execute([
-            'session_id' => $start['id'],
-            'input' => 'hello',
-        ]);
+            $writeResult = $this->tool->execute([
+                'session_id' => $start['id'],
+                'input' => 'hello',
+            ]);
+
+            $this->sessions->kill($start['id']);
+
+            return $writeResult;
+        })->await();
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('hello', $result->output);
-
-        $this->sessions->kill($start['id']);
     }
 
     public function test_execute_with_empty_session_id_returns_error(): void

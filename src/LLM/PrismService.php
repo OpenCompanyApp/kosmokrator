@@ -5,8 +5,8 @@ namespace Kosmokrator\LLM;
 use Amp\Cancellation;
 use Generator;
 use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
-use OpenCompany\PrismRelay\Relay;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
+use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Prism;
 use Prism\Prism\Streaming\Events\StreamEvent;
@@ -40,7 +40,7 @@ class PrismService implements LlmClientInterface
     }
 
     /**
-     * @param string $prompt Full system prompt to prepend to every conversation
+     * @param  string  $prompt  Full system prompt to prepend to every conversation
      */
     public function setSystemPrompt(string $prompt): void
     {
@@ -100,9 +100,9 @@ class PrismService implements LlmClientInterface
     /**
      * Delegate to text() and reshape the Prism Response into our generic LlmResponse.
      *
-     * @param  Message[]    $messages     Conversation history
-     * @param  Tool[]       $tools        Available tools for function calling
-     * @param  Cancellation $cancellation Unused — kept for interface compatibility
+     * @param  Message[]  $messages  Conversation history
+     * @param  Tool[]  $tools  Available tools for function calling
+     * @param  Cancellation  $cancellation  Unused — kept for interface compatibility
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
@@ -127,7 +127,7 @@ class PrismService implements LlmClientInterface
      * normalizeError) consistently across streaming and non-streaming paths.
      *
      * @param  Message[]  $messages
-     * @param  Tool[]     $tools
+     * @param  Tool[]  $tools
      * @return Generator<StreamEvent>
      */
     public function stream(array $messages, array $tools = []): Generator
@@ -150,7 +150,7 @@ class PrismService implements LlmClientInterface
      * the full Prism value objects rather than the generic LlmResponse DTO.
      *
      * @param  Message[]  $messages
-     * @param  Tool[]     $tools
+     * @param  Tool[]  $tools
      */
     public function text(array $messages, array $tools = []): Response
     {
@@ -181,8 +181,8 @@ class PrismService implements LlmClientInterface
     /**
      * Build a pending Prism text request with prompt caching, tools, and provider options.
      *
-     * @param  Message[] $messages Conversation history
-     * @param  Tool[]    $tools    Available tools for function calling
+     * @param  Message[]  $messages  Conversation history
+     * @param  Tool[]  $tools  Available tools for function calling
      */
     private function buildRequest(array $messages, array $tools = []): PendingRequest
     {

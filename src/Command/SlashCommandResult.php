@@ -33,7 +33,7 @@ readonly class SlashCommandResult
     /**
      * Signals the REPL to feed the given input string into the next iteration as if the user typed it.
      *
-     * @param string $input Text to inject as the next user prompt
+     * @param  string  $input  Text to inject as the next user prompt
      */
     public static function inject(string $input): self
     {

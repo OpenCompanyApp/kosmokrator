@@ -48,17 +48,21 @@ class ShellReadToolTest extends TestCase
 
     public function test_execute_calls_read_and_returns_success(): void
     {
-        $start = $this->sessions->start('sleep 5', waitMs: 100);
+        $result = \Amp\async(function () {
+            $start = $this->sessions->start('sleep 5', waitMs: 100);
 
-        // Write input so there is something to read
-        $this->sessions->write($start['id'], 'test', waitMs: 100);
+            // Write input so there is something to read
+            $this->sessions->write($start['id'], 'test', waitMs: 100);
 
-        $result = $this->tool->execute(['session_id' => $start['id']]);
+            $readResult = $this->tool->execute(['session_id' => $start['id']]);
+
+            $this->sessions->kill($start['id']);
+
+            return $readResult;
+        })->await();
 
         $this->assertTrue($result->success);
         $this->assertNotEmpty($result->output);
-
-        $this->sessions->kill($start['id']);
     }
 
     public function test_execute_with_empty_session_id_returns_error(): void

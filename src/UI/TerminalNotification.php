@@ -10,6 +10,7 @@ namespace Kosmokrator\UI;
 final class TerminalNotification
 {
     private const BEL = "\x07";
+
     private const ESC = "\x1b";
 
     /** @var (\Closure(string): void)|null */
@@ -30,10 +31,10 @@ final class TerminalNotification
 
         // Terminal-specific OSC notification
         match (self::detectTerminal()) {
-            'iterm'   => self::notifyIterm2($writer),
+            'iterm' => self::notifyIterm2($writer),
             'ghostty' => self::notifyGhostty($writer),
-            'kitty'   => self::notifyKitty($writer),
-            default   => null,
+            'kitty' => self::notifyKitty($writer),
+            default => null,
         };
     }
 
@@ -52,7 +53,9 @@ final class TerminalNotification
             return self::$writer;
         }
 
-        return static function (string $data): void { fwrite(\STDERR, $data); };
+        return static function (string $data): void {
+            fwrite(\STDERR, $data);
+        };
     }
 
     private static function detectTerminal(): string
@@ -71,14 +74,14 @@ final class TerminalNotification
     private static function notifyIterm2(\Closure $w): void
     {
         // OSC 9 — triggers macOS notification center via iTerm2
-        $w(self::ESC . ']9;KosmoKrator — response ready' . self::BEL);
+        $w(self::ESC.']9;KosmoKrator — response ready'.self::BEL);
     }
 
     /** @param \Closure(string): void $w */
     private static function notifyGhostty(\Closure $w): void
     {
         // OSC 777 — Ghostty desktop notification
-        $w(self::ESC . ']777;notify;KosmoKrator;Response ready' . self::BEL);
+        $w(self::ESC.']777;notify;KosmoKrator;Response ready'.self::BEL);
     }
 
     /** @param \Closure(string): void $w */
@@ -86,9 +89,9 @@ final class TerminalNotification
     {
         // OSC 99 — Kitty inline toast notification
         $id = random_int(1, 9999);
-        $st = self::ESC . '\\';
-        $w(self::ESC . "]99;i={$id}:d=0:p=title;KosmoKrator{$st}");
-        $w(self::ESC . "]99;i={$id}:p=body;Response ready{$st}");
-        $w(self::ESC . "]99;i={$id}:d=1:a=focus;{$st}");
+        $st = self::ESC.'\\';
+        $w(self::ESC."]99;i={$id}:d=0:p=title;KosmoKrator{$st}");
+        $w(self::ESC."]99;i={$id}:p=body;Response ready{$st}");
+        $w(self::ESC."]99;i={$id}:d=1:a=focus;{$st}");
     }
 }

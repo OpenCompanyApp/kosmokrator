@@ -6,7 +6,6 @@ namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\UI\Tui\KosmokratorStyleSheet;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Tui\Style\Color;
 use Symfony\Component\Tui\Style\Direction;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\StyleSheet;
@@ -19,14 +18,14 @@ use Symfony\Component\Tui\Widget\SettingsListWidget;
 
 final class KosmokratorStyleSheetTest extends TestCase
 {
-    public function testCreateReturnsStyleSheet(): void
+    public function test_create_returns_style_sheet(): void
     {
         $sheet = KosmokratorStyleSheet::create();
 
         $this->assertInstanceOf(StyleSheet::class, $sheet);
     }
 
-    public function testCreateReturnsNewInstanceEachCall(): void
+    public function test_create_returns_new_instance_each_call(): void
     {
         $a = KosmokratorStyleSheet::create();
         $b = KosmokratorStyleSheet::create();
@@ -34,7 +33,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotSame($a, $b);
     }
 
-    public function testAllExpectedSelectorsAreDefined(): void
+    public function test_all_expected_selectors_are_defined(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
@@ -101,14 +100,14 @@ final class KosmokratorStyleSheetTest extends TestCase
         }
     }
 
-    public function testTotalRuleCount(): void
+    public function test_total_rule_count(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
         $this->assertCount(40, $rules);
     }
 
-    public function testAllRulesAreStyleObjects(): void
+    public function test_all_rules_are_style_objects(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
@@ -119,14 +118,14 @@ final class KosmokratorStyleSheetTest extends TestCase
 
     // --- Specific style property assertions ---
 
-    public function testSessionHasVerticalDirection(): void
+    public function test_session_has_vertical_direction(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
         $this->assertSame(Direction::Vertical, $rules['.session']->getDirection());
     }
 
-    public function testFigletHeaderIsBoldRedWithFont(): void
+    public function test_figlet_header_is_bold_red_with_font(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.figlet-header'];
@@ -140,7 +139,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertSame(2, $style->getPadding()->getLeft());
     }
 
-    public function testSubtitleIsItalicCentered(): void
+    public function test_subtitle_is_italic_centered(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.subtitle'];
@@ -150,7 +149,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testTaglineIsCentered(): void
+    public function test_tagline_is_centered(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.tagline'];
@@ -159,7 +158,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testUserMessageIsBoldWhite(): void
+    public function test_user_message_is_bold_white(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.user-message'];
@@ -168,7 +167,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testSeparatorHasGrayColor(): void
+    public function test_separator_has_gray_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.separator'];
@@ -176,7 +175,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testResponseHasNoExplicitColor(): void
+    public function test_response_has_no_explicit_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.response'];
@@ -185,7 +184,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getPadding());
     }
 
-    public function testToolCallHasColor(): void
+    public function test_tool_call_has_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.tool-call'];
@@ -193,7 +192,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testTaskCallHasNoTopPadding(): void
+    public function test_task_call_has_no_top_padding(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.task-call'];
@@ -202,7 +201,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testToolSuccessHasGreenColor(): void
+    public function test_tool_success_has_green_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.tool-success'];
@@ -210,7 +209,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testToolErrorHasRedColor(): void
+    public function test_tool_error_has_red_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.tool-error'];
@@ -218,7 +217,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testEditorWidgetHasColor(): void
+    public function test_editor_widget_has_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[EditorWidget::class];
@@ -227,7 +226,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getPadding());
     }
 
-    public function testEditorFrameColors(): void
+    public function test_editor_frame_colors(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
@@ -235,7 +234,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($rules[EditorWidget::class.':focus::frame']->getColor());
     }
 
-    public function testProgressBarBarFillHasColor(): void
+    public function test_progress_bar_bar_fill_has_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[ProgressBarWidget::class.'::bar-fill'];
@@ -243,7 +242,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testProgressBarBarEmptyHasColor(): void
+    public function test_progress_bar_bar_empty_has_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[ProgressBarWidget::class.'::bar-empty'];
@@ -251,7 +250,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testAnsiArtHasNoColor(): void
+    public function test_ansi_art_has_no_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.ansi-art'];
@@ -261,7 +260,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNull($style->getItalic());
     }
 
-    public function testCompactingIsItalicRed(): void
+    public function test_compacting_is_italic_red(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.compacting'];
@@ -270,7 +269,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testCancellableLoaderIsItalic(): void
+    public function test_cancellable_loader_is_italic(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[CancellableLoaderWidget::class];
@@ -279,7 +278,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testCancellableLoaderSpinnerAndMessageElements(): void
+    public function test_cancellable_loader_spinner_and_message_elements(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
@@ -288,7 +287,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertTrue($rules[CancellableLoaderWidget::class.'::message']->getItalic());
     }
 
-    public function testMarkdownWidgetHasMaxColumns(): void
+    public function test_markdown_widget_has_max_columns(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[MarkdownWidget::class];
@@ -296,7 +295,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertSame(100, $style->getMaxColumns());
     }
 
-    public function testPermissionPromptHasBorder(): void
+    public function test_permission_prompt_has_border(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.permission-prompt'];
@@ -305,7 +304,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testSettingsListWidgetHasBorder(): void
+    public function test_settings_list_widget_has_border(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[SettingsListWidget::class];
@@ -314,7 +313,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testSettingsLabelSelectedIsBoldWhite(): void
+    public function test_settings_label_selected_is_bold_white(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[SettingsListWidget::class.'::label-selected'];
@@ -323,7 +322,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testSettingsValueSelectedIsBoldGreen(): void
+    public function test_settings_value_selected_is_bold_green(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[SettingsListWidget::class.'::value-selected'];
@@ -332,7 +331,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertNotNull($style->getColor());
     }
 
-    public function testSettingsDescriptionIsItalic(): void
+    public function test_settings_description_is_italic(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules[SettingsListWidget::class.'::description'];
@@ -340,7 +339,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertTrue($style->getItalic());
     }
 
-    public function testSubagentLoaderHasNoTopPadding(): void
+    public function test_subagent_loader_has_no_top_padding(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.subagent-loader'];

@@ -28,8 +28,8 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismCodex\CodexOAuthService;
+use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
@@ -283,7 +283,7 @@ class AgentSessionBuilderTest extends TestCase
     /**
      * Build a fully-wired container with real or stub dependencies.
      *
-     * @param array<string, string> $globalSettings Settings to pre-populate in the global scope
+     * @param  array<string, string>  $globalSettings  Settings to pre-populate in the global scope
      */
     private function makeWiredContainer(
         ?LlmClientInterface $llm = null,

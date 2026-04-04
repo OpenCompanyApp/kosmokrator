@@ -40,11 +40,11 @@ class Task
     public ?float $completedAt;
 
     /**
-     * @param string      $subject     Short human-readable title
-     * @param string      $description Optional longer explanation
-     * @param string|null $activeForm  Present-progressive label (e.g. "Running tests")
-     * @param string|null $parentId    ID of the parent task, or null for root tasks
-     * @param string|null $id          Explicit ID, or auto-generated 8-char hex
+     * @param  string  $subject  Short human-readable title
+     * @param  string  $description  Optional longer explanation
+     * @param  string|null  $activeForm  Present-progressive label (e.g. "Running tests")
+     * @param  string|null  $parentId  ID of the parent task, or null for root tasks
+     * @param  string|null  $id  Explicit ID, or auto-generated 8-char hex
      */
     public function __construct(
         string $subject,

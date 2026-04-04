@@ -14,7 +14,7 @@ final class PatchApplierTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/patch_applier_test_' . uniqid();
+        $this->tmpDir = sys_get_temp_dir().'/patch_applier_test_'.uniqid();
         mkdir($this->tmpDir, 0755, true);
     }
 
@@ -37,15 +37,15 @@ final class PatchApplierTest extends TestCase
 
     private function path(string $relative): string
     {
-        return $this->tmpDir . '/' . $relative;
+        return $this->tmpDir.'/'.$relative;
     }
 
     // --- Add operation ---
 
-    public function testAddCreatesNewFile(): void
+    public function test_add_creates_new_file(): void
     {
         $path = $this->path('new.txt');
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
         $result = $applier->apply([
             new PatchOperation('add', $path, ['Hello, world!']),
         ]);
@@ -58,12 +58,12 @@ final class PatchApplierTest extends TestCase
         $this->assertSame('Hello, world!', file_get_contents($path));
     }
 
-    public function testAddFailsIfFileAlreadyExists(): void
+    public function test_add_fails_if_file_already_exists(): void
     {
         $path = $this->path('existing.txt');
         file_put_contents($path, 'old');
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already exists');
@@ -73,10 +73,10 @@ final class PatchApplierTest extends TestCase
         ]);
     }
 
-    public function testAddCreatesParentDirectories(): void
+    public function test_add_creates_parent_directories(): void
     {
         $path = $this->path('deep/nested/dir/file.txt');
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
         $applier->apply([
             new PatchOperation('add', $path, ['deep content']),
         ]);
@@ -87,12 +87,12 @@ final class PatchApplierTest extends TestCase
 
     // --- Update operation ---
 
-    public function testUpdateAppliesHunksToExistingFile(): void
+    public function test_update_applies_hunks_to_existing_file(): void
     {
         $path = $this->path('edit.txt');
         file_put_contents($path, "line1\nline2\nline3\n");
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
         $result = $applier->apply([
             new PatchOperation('update', $path, [
                 ' line1',
@@ -106,10 +106,10 @@ final class PatchApplierTest extends TestCase
         $this->assertSame("line1\nline2-updated\nline3\n", file_get_contents($path));
     }
 
-    public function testUpdateFailsForNonExistentFile(): void
+    public function test_update_fails_for_non_existent_file(): void
     {
         $path = $this->path('missing.txt');
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('missing file');
@@ -121,13 +121,13 @@ final class PatchApplierTest extends TestCase
         ]);
     }
 
-    public function testUpdateWithMoveToRenamesFile(): void
+    public function test_update_with_move_to_renames_file(): void
     {
         $srcPath = $this->path('original.txt');
         $dstPath = $this->path('renamed.txt');
         file_put_contents($srcPath, "content\n");
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
         $result = $applier->apply([
             new PatchOperation('update', $srcPath, [
                 '-content',
@@ -142,14 +142,14 @@ final class PatchApplierTest extends TestCase
         $this->assertSame("updated-content\n", file_get_contents($dstPath));
     }
 
-    public function testUpdateWithMoveToFailsIfDestinationExists(): void
+    public function test_update_with_move_to_fails_if_destination_exists(): void
     {
         $srcPath = $this->path('src.txt');
         $dstPath = $this->path('dst.txt');
         file_put_contents($srcPath, "source\n");
         file_put_contents($dstPath, 'destination');
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already exists');
@@ -161,12 +161,12 @@ final class PatchApplierTest extends TestCase
 
     // --- Delete operation ---
 
-    public function testDeleteRemovesFile(): void
+    public function test_delete_removes_file(): void
     {
         $path = $this->path('doomed.txt');
         file_put_contents($path, 'bye');
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
         $result = $applier->apply([
             new PatchOperation('delete', $path),
         ]);
@@ -175,10 +175,10 @@ final class PatchApplierTest extends TestCase
         $this->assertFileDoesNotExist($path);
     }
 
-    public function testDeleteFailsForNonExistentFile(): void
+    public function test_delete_fails_for_non_existent_file(): void
     {
         $path = $this->path('ghost.txt');
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('missing file');
@@ -188,12 +188,12 @@ final class PatchApplierTest extends TestCase
         ]);
     }
 
-    public function testDeleteFailsForDirectories(): void
+    public function test_delete_fails_for_directories(): void
     {
         $path = $this->path('a-dir');
         mkdir($path, 0755);
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Cannot delete directory');
@@ -205,7 +205,7 @@ final class PatchApplierTest extends TestCase
 
     // --- Blocked paths ---
 
-    public function testBlockedPathsAreRejected(): void
+    public function test_blocked_paths_are_rejected(): void
     {
         $path = $this->path('secret.key');
         file_put_contents($path, 'secret');
@@ -222,9 +222,9 @@ final class PatchApplierTest extends TestCase
 
     // --- Invalid paths ---
 
-    public function testEmptyPathIsRejected(): void
+    public function test_empty_path_is_rejected(): void
     {
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('invalid file path');
@@ -234,9 +234,9 @@ final class PatchApplierTest extends TestCase
         ]);
     }
 
-    public function testDotPathIsRejected(): void
+    public function test_dot_path_is_rejected(): void
     {
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('invalid file path');
@@ -248,7 +248,7 @@ final class PatchApplierTest extends TestCase
 
     // --- Summary counts ---
 
-    public function testSummaryCountsAreCorrectForMixedOperations(): void
+    public function test_summary_counts_are_correct_for_mixed_operations(): void
     {
         $addPath = $this->path('added.txt');
         $updatePath = $this->path('updated.txt');
@@ -257,7 +257,7 @@ final class PatchApplierTest extends TestCase
         file_put_contents($updatePath, "original\n");
         file_put_contents($deletePath, 'bye');
 
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
         $result = $applier->apply([
             new PatchOperation('add', $addPath, ['new file']),
             new PatchOperation('update', $updatePath, [
@@ -272,9 +272,9 @@ final class PatchApplierTest extends TestCase
 
     // --- Unsupported operation kind ---
 
-    public function testUnsupportedOperationKindThrows(): void
+    public function test_unsupported_operation_kind_throws(): void
     {
-        $applier = new PatchApplier();
+        $applier = new PatchApplier;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage("Unsupported patch operation 'copy'");

@@ -27,8 +27,8 @@ interface SlashCommand
     /**
      * Execute the slash command.
      *
-     * @param string $args Raw text after the command name (may be empty)
-     * @param SlashCommandContext $ctx Shared access to UI, agent loop, sessions, etc.
+     * @param  string  $args  Raw text after the command name (may be empty)
+     * @param  SlashCommandContext  $ctx  Shared access to UI, agent loop, sessions, etc.
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult;
 }

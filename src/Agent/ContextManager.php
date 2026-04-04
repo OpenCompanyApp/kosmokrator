@@ -50,10 +50,9 @@ final class ContextManager
      * thresholds. Includes a circuit breaker that disables auto-compaction
      * after 3 consecutive failures, falling back to trimOldest instead.
      *
-     * @param ConversationHistory $history  The conversation to inspect and possibly mutate
-     * @param AgentMode           $mode     Current agent mode, used for prompt estimation
-     * @param AgentContext|null   $agentContext  Optional sub-agent context for prompt estimation
-     *
+     * @param  ConversationHistory  $history  The conversation to inspect and possibly mutate
+     * @param  AgentMode  $mode  Current agent mode, used for prompt estimation
+     * @param  AgentContext|null  $agentContext  Optional sub-agent context for prompt estimation
      * @return array{int, int} [tokens_in, tokens_out] consumed by any compaction LLM calls
      */
     public function preFlightCheck(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
@@ -122,10 +121,9 @@ final class ContextManager
      * Headless variant of preFlightCheck() — identical behaviour but named for
      * call-sites that run outside the interactive TUI loop.
      *
-     * @param ConversationHistory $history  The conversation to inspect and possibly mutate
-     * @param AgentMode           $mode     Current agent mode
-     * @param AgentContext|null   $agentContext  Optional sub-agent context
-     *
+     * @param  ConversationHistory  $history  The conversation to inspect and possibly mutate
+     * @param  AgentMode  $mode  Current agent mode
+     * @param  AgentContext|null  $agentContext  Optional sub-agent context
      * @return array{int, int} [tokens_in, tokens_out] consumed by any compaction LLM calls
      */
     public function headlessPreFlightCheck(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
@@ -140,10 +138,9 @@ final class ContextManager
      * the history, stores the summary as a working memory, and extracts durable
      * memories from the summary for future sessions.
      *
-     * @param ConversationHistory $history  The conversation to compact
-     * @param AgentMode           $mode     Current agent mode
-     * @param AgentContext|null   $agentContext  Optional sub-agent context
-     *
+     * @param  ConversationHistory  $history  The conversation to compact
+     * @param  AgentMode  $mode  Current agent mode
+     * @param  AgentContext|null  $agentContext  Optional sub-agent context
      * @return array{int, int} [tokens_in, tokens_out] consumed by compaction + memory extraction
      */
     public function performCompaction(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): array
@@ -234,9 +231,9 @@ final class ContextManager
     /**
      * Rebuild and push the full system prompt to the LLM client.
      *
-     * @param AgentMode                $mode          Current agent mode
-     * @param ConversationHistory|null $history       Used to derive the user query for memory recall
-     * @param AgentContext|null         $agentContext  Optional sub-agent context providing a parent brief
+     * @param  AgentMode  $mode  Current agent mode
+     * @param  ConversationHistory|null  $history  Used to derive the user query for memory recall
+     * @param  AgentContext|null  $agentContext  Optional sub-agent context providing a parent brief
      */
     public function refreshSystemPrompt(AgentMode $mode, ?ConversationHistory $history = null, ?AgentContext $agentContext = null): void
     {
@@ -249,18 +246,17 @@ final class ContextManager
      * Layers: base prompt → relevant memories → session recall → mode suffix →
      * parent brief → active tasks.
      *
-     * @param AgentMode                $mode                 Current agent mode
-     * @param ConversationHistory|null $history              Used to derive the user query for memory recall
-     * @param AgentContext|null         $agentContext         Optional sub-agent context providing a parent brief
-     * @param bool                     $markSurfacedMemories Whether to flag injected memories as surfaced (prevents re-injection)
+     * @param  AgentMode  $mode  Current agent mode
+     * @param  ConversationHistory|null  $history  Used to derive the user query for memory recall
+     * @param  AgentContext|null  $agentContext  Optional sub-agent context providing a parent brief
+     * @param  bool  $markSurfacedMemories  Whether to flag injected memories as surfaced (prevents re-injection)
      */
     public function buildSystemPrompt(
         AgentMode $mode,
         ?ConversationHistory $history = null,
         ?AgentContext $agentContext = null,
         bool $markSurfacedMemories = true,
-    ): string
-    {
+    ): string {
         $query = $history?->latestUserContext();
         $prompt = $this->baseSystemPrompt;
 
@@ -291,9 +287,9 @@ final class ContextManager
     /**
      * Check whether the conversation has grown past the auto-compaction threshold.
      *
-     * @param ConversationHistory $history       The conversation to evaluate
-     * @param AgentMode           $mode          Current agent mode
-     * @param AgentContext|null   $agentContext  Optional sub-agent context
+     * @param  ConversationHistory  $history  The conversation to evaluate
+     * @param  AgentMode  $mode  Current agent mode
+     * @param  AgentContext|null  $agentContext  Optional sub-agent context
      */
     public function shouldCompactHistory(ConversationHistory $history, AgentMode $mode = AgentMode::Edit, ?AgentContext $agentContext = null): bool
     {

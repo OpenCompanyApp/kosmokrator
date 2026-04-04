@@ -115,7 +115,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertStringContainsString('Esc deny', $content);
     }
 
-    public function test_onConfirm_callback_receives_selected_option(): void
+    public function test_on_confirm_callback_receives_selected_option(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
         $received = null;
@@ -130,7 +130,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertSame('allow', $received);
     }
 
-    public function test_onConfirm_callback_receives_deny_option(): void
+    public function test_on_confirm_callback_receives_deny_option(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
         $received = null;
@@ -149,7 +149,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertSame('deny', $received);
     }
 
-    public function test_onDismiss_callback_invoked_on_escape(): void
+    public function test_on_dismiss_callback_invoked_on_escape(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
         $called = false;
@@ -163,7 +163,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertTrue($called);
     }
 
-    public function test_handleInput_down_cycles_options(): void
+    public function test_handle_input_down_cycles_options(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
         $received = null;
@@ -178,7 +178,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertSame('always', $received);
     }
 
-    public function test_handleInput_up_wraps_around(): void
+    public function test_handle_input_up_wraps_around(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
         $received = null;
@@ -194,7 +194,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertSame('deny', $received);
     }
 
-    public function test_handleInput_down_wraps_around(): void
+    public function test_handle_input_down_wraps_around(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
         $received = null;
@@ -214,7 +214,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertSame('allow', $received);
     }
 
-    public function test_onConfirm_returns_static_for_chaining(): void
+    public function test_on_confirm_returns_static_for_chaining(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
 
@@ -223,7 +223,7 @@ final class PermissionPromptWidgetTest extends TestCase
         $this->assertSame($widget, $result);
     }
 
-    public function test_onDismiss_returns_static_for_chaining(): void
+    public function test_on_dismiss_returns_static_for_chaining(): void
     {
         $widget = new PermissionPromptWidget('bash', $this->makePreview());
 

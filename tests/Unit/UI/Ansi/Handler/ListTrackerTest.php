@@ -20,24 +20,24 @@ class ListTrackerTest extends TestCase
 
     // ── Initial state ───────────────────────────────────────────────
 
-    public function testInitialStateDepthIsZero(): void
+    public function test_initial_state_depth_is_zero(): void
     {
         $this->assertSame(0, $this->tracker->depth());
     }
 
-    public function testInitialStateIsNotInsideItem(): void
+    public function test_initial_state_is_not_inside_item(): void
     {
         $this->assertFalse($this->tracker->isInsideItem());
     }
 
-    public function testInitialStateDoesNotNeedBullet(): void
+    public function test_initial_state_does_not_need_bullet(): void
     {
         $this->assertFalse($this->tracker->needsBullet());
     }
 
     // ── reset() ─────────────────────────────────────────────────────
 
-    public function testResetClearsAllState(): void
+    public function test_reset_clears_all_state(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);
@@ -52,7 +52,7 @@ class ListTrackerTest extends TestCase
 
     // ── handleListItem ──────────────────────────────────────────────
 
-    public function testHandleListItemEnteringSetsInsideAndNeedsBullet(): void
+    public function test_handle_list_item_entering_sets_inside_and_needs_bullet(): void
     {
         $this->tracker->handleListItem(true);
 
@@ -60,7 +60,7 @@ class ListTrackerTest extends TestCase
         $this->assertTrue($this->tracker->needsBullet());
     }
 
-    public function testHandleListItemLeavingClearsInsideAndNeedsBullet(): void
+    public function test_handle_list_item_leaving_clears_inside_and_needs_bullet(): void
     {
         $this->tracker->handleListItem(true);
         $this->tracker->handleListItem(false);
@@ -71,7 +71,7 @@ class ListTrackerTest extends TestCase
 
     // ── handleListBlock ─────────────────────────────────────────────
 
-    public function testHandleListBlockEnteringIncreasesDepth(): void
+    public function test_handle_list_block_entering_increases_depth(): void
     {
         $listBlock = $this->createBulletListBlock();
 
@@ -81,7 +81,7 @@ class ListTrackerTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function testHandleListBlockLeavingDecreasesDepth(): void
+    public function test_handle_list_block_leaving_decreases_depth(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);
@@ -91,7 +91,7 @@ class ListTrackerTest extends TestCase
         $this->assertSame(0, $this->tracker->depth());
     }
 
-    public function testHandleListBlockLeavingOutermostReturnsNewline(): void
+    public function test_handle_list_block_leaving_outermost_returns_newline(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);
@@ -101,7 +101,7 @@ class ListTrackerTest extends TestCase
         $this->assertSame("\n", $result);
     }
 
-    public function testHandleListBlockLeavingInnerReturnsNull(): void
+    public function test_handle_list_block_leaving_inner_returns_null(): void
     {
         $outer = $this->createBulletListBlock();
         $inner = $this->createBulletListBlock();
@@ -117,7 +117,7 @@ class ListTrackerTest extends TestCase
 
     // ── flushListItemParagraph ──────────────────────────────────────
 
-    public function testFlushListItemParagraphWithEmptyBufferReturnsEmptyString(): void
+    public function test_flush_list_item_paragraph_with_empty_buffer_returns_empty_string(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);
@@ -128,7 +128,7 @@ class ListTrackerTest extends TestCase
         $this->assertSame('', $result);
     }
 
-    public function testFlushListItemParagraphProducesBulletOutput(): void
+    public function test_flush_list_item_paragraph_produces_bullet_output(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);
@@ -142,7 +142,7 @@ class ListTrackerTest extends TestCase
         $this->assertStringContainsString("\u{2022}", $result);
     }
 
-    public function testFlushListItemParagraphClearsNeedsBullet(): void
+    public function test_flush_list_item_paragraph_clears_needs_bullet(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);
@@ -155,7 +155,7 @@ class ListTrackerTest extends TestCase
         $this->assertFalse($this->tracker->needsBullet());
     }
 
-    public function testFlushListItemParagraphOrderedUsesCounter(): void
+    public function test_flush_list_item_paragraph_ordered_uses_counter(): void
     {
         $listBlock = $this->createOrderedListBlock(start: 1);
         $this->tracker->handleListBlock($listBlock, true);
@@ -174,7 +174,7 @@ class ListTrackerTest extends TestCase
         $this->assertStringContainsString('2.', $result2);
     }
 
-    public function testFlushListItemParagraphNestedUsesCircleBullet(): void
+    public function test_flush_list_item_paragraph_nested_uses_circle_bullet(): void
     {
         $outer = $this->createBulletListBlock();
         $inner = $this->createBulletListBlock();
@@ -188,7 +188,7 @@ class ListTrackerTest extends TestCase
         $this->assertStringContainsString("\u{25E6}", $result);
     }
 
-    public function testFlushListItemParagraphContinuationParagraph(): void
+    public function test_flush_list_item_paragraph_continuation_paragraph(): void
     {
         $listBlock = $this->createBulletListBlock();
         $this->tracker->handleListBlock($listBlock, true);

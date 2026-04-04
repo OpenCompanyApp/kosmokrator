@@ -43,7 +43,7 @@ final class HistoryStatusWidget extends AbstractWidget
 
     /**
      * @param  RenderContext  $context  Terminal dimensions
-     * @return list<string>  Single ANSI-formatted status line, or empty when hidden
+     * @return list<string> Single ANSI-formatted status line, or empty when hidden
      */
     public function render(RenderContext $context): array
     {

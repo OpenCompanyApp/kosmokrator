@@ -7,42 +7,42 @@ use PHPUnit\Framework\TestCase;
 
 class TaskStatusTest extends TestCase
 {
-    public function test_isTerminal_returns_true_for_completed(): void
+    public function test_is_terminal_returns_true_for_completed(): void
     {
         $this->assertTrue(TaskStatus::Completed->isTerminal());
     }
 
-    public function test_isTerminal_returns_true_for_cancelled(): void
+    public function test_is_terminal_returns_true_for_cancelled(): void
     {
         $this->assertTrue(TaskStatus::Cancelled->isTerminal());
     }
 
-    public function test_isTerminal_returns_true_for_failed(): void
+    public function test_is_terminal_returns_true_for_failed(): void
     {
         $this->assertTrue(TaskStatus::Failed->isTerminal());
     }
 
-    public function test_isTerminal_returns_false_for_pending(): void
+    public function test_is_terminal_returns_false_for_pending(): void
     {
         $this->assertFalse(TaskStatus::Pending->isTerminal());
     }
 
-    public function test_isTerminal_returns_false_for_in_progress(): void
+    public function test_is_terminal_returns_false_for_in_progress(): void
     {
         $this->assertFalse(TaskStatus::InProgress->isTerminal());
     }
 
-    public function test_isActive_returns_true_for_pending(): void
+    public function test_is_active_returns_true_for_pending(): void
     {
         $this->assertTrue(TaskStatus::Pending->isActive());
     }
 
-    public function test_isActive_returns_true_for_in_progress(): void
+    public function test_is_active_returns_true_for_in_progress(): void
     {
         $this->assertTrue(TaskStatus::InProgress->isActive());
     }
 
-    public function test_isActive_returns_false_for_terminal_states(): void
+    public function test_is_active_returns_false_for_terminal_states(): void
     {
         $this->assertFalse(TaskStatus::Completed->isActive());
         $this->assertFalse(TaskStatus::Cancelled->isActive());
@@ -90,13 +90,13 @@ class TaskStatusTest extends TestCase
         $this->assertSame(['completed', 'cancelled', 'failed'], $transitions['in_progress']);
     }
 
-    public function test_canTransitionTo_returns_true_for_valid_transition(): void
+    public function test_can_transition_to_returns_true_for_valid_transition(): void
     {
         $this->assertTrue(TaskStatus::Pending->canTransitionTo(TaskStatus::InProgress));
         $this->assertTrue(TaskStatus::InProgress->canTransitionTo(TaskStatus::Failed));
     }
 
-    public function test_canTransitionTo_returns_false_for_invalid_transition(): void
+    public function test_can_transition_to_returns_false_for_invalid_transition(): void
     {
         $this->assertFalse(TaskStatus::Pending->canTransitionTo(TaskStatus::Completed));
         $this->assertFalse(TaskStatus::Completed->canTransitionTo(TaskStatus::InProgress));

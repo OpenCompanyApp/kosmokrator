@@ -47,7 +47,9 @@ class ToolExecutorTest extends TestCase
         return (new Tool)
             ->as($name)
             ->for("Test tool: {$name}")
-            ->using(function (...$_) use ($returnOutput) { return $returnOutput; });
+            ->using(function (...$_) use ($returnOutput) {
+                return $returnOutput;
+            });
     }
 
     /** Create a Prism Tool whose handle() invokes the callback with any args. */
@@ -56,7 +58,9 @@ class ToolExecutorTest extends TestCase
         return (new Tool)
             ->as($name)
             ->for("Test tool: {$name}")
-            ->using(function (...$args) use ($callback) { return $callback(...$args); });
+            ->using(function (...$args) use ($callback) {
+                return $callback(...$args);
+            });
     }
 
     protected function setUp(): void
@@ -202,7 +206,7 @@ class ToolExecutorTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertSame('tc_1', $results[0]->toolCallId);
-        $this->assertStringContainsString("not found", $results[0]->result);
+        $this->assertStringContainsString('not found', $results[0]->result);
     }
 
     public function test_tool_not_found_shows_not_found_message(): void
@@ -618,7 +622,9 @@ class ToolExecutorTest extends TestCase
 
     public function test_tool_exception_returns_error_result(): void
     {
-        $tool = $this->makeToolWithCallback('bash', function (...$_) { throw new \RuntimeException('Something broke'); });
+        $tool = $this->makeToolWithCallback('bash', function (...$_) {
+            throw new \RuntimeException('Something broke');
+        });
         $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: ['command' => 'bad-cmd']);
 
         $executor = $this->createExecutor();
@@ -1036,7 +1042,9 @@ class ToolExecutorTest extends TestCase
         $tool = (new Tool)
             ->as('bash')
             ->for('Test bash')
-            ->using(function (...$_) { throw new \RuntimeException('Boom'); })
+            ->using(function (...$_) {
+                throw new \RuntimeException('Boom');
+            })
             ->withoutErrorHandling();
         $toolCall = new ToolCall(id: 'tc_1', name: 'bash', arguments: ['command' => 'fail']);
 

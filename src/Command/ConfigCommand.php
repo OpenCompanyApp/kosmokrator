@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -41,7 +42,7 @@ final class ConfigCommand extends Command
     {
         $settings = $this->container->make(SettingsManager::class);
         $schema = $this->container->make(SettingsSchema::class);
-        $settings->setProjectRoot(\Kosmokrator\Agent\InstructionLoader::gitRoot() ?? getcwd());
+        $settings->setProjectRoot(InstructionLoader::gitRoot() ?? getcwd());
 
         $action = (string) $input->getArgument('action');
         $key = $input->getArgument('key');

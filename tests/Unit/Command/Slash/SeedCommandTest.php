@@ -35,28 +35,28 @@ class SeedCommandTest extends TestCase
 
     public function test_name(): void
     {
-        $command = new SeedCommand();
+        $command = new SeedCommand;
 
         $this->assertSame('/seed', $command->name());
     }
 
     public function test_aliases(): void
     {
-        $command = new SeedCommand();
+        $command = new SeedCommand;
 
         $this->assertSame([], $command->aliases());
     }
 
     public function test_description(): void
     {
-        $command = new SeedCommand();
+        $command = new SeedCommand;
 
         $this->assertSame('Seed mock session (dev)', $command->description());
     }
 
     public function test_immediate(): void
     {
-        $command = new SeedCommand();
+        $command = new SeedCommand;
 
         $this->assertFalse($command->immediate());
     }
@@ -67,7 +67,7 @@ class SeedCommandTest extends TestCase
         $ui->expects($this->once())
             ->method('seedMockSession');
 
-        $command = new SeedCommand();
+        $command = new SeedCommand;
         $ctx = $this->makeContext(ui: $ui);
 
         $command->execute('', $ctx);
@@ -75,7 +75,7 @@ class SeedCommandTest extends TestCase
 
     public function test_execute_returns_continue(): void
     {
-        $command = new SeedCommand();
+        $command = new SeedCommand;
         $ctx = $this->makeContext();
 
         $result = $command->execute('', $ctx);

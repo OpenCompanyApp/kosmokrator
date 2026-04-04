@@ -9,6 +9,7 @@ use Illuminate\Contracts\Events\Dispatcher as DispatcherContract;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Kosmokrator\Kernel;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
@@ -18,7 +19,6 @@ use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\ToolRegistry;
-use Kosmokrator\Kernel;
 use Monolog\Logger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -42,7 +42,7 @@ class KernelTest extends TestCase
         self::$originalHome = getenv('HOME') ?: null;
         self::$fakeHome = sys_get_temp_dir().'/kosmokrator_kernel_test_'.uniqid();
         mkdir(self::$fakeHome.'/.kosmokrator/logs', 0755, true);
-        putenv("HOME=".self::$fakeHome);
+        putenv('HOME='.self::$fakeHome);
         $_ENV['HOME'] = self::$fakeHome;
 
         self::$sharedKernel = new Kernel(self::$basePath);
@@ -53,7 +53,7 @@ class KernelTest extends TestCase
     {
         // Restore HOME
         if (self::$originalHome !== null) {
-            putenv("HOME=".self::$originalHome);
+            putenv('HOME='.self::$originalHome);
             $_ENV['HOME'] = self::$originalHome;
         } else {
             putenv('HOME');

@@ -12,14 +12,14 @@ class IntroSkippedExceptionTest extends TestCase
 {
     public function test_can_be_instantiated(): void
     {
-        $exception = new IntroSkippedException();
+        $exception = new IntroSkippedException;
 
         $this->assertInstanceOf(IntroSkippedException::class, $exception);
     }
 
     public function test_is_a_runtime_exception(): void
     {
-        $exception = new IntroSkippedException();
+        $exception = new IntroSkippedException;
 
         $this->assertInstanceOf(RuntimeException::class, $exception);
     }

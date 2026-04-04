@@ -49,7 +49,7 @@ class ShellStartToolTest extends TestCase
 
     public function test_execute_with_valid_command_calls_start(): void
     {
-        $result = $this->tool->execute(['command' => 'printf hello']);
+        $result = \Amp\async(fn () => $this->tool->execute(['command' => 'printf hello']))->await();
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('hello', $result->output);

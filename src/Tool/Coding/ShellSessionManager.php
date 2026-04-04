@@ -32,11 +32,11 @@ final class ShellSessionManager
     /**
      * Spawn a new shell session and return its ID along with any initial output.
      *
-     * @param  string       $command         Shell command to run via `sh -c`
-     * @param  string|null  $cwd             Working directory (defaults to getcwd())
-     * @param  bool         $readOnly        Whether to enforce read-only mode on writes
-     * @param  int|null     $timeoutSeconds  Max runtime before auto-kill (defaults to constructor value)
-     * @param  int|null     $waitMs          Milliseconds to wait for initial output
+     * @param  string  $command  Shell command to run via `sh -c`
+     * @param  string|null  $cwd  Working directory (defaults to getcwd())
+     * @param  bool  $readOnly  Whether to enforce read-only mode on writes
+     * @param  int|null  $timeoutSeconds  Max runtime before auto-kill (defaults to constructor value)
+     * @param  int|null  $waitMs  Milliseconds to wait for initial output
      * @return array{id:string, output:string}
      */
     public function start(
@@ -80,11 +80,11 @@ final class ShellSessionManager
     /**
      * Send input to a session's stdin and return any resulting output.
      *
-     * @param  string   $id      Session ID
-     * @param  string   $input   Text to write to stdin
-     * @param  bool     $submit  Whether to append a newline after the input
-     * @param  int|null $waitMs  Milliseconds to wait for response output
-     * @return string   Output text or a status message
+     * @param  string  $id  Session ID
+     * @param  string  $input  Text to write to stdin
+     * @param  bool  $submit  Whether to append a newline after the input
+     * @param  int|null  $waitMs  Milliseconds to wait for response output
+     * @return string Output text or a status message
      */
     public function write(string $id, string $input, bool $submit = true, ?int $waitMs = null): string
     {
@@ -110,9 +110,9 @@ final class ShellSessionManager
     /**
      * Read any unread output from a session (non-destructive).
      *
-     * @param  string   $id     Session ID
-     * @param  int|null $waitMs Milliseconds to wait for new output
-     * @return string   Output text or a status message
+     * @param  string  $id  Session ID
+     * @param  int|null  $waitMs  Milliseconds to wait for new output
+     * @return string Output text or a status message
      */
     public function read(string $id, ?int $waitMs = null): string
     {
@@ -128,7 +128,7 @@ final class ShellSessionManager
     /**
      * Kill a running session and return any remaining output.
      *
-     * @param  string $id Session ID
+     * @param  string  $id  Session ID
      * @return string Output text or a status message
      */
     public function kill(string $id): string
@@ -150,7 +150,7 @@ final class ShellSessionManager
     /**
      * Check whether a session is in read-only mode.
      *
-     * @param  string $id Session ID
+     * @param  string  $id  Session ID
      */
     public function isReadOnly(string $id): bool
     {

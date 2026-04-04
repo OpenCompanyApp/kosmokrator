@@ -23,7 +23,7 @@ final class EffectiveSettingTest extends TestCase
         );
     }
 
-    public function testConstructionWithStringValue(): void
+    public function test_construction_with_string_value(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -40,7 +40,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertSame($this->definition, $setting->definition);
     }
 
-    public function testConstructionWithIntegerValue(): void
+    public function test_construction_with_integer_value(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -53,7 +53,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertSame(42, $setting->value);
     }
 
-    public function testConstructionWithBooleanValue(): void
+    public function test_construction_with_boolean_value(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -66,7 +66,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertTrue($setting->value);
     }
 
-    public function testConstructionWithFalseBooleanValue(): void
+    public function test_construction_with_false_boolean_value(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -79,7 +79,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertFalse($setting->value);
     }
 
-    public function testConstructionWithArrayValue(): void
+    public function test_construction_with_array_value(): void
     {
         $value = ['foo' => 'bar', 'baz' => [1, 2, 3]];
 
@@ -94,7 +94,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertSame($value, $setting->value);
     }
 
-    public function testConstructionWithNullValue(): void
+    public function test_construction_with_null_value(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -107,7 +107,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertNull($setting->value);
     }
 
-    public function testConstructionWithEmptyArrayValue(): void
+    public function test_construction_with_empty_array_value(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -120,7 +120,7 @@ final class EffectiveSettingTest extends TestCase
         $this->assertSame([], $setting->value);
     }
 
-    public function testPropertiesAreReadonly(): void
+    public function test_properties_are_readonly(): void
     {
         $setting = new EffectiveSetting(
             id: 'test.setting',
@@ -140,14 +140,14 @@ final class EffectiveSettingTest extends TestCase
         }
     }
 
-    public function testClassIsReadonly(): void
+    public function test_class_is_readonly(): void
     {
         $reflection = new \ReflectionClass(EffectiveSetting::class);
 
         $this->assertTrue($reflection->isReadOnly());
     }
 
-    public function testConstructionWithDifferentDefinition(): void
+    public function test_construction_with_different_definition(): void
     {
         $differentDefinition = new SettingDefinition(
             id: 'other.setting',

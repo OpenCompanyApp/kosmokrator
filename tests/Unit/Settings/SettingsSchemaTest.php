@@ -14,10 +14,10 @@ final class SettingsSchemaTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->schema = new SettingsSchema();
+        $this->schema = new SettingsSchema;
     }
 
-    public function testDefinitionsReturnsNonEmptyArray(): void
+    public function test_definitions_returns_non_empty_array(): void
     {
         $definitions = $this->schema->definitions();
 
@@ -25,7 +25,7 @@ final class SettingsSchemaTest extends TestCase
         $this->assertNotEmpty($definitions);
     }
 
-    public function testDefinitionsReturnsSettingDefinitionInstances(): void
+    public function test_definitions_returns_setting_definition_instances(): void
     {
         $definitions = $this->schema->definitions();
 
@@ -35,7 +35,7 @@ final class SettingsSchemaTest extends TestCase
         }
     }
 
-    public function testDefinitionWithValidIdReturnsDefinition(): void
+    public function test_definition_with_valid_id_returns_definition(): void
     {
         $definition = $this->schema->definition('agent.mode');
 
@@ -43,12 +43,12 @@ final class SettingsSchemaTest extends TestCase
         $this->assertSame('agent.mode', $definition->id);
     }
 
-    public function testDefinitionWithUnknownIdReturnsNull(): void
+    public function test_definition_with_unknown_id_returns_null(): void
     {
         $this->assertNull($this->schema->definition('nonexistent.setting'));
     }
 
-    public function testCanonicalIdResolvesKnownAliases(): void
+    public function test_canonical_id_resolves_known_aliases(): void
     {
         $this->assertSame('agent.mode', $this->schema->canonicalId('mode'));
         $this->assertSame('tools.default_permission_mode', $this->schema->canonicalId('permission_mode'));
@@ -58,14 +58,14 @@ final class SettingsSchemaTest extends TestCase
         $this->assertSame('agent.max_tokens', $this->schema->canonicalId('max_tokens'));
     }
 
-    public function testCanonicalIdPassesThroughUnknownIdsUnchanged(): void
+    public function test_canonical_id_passes_through_unknown_ids_unchanged(): void
     {
         $this->assertSame('agent.mode', $this->schema->canonicalId('agent.mode'));
         $this->assertSame('totally.unknown', $this->schema->canonicalId('totally.unknown'));
         $this->assertSame('', $this->schema->canonicalId(''));
     }
 
-    public function testCategoriesReturnsExpectedList(): void
+    public function test_categories_returns_expected_list(): void
     {
         $categories = $this->schema->categories();
 
@@ -83,7 +83,7 @@ final class SettingsSchemaTest extends TestCase
         ], $categories);
     }
 
-    public function testCategoryLabelsMapsAllCategories(): void
+    public function test_category_labels_maps_all_categories(): void
     {
         $labels = $this->schema->categoryLabels();
         $categories = $this->schema->categories();
@@ -95,7 +95,7 @@ final class SettingsSchemaTest extends TestCase
         }
     }
 
-    public function testDefinitionsForCategoryReturnsCorrectDefinitions(): void
+    public function test_definitions_for_category_returns_correct_definitions(): void
     {
         $contextMemoryDefs = $this->schema->definitionsForCategory('context_memory');
 
@@ -106,7 +106,7 @@ final class SettingsSchemaTest extends TestCase
         }
     }
 
-    public function testDefinitionsForCategoryWithUnknownCategoryReturnsEmpty(): void
+    public function test_definitions_for_category_with_unknown_category_returns_empty(): void
     {
         $this->assertSame([], $this->schema->definitionsForCategory('nonexistent'));
     }

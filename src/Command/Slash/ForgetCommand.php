@@ -37,9 +37,9 @@ class ForgetCommand implements SlashCommand
     }
 
     /**
-     * @param  string               $args  Numeric memory ID to delete
-     * @param  SlashCommandContext  $ctx   Current session context
-     * @return SlashCommandResult   Always continues the session
+     * @param  string  $args  Numeric memory ID to delete
+     * @param  SlashCommandContext  $ctx  Current session context
+     * @return SlashCommandResult Always continues the session
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {

@@ -15,19 +15,23 @@ use Symfony\Component\Yaml\Yaml;
 final class SettingsManagerTest extends TestCase
 {
     private string $projectConfigDir;
+
     private Repository $config;
+
     private SettingsSchema $schema;
+
     private YamlConfigStore $store;
+
     private SettingsManager $manager;
 
     protected function setUp(): void
     {
         // Use the real project config/ dir so ConfigLoader can reload properly.
-        $this->projectConfigDir = dirname(__DIR__, 3) . '/config';
+        $this->projectConfigDir = dirname(__DIR__, 3).'/config';
 
         // Build a real Repository from the bundled defaults.
         $defaults = [];
-        foreach (glob($this->projectConfigDir . '/*.yaml') as $file) {
+        foreach (glob($this->projectConfigDir.'/*.yaml') as $file) {
             $key = pathinfo($file, PATHINFO_FILENAME);
             $defaults[$key] = Yaml::parse(file_get_contents($file)) ?? [];
         }
@@ -55,12 +59,12 @@ final class SettingsManagerTest extends TestCase
 
     // ── resolve() ──────────────────────────────────────────────────────
 
-    public function testResolveReturnsNullForUnknownSetting(): void
+    public function test_resolve_returns_null_for_unknown_setting(): void
     {
         $this->assertNull($this->manager->resolve('nonexistent.setting'));
     }
 
-    public function testResolveReturnsEffectiveSettingForKnownSetting(): void
+    public function test_resolve_returns_effective_setting_for_known_setting(): void
     {
         $effective = $this->manager->resolve('agent.default_provider');
 
@@ -72,7 +76,7 @@ final class SettingsManagerTest extends TestCase
 
     // ── get() ──────────────────────────────────────────────────────────
 
-    public function testGetReturnsStringValueForKnownSetting(): void
+    public function test_get_returns_string_value_for_known_setting(): void
     {
         $value = $this->manager->get('agent.default_provider');
 
@@ -80,26 +84,26 @@ final class SettingsManagerTest extends TestCase
         $this->assertSame('z', $value);
     }
 
-    public function testGetReturnsNullForUnknownSetting(): void
+    public function test_get_returns_null_for_unknown_setting(): void
     {
         $this->assertNull($this->manager->get('totally.made.up'));
     }
 
     // ── setProjectRoot() ───────────────────────────────────────────────
 
-    public function testSetProjectRootAcceptsNull(): void
+    public function test_set_project_root_accepts_null(): void
     {
         $this->manager->setProjectRoot(null);
         $this->assertNull($this->manager->projectConfigPath());
     }
 
-    public function testSetProjectRootAcceptsPath(): void
+    public function test_set_project_root_accepts_path(): void
     {
-        $tmp = sys_get_temp_dir() . '/kk-test-' . uniqid();
+        $tmp = sys_get_temp_dir().'/kk-test-'.uniqid();
         mkdir($tmp, 0777, true);
         $this->manager->setProjectRoot($tmp);
 
-        $this->assertSame($tmp . '/.kosmokrator/config.yaml', $this->manager->projectConfigPath());
+        $this->assertSame($tmp.'/.kosmokrator/config.yaml', $this->manager->projectConfigPath());
 
         // Cleanup
         rmdir($tmp);
@@ -107,7 +111,7 @@ final class SettingsManagerTest extends TestCase
 
     // ── globalConfigPath() ─────────────────────────────────────────────
 
-    public function testGlobalConfigPathReturnsString(): void
+    public function test_global_config_path_returns_string(): void
     {
         $path = $this->manager->globalConfigPath();
 
@@ -117,7 +121,7 @@ final class SettingsManagerTest extends TestCase
 
     // ── projectConfigPath() ────────────────────────────────────────────
 
-    public function testProjectConfigPathReturnsNullWhenNoProjectRoot(): void
+    public function test_project_config_path_returns_null_when_no_project_root(): void
     {
         $this->manager->setProjectRoot(null);
 
@@ -126,7 +130,7 @@ final class SettingsManagerTest extends TestCase
 
     // ── set() ──────────────────────────────────────────────────────────
 
-    public function testSetThrowsForUnknownSetting(): void
+    public function test_set_throws_for_unknown_setting(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unknown setting [bogus.setting].');
@@ -134,10 +138,10 @@ final class SettingsManagerTest extends TestCase
         $this->manager->set('bogus.setting', 'value');
     }
 
-    public function testSetWritesToGlobalScope(): void
+    public function test_set_writes_to_global_scope(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/kk-settings-test-' . uniqid();
-        $globalDir = $tmpDir . '/.config/kosmokrator';
+        $tmpDir = sys_get_temp_dir().'/kk-settings-test-'.uniqid();
+        $globalDir = $tmpDir.'/.config/kosmokrator';
         mkdir($globalDir, 0777, true);
 
         // Override HOME so the global config path points to our temp dir.
@@ -159,20 +163,20 @@ final class SettingsManagerTest extends TestCase
             $this->assertSame('test-provider', $raw);
 
             // Verify the file was actually written
-            $this->assertFileExists($globalDir . '/config.yaml');
+            $this->assertFileExists($globalDir.'/config.yaml');
         } finally {
             putenv("HOME={$origHome}");
             // Cleanup
-            @unlink($globalDir . '/config.yaml');
+            @unlink($globalDir.'/config.yaml');
             @rmdir($globalDir);
-            @rmdir($tmpDir . '/.config');
+            @rmdir($tmpDir.'/.config');
             @rmdir($tmpDir);
         }
     }
 
     // ── getRaw() ───────────────────────────────────────────────────────
 
-    public function testGetRawReadsFromConfigRepository(): void
+    public function test_get_raw_reads_from_config_repository(): void
     {
         // The bundled config has kosmokrator.agent.default_provider = 'z'
         $value = $this->manager->getRaw('kosmokrator.agent.default_provider');
@@ -180,17 +184,17 @@ final class SettingsManagerTest extends TestCase
         $this->assertSame('z', $value);
     }
 
-    public function testGetRawReturnsNullForUnknownPath(): void
+    public function test_get_raw_returns_null_for_unknown_path(): void
     {
         $this->assertNull($this->manager->getRaw('no.such.path'));
     }
 
     // ── setRaw() / getRaw() round-trip ─────────────────────────────────
 
-    public function testSetRawAndGetRawRoundTripWithTempFiles(): void
+    public function test_set_raw_and_get_raw_round_trip_with_temp_files(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/kk-settings-roundtrip-' . uniqid();
-        $globalDir = $tmpDir . '/.config/kosmokrator';
+        $tmpDir = sys_get_temp_dir().'/kk-settings-roundtrip-'.uniqid();
+        $globalDir = $tmpDir.'/.config/kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -212,24 +216,24 @@ final class SettingsManagerTest extends TestCase
             $this->assertSame('gpt-5', $value);
 
             // Verify file on disk
-            $this->assertFileExists($globalDir . '/config.yaml');
-            $disk = Yaml::parse(file_get_contents($globalDir . '/config.yaml'));
+            $this->assertFileExists($globalDir.'/config.yaml');
+            $disk = Yaml::parse(file_get_contents($globalDir.'/config.yaml'));
             $this->assertSame('gpt-5', $disk['kosmokrator']['provider_state']['testprovider']['last_model']);
         } finally {
             putenv("HOME={$origHome}");
-            @unlink($globalDir . '/config.yaml');
+            @unlink($globalDir.'/config.yaml');
             @rmdir($globalDir);
-            @rmdir($tmpDir . '/.config');
+            @rmdir($tmpDir.'/.config');
             @rmdir($tmpDir);
         }
     }
 
     // ── unsetRaw() ─────────────────────────────────────────────────────
 
-    public function testUnsetRawRemovesValue(): void
+    public function test_unset_raw_removes_value(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/kk-settings-unset-' . uniqid();
-        $globalDir = $tmpDir . '/.config/kosmokrator';
+        $tmpDir = sys_get_temp_dir().'/kk-settings-unset-'.uniqid();
+        $globalDir = $tmpDir.'/.config/kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -253,19 +257,19 @@ final class SettingsManagerTest extends TestCase
             $this->assertNull($manager->getRaw('kosmokrator.test_key'));
         } finally {
             putenv("HOME={$origHome}");
-            @unlink($globalDir . '/config.yaml');
+            @unlink($globalDir.'/config.yaml');
             @rmdir($globalDir);
-            @rmdir($tmpDir . '/.config');
+            @rmdir($tmpDir.'/.config');
             @rmdir($tmpDir);
         }
     }
 
     // ── Provider last model ────────────────────────────────────────────
 
-    public function testProviderLastModelRoundTrip(): void
+    public function test_provider_last_model_round_trip(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/kk-settings-provider-' . uniqid();
-        $globalDir = $tmpDir . '/.config/kosmokrator';
+        $tmpDir = sys_get_temp_dir().'/kk-settings-provider-'.uniqid();
+        $globalDir = $tmpDir.'/.config/kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -285,16 +289,16 @@ final class SettingsManagerTest extends TestCase
             $this->assertSame('gpt-4o', $manager->getProviderLastModel('openai'));
         } finally {
             putenv("HOME={$origHome}");
-            @unlink($globalDir . '/config.yaml');
+            @unlink($globalDir.'/config.yaml');
             @rmdir($globalDir);
-            @rmdir($tmpDir . '/.config');
+            @rmdir($tmpDir.'/.config');
             @rmdir($tmpDir);
         }
     }
 
     // ── customProviders() ──────────────────────────────────────────────
 
-    public function testCustomProvidersReturnsEmptyArrayByDefault(): void
+    public function test_custom_providers_returns_empty_array_by_default(): void
     {
         $providers = $this->manager->customProviders();
 
@@ -303,10 +307,10 @@ final class SettingsManagerTest extends TestCase
 
     // ── delete() ───────────────────────────────────────────────────────
 
-    public function testDeleteRemovesSettingFromGlobal(): void
+    public function test_delete_removes_setting_from_global(): void
     {
-        $tmpDir = sys_get_temp_dir() . '/kk-settings-delete-' . uniqid();
-        $globalDir = $tmpDir . '/.config/kosmokrator';
+        $tmpDir = sys_get_temp_dir().'/kk-settings-delete-'.uniqid();
+        $globalDir = $tmpDir.'/.config/kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -329,14 +333,14 @@ final class SettingsManagerTest extends TestCase
             $this->assertSame('z', $manager->get('agent.default_provider'));
         } finally {
             putenv("HOME={$origHome}");
-            @unlink($globalDir . '/config.yaml');
+            @unlink($globalDir.'/config.yaml');
             @rmdir($globalDir);
-            @rmdir($tmpDir . '/.config');
+            @rmdir($tmpDir.'/.config');
             @rmdir($tmpDir);
         }
     }
 
-    public function testDeleteDoesNothingForUnknownSetting(): void
+    public function test_delete_does_nothing_for_unknown_setting(): void
     {
         // Should not throw — just silently return
         $this->manager->delete('nonexistent.setting');

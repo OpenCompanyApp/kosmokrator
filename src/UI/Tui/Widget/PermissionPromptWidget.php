@@ -102,7 +102,7 @@ final class PermissionPromptWidget extends AbstractWidget implements FocusableIn
      * Render the bordered tool-call preview and selectable approval options.
      *
      * @param  RenderContext  $context  Terminal dimensions
-     * @return list<string>  ANSI-formatted lines
+     * @return list<string> ANSI-formatted lines
      */
     public function render(RenderContext $context): array
     {

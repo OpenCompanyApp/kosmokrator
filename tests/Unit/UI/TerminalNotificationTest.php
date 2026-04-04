@@ -66,7 +66,7 @@ class TerminalNotificationTest extends TestCase
         $output = implode('', $this->captured);
         // Should have BEL + OSC 9
         $this->assertStringContainsString("\x07", $output);
-        $this->assertStringContainsString("]9;KosmoKrator", $output);
+        $this->assertStringContainsString(']9;KosmoKrator', $output);
     }
 
     // ---------------------------------------------------------------
@@ -81,7 +81,7 @@ class TerminalNotificationTest extends TestCase
 
         $output = implode('', $this->captured);
         $this->assertStringContainsString("\x07", $output);
-        $this->assertStringContainsString("]777;notify;KosmoKrator", $output);
+        $this->assertStringContainsString(']777;notify;KosmoKrator', $output);
     }
 
     // ---------------------------------------------------------------

@@ -230,6 +230,12 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
             if (AnsiUtils::visibleWidth($line) > $cols) {
                 $lines[$index] = AnsiUtils::truncateToWidth($line, $cols, '');
             }
+            // Safety net: if truncateToWidth still exceeds (malformed ANSI, wide chars),
+            // strip all escape codes and hard-truncate to prevent RenderException crashes.
+            if (AnsiUtils::visibleWidth($lines[$index]) > $cols) {
+                $stripped = preg_replace('/\x1B(?:\[[0-9;]*[A-Za-z]|\].*?\x07)/', '', $lines[$index]);
+                $lines[$index] = mb_substr($stripped ?? $lines[$index], 0, $cols);
+            }
         }
 
         return $lines;

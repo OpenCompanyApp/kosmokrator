@@ -16,11 +16,11 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 class QuestionWidget extends AbstractWidget
 {
     /**
-     * @param  string  $question     The question text to display inside the box
-     * @param  string  $title        Box header title (default: 'Question')
+     * @param  string  $question  The question text to display inside the box
+     * @param  string  $title  Box header title (default: 'Question')
      * @param  string  $borderColor  ANSI escape for border color (falls back to Theme::borderAccent)
-     * @param  string  $titleColor   ANSI escape for title color (falls back to Theme::accent)
-     * @param  bool    $showBottom   Whether to render the bottom border line
+     * @param  string  $titleColor  ANSI escape for title color (falls back to Theme::accent)
+     * @param  bool  $showBottom  Whether to render the bottom border line
      */
     public function __construct(
         private readonly string $question,
@@ -32,7 +32,7 @@ class QuestionWidget extends AbstractWidget
 
     /**
      * @param  RenderContext  $context  Terminal dimensions
-     * @return list<string>  ANSI-formatted bordered lines containing the question
+     * @return list<string> ANSI-formatted bordered lines containing the question
      */
     public function render(RenderContext $context): array
     {

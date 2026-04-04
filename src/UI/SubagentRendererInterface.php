@@ -53,7 +53,7 @@ interface SubagentRendererInterface
     /**
      * Update the live subagent tree display with current orchestrator state.
      *
-     * @param array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}> $tree
+     * @param  array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>  $tree
      */
     public function refreshSubagentTree(array $tree): void;
 

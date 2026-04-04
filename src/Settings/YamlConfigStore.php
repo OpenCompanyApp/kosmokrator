@@ -17,7 +17,7 @@ final class YamlConfigStore
     /**
      * Parse a YAML config file into a nested array.
      *
-     * @param  string|null $path Absolute file path, or null to skip
+     * @param  string|null  $path  Absolute file path, or null to skip
      * @return array<string, mixed> Parsed config data, or empty array on failure
      */
     public function load(?string $path): array
@@ -39,8 +39,8 @@ final class YamlConfigStore
      *
      * Creates the parent directory if needed. Removes the file when data is empty.
      *
-     * @param  string               $path Absolute file path
-     * @param  array<string, mixed> $data Config data to write
+     * @param  string  $path  Absolute file path
+     * @param  array<string, mixed>  $data  Config data to write
      */
     public function save(string $path, array $data): void
     {
@@ -63,8 +63,8 @@ final class YamlConfigStore
     /**
      * Retrieve a value from a nested array using dot notation.
      *
-     * @param  array<string, mixed> $data Config array to search
-     * @param  string               $path Dot-separated key path (e.g. "kosmokrator.agent.mode")
+     * @param  array<string, mixed>  $data  Config array to search
+     * @param  string  $path  Dot-separated key path (e.g. "kosmokrator.agent.mode")
      * @return mixed The value at the given path, or null if not found
      */
     public function get(array $data, string $path): mixed
@@ -86,21 +86,21 @@ final class YamlConfigStore
     /**
      * Set a value in a nested array using dot notation, creating intermediate keys as needed.
      *
-     * @param  array<string, mixed> $data  Config array to modify (by reference)
-     * @param  string               $path  Dot-separated key path
-     * @param  mixed                $value Value to assign
+     * @param  array<string, mixed>  $data  Config array to modify (by reference)
+     * @param  string  $path  Dot-separated key path
+     * @param  mixed  $value  Value to assign
      */
     public function set(array &$data, string $path, mixed $value): void
     {
         $segments = explode('.', $path);
-        $current =& $data;
+        $current = &$data;
 
         foreach ($segments as $segment) {
             if (! isset($current[$segment]) || ! is_array($current[$segment])) {
                 $current[$segment] = [];
             }
 
-            $current =& $current[$segment];
+            $current = &$current[$segment];
         }
 
         $current = $value;
@@ -109,8 +109,8 @@ final class YamlConfigStore
     /**
      * Remove a value from a nested array using dot notation.
      *
-     * @param  array<string, mixed> $data Config array to modify (by reference)
-     * @param  string               $path Dot-separated key path to unset
+     * @param  array<string, mixed>  $data  Config array to modify (by reference)
+     * @param  string  $path  Dot-separated key path to unset
      */
     public function unset(array &$data, string $path): void
     {
@@ -120,12 +120,12 @@ final class YamlConfigStore
             return;
         }
 
-        $current =& $data;
+        $current = &$data;
         foreach ($segments as $segment) {
             if (! isset($current[$segment]) || ! is_array($current[$segment])) {
                 return;
             }
-            $current =& $current[$segment];
+            $current = &$current[$segment];
         }
 
         unset($current[$leaf]);

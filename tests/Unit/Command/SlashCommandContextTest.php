@@ -21,12 +21,19 @@ use PHPUnit\Framework\TestCase;
 final class SlashCommandContextTest extends TestCase
 {
     private UIManager $ui;
+
     private AgentLoop $agentLoop;
+
     private PermissionEvaluator $permissions;
+
     private SessionManager $sessionManager;
+
     private LlmClientInterface $llm;
+
     private TaskStore $taskStore;
+
     private Repository $config;
+
     private SettingsRepository $settings;
 
     protected function setUp(): void
@@ -55,14 +62,14 @@ final class SlashCommandContextTest extends TestCase
         );
     }
 
-    public function testConstructorWithRequiredArgsOnly(): void
+    public function test_constructor_with_required_args_only(): void
     {
         $context = $this->createContext();
 
         $this->assertInstanceOf(SlashCommandContext::class, $context);
     }
 
-    public function testOptionalArgsDefaultToNull(): void
+    public function test_optional_args_default_to_null(): void
     {
         $context = $this->createContext();
 
@@ -71,7 +78,7 @@ final class SlashCommandContextTest extends TestCase
         $this->assertNull($context->providers);
     }
 
-    public function testOptionalArgsCanBeSet(): void
+    public function test_optional_args_can_be_set(): void
     {
         $orchestrator = $this->createMock(SubagentOrchestrator::class);
         $models = $this->createMock(ModelCatalog::class);
@@ -95,7 +102,7 @@ final class SlashCommandContextTest extends TestCase
         $this->assertNull($context->providers);
     }
 
-    public function testAllPropertiesAreAccessible(): void
+    public function test_all_properties_are_accessible(): void
     {
         $context = $this->createContext();
 

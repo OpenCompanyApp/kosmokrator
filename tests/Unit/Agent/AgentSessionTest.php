@@ -16,9 +16,13 @@ use PHPUnit\Framework\TestCase;
 class AgentSessionTest extends TestCase
 {
     private UIManager $ui;
+
     private AgentLoop $agentLoop;
+
     private LlmClientInterface $llm;
+
     private PermissionEvaluator $permissions;
+
     private SessionManager $sessionManager;
 
     protected function setUp(): void

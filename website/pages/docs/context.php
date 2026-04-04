@@ -22,21 +22,37 @@ ob_start();
     aggressive.
 </p>
 
-<pre><code>  Tool Output         Conversation          Conversation          LLM              Conversation
-  comes back          history               history               call             history
-      |                   |                     |                   |                   |
-      v                   v                     v                   v                   v
-+--------------+   +---------------+   +--------------+   +-----------------+   +---------------+
-|   Output     |   |               |   |              |   |   LLM-Based     |   |  Oldest-Turn  |
-|  Truncation  |-->| Deduplication |-->|   Pruning    |-->|  Compaction     |-->|   Trimming    |
-|              |   |               |   |              |   |                 |   |               |
-| 2,000 lines  |   | Exact dupes,  |   | Score-based  |   | Summarize old   |   | Drop oldest   |
-| 50 KB cap    |   | stale reads,  |   | placeholder  |   | messages via    |   | message;      |
-|              |   | subsumed grep |   | replacement  |   | LLM; extract    |   | repeat until  |
-|              |   |               |   |              |   | memories        |   | within budget |
-+--------------+   +---------------+   +--------------+   +-----------------+   +---------------+
-   Immediate          Per turn           Per turn         When threshold         Emergency
-                                                           is crossed            fallback</code></pre>
+<div class="pipeline-flow">
+    <div class="pipeline-stage">
+        <h4>Output Truncation</h4>
+        <p>2,000 lines / 50KB cap on tool results</p>
+        <span class="stage-tag">Immediate</span>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-stage">
+        <h4>Deduplication</h4>
+        <p>Exact dupes, stale reads, subsumed grep results</p>
+        <span class="stage-tag">Per turn</span>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-stage">
+        <h4>Pruning</h4>
+        <p>Score-based placeholder replacement of low-value messages</p>
+        <span class="stage-tag">Per turn</span>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-stage">
+        <h4>LLM Compaction</h4>
+        <p>Summarize old messages via LLM; extract memories</p>
+        <span class="stage-tag">Threshold crossed</span>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-stage">
+        <h4>Oldest-Turn Trimming</h4>
+        <p>Drop oldest message; repeat until within budget</p>
+        <span class="stage-tag">Emergency</span>
+    </div>
+</div>
 
 <p>
     The pipeline is designed so that most sessions never reach the later stages.
@@ -504,18 +520,23 @@ ob_start();
     The intervention thresholds are:
 </p>
 
-<pre><code>Context Window (from model catalog)
-  - reserve_output_tokens
-  = Effective Context Window
-    - warning_buffer_tokens      = Warning Threshold
-    - auto_compact_buffer_tokens = Auto-Compact Threshold
-    - blocking_buffer_tokens     = Blocking Threshold
-
-Example with a 200K context window:
-  200,000 - 16,384 = 183,616 (effective window)
-  183,616 - 24,576 = 159,040 (warning: pruning begins)
-  183,616 - 12,288 = 171,328 (auto-compact: LLM summarization)
-  183,616 -  3,072 = 180,544 (blocking: force trim oldest)</code></pre>
+<div class="budget-bar">
+    <div class="budget-bar-header">Example: 200K context window</div>
+    <div class="budget-bar-track">
+        <div class="budget-segment" style="width:79.5%;background:rgba(0,255,136,0.25);" title="Available context: 159,040 tokens">Available (159K)</div>
+        <div class="budget-segment" style="width:6.1%;background:rgba(210,153,34,0.4);" title="Warning buffer: 12,288 tokens">Warn</div>
+        <div class="budget-segment" style="width:4.6%;background:rgba(220,20,60,0.4);" title="Auto-compact buffer: 9,216 tokens">Compact</div>
+        <div class="budget-segment" style="width:1.6%;background:rgba(248,81,73,0.5);" title="Blocking buffer: 3,072 tokens">&#x26A0;</div>
+        <div class="budget-segment" style="width:8.2%;background:rgba(100,100,120,0.3);" title="Reserved for output: 16,384 tokens">Output (16K)</div>
+    </div>
+    <div class="budget-legend">
+        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(0,255,136,0.4);"></span> Usable context (159K)</div>
+        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(210,153,34,0.5);"></span> Warning: pruning begins</div>
+        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(220,20,60,0.5);"></span> Auto-compact: LLM summarization</div>
+        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(248,81,73,0.6);"></span> Blocking: force trim oldest</div>
+        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(100,100,120,0.4);"></span> Reserved for LLM output (16K)</div>
+    </div>
+</div>
 
 <div class="tip">
     <p>

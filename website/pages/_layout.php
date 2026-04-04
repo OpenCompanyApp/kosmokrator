@@ -1245,6 +1245,126 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             color: var(--crimson-light);
         }
 
+        /* ── Pipeline visualization ── */
+        .pipeline-flow {
+            display: flex;
+            gap: 0;
+            align-items: stretch;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 1rem 0;
+            margin-bottom: 1.5rem;
+        }
+
+        .pipeline-stage {
+            flex: 1;
+            min-width: 140px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem 1rem;
+            text-align: center;
+        }
+
+        .pipeline-stage h4 {
+            color: var(--crimson-light);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .pipeline-stage p {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .pipeline-stage .stage-tag {
+            display: inline-block;
+            margin-top: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            background: var(--crimson-subtle);
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .pipeline-arrow {
+            display: flex;
+            align-items: center;
+            color: var(--crimson);
+            font-size: 1.2rem;
+            padding: 0 0.35rem;
+            flex-shrink: 0;
+        }
+
+        /* ── Budget bar ── */
+        .budget-bar {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .budget-bar-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--star-white);
+            margin-bottom: 1rem;
+        }
+
+        .budget-bar-track {
+            height: 32px;
+            background: var(--space-dark);
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            margin-bottom: 0.75rem;
+        }
+
+        .budget-segment {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .budget-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1.5rem;
+        }
+
+        .budget-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .budget-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 767.98px) {
+            .pipeline-flow { flex-direction: column; }
+            .pipeline-arrow { transform: rotate(90deg); justify-content: center; padding: 0.3rem 0; }
+        }
+
         /* ── Install tabs ── */
         .install-tabs {
             display: flex;

@@ -11,7 +11,7 @@ $extraScript ??= '';
 $isDocsPage = str_contains($pageClass, 'docs-page');
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="background:#07070d;">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

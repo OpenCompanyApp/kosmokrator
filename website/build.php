@@ -59,8 +59,7 @@ function minifyCss(string $css): string
 
 function minifyJs(string $js): string
 {
-    $js = preg_replace('#(?<![:"\'/\\\\])//(?!/)[^\n]*#', '', $js);
-    $js = preg_replace('/[ \t]+/', ' ', $js);
+    // Only safe transforms — no comment stripping (too risky without a parser)
     $js = preg_replace('/\n{2,}/', "\n", $js);
     return trim($js);
 }

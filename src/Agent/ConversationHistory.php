@@ -231,7 +231,7 @@ class ConversationHistory
                 continue;
             }
 
-            $results[$resultIdx] = ToolCallMapper::withReplacedContent($results[$resultIdx], $placeholder);
+            $results[$resultIdx] = ToolCallMapper::withPrunedContent($results[$resultIdx], $placeholder);
             $this->messages[$msgIdx] = new ToolResultMessage($results);
         }
     }
@@ -254,7 +254,7 @@ class ConversationHistory
                 continue;
             }
 
-            $results[$resultIdx] = ToolCallMapper::withReplacedContent($results[$resultIdx], $placeholder);
+            $results[$resultIdx] = ToolCallMapper::withPrunedContent($results[$resultIdx], $placeholder);
             $this->messages[$msgIdx] = new ToolResultMessage($results);
         }
     }
@@ -278,7 +278,7 @@ class ConversationHistory
             return;
         }
 
-        $results[$resultIndex] = ToolCallMapper::withReplacedContent($results[$resultIndex], $placeholder);
+        $results[$resultIndex] = ToolCallMapper::withPrunedContent($results[$resultIndex], $placeholder);
         $this->messages[$messageIndex] = new ToolResultMessage($results);
     }
 

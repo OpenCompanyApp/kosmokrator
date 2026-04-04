@@ -179,6 +179,21 @@ class MessageRepository implements MessageRepositoryInterface
 
             throw $e;
         }
+
+        // Purge previously compacted messages to prevent DB bloat
+        $this->deleteCompacted($sessionId);
+    }
+
+    /**
+     * Delete all compacted messages for a session that are no longer needed.
+     * Called after successful compaction to prevent unbounded DB growth.
+     */
+    public function deleteCompacted(string $sessionId): void
+    {
+        $stmt = $this->db->connection()->prepare(
+            'DELETE FROM messages WHERE session_id = :session_id AND compacted = 1'
+        );
+        $stmt->execute(['session_id' => $sessionId]);
     }
 
     /**

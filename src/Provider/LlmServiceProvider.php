@@ -80,7 +80,7 @@ class LlmServiceProvider extends ServiceProvider
 
         $this->container->singleton(PrismService::class, fn () => new RetryableLlmClient(
             new PrismService(
-                provider: $config->get('kosmokrator.agent.default_provider', 'anthropic'),
+                provider: $config->get('kosmokrator.agent.default_provider', 'z'),
                 model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
                 systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
                 maxTokens: $config->get('kosmokrator.agent.max_tokens'),

@@ -158,17 +158,19 @@ final class ToolExecutor
                     SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
 
                     // Wire bash streaming callback
-                    if ($toolCall->name === 'bash') {
-                        BashTool::$progressCallback = fn (string $chunk) => SafeDisplay::call(
+                    if ($toolCall->name === 'bash' && $tool instanceof BashTool) {
+                        $tool->progressCallback = fn (string $chunk) => SafeDisplay::call(
                             fn () => $this->ui->updateToolExecuting($chunk), $this->log
                         );
                     }
                 }
 
-                $result = $this->executeSingleTool($toolCall, $tool, $stats, $mode);
-
-                if ($toolCall->name === 'bash') {
-                    BashTool::$progressCallback = null;
+                try {
+                    $result = $this->executeSingleTool($toolCall, $tool, $stats, $mode);
+                } finally {
+                    if ($toolCall->name === 'bash' && $tool instanceof BashTool) {
+                        $tool->progressCallback = null;
+                    }
                 }
 
                 if ($toolCall->name !== 'subagent') {

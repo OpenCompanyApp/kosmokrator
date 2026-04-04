@@ -158,6 +158,18 @@ class GuardianEvaluator
             }
         }
 
+        // Also check the first token's basename to catch full-path invocations
+        // e.g. "/bin/rm foo" or "/usr/bin/git commit"
+        $tokens = preg_split('/\s+/', $lower, 2);
+        $base = basename($tokens[0] ?? '');
+        $rest = ($tokens[1] ?? '') !== '' ? ' '.$tokens[1] : '';
+
+        foreach (self::MUTATIVE_PATTERNS as $pattern) {
+            if (str_starts_with($base.$rest, $pattern) || $base.$rest === rtrim($pattern)) {
+                return true;
+            }
+        }
+
         return false;
     }
 

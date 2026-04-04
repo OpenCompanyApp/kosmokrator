@@ -12,7 +12,7 @@ class Database
 {
     private \PDO $pdo;
 
-    private const SCHEMA_VERSION = 2;
+    private const SCHEMA_VERSION = 3;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -24,7 +24,7 @@ class Database
             $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
             $dir = $home.'/.kosmokrator/data';
             if (! is_dir($dir)) {
-                mkdir($dir, 0755, true);
+                mkdir($dir, 0700, true);
             }
             $path = $dir.'/kosmokrator.db';
         }
@@ -36,6 +36,7 @@ class Database
 
         if (! $isMemory) {
             $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
+            $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
         }
         $this->pdo->exec('PRAGMA foreign_keys=ON'); // Enforce referential integrity
 
@@ -46,6 +47,27 @@ class Database
     public function connection(): \PDO
     {
         return $this->pdo;
+    }
+
+    /**
+     * Checkpoint the WAL and optimize the database.
+     * Call on session close to prevent unbounded WAL file growth.
+     */
+    public function checkpoint(): void
+    {
+        $this->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    }
+
+    /**
+     * Checkpoint and close the database connection gracefully.
+     */
+    public function close(): void
+    {
+        try {
+            $this->checkpoint();
+        } catch (\Throwable) {
+            // Best-effort checkpoint — ignore errors during shutdown
+        }
     }
 
     /** Creates or migrates the schema to the current version. */
@@ -126,6 +148,11 @@ class Database
         ');
 
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)');
+
+        // Composite index for memory lookups filtered by project + expiry
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
+        // Index for session listing by project
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_updated ON sessions(project, updated_at DESC)');
     }
 
     /** Runs incremental schema migrations starting from the given version. */
@@ -137,6 +164,12 @@ class Database
             $this->addColumnIfMissing('memories', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
             $this->addColumnIfMissing('memories', 'expires_at', 'TEXT');
             $this->addColumnIfMissing('memories', 'last_surfaced_at', 'TEXT');
+        }
+
+        if ($from < 3) {
+            // v3: add composite indexes for common query patterns
+            $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
+            $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_updated ON sessions(project, updated_at DESC)');
         }
     }
 

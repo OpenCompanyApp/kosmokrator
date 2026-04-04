@@ -34,23 +34,29 @@ final class PromptFrameBuilder
             return [];
         }
 
+        // Cache by content hash — avoids re-splitting identical prompts across retries
+        static $cache = [];
+        $key = crc32($systemPrompt);
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
         $splitOffset = self::findVolatileSectionOffset($systemPrompt);
         if ($splitOffset === null || $splitOffset <= 0) {
-            return [new SystemMessage($systemPrompt)];
+            return $cache[$key] = [new SystemMessage($systemPrompt)];
         }
 
         $stablePrefix = substr($systemPrompt, 0, $splitOffset);
         $volatileTail = substr($systemPrompt, $splitOffset + 2);
 
         $prompts = [];
-
         $prompts[] = new SystemMessage($stablePrefix);
 
         if ($volatileTail !== '') {
             $prompts[] = new SystemMessage($volatileTail);
         }
 
-        return $prompts;
+        return $cache[$key] = $prompts;
     }
 
     /**

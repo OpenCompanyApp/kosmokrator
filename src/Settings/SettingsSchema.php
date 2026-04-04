@@ -372,7 +372,7 @@ final class SettingsSchema
                 type: 'choice',
                 options: ['off', 'low', 'medium', 'high'],
                 effect: 'applies_now',
-                default: 'off',
+                default: 'high',
             ),
             new SettingDefinition(
                 id: 'agent.temperature',

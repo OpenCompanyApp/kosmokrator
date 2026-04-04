@@ -59,12 +59,51 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
      */
     public function setResult(string $output, bool $success): void
     {
-        $this->output = str_replace("\t", '   ', $output);
+        $this->output = self::normalizeOutput($output);
         $this->success = $success;
         if (! $success) {
             $this->expanded = true;
         }
         $this->invalidate();
+    }
+
+    /**
+     * Normalize raw command output for safe display in a widget.
+     *
+     * Strips terminal control sequences that don't make sense in a static
+     * block (cursor movement, scroll regions, screen clear, etc.) while
+     * preserving color/styling ANSI codes. Also normalizes tabs.
+     */
+    private static function normalizeOutput(string $output): string
+    {
+        // Normalize tabs first
+        $output = str_replace("\t", '   ', $output);
+
+        // Strip non-SGR control sequences that are meaningless in a static display:
+        // - CSI sequences that move the cursor, clear screen/line, scroll, etc.
+        // - Keep SGR (CSI ... m) sequences which control colors/styles
+        $output = preg_replace_callback(
+            '/\x1B\[([\x30-\x3F]*[\x20-\x2F]*)([\x40-\x7E])/S',
+            static function (array $m): string {
+                $final = $m[2];
+                // SGR (Select Graphic Rendition) — keep for colors/styles
+                if ($final === 'm') {
+                    return $m[0];
+                }
+
+                return '';
+            },
+            $output,
+        );
+
+        // Strip OSC, DCS, APC, and other string sequences (hyperlinks, window titles, etc.)
+        // These can be very long and contain bytes that confuse width calculations.
+        $output = preg_replace('/\x1B(?:\][^\x07\x1B]*(?:\x07|\x1B\\\\)|P[^\x07\x1B]*(?:\x07|\x1B\\\\)|_[^\x07\x1B]*(?:\x07|\x1B\\\\)|\^[^\x07\x1B]*(?:\x07|\x1B\\\\)|X[^\x07\x1B]*(?:\x07|\x1B\\\\))/', '', $output);
+
+        // Strip other two-byte and nF ESC sequences
+        $output = preg_replace('/\x1B(?:[\x20-\x2F]+[\x30-\x7E]|[\x30-\x3F\x60-\x7E])/', '', $output);
+
+        return $output;
     }
 
     /**
@@ -227,14 +266,18 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
     private function truncateLines(array $lines, int $cols): array
     {
         foreach ($lines as $index => $line) {
-            if (AnsiUtils::visibleWidth($line) > $cols) {
-                $lines[$index] = AnsiUtils::truncateToWidth($line, $cols, '');
+            if (AnsiUtils::visibleWidth($line) <= $cols) {
+                continue;
             }
-            // Safety net: if truncateToWidth still exceeds (malformed ANSI, wide chars),
-            // strip all escape codes and hard-truncate to prevent RenderException crashes.
+
+            // Primary: width-aware truncation that preserves ANSI styling
+            $lines[$index] = AnsiUtils::truncateToWidth($line, $cols, '');
+
+            // Safety net: if visibleWidth still exceeds (malformed ANSI, wide chars),
+            // strip all escape codes and truncate the plain text.
             if (AnsiUtils::visibleWidth($lines[$index]) > $cols) {
-                $stripped = preg_replace('/\x1B(?:\[[0-9;]*[A-Za-z]|\].*?\x07)/', '', $lines[$index]);
-                $lines[$index] = mb_substr($stripped ?? $lines[$index], 0, $cols);
+                $stripped = AnsiUtils::stripAnsiCodes($lines[$index]);
+                $lines[$index] = AnsiUtils::truncateToWidth($stripped, $cols, '');
             }
         }
 

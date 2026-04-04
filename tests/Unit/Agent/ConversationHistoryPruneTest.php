@@ -46,7 +46,7 @@ class ConversationHistoryPruneTest extends TestCase
         $result = $history->messages()[2]->toolResults[0];
         $this->assertSame('tc42', $result->toolCallId);
         $this->assertSame('bash', $result->toolName);
-        $this->assertSame(['command' => 'ls -la'], $result->args);
+        $this->assertSame([], $result->args);
         $this->assertSame('[pruned]', $result->result);
     }
 

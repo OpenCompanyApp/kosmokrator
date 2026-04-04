@@ -32,6 +32,9 @@ final class PathResolver
         // File doesn't exist yet — resolve parent directory
         $parent = realpath(dirname($path));
         if ($parent === false) {
+            // Unresolvable path — return null so callers treat it as untrusted.
+            // BlockedPathCheck still checks the raw path against blocked patterns,
+            // and GuardianEvaluator treats null as "not inside project" (deny).
             return null;
         }
 

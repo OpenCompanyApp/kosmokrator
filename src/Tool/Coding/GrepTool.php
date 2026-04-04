@@ -5,6 +5,7 @@ namespace Kosmokrator\Tool\Coding;
 use Amp\Process\Process;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
+use Revolt\EventLoop;
 
 use function Amp\ByteStream\buffer;
 
@@ -15,6 +16,8 @@ use function Amp\ByteStream\buffer;
  */
 class GrepTool extends AbstractTool
 {
+    private ?bool $hasRg = null;
+
     public function __construct(
         private readonly int $timeout = 30,
     ) {}
@@ -53,12 +56,11 @@ class GrepTool extends AbstractTool
         $path = $args['path'] ?? '.';
         $glob = $args['glob'] ?? '';
 
-        $cmd = $this->hasRipgrep() ? 'rg' : 'grep -rn';
-
+        $useRg = $this->hasRipgrep();
         $escaped = escapeshellarg($pattern);
         $escapedPath = escapeshellarg($path);
 
-        if ($this->hasRipgrep()) {
+        if ($useRg) {
             $fullCmd = "rg -n --max-count=50 {$escaped} {$escapedPath}";
             if ($glob !== '') {
                 $fullCmd .= ' --glob '.escapeshellarg($glob);
@@ -71,11 +73,31 @@ class GrepTool extends AbstractTool
         }
 
         $process = Process::start(['sh', '-c', $fullCmd]);
-        $stdoutFuture = \Amp\async(fn () => buffer($process->getStdout()));
-        $stderrFuture = \Amp\async(fn () => buffer($process->getStderr()));
-        $exitCode = $process->join();
-        $stdout = trim($stdoutFuture->await());
-        $stderr = trim($stderrFuture->await());
+
+        // Timeout watchdog — kills the process if it exceeds the limit
+        $timedOut = false;
+        $timerId = EventLoop::delay($this->timeout, function () use ($process, &$timedOut): void {
+            $timedOut = true;
+            if ($process->isRunning()) {
+                $process->kill();
+            }
+        });
+
+        try {
+            $stdoutFuture = \Amp\async(fn () => buffer($process->getStdout()));
+            $stderrFuture = \Amp\async(fn () => buffer($process->getStderr()));
+            $exitCode = $process->join();
+            $stdout = trim($stdoutFuture->await());
+            $stderr = trim($stderrFuture->await());
+        } catch (\Throwable $e) {
+            return ToolResult::error("Process error: {$e->getMessage()}");
+        } finally {
+            EventLoop::cancel($timerId);
+        }
+
+        if ($timedOut) {
+            return ToolResult::error("Search timed out after {$this->timeout}s");
+        }
 
         // Exit code 1 = no matches (normal), 2+ = error
         if ($exitCode === 1 || ($exitCode === 0 && $stdout === '')) {
@@ -97,8 +119,10 @@ class GrepTool extends AbstractTool
     /** Checks whether ripgrep is available on the system PATH. */
     private function hasRipgrep(): bool
     {
-        $process = Process::start(['which', 'rg']);
+        return $this->hasRg ??= (function (): bool {
+            $process = Process::start(['which', 'rg']);
 
-        return $process->join() === 0;
+            return $process->join() === 0;
+        })();
     }
 }

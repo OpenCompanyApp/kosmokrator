@@ -150,6 +150,7 @@ class FileEditTool extends AbstractTool
             return false;
         }
 
+        $success = false;
         try {
             // Copy bytes before the match
             if ($offset > 0 && stream_copy_to_stream($src, $dst, $offset) !== $offset) {
@@ -169,12 +170,17 @@ class FileEditTool extends AbstractTool
             if ($remaining > 0) {
                 stream_copy_to_stream($src, $dst, $remaining);
             }
+
+            $success = true;
         } finally {
             fclose($src);
             fclose($dst);
+            if (! $success) {
+                @unlink($tmpPath);
+            }
         }
 
-        $renamed = rename($tmpPath, $path);
+        $renamed = @rename($tmpPath, $path);
         if (! $renamed) {
             @unlink($tmpPath);
         }

@@ -22,13 +22,16 @@ class EnvironmentContext
         $lines[] = 'Shell: '.(getenv('SHELL') ?: getenv('COMSPEC') ?: 'unknown');
         $lines[] = "Today's date: ".date('Y-m-d');
 
-        // Git info
-        $gitBranch = self::exec('git rev-parse --abbrev-ref HEAD 2>/dev/null');
-        if ($gitBranch !== '') {
-            $lines[] = 'Git branch: '.$gitBranch;
-            $gitRoot = self::exec('git rev-parse --show-toplevel 2>/dev/null');
-            if ($gitRoot !== '') {
-                $lines[] = 'Git root: '.$gitRoot;
+        // Git info — cached to avoid repeated shell_exec calls
+        static $gitInfo = null;
+        if ($gitInfo === null) {
+            $gitInfo = self::collectGitInfo();
+        }
+
+        if ($gitInfo['branch'] !== '') {
+            $lines[] = 'Git branch: '.$gitInfo['branch'];
+            if ($gitInfo['root'] !== '') {
+                $lines[] = 'Git root: '.$gitInfo['root'];
             }
         } else {
             $lines[] = 'Git: not a repository';
@@ -183,5 +186,18 @@ class EnvironmentContext
     private static function exec(string $command): string
     {
         return trim((string) shell_exec($command));
+    }
+
+    /**
+     * Collect git branch and root in a single cached call.
+     *
+     * @return array{branch: string, root: string}
+     */
+    private static function collectGitInfo(): array
+    {
+        $branch = self::exec('git rev-parse --abbrev-ref HEAD 2>/dev/null');
+        $root = $branch !== '' ? self::exec('git rev-parse --show-toplevel 2>/dev/null') : '';
+
+        return ['branch' => $branch, 'root' => $root];
     }
 }

@@ -68,7 +68,10 @@ final class ShellSession
     /** Return all output appended since the last readUnread() call, advancing the cursor. */
     public function readUnread(): string
     {
-        $chunk = substr($this->buffer, $this->readOffset);
+        $offset = $this->readOffset;
+        $chunk = substr($this->buffer, $offset);
+        // Truncate the consumed portion to prevent unbounded growth
+        $this->buffer = substr($this->buffer, $offset);
         $this->readOffset = strlen($this->buffer);
         $this->touch();
 

@@ -72,6 +72,12 @@ class Task
      */
     public function transitionTo(TaskStatus $status): void
     {
+        if (! $this->status->canTransitionTo($status)) {
+            throw new \LogicException(
+                "Invalid task transition: {$this->status->value} → {$status->value}"
+            );
+        }
+
         if ($status === TaskStatus::InProgress && $this->startedAt === null) {
             $this->startedAt = microtime(true);
         }

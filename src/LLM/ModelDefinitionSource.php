@@ -84,15 +84,22 @@ class ModelDefinitionSource
         }
 
         // Substring match (e.g. "z/GLM-5.1" matches "glm-5.1")
-        // Use longest match first to avoid "glm" matching before "glm-5.1"
+        // Use longest match first, then alphabetical for deterministic tiebreaking
         $bestMatch = null;
         $bestLength = 0;
+        $bestName = '';
 
         foreach ($this->models as $name => $spec) {
             $lowerName = strtolower($name);
-            if (str_contains($key, $lowerName) && strlen($lowerName) > $bestLength) {
+            if (! str_contains($key, $lowerName)) {
+                continue;
+            }
+
+            $len = strlen($lowerName);
+            if ($len > $bestLength || ($len === $bestLength && $lowerName < $bestName)) {
                 $bestMatch = $spec;
-                $bestLength = strlen($lowerName);
+                $bestLength = $len;
+                $bestName = $lowerName;
             }
         }
 

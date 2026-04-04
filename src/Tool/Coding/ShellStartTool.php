@@ -60,7 +60,7 @@ final class ShellStartTool extends AbstractTool
             command: $command,
             cwd: isset($args['cwd']) ? (string) $args['cwd'] : null,
             readOnly: (bool) ($args['read_only'] ?? $this->readOnly),
-            timeoutSeconds: isset($args['timeout']) ? (int) $args['timeout'] : null,
+            timeoutSeconds: isset($args['timeout']) ? max(1, min((int) $args['timeout'], 7200)) : null,
             waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
         );
 

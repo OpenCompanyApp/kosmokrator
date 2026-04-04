@@ -64,6 +64,11 @@ class SubagentOrchestrator
         $this->globalSemaphore = $concurrency > 0 ? new LocalSemaphore($concurrency) : null;
     }
 
+    public function __destruct()
+    {
+        $this->cancelAll();
+    }
+
     public function getMaxDepth(): int
     {
         return $this->maxDepth;
@@ -392,7 +397,7 @@ class SubagentOrchestrator
      */
     public function pruneCompleted(): int
     {
-        $terminalStates = ['done' => true, 'cancelled' => true];
+        $terminalStates = ['done' => true, 'cancelled' => true, 'failed' => true];
         $pruned = 0;
 
         foreach ($this->stats as $id => $stats) {

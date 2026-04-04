@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui\Widget;
 
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 
 final class BashCommandWidgetTest extends TestCase
@@ -158,5 +159,61 @@ final class BashCommandWidgetTest extends TestCase
         $content = implode("\n", $lines);
 
         $this->assertStringContainsString('✗', $content);
+    }
+
+    public function test_set_result_strips_cursor_control_sequences(): void
+    {
+        // Simulate PHPUnit progress output with cursor movement
+        $output = "\x1b[1G\x1b[2KOK (10 tests)\x1b[1G\x1b[2KFailures: 5";
+        $widget = new BashCommandWidget('test');
+        $widget->setResult($output, true);
+
+        $lines = $widget->render(new RenderContext(80, 24));
+        $content = implode("\n", $lines);
+
+        // Cursor control sequences should be stripped
+        $this->assertStringNotContainsString("\x1b[1G", $content);
+        $this->assertStringNotContainsString("\x1b[2K", $content);
+    }
+
+    public function test_set_result_strips_osc_hyperlinks(): void
+    {
+        $output = "\x1b]8;;file:///test.php\x1b\\test name\x1b]8;;\x1b\\";
+        $widget = new BashCommandWidget('test');
+        $widget->setResult($output, true);
+
+        $lines = $widget->render(new RenderContext(80, 24));
+
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(80, AnsiUtils::visibleWidth($line));
+        }
+    }
+
+    public function test_set_result_preserves_sgr_color_codes(): void
+    {
+        $output = "\x1b[31mred text\x1b[0m normal text";
+        $widget = new BashCommandWidget('test');
+        $widget->setResult($output, true);
+
+        $lines = $widget->render(new RenderContext(80, 24));
+        $content = implode("\n", $lines);
+
+        // SGR color codes should be preserved
+        $this->assertStringContainsString("\x1b[31m", $content);
+    }
+
+    public function test_render_never_exceeds_column_width(): void
+    {
+        // Simulate a very long PHPUnit output line (this was the crash case)
+        $longOutput = str_repeat('x', 300);
+        $widget = new BashCommandWidget('phpunit');
+        $widget->setResult($longOutput, false); // Failure auto-expands
+
+        $lines = $widget->render(new RenderContext(139, 40));
+
+        foreach ($lines as $i => $line) {
+            $width = AnsiUtils::visibleWidth($line);
+            $this->assertLessThanOrEqual(139, $width, "Line {$i} exceeds 139 columns (width: {$width})");
+        }
     }
 }

@@ -99,7 +99,9 @@ class GlobTool extends AbstractTool
 
         // Match in the base directory itself
         if ($rest !== '') {
-            $results = array_merge($results, glob($base.'/'.$rest) ?: []);
+            foreach (glob($base.'/'.$rest) ?: [] as $match) {
+                $results[] = $match;
+            }
         }
 
         // Recurse into subdirectories
@@ -112,10 +114,14 @@ class GlobTool extends AbstractTool
             }
 
             if ($rest !== '') {
-                $results = array_merge($results, glob($dir.'/'.$rest) ?: []);
+                foreach (glob($dir.'/'.$rest) ?: [] as $match) {
+                    $results[] = $match;
+                }
             }
             // Continue recursing with **
-            $results = array_merge($results, $this->globStar($dir.'/**'.($rest !== '' ? '/'.$rest : '')));
+            foreach ($this->globStar($dir.'/**'.($rest !== '' ? '/'.$rest : '')) as $match) {
+                $results[] = $match;
+            }
         }
 
         return array_filter($results, 'is_file');

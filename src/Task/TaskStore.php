@@ -288,16 +288,20 @@ class TaskStore
     }
 
     /**
-     * Remove all terminal (completed/cancelled) tasks.
+     * Remove all terminal (completed/cancelled/failed) tasks.
      * Keeps pending and in-progress tasks intact.
      */
     public function clearTerminal(): void
     {
+        $removedIds = [];
         foreach ($this->tasks as $id => $task) {
             if ($task->status->isTerminal()) {
+                $removedIds[] = $id;
                 unset($this->tasks[$id]);
             }
         }
+
+        $this->purgeStaleDependencies($removedIds);
     }
 
     /**
@@ -306,6 +310,30 @@ class TaskStore
     public function clearAll(): void
     {
         $this->tasks = [];
+    }
+
+    /**
+     * Remove stale dependency IDs from remaining tasks' blockedBy/blocks arrays.
+     *
+     * @param  string[]  $removedIds
+     */
+    private function purgeStaleDependencies(array $removedIds): void
+    {
+        if ($removedIds === []) {
+            return;
+        }
+
+        $removeSet = array_flip($removedIds);
+        foreach ($this->tasks as $task) {
+            $task->blockedBy = array_values(array_filter(
+                $task->blockedBy,
+                fn (string $id) => ! isset($removeSet[$id]),
+            ));
+            $task->blocks = array_values(array_filter(
+                $task->blocks,
+                fn (string $id) => ! isset($removeSet[$id]),
+            ));
+        }
     }
 
     /**
@@ -330,7 +358,16 @@ class TaskStore
             }
         }
 
-        $parent->transitionTo(TaskStatus::Completed);
+        // If all children failed/cancelled, mark parent as Failed rather than Completed
+        $anyCompleted = false;
+        foreach ($children as $child) {
+            if ($child->status === TaskStatus::Completed) {
+                $anyCompleted = true;
+                break;
+            }
+        }
+
+        $parent->transitionTo($anyCompleted ? TaskStatus::Completed : TaskStatus::Failed);
 
         // Recurse: if this parent also has a parent, check that too
         if ($parent->parentId !== null) {

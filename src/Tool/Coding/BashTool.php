@@ -19,7 +19,7 @@ use function Amp\ByteStream\buffer;
 class BashTool extends AbstractTool
 {
     /** @var (\Closure(string): void)|null */
-    public static ?\Closure $progressCallback = null;
+    public ?\Closure $progressCallback = null;
 
     private int $timeout;
 
@@ -92,7 +92,7 @@ class BashTool extends AbstractTool
             });
 
             // Read stdout/stderr concurrently, streaming chunks via progress callback
-            $progressCb = self::$progressCallback;
+            $progressCb = $this->progressCallback;
             $stdoutFuture = \Amp\async(function () use ($process, $progressCb): string {
                 $buf = '';
                 $stream = $process->getStdout();
@@ -109,12 +109,16 @@ class BashTool extends AbstractTool
             $exitCode = $process->join();
             $output = $stdoutFuture->await();
             $errorOutput = $stderrFuture->await();
-            EventLoop::cancel($timerId);
 
             if ($timedOut) {
+                EventLoop::cancel($timerId);
+
                 return ToolResult::error("Process timed out after {$timeout}s");
             }
         } catch (\Throwable $e) {
+            if (isset($timerId)) {
+                EventLoop::cancel($timerId);
+            }
             $this->log->warning('Bash process error', [
                 'command' => mb_substr($command, 0, 100),
                 'error' => $e->getMessage(),
@@ -124,6 +128,8 @@ class BashTool extends AbstractTool
 
             return ToolResult::error("Process error: {$e->getMessage()}");
         }
+
+        EventLoop::cancel($timerId);
 
         $this->log->debug('Bash command complete', [
             'command' => mb_substr($command, 0, 100),

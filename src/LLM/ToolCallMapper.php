@@ -73,6 +73,22 @@ final class ToolCallMapper
     }
 
     /**
+     * Create a ToolResult with replaced content and nulled-out args (for pruning).
+     *
+     * Frees memory retained in large tool call arguments after the result has been
+     * superseded by a placeholder summary.
+     */
+    public static function withPrunedContent(ToolResult $original, string $replacementContent): ToolResult
+    {
+        return new ToolResult(
+            toolCallId: $original->toolCallId,
+            toolName: $original->toolName,
+            args: [],
+            result: $replacementContent,
+        );
+    }
+
+    /**
      * Extract the tool name and decoded arguments from a Prism ToolCall.
      *
      * @return array{name: string, args: array<string, mixed>, id: string}

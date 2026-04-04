@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-04-04
+
+### Added
+- Website with /docs section and Railway deployment
+- Install tabs and mobile-responsive docs tables
+- HTML/CSS visualizations replacing ASCII diagrams in architecture docs
+- New website docs pages: architecture, getting-started, patterns, ui-guide
+
+### Fixed
+- Disabled JS minifier (broke syntax), fixed white flash on navigation
+- Removed stale SRI hashes from Bootstrap CDN links
+- Docs sidebar and mobile responsiveness
+
+### Changed
+- Updated architecture overview docs with improved diagrams
+- Added Bootstrap 5 for website styling
+
 ## [0.3.0] - 2026-04-04
 
 ### Added

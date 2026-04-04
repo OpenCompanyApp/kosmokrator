@@ -47,12 +47,15 @@ class PermissionRule
 
     /**
      * Match a value against a glob-style pattern (case-insensitive).
+     *
+     * The wildcard `*` matches within a single token (non-whitespace only)
+     * to prevent patterns like `git *` from matching `git log && rm -rf /`.
      */
     public static function matchesGlob(string $value, string $pattern): bool
     {
         $regex = '/^'.str_replace(
             ['\*', '\?'],
-            ['.*', '.'],
+            ['[^;&|`$><\n]*', '.'],
             preg_quote($pattern, '/'),
         ).'$/i';
 

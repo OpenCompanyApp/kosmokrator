@@ -1,6 +1,7 @@
 {
     "preset": "laravel",
     "exclude": [
-        "vendor-src"
+        "vendor-src",
+        "website"
     ]
 }

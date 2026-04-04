@@ -44,4 +44,6 @@ parameters:
         - '#unknown class LlmClientInterface#'
         # Audio scripts passing wrong type to constructor
         - '#Parameter \$llm.*expects.*LlmClientInterface.*LlmClientInterface given#'
+        # Vendor classes that may not be present in all composer.lock versions
+        - '#Call to static method.*on an unknown class OpenCompany#'
     reportUnmatchedIgnoredErrors: false

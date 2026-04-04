@@ -64,7 +64,7 @@ class GrepTool extends AbstractTool
                 $fullCmd .= ' --glob '.escapeshellarg($glob);
             }
         } else {
-            $fullCmd = "grep -rn --max-count=50 {$escaped} {$escapedPath}";
+            $fullCmd = "grep -rnE --max-count=50 {$escaped} {$escapedPath}";
             if ($glob !== '') {
                 $fullCmd .= ' --include='.escapeshellarg($glob);
             }

@@ -55,20 +55,20 @@ Download a self-contained binary for your platform — no PHP installation neede
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
-  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 
 # macOS (Intel)
-curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
-  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 
 # Linux (x86_64)
-curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
-  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 
 # Linux (ARM64)
-curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
-  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 ```
 
 ### PHAR (requires PHP 8.4+)
@@ -76,8 +76,8 @@ curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/k
 If you already have PHP installed, the PHAR is smaller (~5MB vs ~25MB):
 
 ```bash
-curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
-  -o /usr/local/bin/kosmokrator && chmod +x /usr/local/bin/kosmokrator
+sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 ```
 
 ### From source

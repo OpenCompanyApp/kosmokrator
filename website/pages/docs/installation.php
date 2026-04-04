@@ -28,27 +28,27 @@ ob_start();
 
 <h3 id="binary-macos-arm">macOS &mdash; Apple Silicon (aarch64)</h3>
 
-<pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <h3 id="binary-macos-intel">macOS &mdash; Intel (x86_64)</h3>
 
-<pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
+<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <h3 id="binary-linux-x86">Linux &mdash; x86_64</h3>
 
-<pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <h3 id="binary-linux-arm">Linux &mdash; ARM (aarch64)</h3>
 
-<pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
+<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <div class="tip">
     <p>
@@ -84,9 +84,9 @@ ob_start();
 
 <h3 id="phar-download">Download</h3>
 
-<pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <p>
     Because the PHAR is a standard PHP archive, you can also run it directly
@@ -575,9 +575,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+          sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
             -o /usr/local/bin/kosmokrator \
-            && chmod +x /usr/local/bin/kosmokrator
+            && sudo chmod +x /usr/local/bin/kosmokrator
 
           kosmokrator --headless \
             --prompt "Review this PR and fix any PHP coding standard violations. Run 'make lint' to verify."

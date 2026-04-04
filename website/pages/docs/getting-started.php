@@ -57,9 +57,9 @@ ob_start();
         <a href="/docs/installation#static-binary">Installation</a> for Intel
         and Linux builds.
     </p>
-    <pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+    <pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 </div>
 
 <div id="install-phar" class="install-panel">
@@ -67,9 +67,9 @@ ob_start();
         Requires PHP 8.4+. Download the PHAR and place it on your
         <code>$PATH</code>.
     </p>
-    <pre><code>curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+    <pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
   -o /usr/local/bin/kosmokrator \
-  && chmod +x /usr/local/bin/kosmokrator</code></pre>
+  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 </div>
 
 <div id="install-source" class="install-panel">

@@ -420,14 +420,14 @@ ob_start();
                             <div class="terminal-body">
                                 <div class="terminal-line"><span class="code-comment"># ~25MB static binary &mdash; no PHP required</span></div>
                                 <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># macOS (Apple Silicon)</span></div>
-                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \</span></div>
-                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \</span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; sudo chmod +x /usr/local/bin/kosmokrator</span></div>
                                 <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># macOS (Intel)</span></div>
-                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L .../kosmokrator-macos-x86_64 \</span></div>
-                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">sudo curl -L .../kosmokrator-macos-x86_64 \</span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; sudo chmod +x /usr/local/bin/kosmokrator</span></div>
                                 <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># Linux (x86_64 / ARM)</span></div>
-                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L .../kosmokrator-linux-x86_64 \  <span class="code-comment"># or kosmokrator-linux-aarch64</span></span></div>
-                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">sudo curl -L .../kosmokrator-linux-x86_64 \  <span class="code-comment"># or kosmokrator-linux-aarch64</span></span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; sudo chmod +x /usr/local/bin/kosmokrator</span></div>
                             </div>
                         </div>
                     </div>
@@ -436,8 +436,8 @@ ob_start();
                         <div class="quickstart-code" style="border-radius: 0 0 14px 14px; border-top: none;">
                             <div class="terminal-body">
                                 <div class="terminal-line"><span class="code-comment"># ~5MB, requires PHP 8.4+ with pcntl, posix, mbstring</span></div>
-                                <div class="terminal-line" style="margin-top:0.5rem"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \</span></div>
-                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                                <div class="terminal-line" style="margin-top:0.5rem"><span class="prompt">$</span> <span class="command">sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \</span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; sudo chmod +x /usr/local/bin/kosmokrator</span></div>
                             </div>
                         </div>
                     </div>

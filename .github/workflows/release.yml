@@ -58,7 +58,8 @@ jobs:
           box compile
 
       - name: Verify PHAR
-        run: php -r "echo 'PHAR size: ' . filesize('builds/kosmokrator.phar') . ' bytes';"
+        run: |
+          php -r "echo 'PHAR size: ' . filesize('builds/kosmokrator.phar') . ' bytes';"
 
       - name: Upload PHAR artifact
         uses: actions/upload-artifact@v4

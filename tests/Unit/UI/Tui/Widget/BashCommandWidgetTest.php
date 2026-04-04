@@ -216,4 +216,53 @@ final class BashCommandWidgetTest extends TestCase
             $this->assertLessThanOrEqual(139, $width, "Line {$i} exceeds 139 columns (width: {$width})");
         }
     }
+
+    public function test_set_result_strips_carriage_returns(): void
+    {
+        // PHPUnit progress bars use \r to overwrite lines
+        $output = str_repeat("0\r", 80);
+        $widget = new BashCommandWidget('phpunit');
+        $widget->setResult($output, true);
+
+        $lines = $widget->render(new RenderContext(72, 24));
+
+        foreach ($lines as $i => $line) {
+            $width = AnsiUtils::visibleWidth($line);
+            $this->assertLessThanOrEqual(72, $width, "Line {$i} exceeds 72 columns (width: {$width})");
+        }
+    }
+
+    public function test_set_result_strips_null_bytes_and_other_c0_controls(): void
+    {
+        $output = "OK\x00\x01\x02\x0B\x0E\x0F\x7Fdone";
+        $widget = new BashCommandWidget('test');
+        $widget->setResult($output, true);
+
+        $lines = $widget->render(new RenderContext(80, 24));
+        $content = implode("\n", $lines);
+
+        // C0 controls should be stripped; visible text remains
+        $this->assertStringNotContainsString("\x00", $content);
+        $this->assertStringNotContainsString("\x0E", $content);
+        $this->assertStringContainsString('OK', $content);
+    }
+
+    public function test_render_never_exceeds_narrow_width_with_control_chars(): void
+    {
+        // Large output mixing \r, \x1b sequences, and long lines
+        $output = '';
+        for ($i = 0; $i < 200; $i++) {
+            $output .= "\r\x1b[K{$i}/200 (" . str_repeat('=', $i % 80) . ")\n";
+        }
+        $widget = new BashCommandWidget('progress');
+        $widget->setResult($output, true);
+        $widget->setExpanded(true);
+
+        $lines = $widget->render(new RenderContext(72, 24));
+
+        foreach ($lines as $i => $line) {
+            $width = AnsiUtils::visibleWidth($line);
+            $this->assertLessThanOrEqual(72, $width, "Line {$i} exceeds 72 columns (width: {$width})");
+        }
+    }
 }

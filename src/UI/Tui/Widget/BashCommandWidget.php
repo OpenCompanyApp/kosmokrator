@@ -79,6 +79,11 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
         // Normalize tabs first
         $output = str_replace("\t", '   ', $output);
 
+        // Strip C0 control characters except \n (0x0A) and \x1B (ESC, handled below).
+        // Characters like \r, \0, \x0e, \x0f, \x7f are counted as width-1 by
+        // mb_strwidth but have no visible representation, causing RenderException crashes.
+        $output = preg_replace('/[\x00-\x09\x0B-\x1A\x1C-\x1F\x7F]/', '', $output);
+
         // Strip non-SGR control sequences that are meaningless in a static display:
         // - CSI sequences that move the cursor, clear screen/line, scroll, etc.
         // - Keep SGR (CSI ... m) sequences which control colors/styles
@@ -260,6 +265,11 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
     /**
      * Truncate every rendered line that exceeds the terminal column width.
      *
+     * Uses three progressively aggressive strategies:
+     * 1. Width-aware truncation preserving ANSI styling
+     * 2. Strip all ANSI codes, then width-aware truncate
+     * 3. Hard-cut: strip ANSI, then use mb_strcut on plain text
+     *
      * @param  string[]  $lines
      * @return string[]
      */
@@ -270,15 +280,24 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
                 continue;
             }
 
-            // Primary: width-aware truncation that preserves ANSI styling
+            // Strategy 1: width-aware truncation that preserves ANSI styling
             $lines[$index] = AnsiUtils::truncateToWidth($line, $cols, '');
 
-            // Safety net: if visibleWidth still exceeds (malformed ANSI, wide chars),
-            // strip all escape codes and truncate the plain text.
-            if (AnsiUtils::visibleWidth($lines[$index]) > $cols) {
-                $stripped = AnsiUtils::stripAnsiCodes($lines[$index]);
-                $lines[$index] = AnsiUtils::truncateToWidth($stripped, $cols, '');
+            if (AnsiUtils::visibleWidth($lines[$index]) <= $cols) {
+                continue;
             }
+
+            // Strategy 2: strip all ANSI codes and truncate the plain text
+            $stripped = AnsiUtils::stripAnsiCodes($lines[$index]);
+            $lines[$index] = AnsiUtils::truncateToWidth($stripped, $cols, '');
+
+            if (AnsiUtils::visibleWidth($lines[$index]) <= $cols) {
+                continue;
+            }
+
+            // Strategy 3: hard-cut — plain text byte truncation as absolute last resort
+            $plain = AnsiUtils::stripAnsiCodes($line);
+            $lines[$index] = mb_strcut($plain, 0, $cols, 'UTF-8');
         }
 
         return $lines;

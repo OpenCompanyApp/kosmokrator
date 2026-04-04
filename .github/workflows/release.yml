@@ -79,12 +79,6 @@ jobs:
           - os: linux
             arch: aarch64
             runner: ubuntu-latest
-          - os: macos
-            arch: x86_64
-            runner: macos-13
-          - os: macos
-            arch: aarch64
-            runner: macos-14
     needs: build-phar
     steps:
       - uses: actions/checkout@v4

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Settings;
 
+use Psr\Log\LoggerInterface;
+use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -14,6 +16,10 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class YamlConfigStore
 {
+    public function __construct(
+        private readonly ?LoggerInterface $log = null,
+    ) {}
+
     /**
      * Parse a YAML config file into a nested array.
      *
@@ -31,13 +37,20 @@ final class YamlConfigStore
             return [];
         }
 
-        return Yaml::parse($content) ?? [];
+        try {
+            return Yaml::parse($content) ?? [];
+        } catch (ParseException $e) {
+            $this->log?->warning("Failed to parse YAML config file {$path}: ".$e->getMessage());
+
+            return [];
+        }
     }
 
     /**
      * Persist a nested config array to a YAML file.
      *
      * Creates the parent directory if needed. Removes the file when data is empty.
+     * Uses atomic write (temp file + rename) to prevent partial writes.
      *
      * @param  string  $path  Absolute file path
      * @param  array<string, mixed>  $data  Config data to write
@@ -57,7 +70,10 @@ final class YamlConfigStore
             return;
         }
 
-        file_put_contents($path, Yaml::dump($data, 8, 2, Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE));
+        // Atomic write: write to temp file then rename
+        $tmpPath = $dir.'/'.basename($path).'.tmp.'.uniqid('', true);
+        file_put_contents($tmpPath, Yaml::dump($data, 8, 2, Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE));
+        rename($tmpPath, $path);
     }
 
     /**

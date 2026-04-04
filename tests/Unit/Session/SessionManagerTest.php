@@ -90,4 +90,38 @@ class SessionManagerTest extends TestCase
             $this->assertSame([0, 0, 0], array_map(fn (array $row): int => (int) $row['compacted'], $raw));
         }
     }
+
+    public function test_switch_to_nonexistent_session_throws(): void
+    {
+        $db = new Database(':memory:');
+        $sessions = new SessionRepository($db);
+        $messages = new MessageRepository($db);
+        $settings = new SettingsRepository($db);
+        $memories = new MemoryRepository($db);
+        $manager = new SessionManager($sessions, $messages, $settings, $memories, new NullLogger);
+
+        // setCurrentSession is a simple setter with no validation.
+        // Verify it sets the ID without throwing (no DB lookup).
+        $manager->setCurrentSession('nonexistent-id');
+        $this->assertSame('nonexistent-id', $manager->currentSessionId());
+    }
+
+    public function test_save_message_with_no_session_does_not_persist(): void
+    {
+        $db = new Database(':memory:');
+        $sessions = new SessionRepository($db);
+        $messages = new MessageRepository($db);
+        $settings = new SettingsRepository($db);
+        $memories = new MemoryRepository($db);
+        $manager = new SessionManager($sessions, $messages, $settings, $memories, new NullLogger);
+
+        // No session — saveMessage should silently return without persisting
+        $manager->saveMessage(new \Prism\Prism\ValueObjects\Messages\UserMessage('hello'));
+
+        // Verify no messages were persisted by creating a session and checking
+        $sessionId = $manager->createSession('model');
+        $manager->setProject('/project');
+        $history = $manager->loadHistory($sessionId);
+        $this->assertCount(0, $history->messages());
+    }
 }

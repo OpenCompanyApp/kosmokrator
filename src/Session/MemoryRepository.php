@@ -295,7 +295,7 @@ class MemoryRepository implements MemoryRepositoryInterface
      */
     public function all(?string $project = null, int $limit = 50): array
     {
-        $now = date('c');
+        $now = gmdate('Y-m-d\TH:i:s\Z');
         if ($project === null) {
             $stmt = $this->db->connection()->prepare(
                 'SELECT * FROM memories

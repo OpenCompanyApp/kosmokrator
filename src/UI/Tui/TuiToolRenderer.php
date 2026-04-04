@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\Theme;
@@ -42,6 +43,8 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     private array $lastToolArgs = [];
 
+    private array $lastToolArgsByName = [];
+
     private ?DiscoveryBatchWidget $activeDiscoveryBatch = null;
 
     /** @var list<array{name: string, label: string, detail: string, summary: string, status: 'pending'|'success'|'error'}> */
@@ -78,6 +81,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         }
 
         $this->lastToolArgs = $args;
+        $this->lastToolArgsByName[$name] = $args;
         $icon = Theme::toolIcon($name);
         $friendly = Theme::toolLabel($name);
         $r = Theme::reset();
@@ -191,14 +195,16 @@ final class TuiToolRenderer implements ToolRendererInterface
             return;
         }
 
-        if ($name === 'bash' && ! $this->isOmensTool($name, $this->lastToolArgs)) {
+        $args = $this->lastToolArgsByName[$name] ?? $this->lastToolArgs;
+
+        if ($name === 'bash' && ! $this->isOmensTool($name, $args)) {
             $this->completeBashCommand($output, $success);
             $this->core->flushRender();
 
             return;
         }
 
-        if ($this->isOmensTool($name, $this->lastToolArgs)) {
+        if ($this->isOmensTool($name, $args)) {
             $this->completeDiscoveryToolResult($name, $output, $success);
             $this->core->flushRender();
 
@@ -206,11 +212,11 @@ final class TuiToolRenderer implements ToolRendererInterface
         }
 
         // Diff view for file_edit
-        if ($name === 'file_edit' && $success && isset($this->lastToolArgs['old_string'])) {
+        if ($name === 'file_edit' && $success && isset($args['old_string'])) {
             $content = $this->buildDiffView(
-                $this->lastToolArgs['old_string'],
-                $this->lastToolArgs['new_string'] ?? '',
-                $this->lastToolArgs['path'] ?? '',
+                $args['old_string'],
+                $args['new_string'] ?? '',
+                $args['path'] ?? '',
             );
             $lineCount = count(explode("\n", $content));
         } elseif ($name === 'file_read' && $success) {
@@ -253,7 +259,7 @@ final class TuiToolRenderer implements ToolRendererInterface
 
         $r = Theme::reset();
         $dim = Theme::dim();
-        $blue = "\033[38;2;112;160;208m";
+        $blue = Theme::rgb(112, 160, 208);
 
         $this->toolExecutingLoader = new CancellableLoaderWidget("{$blue}running...{$r}");
         $this->toolExecutingLoader->setId('tool-executing');
@@ -273,7 +279,7 @@ final class TuiToolRenderer implements ToolRendererInterface
             $cr = (int) (112 + 40 * $t);
             $cg = (int) (160 + 40 * $t);
             $cb = (int) (208 + 47 * $t);
-            $color = "\033[38;2;{$cr};{$cg};{$cb}m";
+            $color = Theme::rgb($cr, $cg, $cb);
 
             $elapsed = (int) (microtime(true) - $this->toolExecutingStartTime);
             $time = $elapsed > 0 ? " {$dim}({$elapsed}s){$r}" : '';
@@ -360,7 +366,9 @@ final class TuiToolRenderer implements ToolRendererInterface
         $code = implode("\n", $codeLines);
         try {
             $highlighted = $this->getHighlighter()->parse($code, $language);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            error_log("[TuiToolRenderer] Syntax highlight failed: {$e->getMessage()}");
+
             return $output;
         }
 
@@ -368,7 +376,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         $result = [];
         foreach ($highlightedLines as $i => $hLine) {
             if (isset($lineNums[$i]) && $lineNums[$i] !== null) {
-                $result[] = "\033[38;5;240m{$lineNums[$i]}\033[0m\t{$hLine}";
+                $result[] = Theme::dim()."{$lineNums[$i]}".Theme::reset()."\t{$hLine}";
             } else {
                 $result[] = $hLine;
             }
@@ -434,7 +442,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         }
 
         $trimmed = trim($result);
-        if (str_starts_with($trimmed, 'Error:')) {
+        if (str_starts_with($trimmed, ToolCallMapper::ERROR_PREFIX)) {
             return false;
         }
 

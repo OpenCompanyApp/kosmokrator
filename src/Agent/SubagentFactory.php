@@ -83,8 +83,12 @@ class SubagentFactory
         };
 
         $pruner = new ContextPruner(20_000, 10_000);
+
+        // Clone budget so child mutations don't leak to parent — shares the same ModelCatalog reference
+        $childBudget = $this->budget !== null ? clone $this->budget : null;
+
         $compactor = $this->models !== null
-            ? new ContextCompactor($llm, $this->models, $this->log, 50, $this->budget)
+            ? new ContextCompactor($llm, $this->models, $this->log, 50, $childBudget)
             : null;
 
         $loop = new AgentLoop(
@@ -98,8 +102,8 @@ class SubagentFactory
             truncator: $this->truncator,
             pruner: $pruner,
             deduplicator: new ToolResultDeduplicator,
-            budget: $this->budget,
-            protectedContextBuilder: $this->protectedContextBuilder,
+            budget: $childBudget,
+            protectedContextBuilder: $this->protectedContextBuilder !== null ? clone $this->protectedContextBuilder : null,
         );
         $loop->setMode($mode);
         $loop->setTools($scopedRegistry->toPrismTools());

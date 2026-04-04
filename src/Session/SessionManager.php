@@ -275,8 +275,6 @@ class SessionManager
      */
     public function getMemories(): array
     {
-        $this->memories->pruneExpired($this->project);
-
         return $this->memories->forProject($this->project);
     }
 

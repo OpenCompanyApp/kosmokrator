@@ -43,7 +43,11 @@ class CompactCommand implements SlashCommand
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
+        $before = $ctx->agentLoop->history()->count();
         $ctx->agentLoop->performCompaction();
+        $after = $ctx->agentLoop->history()->count();
+
+        $ctx->ui->showNotice("Context compacted. {$before} messages reduced to {$after}.");
 
         return SlashCommandResult::continue();
     }

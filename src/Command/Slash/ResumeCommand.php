@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Command\Slash;
 
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
@@ -77,6 +78,15 @@ class ResumeCommand implements SlashCommand
             $history = $ctx->sessionManager->resumeSession($sessionId);
             $ctx->agentLoop->setHistory($history);
             $ctx->permissions->resetGrants();
+
+            // Re-apply stored mode setting
+            $modeSetting = $ctx->sessionManager->getSetting('mode');
+            if ($modeSetting !== null) {
+                $mode = AgentMode::from($modeSetting);
+                $ctx->agentLoop->setMode($mode);
+                $ctx->ui->showMode($mode->label(), $mode->color());
+            }
+
             $ctx->ui->clearConversation();
             $ctx->ui->replayHistory($history->messages());
             $session = $ctx->sessionManager->findSession($sessionId);

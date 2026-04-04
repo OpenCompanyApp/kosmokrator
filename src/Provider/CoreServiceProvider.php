@@ -20,6 +20,7 @@ use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Registry\RelayRegistryBuilder;
+use Psr\Log\LoggerInterface;
 
 /**
  * Binds core infrastructure: paths, events, filesystem, HTTP, settings,
@@ -50,7 +51,9 @@ class CoreServiceProvider extends ServiceProvider
         // HTTP client factory (used by Prism via Http facade)
         $this->container->singleton('http', fn () => new HttpFactory);
         $this->container->singleton(SettingsSchema::class, fn () => new SettingsSchema);
-        $this->container->singleton(YamlConfigStore::class, fn () => new YamlConfigStore);
+        $this->container->singleton(YamlConfigStore::class, fn () => new YamlConfigStore(
+            log: $this->container->make(LoggerInterface::class),
+        ));
         $this->container->singleton(SettingsManager::class, fn () => new SettingsManager(
             config: $this->container->make('config'),
             schema: $this->container->make(SettingsSchema::class),

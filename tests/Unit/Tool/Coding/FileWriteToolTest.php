@@ -13,9 +13,9 @@ class FileWriteToolTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tool = new FileWriteTool;
         $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
+        $this->tool = new FileWriteTool($this->tempDir);
     }
 
     protected function tearDown(): void

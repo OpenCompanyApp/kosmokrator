@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Kosmokrator\Audio\CompletionSound;
-use Kosmokrator\LLM\LlmClientInterface;
+use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
 use Kosmokrator\Session\MemoryRepositoryInterface;
@@ -16,6 +16,8 @@ use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SessionRepositoryInterface;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
+use OpenCompany\PrismRelay\Registry\RelayRegistry;
+use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -52,17 +54,19 @@ class SessionServiceProvider extends ServiceProvider
             $config = $this->container->make('config');
             $sessionId = $this->container->make(SessionManager::class)->currentSessionId() ?? 'default';
 
-            // Resolve audio model override — if set, apply to a cloned LLM client
-            $llm = $this->container->make(LlmClientInterface::class);
+            // Build a dedicated LLM client for audio so we don't mutate the shared singleton
             $audioProvider = $config->get('kosmokrator.agent.audio_provider');
             $audioModel = $config->get('kosmokrator.agent.audio_model');
+            $defaultProvider = $config->get('kosmokrator.agent.default_provider', 'z');
+            $defaultModel = $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514');
 
-            if ($audioProvider !== null && $audioProvider !== '') {
-                $llm->setProvider($audioProvider);
-            }
-            if ($audioModel !== null && $audioModel !== '') {
-                $llm->setModel($audioModel);
-            }
+            $llm = new PrismService(
+                provider: ($audioProvider !== null && $audioProvider !== '') ? $audioProvider : $defaultProvider,
+                model: ($audioModel !== null && $audioModel !== '') ? $audioModel : $defaultModel,
+                systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+                relay: $this->container->make(Relay::class),
+                registry: $this->container->make(RelayRegistry::class),
+            );
 
             return new CompletionSound(
                 llm: $llm,

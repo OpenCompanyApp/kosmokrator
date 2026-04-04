@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Ansi;
 
+use Kosmokrator\UI\Ansi\Concern\AnimationSignalHandler;
 use Kosmokrator\UI\Theme;
 
 /**
@@ -14,6 +15,8 @@ use Kosmokrator\UI\Theme;
  */
 class AnsiConsensus implements AnsiAnimation
 {
+    use AnimationSignalHandler;
+
     private int $termWidth;
 
     private int $termHeight;
@@ -41,23 +44,34 @@ class AnsiConsensus implements AnsiAnimation
      */
     public function animate(): void
     {
-        $this->termWidth = (int) exec('tput cols') ?: 120;
-        $this->termHeight = (int) exec('tput lines') ?: 30;
+        $this->termWidth = TerminalSize::cols();
+        $this->termHeight = TerminalSize::lines();
         $this->cx = (int) ($this->termWidth / 2);
         $this->cy = (int) ($this->termHeight / 2);
 
         echo Theme::hideCursor().Theme::clearScreen();
 
-        register_shutdown_function(fn () => print (Theme::showCursor()));
+        register_shutdown_function(function () {
+            echo Theme::showCursor();
+        });
 
-        $this->phaseCouncil();
-        $this->phaseDebate();
-        $this->phaseConvergence();
-        $this->phaseTitle();
+        $this->installSignalHandler();
 
-        usleep(400000);
-        echo Theme::clearScreen();
-        echo Theme::showCursor();
+        try {
+            $this->phaseCouncil();
+            $this->phaseDebate();
+            $this->phaseConvergence();
+            $this->phaseTitle();
+
+            usleep(400000);
+            echo Theme::clearScreen();
+            echo Theme::showCursor();
+        } catch (IntroSkippedException) {
+            // Animation skipped by user
+        } finally {
+            $this->restoreSignalHandler();
+            TerminalSize::reset();
+        }
     }
 
     /**

@@ -211,12 +211,20 @@ final class ToolExecutor
             }
         }
 
-        // Add denied results in original order
+        // Merge approved and denied results in original tool call order
+        $approvedById = [];
+        foreach ($results as $r) {
+            $approvedById[$r->toolCallId] = $r;
+        }
+        $orderedResults = [];
         foreach ($toolCalls as $toolCall) {
-            if (isset($denied[$toolCall->id])) {
-                $results[] = $denied[$toolCall->id];
+            if (isset($approvedById[$toolCall->id])) {
+                $orderedResults[] = $approvedById[$toolCall->id];
+            } elseif (isset($denied[$toolCall->id])) {
+                $orderedResults[] = $denied[$toolCall->id];
             }
         }
+        $results = $orderedResults;
 
         // Flush remaining subagent batch
         if ($subagentBatch !== []) {
@@ -309,10 +317,18 @@ final class ToolExecutor
             ]);
 
             return ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $outputStr);
-        } catch (\Throwable $e) {
+        } catch (\RuntimeException $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
-            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $toolCall->arguments(), "Error: {$e->getMessage()}");
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $toolCall->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+        } catch (\Throwable $e) {
+            $this->log->error('Tool execution failed with unexpected exception', [
+                'tool' => $toolCall->name,
+                'exception' => get_class($e),
+                'error' => $e->getMessage(),
+            ]);
+
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $toolCall->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
         }
     }
 
@@ -356,6 +372,17 @@ final class ToolExecutor
             }
             if ($name === 'apply_patch') {
                 $hasWrites = true;
+                // Extract file paths from the patch argument for conflict detection
+                $patchContent = $toolCall->arguments()['patch'] ?? '';
+                if (is_string($patchContent) && $patchContent !== '') {
+                    // Match paths from lines like: "Update File: path/to/file" or "*** Begin Patch\nAdd File: path"
+                    if (preg_match_all('/(?:Update File|Add File|Delete File|File):\s*(\S+)/i', $patchContent, $matches)) {
+                        foreach ($matches[1] as $extractedPath) {
+                            $resolved = realpath($extractedPath) ?: $extractedPath;
+                            $writePaths[$resolved][] = $i;
+                        }
+                    }
+                }
             }
             if ($name === 'bash' || str_starts_with($name, 'shell_')) {
                 $hasBash = true;
@@ -404,19 +431,21 @@ final class ToolExecutor
         array &$subagentBatch,
         array &$results,
     ): void {
-        $success = ! str_starts_with($result->result, 'Error:');
+        $success = ! ToolCallMapper::isErrorResult($result);
 
         if ($toolCall->name === 'subagent') {
             $agentId = $toolCall->arguments()['id'] ?? '';
             $orchestrator = $agentContext?->orchestrator;
             $subagentBatch[] = [
                 'args' => $toolCall->arguments(),
-                'result' => (string) $result->result,
+                'result' => ToolCallMapper::cleanErrorResult($result),
                 'success' => $success,
                 'children' => $orchestrator !== null ? $this->treeBuilder->buildSubtree($orchestrator, $agentId) : [],
                 'stats' => $orchestrator?->getStats($agentId),
             ];
-            $results[] = $result;
+            $results[] = ToolCallMapper::isErrorResult($result)
+                ? ToolCallMapper::withReplacedContent($result, ToolCallMapper::cleanErrorResult($result))
+                : $result;
 
             return;
         }
@@ -427,8 +456,10 @@ final class ToolExecutor
             $subagentBatch = [];
         }
 
-        SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $result->result, $success), $this->log);
-        $results[] = $result;
+        SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, ToolCallMapper::cleanErrorResult($result), $success), $this->log);
+        $results[] = ToolCallMapper::isErrorResult($result)
+            ? ToolCallMapper::withReplacedContent($result, ToolCallMapper::cleanErrorResult($result))
+            : $result;
     }
 
     /**
@@ -456,7 +487,7 @@ final class ToolExecutor
     /** Whether the tool can execute shell commands that might be mutative. */
     private function isReadOnlyShellTool(string $name): bool
     {
-        return in_array($name, ['bash', 'shell_start', 'shell_write'], true);
+        return in_array($name, ['bash', 'shell_start', 'shell_write', 'shell_kill'], true);
     }
 
     /** Extract the command string from a tool call's arguments (handles both 'command' and 'input' keys). */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Tool\Coding;
 
 use Amp\Process\Process;
+use Kosmokrator\Exception\SessionException;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
 
@@ -182,7 +183,7 @@ final class ShellSessionManager
     private function requireSession(string $id): ShellSession
     {
         if (! isset($this->sessions[$id])) {
-            throw new \RuntimeException("Unknown shell session '{$id}'.");
+            throw new SessionException("Unknown shell session '{$id}'.");
         }
 
         return $this->sessions[$id];

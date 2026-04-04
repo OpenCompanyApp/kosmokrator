@@ -367,6 +367,11 @@ class TaskStore
             }
         }
 
+        // Transition parent through in_progress first if currently pending
+        if ($parent->status === TaskStatus::Pending) {
+            $parent->transitionTo(TaskStatus::InProgress);
+        }
+
         $parent->transitionTo($anyCompleted ? TaskStatus::Completed : TaskStatus::Failed);
 
         // Recurse: if this parent also has a parent, check that too

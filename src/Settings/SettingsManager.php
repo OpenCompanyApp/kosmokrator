@@ -282,6 +282,27 @@ final class SettingsManager
         foreach (['app', 'kosmokrator', 'prism', 'models', 'relay'] as $key) {
             $this->config->set($key, $reloaded->get($key, []));
         }
+
+        // Re-apply user and project YAML overrides so they aren't lost after a reload
+        $paths = new SettingsPaths($this->projectRoot);
+        $globalPath = $paths->globalReadPath();
+        if ($globalPath !== null) {
+            $globalData = $this->store->load($globalPath);
+            if ($globalData !== []) {
+                foreach ($globalData as $key => $value) {
+                    $this->config->set($key, $value);
+                }
+            }
+        }
+        $projectPath = $paths->projectReadPath();
+        if ($projectPath !== null) {
+            $projectData = $this->store->load($projectPath);
+            if ($projectData !== []) {
+                foreach ($projectData as $key => $value) {
+                    $this->config->set($key, $value);
+                }
+            }
+        }
     }
 
     /** Coerce a raw input value to the type expected by the setting definition. */
@@ -294,7 +315,7 @@ final class SettingsManager
 
         return match ($definition->type) {
             'number' => is_numeric($value) ? (str_contains((string) $value, '.') ? (float) $value : (int) $value) : $value,
-            'toggle' => in_array((string) $value, ['1', 'true', 'on', 'yes'], true) ? 'on' : ((string) $value === 'off' ? 'off' : (string) $value),
+            'toggle' => in_array((string) $value, ['1', 'true', 'on', 'yes'], true) ? 'on' : (in_array((string) $value, ['0', 'false', 'off', 'no'], true) ? 'off' : (string) $value),
             default => $value,
         };
     }

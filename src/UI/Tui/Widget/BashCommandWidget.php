@@ -138,7 +138,7 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
      */
     private function renderCollapsed(int $cols, string $gold, string $r, string $dim, string $text, string $outputColor, string $icon): array
     {
-        $command = $this->stripCwdPrefix($this->command);
+        $command = str_replace("\n", ' ', $this->stripCwdPrefix($this->command));
         $headerWidth = max(20, $cols - 3); // icon + space + command
 
         if ($command === '') {
@@ -167,6 +167,8 @@ class BashCommandWidget extends AbstractWidget implements ToggleableWidgetInterf
 
         foreach ($previewLines as $index => $outputLine) {
             $prefix = $index === 0 ? '└ ' : '  ';
+            // Collapse excessive leading indentation to preserve columns
+            $outputLine = preg_replace('/^\s{4,}/', '  ', ltrim($outputLine));
             $lines[] = $prefix.$statusPrefix."{$outputColor}{$outputLine}{$r}";
         }
 

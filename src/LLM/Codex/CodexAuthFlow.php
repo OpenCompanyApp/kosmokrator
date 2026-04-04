@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM\Codex;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\Exception\AuthenticationException;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
@@ -49,7 +50,7 @@ final class CodexAuthFlow
      * @param  callable(string): void|null  $notify  Optional callback for TUI status messages
      * @return CodexToken The newly obtained and persisted token
      *
-     * @throws \RuntimeException If authentication fails or times out
+     * @throws AuthenticationException If authentication fails or times out
      */
     public function browserLogin(?callable $notify = null): CodexToken
     {
@@ -77,7 +78,7 @@ final class CodexAuthFlow
 
         $code = $this->waitForCallback($port, $state);
         if ($code === null) {
-            throw new \RuntimeException('Authentication failed or timed out.');
+            throw new AuthenticationException('Authentication failed or timed out.');
         }
 
         return $this->oauth->storeTokens($this->oauth->exchangeCode($code, $pkce['verifier'], $redirectUri));
@@ -93,7 +94,7 @@ final class CodexAuthFlow
      * @param  int  $maxWaitSeconds  Maximum time to wait for user authorization (default 300s)
      * @return CodexToken The newly obtained and persisted token
      *
-     * @throws \RuntimeException If authorization times out
+     * @throws AuthenticationException If authorization times out
      */
     public function deviceLogin(?callable $notify = null, int $maxWaitSeconds = 300): CodexToken
     {
@@ -116,7 +117,7 @@ final class CodexAuthFlow
             return $this->oauth->storeTokens($tokens);
         }
 
-        throw new \RuntimeException('Timed out waiting for device authorization.');
+        throw new AuthenticationException('Timed out waiting for device authorization.');
     }
 
     /** Emit a message to the optional notify callback, used for TUI status updates. */
@@ -148,7 +149,7 @@ final class CodexAuthFlow
     {
         $server = @stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN);
         if ($server === false) {
-            throw new \RuntimeException("Could not start callback server on port {$port}: {$errstr}");
+            throw new AuthenticationException("Could not start callback server on port {$port}: {$errstr}");
         }
 
         stream_set_timeout($server, 120);

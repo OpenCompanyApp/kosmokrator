@@ -75,6 +75,13 @@ class ReleaseCommand implements PowerCommand
             - Create annotated tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
 
             ## Step 6: Push & Publish
+            - NEVER push or publish without explicit user confirmation.
+            - Before pushing, display a PRE-PUSH SUMMARY listing:
+              1. Exact commands to be executed (e.g. `git push`, `git push origin vX.Y.Z`, `gh release create vX.Y.Z --generate-notes`)
+              2. What each command will do (remote affected, visibility, etc.)
+              3. Any irreversible actions
+            - Wait for the user to confirm each push/publish action individually.
+            - If the user declines or aborts, stop at this step and report what was completed.
             - Push commits: `git push`
             - Push tag: `git push origin vX.Y.Z`
             - Create GitHub release: `gh release create vX.Y.Z --generate-notes`

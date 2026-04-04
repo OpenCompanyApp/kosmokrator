@@ -26,12 +26,12 @@ class ToolCallMapperTest extends TestCase
 
     public function test_to_error_result_creates_result_with_error_text(): void
     {
-        $result = ToolCallMapper::toErrorResult('tc2', 'bash', ['command' => 'ls'], 'Error: command failed');
+        $result = ToolCallMapper::toErrorResult('tc2', 'bash', ['command' => 'ls'], 'command failed');
 
         $this->assertInstanceOf(ToolResult::class, $result);
         $this->assertSame('tc2', $result->toolCallId);
         $this->assertSame('bash', $result->toolName);
-        $this->assertSame('Error: command failed', $result->result);
+        $this->assertSame(ToolCallMapper::ERROR_PREFIX.'command failed', $result->result);
     }
 
     public function test_with_replaced_content_preserves_metadata(): void
@@ -82,7 +82,7 @@ class ToolCallMapperTest extends TestCase
     {
         $error = new ToolError('something went wrong');
 
-        $this->assertSame('Error: something went wrong', ToolCallMapper::normalizeToolOutput($error));
+        $this->assertSame(ToolCallMapper::ERROR_PREFIX.'something went wrong', ToolCallMapper::normalizeToolOutput($error));
     }
 
     public function test_normalize_tool_output_other_type(): void

@@ -106,7 +106,7 @@ No file locking is used. If parallel subagents edit the same file, both read the
 
 `BashTool::execute()` takes no `Cancellation` parameter. If the user presses Ctrl+C while a bash tool is running in a subagent, the process won't be killed until it times out (up to 7200 seconds). Cancellation is caught at the LLM call level, but the spawned process continues as a zombie.
 
-### H5. No PRAGMA busy_timeout on SQLite
+### H5. No PRAGMA busy_timeout on SQLite ✅ Fixed
 
 **Location:** `src/Session/Database.php:30-32`
 
@@ -114,7 +114,7 @@ WAL mode is enabled but no `busy_timeout` is set. If two KosmoKrator processes a
 
 **Fix:** Add `$this->pdo->exec('PRAGMA busy_timeout=5000');` after line 32.
 
-### H6. DB directory 0755 instead of 0700
+### H6. DB directory 0755 instead of 0700 ✅ Fixed
 
 **Location:** `src/Session/Database.php:19`
 
@@ -148,13 +148,13 @@ The Amp HTTP client's `buffer()` reads the entire response into memory. No `Cont
 
 Memories, session recall, tool results, and parent briefs are injected into the system prompt verbatim. If any contain API keys, passwords, or other secrets (e.g., from `env` command output stored in session history), they are sent to the LLM API.
 
-### M3. ShellStartTool no timeout upper bound
+### M3. ShellStartTool no timeout upper bound ✅ Fixed
 
 **Location:** `src/Tool/Coding/ShellStartTool.php:54`
 
 Unlike `BashTool` which clamps timeouts to `max(1, min($timeout, 7200))`, `ShellStartTool` passes the timeout directly. A user/LLM could specify `timeout: 999999` (~11.5 days). The idle TTL (300s) partially mitigates this for idle sessions.
 
-### M4. ToolExecutor missing finally for BashTool::$progressCallback
+### M4. ToolExecutor missing finally for BashTool::$progressCallback ✅ Fixed
 
 **Location:** `src/Agent/ToolExecutor.php:155-165`
 

@@ -11,6 +11,7 @@ use Amp\Http\Client\HttpException;
 use Amp\Sync\LocalSemaphore;
 use Amp\Sync\Lock;
 use Kosmokrator\LLM\RetryableHttpException;
+use Kosmokrator\LLM\ToolCallMapper;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
 
@@ -178,7 +179,7 @@ class SubagentOrchestrator
                         $warning = '';
                         if ($depStats !== null && $depStats->status === 'failed') {
                             $warning = ' ⚠ THIS DEPENDENCY FAILED — results may be incomplete or missing.';
-                        } elseif (str_starts_with($dresult, '(cancelled)') || str_starts_with($dresult, 'Error:')) {
+                        } elseif (str_starts_with($dresult, '(cancelled)') || str_starts_with($dresult, ToolCallMapper::ERROR_PREFIX)) {
                             $warning = ' ⚠ THIS DEPENDENCY RETURNED AN ERROR — results may be degraded. Consider doing your own research.';
                         }
                         $task .= "\n[Agent '{$did}']{$warning}:\n{$dresult}\n";
@@ -328,7 +329,7 @@ class SubagentOrchestrator
 
                 // Inject failure as a pending result so the parent is notified
                 if ($mode === 'background') {
-                    $this->pendingResults[$stats->parentId][$id] = "Error: Agent '{$id}' failed — {$stats->error}";
+                    $this->pendingResults[$stats->parentId][$id] = ToolCallMapper::ERROR_PREFIX."Agent '{$id}' failed — {$stats->error}";
                 }
 
                 throw $e;
@@ -377,7 +378,11 @@ class SubagentOrchestrator
             }
             $visited[$current] = true;
 
-            $existingDeps = $this->stats[$current]->dependsOn ?? [];
+            if (! isset($this->stats[$current])) {
+                // Pruned or unknown agent — treat as leaf (no outgoing deps)
+                continue;
+            }
+            $existingDeps = $this->stats[$current]->dependsOn;
             foreach ($existingDeps as $dep) {
                 $stack[] = $dep;
             }
@@ -494,6 +499,11 @@ class SubagentOrchestrator
             return;
         }
 
+        // Root agents never yield slots — don't reclaim one for them
+        if (! isset($this->globalLocks[$agentId])) {
+            return;
+        }
+
         $this->log->debug("Agent '{$agentId}' reclaiming global semaphore slot");
         $lock = $this->globalSemaphore->acquire();
         $this->globalLocks[$agentId] = $lock;
@@ -589,7 +599,7 @@ class SubagentOrchestrator
     /**
      * Determine if an error result from runHeadless() is worth retrying.
      *
-     * Retryable: "Error: ..." prefix (context overflow, transient LLM errors).
+     * Retryable: ERROR_PREFIX results (context overflow, transient LLM errors).
      * NOT retryable: "(cancelled)", "(forced return: ...)", auth/key errors.
      */
     private function isRetryableResult(string $result): bool
@@ -602,7 +612,7 @@ class SubagentOrchestrator
             return false;
         }
 
-        if (str_starts_with($result, 'Error:')) {
+        if (str_starts_with($result, ToolCallMapper::ERROR_PREFIX)) {
             $lower = strtolower($result);
 
             if (str_contains($lower, 'invalid api key')

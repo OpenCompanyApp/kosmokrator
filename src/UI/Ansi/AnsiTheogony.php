@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Ansi;
 
+use Kosmokrator\UI\Ansi\Concern\AnimationSignalHandler;
 use Kosmokrator\UI\Theme;
 
 /**
@@ -15,6 +16,12 @@ use Kosmokrator\UI\Theme;
  */
 class AnsiTheogony implements AnsiAnimation
 {
+    use AnimationSignalHandler;
+
+    private $stdinStream = null;
+
+    private ?string $originalTtyMode = null;
+
     private int $termWidth = 120;
 
     private int $termHeight = 30;
@@ -77,52 +84,66 @@ class AnsiTheogony implements AnsiAnimation
      */
     public function animate(): void
     {
-        $this->termWidth = (int) exec('tput cols') ?: 120;
-        $this->termHeight = (int) exec('tput lines') ?: 30;
+        $this->termWidth = TerminalSize::cols();
+        $this->termHeight = TerminalSize::lines();
         $this->cx = (int) ($this->termWidth / 2);
         $this->cy = (int) ($this->termHeight / 2);
 
         echo Theme::hideCursor().Theme::clearScreen();
 
-        register_shutdown_function(fn () => print (Theme::showCursor()));
+        register_shutdown_function(function () {
+            echo Theme::showCursor();
+        });
 
-        $this->titleCard('Ι', 'ΧΑΟΣ', 'In the beginning, there was nothing.');
-        $this->phaseChaos();
+        $this->enableNonBlockingInput();
 
-        $this->fadeToBlack();
-        $this->titleCard('ΙΙ', 'ΕΡΕΒΟΣ ΚΑΙ ΝΥΞ', 'From the void came Darkness and Night.');
-        $this->phaseErebosAndNyx();
+        try {
+            $this->installSignalHandler();
 
-        $this->fadeToBlack();
-        $this->titleCard('ΙΙΙ', 'ΦΩΣ', 'And then — Light.');
-        $this->phaseSpark();
+            $this->titleCard('Ι', 'ΧΑΟΣ', 'In the beginning, there was nothing.');
+            $this->phaseChaos();
 
-        $this->fadeToBlack();
-        $this->titleCard('ΙV', 'ΓΑΙΑ', 'The Earth took shape beneath the stars.');
-        $this->phaseGaia();
+            $this->fadeToBlack();
+            $this->titleCard('ΙΙ', 'ΕΡΕΒΟΣ ΚΑΙ ΝΥΞ', 'From the void came Darkness and Night.');
+            $this->phaseErebosAndNyx();
 
-        $this->fadeToBlack();
-        $this->titleCard('V', 'ΤΙΤΑΝΕΣ', 'The ancient powers awakened.');
-        $this->phaseTitans();
+            $this->fadeToBlack();
+            $this->titleCard('ΙΙΙ', 'ΦΩΣ', 'And then — Light.');
+            $this->phaseSpark();
 
-        $this->fadeToBlack();
-        $this->titleCard('VΙ', 'ΤΙΤΑΝΟΜΑΧΙΑ', 'War shook the heavens.');
-        $this->phaseTitanomachy();
+            $this->fadeToBlack();
+            $this->titleCard('ΙV', 'ΓΑΙΑ', 'The Earth took shape beneath the stars.');
+            $this->phaseGaia();
 
-        $this->fadeToBlack();
-        $this->titleCard('VΙΙ', 'ΚΟΣΜΟΚΡΑΤΩΡ', 'From the ashes, a Ruler was forged.');
-        $this->phaseCosmicRain();
-        $this->phaseLogoIgnite();
+            $this->fadeToBlack();
+            $this->titleCard('V', 'ΤΙΤΑΝΕΣ', 'The ancient powers awakened.');
+            $this->phaseTitans();
 
-        if ($this->termHeight > 30) {
-            $this->titleCard('VΙΙΙ', 'Η ΤΑΞΗ', 'The cosmos took its eternal shape.');
-            $this->phaseCosmicAssembly();
+            $this->fadeToBlack();
+            $this->titleCard('VΙ', 'ΤΙΤΑΝΟΜΑΧΙΑ', 'War shook the heavens.');
+            $this->phaseTitanomachy();
+
+            $this->fadeToBlack();
+            $this->titleCard('VΙΙ', 'ΚΟΣΜΟΚΡΑΤΩΡ', 'From the ashes, a Ruler was forged.');
+            $this->phaseCosmicRain();
+            $this->phaseLogoIgnite();
+
+            if ($this->termHeight > 30) {
+                $this->titleCard('VΙΙΙ', 'Η ΤΑΞΗ', 'The cosmos took its eternal shape.');
+                $this->phaseCosmicAssembly();
+            }
+
+            $this->phaseEpilogue();
+
+            echo Theme::moveTo($this->termHeight, 1);
+            echo Theme::showCursor();
+        } catch (IntroSkippedException) {
+            echo Theme::clearScreen();
+        } finally {
+            $this->restoreInput();
+            $this->restoreSignalHandler();
+            TerminalSize::reset();
         }
-
-        $this->phaseEpilogue();
-
-        echo Theme::moveTo($this->termHeight, 1);
-        echo Theme::showCursor();
     }
 
     // ──────────────────────────────────────────────────────
@@ -216,6 +237,7 @@ class AnsiTheogony implements AnsiAnimation
 
         for ($frame = 0; $frame < $frames; $frame++) {
             $progress = $frame / $frames;
+            $this->checkSkip();
 
             // Update and render drifting particles
             foreach ($particles as &$p) {
@@ -380,6 +402,7 @@ class AnsiTheogony implements AnsiAnimation
 
         // Phase 4: Stars twinkle
         for ($twinkle = 0; $twinkle < 80; $twinkle++) {
+            $this->checkSkip();
             $idx = rand(0, count($starPositions) - 1);
             $s = $starPositions[$idx];
             $bright = rand(0, 1);
@@ -528,6 +551,7 @@ class AnsiTheogony implements AnsiAnimation
         }
 
         for ($frame = 0; $frame < 50; $frame++) {
+            $this->checkSkip();
             foreach ($blastParticles as &$p) {
                 if ($p['life'] <= 0) {
                     continue;
@@ -924,7 +948,7 @@ class AnsiTheogony implements AnsiAnimation
         // Screen shake
         usleep(300000);
         for ($shake = 0; $shake < 8; $shake++) {
-            echo "\033[".(($shake % 2 === 0) ? '1' : '1').'B';
+            echo "\033[".(($shake % 2 === 0) ? '1A' : '1B');
             usleep(40000);
         }
 
@@ -970,6 +994,7 @@ class AnsiTheogony implements AnsiAnimation
         // Sustained battle loop — 120 frames of chaos
         $battleMid = $this->cx;
         for ($frame = 0; $frame < 120; $frame++) {
+            $this->checkSkip();
             // Clash projectiles from both sides
             if ($frame % 8 === 0) {
                 $projRow = $startRow + rand(0, 9);
@@ -1023,7 +1048,7 @@ class AnsiTheogony implements AnsiAnimation
 
             // Screen shake every 20 frames
             if ($frame % 20 === 0 && $frame > 0) {
-                echo "\033[1A\033[1B";
+                echo (($frame / 20) % 2 === 0) ? "\033[1A" : "\033[1B";
             }
 
             usleep(30000);
@@ -1204,6 +1229,7 @@ class AnsiTheogony implements AnsiAnimation
         $totalFrames = 180;
 
         for ($frame = 0; $frame < $totalFrames; $frame++) {
+            $this->checkSkip();
             $lockPhase = $frame > 90;
 
             foreach ($streams as &$stream) {
@@ -1316,6 +1342,7 @@ class AnsiTheogony implements AnsiAnimation
 
         // Text scramble → color wave
         for ($frame = 0; $frame < 45; $frame++) {
+            $this->checkSkip();
             $resolveCol = $frame * 2;
 
             foreach (self::LOGO_LINES as $lineIdx => $line) {
@@ -2009,6 +2036,68 @@ class AnsiTheogony implements AnsiAnimation
                 echo Theme::moveTo($row, $col).$arcColor.'·'.$r;
             }
             usleep(1500);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // Skip mechanism
+    // ──────────────────────────────────────────────────────
+
+    /** Put STDIN into raw, non-blocking mode for keypress detection. */
+    private function enableNonBlockingInput(): void
+    {
+        if (! defined('STDIN') || ! posix_isatty(STDIN)) {
+            return;
+        }
+
+        $this->stdinStream = STDIN;
+        $this->originalTtyMode = trim((string) shell_exec('stty -g 2>/dev/null'));
+
+        // Raw mode: no echo, no line buffering, no signal handling for input
+        shell_exec('stty -icanon -echo 2>/dev/null');
+        stream_set_blocking($this->stdinStream, false);
+    }
+
+    /** Restore STDIN to its original blocking mode. */
+    private function restoreInput(): void
+    {
+        if ($this->originalTtyMode !== null) {
+            shell_exec('stty '.escapeshellarg($this->originalTtyMode).' 2>/dev/null');
+            $this->originalTtyMode = null;
+        }
+
+        if ($this->stdinStream !== null) {
+            stream_set_blocking($this->stdinStream, true);
+            $this->stdinStream = null;
+        }
+    }
+
+    /** Check whether a key has been pressed (non-blocking). */
+    private function keyPressed(): bool
+    {
+        if ($this->stdinStream === null) {
+            return false;
+        }
+
+        $read = [$this->stdinStream];
+        $write = $except = [];
+
+        // Non-blocking check: timeout = 0
+        if (@stream_select($read, $write, $except, 0) > 0) {
+            // Consume the input
+            fread($this->stdinStream, 256);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /** Throw IntroSkippedException if user pressed a key. */
+    private function checkSkip(): void
+    {
+        if ($this->keyPressed()) {
+            throw new IntroSkippedException;
         }
     }
 }

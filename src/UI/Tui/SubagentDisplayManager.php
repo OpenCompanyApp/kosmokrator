@@ -170,7 +170,7 @@ final class SubagentDisplayManager
 
         $r = Theme::reset();
         $dim = Theme::dim();
-        $blue = "\033[38;2;112;160;208m";
+        $blue = Theme::rgb(112, 160, 208);
 
         $count = count($entries);
         $label = $this->formatRunningSummary($count, 0);
@@ -213,7 +213,7 @@ final class SubagentDisplayManager
             $cr = (int) (112 + 40 * $t);
             $cg = (int) (160 + 40 * $t);
             $cb = (int) (208 + 47 * $t);
-            $color = "\033[38;2;{$cr};{$cg};{$cb}m";
+            $color = Theme::rgb($cr, $cg, $cb);
 
             // Escalate color for long-running agents
             $elapsed = (int) (microtime(true) - $this->startTime);
@@ -275,7 +275,7 @@ final class SubagentDisplayManager
         }
 
         // Filter out background acks — show remaining (failures, awaited results)
-        $entries = array_values(array_filter($entries, fn ($e) => ! str_contains($e['result'], 'spawned in background')));
+        $entries = array_values(array_filter($entries, fn ($e) => ! ($e['background'] ?? false)));
         if (empty($entries)) {
             // All background — keep loader and tree running
             return;
@@ -430,9 +430,9 @@ final class SubagentDisplayManager
         $dim = Theme::dim();
         $green = Theme::success();
         $red = Theme::error();
-        $amber = ($this->breathColorProvider)() ?? "\033[38;2;200;150;60m";
-        $gray = "\033[38;5;240m";
-        $cyan = "\033[38;2;100;200;220m";
+        $amber = ($this->breathColorProvider)() ?? Theme::rgb(200, 150, 60);
+        $gray = Theme::dim();
+        $cyan = Theme::agentDefault();
 
         $total = $this->formatter->countNodes($nodes);
         $running = $this->formatter->countByStatus($nodes, 'running');

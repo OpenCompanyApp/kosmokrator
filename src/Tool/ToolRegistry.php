@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\Tool;
 
 use Kosmokrator\Agent\AgentContext;
+use Kosmokrator\LLM\ToolCallMapper;
 use Prism\Prism\Schema\StringSchema;
 use Prism\Prism\Tool as PrismTool;
 
@@ -81,7 +84,7 @@ class ToolRegistry
             ->using(function (...$args) use ($tool) {
                 $result = $tool->execute($args);
 
-                return $result->success ? $result->output : "Error: {$result->output}";
+                return $result->success ? $result->output : ToolCallMapper::ERROR_PREFIX.$result->output;
             });
 
         foreach ($tool->parameters() as $name => $schema) {

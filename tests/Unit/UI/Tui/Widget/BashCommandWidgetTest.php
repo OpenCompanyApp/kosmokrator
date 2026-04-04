@@ -252,7 +252,7 @@ final class BashCommandWidgetTest extends TestCase
         // Large output mixing \r, \x1b sequences, and long lines
         $output = '';
         for ($i = 0; $i < 200; $i++) {
-            $output .= "\r\x1b[K{$i}/200 (" . str_repeat('=', $i % 80) . ")\n";
+            $output .= "\r\x1b[K{$i}/200 (".str_repeat('=', $i % 80).")\n";
         }
         $widget = new BashCommandWidget('progress');
         $widget->setResult($output, true);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\Exception\KosmokratorException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
@@ -110,8 +111,15 @@ final class ContextManager
             }
 
             return [0, 0];
+        } catch (KosmokratorException $e) {
+            $this->log->warning('Pre-flight check failed', ['error' => $e->getMessage()]);
+
+            return [0, 0];
         } catch (\Throwable $e) {
-            $this->log->error('Pre-flight check failed', ['error' => $e->getMessage()]);
+            $this->log->error('Pre-flight check failed unexpectedly', [
+                'exception' => get_class($e),
+                'error' => $e->getMessage(),
+            ]);
 
             return [0, 0];
         }
@@ -156,7 +164,8 @@ final class ContextManager
 
         try {
             $protectedMessages = $this->protectedContextBuilder?->build($mode, $agentContext) ?? [];
-            $plan = $this->compactor->buildPlan($history, $protectedMessages);
+            $cancellation = $agentContext?->cancellation;
+            $plan = $this->compactor->buildPlan($history, $protectedMessages, cancellation: $cancellation);
             $tokensIn = $plan->tokensIn;
             $tokensOut = $plan->tokensOut;
 
@@ -211,6 +220,20 @@ final class ContextManager
             ]);
 
             return [$tokensIn, $tokensOut];
+        } catch (KosmokratorException $e) {
+            SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
+            $this->consecutiveCompactionFailures++;
+            $messagesBefore = count($history->messages());
+            $history->trimOldest();
+            $this->log->warning('Compaction failed with known exception', [
+                'exception' => get_class($e),
+                'error' => $e->getMessage(),
+                'messages_before' => $messagesBefore,
+                'messages_after' => count($history->messages()),
+                'consecutive_failures' => $this->consecutiveCompactionFailures,
+            ]);
+
+            return [0, 0];
         } catch (\Throwable $e) {
             SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
             $this->consecutiveCompactionFailures++;

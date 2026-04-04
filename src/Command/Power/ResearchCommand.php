@@ -102,6 +102,7 @@ class ResearchCommand implements PowerCommand
             - Distinguish between "confirmed by code" and "inferred from patterns"
             - If the codebase doesn't contain enough information to answer fully, say so
             - Prefer depth in fewer facets over shallow coverage of many
+            - If the user cancels mid-research, acknowledge and provide a partial summary of findings so far
             PROMPT;
     }
 }

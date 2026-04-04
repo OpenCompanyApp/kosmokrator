@@ -39,7 +39,7 @@ class QuitCommandTest extends TestCase
     public function test_execute_returns_quit(): void
     {
         $ui = $this->createMock(UIManager::class);
-        $ui->expects($this->once())->method('teardown');
+        $ui->expects($this->never())->method('teardown');
 
         $ctx = new SlashCommandContext(
             ui: $ui,

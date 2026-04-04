@@ -639,8 +639,8 @@ class ToolExecutorTest extends TestCase
         );
 
         $this->assertCount(1, $results);
-        $this->assertStringContainsString('Error:', $results[0]->result);
         $this->assertStringContainsString('Something broke', $results[0]->result);
+        $this->assertStringContainsString('tool execution', $results[0]->result);
     }
 
     // ── Read-only mode shell guard ───────────────────────────────────────
@@ -1204,5 +1204,68 @@ class ToolExecutorTest extends TestCase
         $this->assertSame('written', $byId['tc_2']->result);
 
         @unlink($path);
+    }
+
+    // ── Result ordering ──────────────────────────────────────────────────
+
+    public function test_results_returned_in_tool_call_order(): void
+    {
+        $readTool = $this->makeTool('file_read', 'contents');
+
+        $tc1 = new ToolCall(id: 'tc_1', name: 'file_read', arguments: ['path' => '/tmp/a.txt']);
+        $tc2 = new ToolCall(id: 'tc_2', name: 'file_read', arguments: ['path' => '/blocked']);
+        $tc3 = new ToolCall(id: 'tc_3', name: 'file_read', arguments: ['path' => '/tmp/c.txt']);
+
+        $permissions = $this->createMock(PermissionEvaluator::class);
+        $permissions->method('evaluate')
+            ->willReturnCallback(function (string $name, array $args) {
+                if (isset($args['path']) && $args['path'] === '/blocked') {
+                    return new PermissionResult(PermissionAction::Deny, 'Blocked path');
+                }
+
+                return new PermissionResult(PermissionAction::Allow);
+            });
+
+        $executor = $this->createExecutor($permissions);
+
+        $results = $executor->executeToolCalls(
+            toolCalls: [$tc1, $tc2, $tc3],
+            tools: [$readTool],
+            allTools: [$readTool],
+            mode: AgentMode::Edit,
+            agentContext: null,
+            stats: null,
+        );
+
+        $this->assertCount(3, $results);
+        $this->assertSame('tc_1', $results[0]->toolCallId);
+        $this->assertSame('tc_2', $results[1]->toolCallId);
+        $this->assertSame('tc_3', $results[2]->toolCallId);
+        $this->assertStringContainsString('Blocked path', $results[1]->result);
+    }
+
+    public function test_concurrent_results_match_call_order(): void
+    {
+        $readTool = $this->makeTool('file_read', 'data');
+
+        $tc1 = new ToolCall(id: 'tc_1', name: 'file_read', arguments: ['path' => '/tmp/a.txt']);
+        $tc2 = new ToolCall(id: 'tc_2', name: 'file_read', arguments: ['path' => '/tmp/b.txt']);
+        $tc3 = new ToolCall(id: 'tc_3', name: 'file_read', arguments: ['path' => '/tmp/c.txt']);
+
+        $executor = $this->createExecutor();
+
+        $results = $executor->executeToolCalls(
+            toolCalls: [$tc1, $tc2, $tc3],
+            tools: [$readTool],
+            allTools: [$readTool],
+            mode: AgentMode::Edit,
+            agentContext: null,
+            stats: null,
+        );
+
+        $this->assertCount(3, $results);
+        $this->assertSame('tc_1', $results[0]->toolCallId);
+        $this->assertSame('tc_2', $results[1]->toolCallId);
+        $this->assertSame('tc_3', $results[2]->toolCallId);
     }
 }

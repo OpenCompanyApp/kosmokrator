@@ -79,6 +79,7 @@ class BabysitCommand implements PowerCommand
             - Never force-push unless absolutely necessary (and warn before doing so)
             - Report every significant state change to the user
             - If stuck for more than 3 cycles with no progress, ask the user for guidance
+            - If monitoring for more than 60 minutes, report status and suggest the user check manually. Do not run indefinitely.
             - Keep a running log of actions taken
             PROMPT;
     }

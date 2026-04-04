@@ -37,6 +37,9 @@ class NewCommand implements SlashCommand
 
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
+        // Cancel any running subagents before clearing
+        $ctx->orchestrator?->cancelAll();
+
         $ctx->agentLoop->history()->clear();
         $ctx->agentLoop->resetSessionCost();
         $ctx->permissions->resetGrants();

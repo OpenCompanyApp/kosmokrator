@@ -107,7 +107,7 @@ class ConsensusCommand implements PowerCommand
 
             ## Rules:
             - Each role runs SEQUENTIALLY (not parallel) so it can see accumulated context
-            - The Critic must find at least one concern (force critical thinking)
+            - The Critic must find at least one concern IF the task is non-trivial. If trivially simple, say so and explain why no concerns were found.
             - If the task is trivially simple, say so and skip the full council
             - The consensus document is the deliverable — do not start implementation
             - Quality gate: 80%+ of acceptance criteria must be testable

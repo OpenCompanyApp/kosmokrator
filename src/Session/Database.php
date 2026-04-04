@@ -12,7 +12,7 @@ class Database
 {
     private \PDO $pdo;
 
-    private const SCHEMA_VERSION = 3;
+    private const SCHEMA_VERSION = 4;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -73,18 +73,26 @@ class Database
     /** Creates or migrates the schema to the current version. */
     private function ensureSchema(): void
     {
-        $this->pdo->exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
+        $this->pdo->exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL, UNIQUE(version))');
 
-        $stmt = $this->pdo->query('SELECT version FROM schema_version LIMIT 1');
-        $row = $stmt->fetch();
-        $currentVersion = $row ? (int) $row['version'] : 0;
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->query('SELECT version FROM schema_version LIMIT 1');
+            $row = $stmt->fetch();
+            $currentVersion = $row ? (int) $row['version'] : 0;
 
-        if ($currentVersion === 0) {
-            $this->createInitialSchema();
-            $this->pdo->exec('INSERT INTO schema_version (version) VALUES ('.self::SCHEMA_VERSION.')');
-        } elseif ($currentVersion < self::SCHEMA_VERSION) {
-            $this->migrate($currentVersion);
-            $this->pdo->exec('UPDATE schema_version SET version = '.self::SCHEMA_VERSION);
+            if ($currentVersion === 0) {
+                $this->createInitialSchema();
+                $this->pdo->exec('INSERT OR REPLACE INTO schema_version (version) VALUES ('.self::SCHEMA_VERSION.')');
+            } elseif ($currentVersion < self::SCHEMA_VERSION) {
+                $this->migrate($currentVersion);
+                $this->pdo->exec('UPDATE schema_version SET version = '.self::SCHEMA_VERSION);
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
         }
     }
 
@@ -151,6 +159,11 @@ class Database
 
         // Composite index for memory lookups filtered by project + expiry
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
+        // Index for expired memory pruning
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_expires_at ON memories(expires_at)');
+        // Index for memory type and class lookups
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
         // Index for session listing by project
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_updated ON sessions(project, updated_at DESC)');
     }
@@ -170,6 +183,13 @@ class Database
             // v3: add composite indexes for common query patterns
             $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
             $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_updated ON sessions(project, updated_at DESC)');
+        }
+
+        if ($from < 4) {
+            // v4: add indexes for expires_at, type, and memory_class
+            $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_expires_at ON memories(expires_at)');
+            $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
+            $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
         }
     }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool;
 
+use Kosmokrator\Agent\ErrorSanitizer;
+
 /**
  * Base class for tool implementations, providing automatic error wrapping and
  * a sensible default for requiredParameters() (all parameter keys).
@@ -32,7 +34,7 @@ abstract class AbstractTool implements ToolInterface
         try {
             return $this->handle($args);
         } catch (\Throwable $e) {
-            return ToolResult::error($e->getMessage());
+            return ToolResult::error(ErrorSanitizer::sanitize($e->getMessage()));
         }
     }
 

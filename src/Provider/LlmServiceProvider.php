@@ -65,10 +65,6 @@ class LlmServiceProvider extends ServiceProvider
     /** Register sync and async LLM clients with retry decorators. */
     private function registerLlmClients(): void
     {
-        $config = $this->container->make('config');
-        $registry = $this->container->make(RelayRegistry::class);
-        $providers = $this->container->make(ProviderCatalog::class);
-        $log = $this->container->make(LoggerInterface::class);
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
 
         $this->container->singleton(Relay::class, fn () => new Relay(
@@ -78,47 +74,69 @@ class LlmServiceProvider extends ServiceProvider
             ),
         ));
 
-        $this->container->singleton(PrismService::class, fn () => new RetryableLlmClient(
-            new PrismService(
-                provider: $config->get('kosmokrator.agent.default_provider', 'z'),
-                model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
-                systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-                maxTokens: $config->get('kosmokrator.agent.max_tokens'),
-                temperature: $config->get('kosmokrator.agent.temperature', 0.0),
-                relay: $this->container->make(Relay::class),
-                registry: $this->container->make(RelayRegistry::class),
-            ),
-            $log,
-        ));
+        // Use lazy resolution via closures that read config at resolution time, not registration time,
+        // so that late-boot config changes (e.g. SQLite settings injection) are reflected.
+        $this->container->singleton(PrismService::class, function () {
+            $config = $this->container->make('config');
+
+            return new RetryableLlmClient(
+                new PrismService(
+                    provider: $config->get('kosmokrator.agent.default_provider', 'z'),
+                    model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
+                    systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+                    maxTokens: $config->get('kosmokrator.agent.max_tokens'),
+                    temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+                    relay: $this->container->make(Relay::class),
+                    registry: $this->container->make(RelayRegistry::class),
+                ),
+                $this->container->make(LoggerInterface::class),
+                maxAttempts: 5,
+            );
+        });
         $this->container->singleton(LlmClientInterface::class, fn () => $this->container->make(PrismService::class));
 
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        $providerUrl = rtrim($registry->url($provider), '/');
-        $this->container->singleton(AsyncLlmClient::class, fn () => new RetryableLlmClient(
-            new AsyncLlmClient(
-                apiKey: $providers->apiKey($provider),
-                baseUrl: $providerUrl,
-                model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
-                systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-                maxTokens: $config->get('kosmokrator.agent.max_tokens'),
-                temperature: $config->get('kosmokrator.agent.temperature', 0.0),
-                provider: $provider,
-                relay: $this->container->make(Relay::class),
-                registry: $this->container->make(RelayRegistry::class),
-            ),
-            $log,
-        ));
+        $this->container->singleton(AsyncLlmClient::class, function () {
+            $config = $this->container->make('config');
+            $registry = $this->container->make(RelayRegistry::class);
+            $providers = $this->container->make(ProviderCatalog::class);
+            $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+            $providerUrl = rtrim($registry->url($provider), '/');
 
-        $this->container->singleton(ModelDefinitionSource::class, fn () => new ModelDefinitionSource(
-            $config->get('models', []),
-            $this->container->make(ProviderMeta::class),
-        ));
+            return new RetryableLlmClient(
+                new AsyncLlmClient(
+                    apiKey: $providers->apiKey($provider),
+                    baseUrl: $providerUrl,
+                    model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
+                    systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+                    maxTokens: $config->get('kosmokrator.agent.max_tokens'),
+                    temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+                    provider: $provider,
+                    relay: $this->container->make(Relay::class),
+                    registry: $this->container->make(RelayRegistry::class),
+                ),
+                $this->container->make(LoggerInterface::class),
+                maxAttempts: 5,
+            );
+        });
+
+        $this->container->singleton(ModelDefinitionSource::class, function () {
+            $config = $this->container->make('config');
+
+            return new ModelDefinitionSource(
+                $config->get('models', []),
+                $this->container->make(ProviderMeta::class),
+            );
+        });
         $this->container->singleton(ModelPricingService::class, fn () => new ModelPricingService(
             $this->container->make(ModelDefinitionSource::class),
         ));
-        $this->container->singleton(ModelCatalog::class, fn () => new ModelCatalog(
-            $config->get('models', []),
-            $this->container->make(ProviderMeta::class),
-        ));
+        $this->container->singleton(ModelCatalog::class, function () {
+            $config = $this->container->make('config');
+
+            return new ModelCatalog(
+                $config->get('models', []),
+                $this->container->make(ProviderMeta::class),
+            );
+        });
     }
 }

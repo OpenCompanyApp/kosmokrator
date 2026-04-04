@@ -106,7 +106,9 @@ class SkillLoader
 
         try {
             $meta = Yaml::parse($frontmatter);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            error_log("[SkillLoader] YAML parse failed for {$path}: {$e->getMessage()}");
+
             return null;
         }
 

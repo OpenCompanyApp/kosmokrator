@@ -333,15 +333,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function renderIntro(bool $animated): void
     {
         $intro = new AnsiIntro;
-        if ($animated) {
+        $noAnim = getenv('KOSMOKRATOR_NO_ANIM') === '1';
+
+        if ($noAnim || ! $animated) {
+            $intro->renderStatic();
+            sleep(1);
+            echo "\033[2J\033[H";
+        } else {
             $skipped = $intro->animate();
             if (! $skipped) {
                 usleep(800000);
             }
-            echo "\033[2J\033[H";
-        } else {
-            $intro->renderStatic();
-            sleep(1);
             echo "\033[2J\033[H";
         }
 
@@ -606,9 +608,9 @@ HELP;
         $inLabel = Theme::formatTokenCount($tokensIn);
         $maxLabel = Theme::formatTokenCount($maxContext);
         $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-        $r = "\033[0m";
-        $sep = "\033[38;5;240m·{$r}";
-        $dimWhite = "\033[38;2;140;140;150m";
+        $r = Theme::reset();
+        $sep = Theme::dim()."·{$r}";
+        $dimWhite = Theme::dimWhite();
         $ctxColor = Theme::contextColor($ratio);
         $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}";
         $this->refreshStatusBar();
@@ -626,8 +628,8 @@ HELP;
         }
 
         $label = $provider.'/'.$model;
-        $r = "\033[0m";
-        $dimWhite = "\033[38;2;140;140;150m";
+        $r = Theme::reset();
+        $dimWhite = Theme::dimWhite();
 
         if ($this->lastStatusMaxContext === null) {
             $this->statusDetail = "{$dimWhite}{$label}{$r}";
@@ -635,7 +637,7 @@ HELP;
             $inLabel = Theme::formatTokenCount($tokensIn);
             $maxLabel = Theme::formatTokenCount($maxContext);
             $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-            $sep = "\033[38;5;240m·{$r}";
+            $sep = Theme::dim()."·{$r}";
             $ctxColor = Theme::contextColor($ratio);
             $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}";
         }
@@ -726,7 +728,7 @@ HELP;
 
         $thinkingPhrase = $this->animationManager->getThinkingPhrase();
         if ($thinkingPhrase !== null && ! $this->taskStore->hasInProgress() && $this->animationManager->getLoader() === null) {
-            $color = $breathColor ?? "\033[38;2;112;160;208m";
+            $color = $breathColor ?? Theme::rgb(112, 160, 208);
             $bar .= "\n  {$border}│{$r}";
             $bar .= "\n  {$border}│{$r} {$color}{$thinkingPhrase}{$r}";
 
@@ -798,6 +800,10 @@ HELP;
         $this->hasHiddenActivityBelow = false;
         $this->historyStatus->hide();
         $this->tui->setScrollOffset(0);
+
+        if ($this->toolStateResetCallback !== null) {
+            ($this->toolStateResetCallback)();
+        }
     }
 
     /** @var (\Closure(): void)|null */
@@ -806,6 +812,14 @@ HELP;
     public function setDiscoveryBatchFinalizer(\Closure $finalizer): void
     {
         $this->discoveryBatchFinalizer = $finalizer;
+    }
+
+    /** @var (\Closure(): void)|null */
+    private ?\Closure $toolStateResetCallback = null;
+
+    public function setToolStateResetCallback(\Closure $callback): void
+    {
+        $this->toolStateResetCallback = $callback;
     }
 
     public function finalizeDiscoveryBatch(): void
@@ -825,8 +839,8 @@ HELP;
 
     private function refreshStatusBar(): void
     {
-        $r = "\033[0m";
-        $sep = "\033[38;5;240m·{$r}";
+        $r = Theme::reset();
+        $sep = Theme::dim()."·{$r}";
         $this->statusBar->setMessage(
             "{$this->currentModeColor}{$this->currentModeLabel}{$r} {$sep} "
             ."{$this->currentPermissionColor}{$this->currentPermissionLabel}{$r} {$sep} "
@@ -905,6 +919,9 @@ HELP;
         $modes = ['edit', 'plan', 'ask'];
         $current = strtolower($this->currentModeLabel);
         $index = array_search($current, $modes, true);
+        if ($index === false) {
+            $index = -1;
+        }
         $next = $modes[($index + 1) % count($modes)];
 
         return $next;
@@ -1066,13 +1083,14 @@ HELP;
                     $suspension->resume("/{$nextMode}");
                 } else {
                     $modeColors = [
-                        'edit' => "\033[38;2;80;200;120m",
-                        'plan' => "\033[38;2;160;120;255m",
-                        'ask' => "\033[38;2;255;180;60m",
+                        'edit' => Theme::rgb(80, 200, 120),
+                        'plan' => Theme::agentPlan(),
+                        'ask' => Theme::rgb(255, 180, 60),
                     ];
                     $this->showMode(ucfirst($nextMode), $modeColors[$nextMode] ?? '');
                     $this->messageQueue[] = "/{$nextMode}";
                     $this->requestCancellation?->cancel();
+                    $this->requestCancellation = null;
                 }
 
                 return true;
@@ -1092,6 +1110,7 @@ HELP;
 
             if ($this->requestCancellation !== null) {
                 $this->requestCancellation->cancel();
+                $this->requestCancellation = null;
 
                 return;
             }

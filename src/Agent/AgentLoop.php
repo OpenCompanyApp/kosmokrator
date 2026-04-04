@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\Agent;
 
 use Amp\CancelledException;
@@ -253,7 +255,7 @@ class AgentLoop
                     $this->log->info('LLM request cancelled by user', ['round' => $round]);
 
                     return;
-                } catch (\Throwable $e) {
+                } catch (\RuntimeException $e) {
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
 
                     // Context window overflow — compact or trim and retry
@@ -285,7 +287,18 @@ class AgentLoop
 
                     $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
                     SafeDisplay::call(fn () => $this->ui->showError($e->getMessage()), $this->log);
-                    $this->history->addAssistant('Error: '.$e->getMessage());
+                    $this->history->addAssistant('Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+
+                    return;
+                } catch (\Throwable $e) {
+                    $this->log->error('LLM request failed with unexpected exception', [
+                        'exception' => get_class($e),
+                        'error' => $e->getMessage(),
+                        'round' => $round,
+                    ]);
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+                    SafeDisplay::call(fn () => $this->ui->showError('An unexpected error occurred.'), $this->log);
+                    $this->history->addAssistant('Error: An unexpected error occurred.');
 
                     return;
                 }
@@ -309,7 +322,7 @@ class AgentLoop
                         SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
                         SafeDisplay::call(fn () => $this->ui->showError('Tool execution error: '.$e->getMessage()), $this->log);
                         $toolResults = array_map(
-                            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
+                            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
                             $toolCalls,
                         );
                     }
@@ -409,176 +422,181 @@ class AgentLoop
         $round = 0;
         $trimAttempts = 0;
 
-        while (true) {
-            $round++;
-            $this->stats?->touchActivity();
-
-            $this->log->debug('Headless round start', [
-                'round' => $round,
-                'tokens_in' => $this->sessionTokensIn,
-                'tokens_out' => $this->sessionTokensOut,
-                'history_messages' => count($this->history->messages()),
-            ]);
-
-            [$compactIn, $compactOut] = $this->contextManager->headlessPreFlightCheck($this->history, $this->mode, $this->agentContext);
-            $this->sessionTokensIn += $compactIn;
-            $this->sessionTokensOut += $compactOut;
-            if ($compactIn > 0 || $compactOut > 0) {
-                $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
-            }
-            $this->injectPendingBackgroundResults();
-            $this->contextManager->refreshSystemPrompt($this->mode, $this->history, $this->agentContext);
-
-            try {
-                $cancellation = $this->ui->getCancellation();
-                $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
-                $trimAttempts = 0;
-
-                $fullText = $response->text;
-                $toolCalls = $response->toolCalls;
-                $finishReason = $response->finishReason;
-
-                $this->sessionTokensIn += $response->promptTokens;
-                $this->sessionTokensOut += $response->completionTokens;
-                $this->stats?->addTokens($response->promptTokens, $response->completionTokens);
+        try {
+            while (true) {
+                $round++;
                 $this->stats?->touchActivity();
 
-                $this->events?->dispatch(new LlmResponseReceived(
-                    $response->promptTokens, $response->completionTokens,
-                    $response->cacheReadInputTokens, $response->cacheWriteInputTokens,
-                    $this->contextManager->getModelName(),
-                ));
-
-                $this->log->debug('Headless LLM response', [
+                $this->log->debug('Headless round start', [
                     'round' => $round,
-                    'finish_reason' => $finishReason->value,
-                    'tool_calls' => count($toolCalls),
-                    'text_length' => strlen($fullText),
-                    'prompt_tokens' => $response->promptTokens,
-                    'completion_tokens' => $response->completionTokens,
+                    'tokens_in' => $this->sessionTokensIn,
+                    'tokens_out' => $this->sessionTokensOut,
+                    'history_messages' => count($this->history->messages()),
                 ]);
-            } catch (CancelledException $e) {
-                $watchdogReason = $this->watchdogCancellationReason($e);
 
-                if ($watchdogReason !== null) {
-                    $this->log->warning('Headless agent cancelled by watchdog', [
+                [$compactIn, $compactOut] = $this->contextManager->headlessPreFlightCheck($this->history, $this->mode, $this->agentContext);
+                $this->sessionTokensIn += $compactIn;
+                $this->sessionTokensOut += $compactOut;
+                if ($compactIn > 0 || $compactOut > 0) {
+                    $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
+                }
+                $this->injectPendingBackgroundResults();
+                $this->contextManager->refreshSystemPrompt($this->mode, $this->history, $this->agentContext);
+
+                try {
+                    $cancellation = $this->ui->getCancellation();
+                    $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+                    $trimAttempts = 0;
+
+                    $fullText = $response->text;
+                    $toolCalls = $response->toolCalls;
+                    $finishReason = $response->finishReason;
+
+                    $this->sessionTokensIn += $response->promptTokens;
+                    $this->sessionTokensOut += $response->completionTokens;
+                    $this->stats?->addTokens($response->promptTokens, $response->completionTokens);
+                    $this->stats?->touchActivity();
+
+                    $this->events?->dispatch(new LlmResponseReceived(
+                        $response->promptTokens, $response->completionTokens,
+                        $response->cacheReadInputTokens, $response->cacheWriteInputTokens,
+                        $this->contextManager->getModelName(),
+                    ));
+
+                    $this->log->debug('Headless LLM response', [
                         'round' => $round,
-                        'reason' => $watchdogReason,
+                        'finish_reason' => $finishReason->value,
+                        'tool_calls' => count($toolCalls),
+                        'text_length' => strlen($fullText),
+                        'prompt_tokens' => $response->promptTokens,
+                        'completion_tokens' => $response->completionTokens,
                     ]);
-                    if ($this->stats !== null) {
-                        $this->stats->error = $watchdogReason;
+                } catch (CancelledException $e) {
+                    $watchdogReason = $this->watchdogCancellationReason($e);
+
+                    if ($watchdogReason !== null) {
+                        $this->log->warning('Headless agent cancelled by watchdog', [
+                            'round' => $round,
+                            'reason' => $watchdogReason,
+                        ]);
+                        if ($this->stats !== null) {
+                            $this->stats->error = $watchdogReason;
+                        }
+
+                        throw new \RuntimeException($watchdogReason, previous: $e);
                     }
 
-                    throw new \RuntimeException($watchdogReason, previous: $e);
+                    $this->log->info('Headless agent cancelled', ['round' => $round]);
+
+                    return '(cancelled)';
+                } catch (\Throwable $e) {
+                    if ($this->isContextOverflow($e) && $trimAttempts < 3) {
+                        $trimAttempts++;
+                        $round--;
+                        $messagesBefore = count($this->history->messages());
+                        if ($this->compactor !== null && $trimAttempts === 1) {
+                            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
+                            $this->sessionTokensIn += $cIn;
+                            $this->sessionTokensOut += $cOut;
+                            if ($cIn > 0 || $cOut > 0) {
+                                $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
+                            }
+                        } else {
+                            $this->history->trimOldest();
+                        }
+                        $this->log->warning('Headless context overflow, trimmed', [
+                            'attempt' => $trimAttempts,
+                            'messages_before' => $messagesBefore,
+                            'messages_after' => count($this->history->messages()),
+                        ]);
+
+                        continue;
+                    }
+
+                    $this->log->error('Headless agent error', ['error' => $e->getMessage(), 'round' => $round]);
+
+                    return ToolCallMapper::ERROR_PREFIX.$e->getMessage();
                 }
 
-                $this->log->info('Headless agent cancelled', ['round' => $round]);
+                if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
+                    $this->history->addAssistant($fullText, $toolCalls);
 
-                return '(cancelled)';
-            } catch (\Throwable $e) {
-                if ($this->isContextOverflow($e) && $trimAttempts < 3) {
-                    $trimAttempts++;
-                    $round--;
-                    $messagesBefore = count($this->history->messages());
-                    if ($this->compactor !== null && $trimAttempts === 1) {
-                        [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
-                        $this->sessionTokensIn += $cIn;
-                        $this->sessionTokensOut += $cOut;
-                        if ($cIn > 0 || $cOut > 0) {
-                            $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
-                        }
-                    } else {
-                        $this->history->trimOldest();
+                    try {
+                        $toolResults = $this->toolExecutor->executeToolCalls(
+                            $toolCalls, $this->tools, $this->allTools,
+                            $this->mode, $this->agentContext, $this->stats,
+                        );
+                    } catch (\Throwable $e) {
+                        $this->log->error('Headless tool execution failed', ['error' => $e->getMessage()]);
+                        $toolResults = array_map(
+                            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
+                            $toolCalls,
+                        );
                     }
-                    $this->log->warning('Headless context overflow, trimmed', [
-                        'attempt' => $trimAttempts,
-                        'messages_before' => $messagesBefore,
-                        'messages_after' => count($this->history->messages()),
-                    ]);
+
+                    $this->history->addToolResults($toolResults);
+                    $this->stats?->touchActivity();
+
+                    $this->injectPendingBackgroundResults();
+
+                    if ($this->deduplicator !== null) {
+                        $this->deduplicator->deduplicate($this->history);
+                    }
+                    if ($this->pruner !== null) {
+                        $this->pruner->prune($this->history);
+                    }
+
+                    // Stuck detection: check for repetitive tool call patterns
+                    $stuckState = $this->stuckDetector->check($toolCalls);
+
+                    if ($stuckState === 'force_return') {
+                        $this->log->warning('Headless agent force-returned', [
+                            'round' => $round,
+                            'escalation' => $this->stuckDetector->getEscalation(),
+                            'window' => $this->stuckDetector->getWindow(),
+                        ]);
+                        if ($this->stats !== null) {
+                            $this->stats->error = 'forced return: agent did not converge';
+                        }
+                        $lastText = $fullText !== '' ? $fullText : $this->stuckDetector->extractLastAssistantText($this->history);
+
+                        return $lastText."\n\n(forced return: agent did not converge after repeated nudges)";
+                    }
+                    if ($stuckState === 'nudge') {
+                        $this->history->addUser('[SYSTEM] You appear to be repeating the same actions. Consolidate your findings and return a final response.');
+                        $this->log->info('Stuck nudge injected', [
+                            'round' => $round,
+                            'window' => $this->stuckDetector->getWindow(),
+                            'escalation' => $this->stuckDetector->getEscalation(),
+                        ]);
+                    }
+                    if ($stuckState === 'final_notice') {
+                        $this->history->addUser('[SYSTEM] FINAL NOTICE: You are still looping. Return your findings NOW. Do NOT make any more tool calls.');
+                        $this->log->warning('Stuck final notice injected', [
+                            'round' => $round,
+                            'window' => $this->stuckDetector->getWindow(),
+                            'escalation' => $this->stuckDetector->getEscalation(),
+                        ]);
+                    }
 
                     continue;
                 }
 
-                $this->log->error('Headless agent error', ['error' => $e->getMessage(), 'round' => $round]);
-
-                return 'Error: '.$e->getMessage();
-            }
-
-            if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
-                $this->history->addAssistant($fullText, $toolCalls);
-
-                try {
-                    $toolResults = $this->toolExecutor->executeToolCalls(
-                        $toolCalls, $this->tools, $this->allTools,
-                        $this->mode, $this->agentContext, $this->stats,
-                    );
-                } catch (\Throwable $e) {
-                    $this->log->error('Headless tool execution failed', ['error' => $e->getMessage()]);
-                    $toolResults = array_map(
-                        fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.$e->getMessage()),
-                        $toolCalls,
-                    );
-                }
-
-                $this->history->addToolResults($toolResults);
+                // Final response
+                $this->log->info('Headless agent complete', [
+                    'rounds' => $round,
+                    'total_tokens_in' => $this->sessionTokensIn,
+                    'total_tokens_out' => $this->sessionTokensOut,
+                    'response_length' => strlen($fullText),
+                ]);
                 $this->stats?->touchActivity();
+                $this->history->addAssistant($fullText);
 
-                $this->injectPendingBackgroundResults();
-
-                if ($this->deduplicator !== null) {
-                    $this->deduplicator->deduplicate($this->history);
-                }
-                if ($this->pruner !== null) {
-                    $this->pruner->prune($this->history);
-                }
-
-                // Stuck detection: check for repetitive tool call patterns
-                $stuckState = $this->stuckDetector->check($toolCalls);
-
-                if ($stuckState === 'force_return') {
-                    $this->log->warning('Headless agent force-returned', [
-                        'round' => $round,
-                        'escalation' => $this->stuckDetector->getEscalation(),
-                        'window' => $this->stuckDetector->getWindow(),
-                    ]);
-                    if ($this->stats !== null) {
-                        $this->stats->error = 'forced return: agent did not converge';
-                    }
-                    $lastText = $fullText !== '' ? $fullText : $this->stuckDetector->extractLastAssistantText($this->history);
-
-                    return $lastText."\n\n(forced return: agent did not converge after repeated nudges)";
-                }
-                if ($stuckState === 'nudge') {
-                    $this->history->addUser('[SYSTEM] You appear to be repeating the same actions. Consolidate your findings and return a final response.');
-                    $this->log->info('Stuck nudge injected', [
-                        'round' => $round,
-                        'window' => $this->stuckDetector->getWindow(),
-                        'escalation' => $this->stuckDetector->getEscalation(),
-                    ]);
-                }
-                if ($stuckState === 'final_notice') {
-                    $this->history->addUser('[SYSTEM] FINAL NOTICE: You are still looping. Return your findings NOW. Do NOT make any more tool calls.');
-                    $this->log->warning('Stuck final notice injected', [
-                        'round' => $round,
-                        'window' => $this->stuckDetector->getWindow(),
-                        'escalation' => $this->stuckDetector->getEscalation(),
-                    ]);
-                }
-
-                continue;
+                return $fullText;
             }
-
-            // Final response
-            $this->log->info('Headless agent complete', [
-                'rounds' => $round,
-                'total_tokens_in' => $this->sessionTokensIn,
-                'total_tokens_out' => $this->sessionTokensOut,
-                'response_length' => strlen($fullText),
-            ]);
-            $this->stats?->touchActivity();
-            $this->history->addAssistant($fullText);
-
-            return $fullText;
+        } finally {
+            $this->log->debug('Headless agent exiting, resetting phase');
+            SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
         }
     }
 
@@ -749,11 +767,32 @@ class AgentLoop
     {
         $message = strtolower($e->getMessage());
 
+        // Check HTTP status codes commonly returned for context overflow
+        if (preg_match('/\b(400|413)\b/', $message) && (
+            str_contains($message, 'token')
+            || str_contains($message, 'context')
+            || str_contains($message, 'length')
+            || str_contains($message, 'input')
+            || str_contains($message, 'request')
+        )) {
+            return true;
+        }
+
         return str_contains($message, 'max length')
             || str_contains($message, 'max tokens')
             || str_contains($message, 'context length')
+            || str_contains($message, 'context_length_exceeded')
+            || str_contains($message, 'context window')
+            || str_contains($message, 'too many tokens')
             || str_contains($message, 'too long')
-            || str_contains($message, 'token limit');
+            || str_contains($message, 'token limit')
+            || str_contains($message, 'input is too long')
+            || str_contains($message, 'request too large')
+            || str_contains($message, 'prompt is too long')
+            || str_contains($message, 'reduced context')
+            || str_contains($message, 'input_length_exceeded')
+            || (str_contains($message, 'content filter')
+                && str_contains($message, 'length'));
     }
 
     /**

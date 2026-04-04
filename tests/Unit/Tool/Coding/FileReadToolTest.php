@@ -13,9 +13,9 @@ class FileReadToolTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tool = new FileReadTool;
         $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
+        $this->tool = new FileReadTool($this->tempDir);
     }
 
     protected function tearDown(): void

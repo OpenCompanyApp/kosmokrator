@@ -129,7 +129,9 @@ final class UpdateChecker
             }
 
             return (string) $data['version'];
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->log?->warning('Update check cache read failed', ['error' => $e->getMessage()]);
+
             return null;
         }
     }

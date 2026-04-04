@@ -117,9 +117,9 @@ final class AgentDisplayFormatter
         $taskPreview = mb_strlen($task) > 50 ? mb_substr($task, 0, 50).'...' : $task;
 
         $typeColor = match (strtolower($type)) {
-            'general' => "\033[38;2;218;165;32m",
-            'plan' => "\033[38;2;160;120;255m",
-            default => "\033[38;2;100;200;220m",
+            'general' => Theme::agentGeneral(),
+            'plan' => Theme::agentPlan(),
+            default => Theme::agentDefault(),
         };
 
         $primary = $id !== null

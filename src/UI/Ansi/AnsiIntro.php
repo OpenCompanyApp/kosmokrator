@@ -2,6 +2,7 @@
 
 namespace Kosmokrator\UI\Ansi;
 
+use Kosmokrator\UI\Ansi\Concern\AnimationSignalHandler;
 use Kosmokrator\UI\Theme;
 
 /**
@@ -10,6 +11,8 @@ use Kosmokrator\UI\Theme;
  */
 class AnsiIntro
 {
+    use AnimationSignalHandler;
+
     private int $termWidth = 120;
 
     private int $termHeight = 30;
@@ -28,12 +31,16 @@ class AnsiIntro
      */
     public function animate(): bool
     {
-        $this->termWidth = (int) exec('tput cols') ?: 120;
-        $this->termHeight = (int) exec('tput lines') ?: 30;
+        $this->termWidth = TerminalSize::cols();
+        $this->termHeight = TerminalSize::lines();
 
         echo Theme::hideCursor().Theme::clearScreen();
 
-        register_shutdown_function(fn () => print (Theme::showCursor()));
+        register_shutdown_function(function () {
+            echo Theme::showCursor();
+        });
+
+        $this->installSignalHandler();
 
         $this->enableNonBlockingInput();
 
@@ -68,6 +75,8 @@ class AnsiIntro
             $this->skipped = true;
         } finally {
             $this->restoreInput();
+            $this->restoreSignalHandler();
+            TerminalSize::reset();
         }
 
         if ($this->skipped) {

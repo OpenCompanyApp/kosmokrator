@@ -316,11 +316,11 @@ class MarkdownToAnsi
         }
     }
 
-    /** Toggles italic via ANSI escape code \033[3m (italic on) / \033[23m (italic off). */
+    /** Toggles italic via Theme::italic() on enter, resets on exit. */
     private function handleEmphasis(bool $entering): void
     {
         if ($entering) {
-            $this->appendInline("\033[3m");
+            $this->appendInline(Theme::italic());
         } else {
             $this->appendInline("\033[23m");
         }
@@ -358,11 +358,11 @@ class MarkdownToAnsi
         }
     }
 
-    /** Toggles strikethrough via ANSI escape code \033[9m (on) / \033[29m (off). */
+    /** Toggles strikethrough via Theme::strikethrough() on enter, resets on exit. */
     private function handleStrikethrough(bool $entering): void
     {
         if ($entering) {
-            $this->appendInline("\033[9m");
+            $this->appendInline(Theme::strikethrough());
         } else {
             $this->appendInline("\033[29m");
         }
@@ -423,7 +423,7 @@ class MarkdownToAnsi
      *
      * @return list<string>
      */
-    private function wrapAnsiText(string $text, int $width): array
+    public static function wrapAnsiText(string $text, int $width): array
     {
         // Split into words (preserving ANSI codes attached to words)
         $words = preg_split('/(?<=\s)(?=\S)/', $text);

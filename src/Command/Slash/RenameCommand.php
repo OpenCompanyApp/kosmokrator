@@ -47,7 +47,7 @@ class RenameCommand implements SlashCommand
         }
 
         // Strip surrounding quotes if present
-        if (preg_match('/^"(.+)"$/', $title, $matches) || preg_match("/^'(.+)'/", $title, $matches)) {
+        if (preg_match('/^"(.+)"$/', $title, $matches) || preg_match("/^'(.+)'$/", $title, $matches)) {
             $title = $matches[1];
         }
 

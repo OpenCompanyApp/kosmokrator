@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\UI;
 
 /**
@@ -126,7 +128,7 @@ class Theme
     /** Bright white (bold). */
     public static function white(): string
     {
-        return self::ESC.'[1;37m';
+        return self::rgb(240, 240, 245);
     }
 
     /** Bold intensity attribute. */
@@ -139,6 +141,48 @@ class Theme
     public static function reset(): string
     {
         return self::ESC.'[0m';
+    }
+
+    /** Agent type: general (goldenrod). */
+    public static function agentGeneral(): string
+    {
+        return self::rgb(218, 165, 32);
+    }
+
+    /** Agent type: plan (purple). */
+    public static function agentPlan(): string
+    {
+        return self::rgb(160, 120, 255);
+    }
+
+    /** Agent type: default/explore (cyan). */
+    public static function agentDefault(): string
+    {
+        return self::rgb(100, 200, 220);
+    }
+
+    /** Dimmed white for subtle UI text. */
+    public static function dimWhite(): string
+    {
+        return self::rgb(140, 140, 150);
+    }
+
+    /** Waiting/queued status indicator (blue). */
+    public static function waiting(): string
+    {
+        return self::rgb(100, 149, 237);
+    }
+
+    /** Italic text attribute. */
+    public static function italic(): string
+    {
+        return self::ESC.'[3m';
+    }
+
+    /** Strikethrough text attribute. */
+    public static function strikethrough(): string
+    {
+        return self::ESC.'[9m';
     }
 
     // Border colors — dimmed variants of mode/accent colors

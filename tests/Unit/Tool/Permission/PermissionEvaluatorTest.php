@@ -446,4 +446,28 @@ class PermissionEvaluatorTest extends TestCase
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/test']);
         $this->assertSame(PermissionAction::Allow, $result->action);
     }
+
+    // --- Default deny ---
+
+    public function test_unknown_tool_default_deny(): void
+    {
+        $evaluator = new PermissionEvaluator([], $this->grants);
+
+        $result = $evaluator->evaluate('totally_unknown_tool', ['arg' => 'value']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+        $this->assertStringContainsString('not explicitly allowed', $result->reason);
+    }
+
+    public function test_known_tool_with_no_rules_denied(): void
+    {
+        // Rules exist for other tools but not for this one
+        $rules = [
+            new PermissionRule('file_read', PermissionAction::Allow),
+            new PermissionRule('bash', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+
+        $result = $evaluator->evaluate('file_write', ['path' => '/tmp/test']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+    }
 }

@@ -36,8 +36,6 @@ class QuitCommand implements SlashCommand
 
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
-        $ctx->ui->teardown();
-
         return SlashCommandResult::quit();
     }
 }

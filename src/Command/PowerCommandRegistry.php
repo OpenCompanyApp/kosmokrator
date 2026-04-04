@@ -31,20 +31,32 @@ class PowerCommandRegistry
 
     /**
      * Resolve a single command name (with or without colon prefix).
+     *
+     * Returns null if the command is unknown or its animation class does not exist.
      */
     public function resolve(string $name): ?PowerCommand
     {
         $lower = strtolower($name);
 
+        $command = null;
+
         if (isset($this->commands[$lower])) {
-            return $this->commands[$lower];
+            $command = $this->commands[$lower];
+        } elseif (isset($this->aliases[$lower])) {
+            $command = $this->commands[$this->aliases[$lower]];
         }
 
-        if (isset($this->aliases[$lower])) {
-            return $this->commands[$this->aliases[$lower]];
+        if ($command === null) {
+            return null;
         }
 
-        return null;
+        // Validate that the animation class actually exists
+        $animationClass = $command->animationClass();
+        if (! class_exists($animationClass) && ! interface_exists($animationClass)) {
+            return null;
+        }
+
+        return $command;
     }
 
     /**
@@ -74,7 +86,7 @@ class PowerCommandRegistry
 
         // Find all positions where a known :command starts
         $segments = [];
-        $pattern = '/(^|(?<=\s)):(\w+)/';
+        $pattern = '/(^|(?<=\s)):([\w-]+)/';
         if (preg_match_all($pattern, $input, $matches, PREG_OFFSET_CAPTURE)) {
             foreach ($matches[0] as $i => $match) {
                 $fullMatch = ltrim($match[0]); // remove leading space if any

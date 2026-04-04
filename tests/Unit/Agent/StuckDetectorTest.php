@@ -61,15 +61,21 @@ class StuckDetectorTest extends TestCase
     public function test_recovery_resets_escalation(): void
     {
         $same = new ToolCall(id: 'tc_1', name: 'grep', arguments: '{"pattern": "same"}');
-        $different = new ToolCall(id: 'tc_2', name: 'glob', arguments: '{"pattern": "*.txt"}');
 
         // Trigger nudge
         $this->detector->check([$same]);
         $this->detector->check([$same]);
         $this->assertSame('nudge', $this->detector->check([$same]));
 
-        // Different calls reset escalation
-        $this->assertSame('ok', $this->detector->check([$different]));
+        // Window is [A,A,A] → A=3 ≥ 3 → still stuck.
+        // Need enough UNIQUE calls to push the old As out of the window
+        // AND meet the cooldown threshold (2 consecutive diverse turns).
+        // Each unique call has a different signature, so max count stays 1.
+        for ($i = 0; $i < 8; $i++) {
+            $unique = new ToolCall(id: "tc_{$i}", name: 'grep', arguments: json_encode(['pattern' => "unique_{$i}"]));
+            $this->detector->check([$unique]);
+        }
+
         $this->assertSame(0, $this->detector->getEscalation());
     }
 
@@ -148,5 +154,36 @@ class StuckDetectorTest extends TestCase
 
         // A single batch of 4 identical calls should trigger nudge (3+ in window)
         $this->assertSame('nudge', $this->detector->check($calls));
+    }
+
+    public function test_oscillation_pattern_detected(): void
+    {
+        // Small window + quick cooldown so As age out and Bs trigger a second nudge
+        $detector = new StuckDetector(windowSize: 4, repetitionThreshold: 3, cooldownThreshold: 1);
+        $A = new ToolCall(id: 'tc_1', name: 'grep', arguments: '{"pattern": "same"}');
+        $B = new ToolCall(id: 'tc_2', name: 'glob', arguments: '{"pattern": "*.txt"}');
+
+        $this->assertSame('ok', $detector->check([$A]));      // window=[A]
+        $this->assertSame('ok', $detector->check([$A]));      // window=[A,A]
+        $this->assertSame('nudge', $detector->check([$A]));   // window=[A,A,A] → A=3, nudge #1
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,A,B] → A=3, still stuck, turnsSince=1
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, diverse → reset (cooldownThreshold=1)
+        $this->assertSame('nudge', $detector->check([$B]));   // window=[A,B,B,B] → B=3, nudge #2
+    }
+
+    public function test_single_diverse_call_does_not_fully_reset_escalation(): void
+    {
+        // Small window so As age out after B calls, default cooldownThreshold=2
+        $detector = new StuckDetector(windowSize: 4, repetitionThreshold: 3);
+        $A = new ToolCall(id: 'tc_1', name: 'grep', arguments: '{"pattern": "same"}');
+        $B = new ToolCall(id: 'tc_2', name: 'glob', arguments: '{"pattern": "*.txt"}');
+
+        $this->assertSame('ok', $detector->check([$A]));      // window=[A]
+        $this->assertSame('ok', $detector->check([$A]));      // window=[A,A]
+        $this->assertSame('nudge', $detector->check([$A]));   // window=[A,A,A] → nudge, escalation=1
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,A,B] → A=3, still stuck, turnsSince=1
+        $this->assertSame(1, $detector->getEscalation());     // Not reset — stuck branch, no cooldown
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, diverse, cooldown=1
+        $this->assertSame(1, $detector->getEscalation());     // Still not reset — need 2 diverse turns (cooldownThreshold=2)
     }
 }

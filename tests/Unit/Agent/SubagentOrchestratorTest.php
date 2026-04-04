@@ -7,6 +7,7 @@ use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\LLM\RetryableHttpException;
+use Kosmokrator\LLM\ToolCallMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Revolt\EventLoop;
@@ -202,7 +203,7 @@ class SubagentOrchestratorTest extends TestCase
         // Agent A returns an error string (not an exception)
         $this->orchestrator->spawnAgent(
             $this->rootContext, 'degrade', AgentType::Explore, 'background', 'dep-deg', [], null,
-            fn ($ctx, $task) => 'Error: rate limited after 3 attempts',
+            fn ($ctx, $task) => ToolCallMapper::ERROR_PREFIX.'rate limited after 3 attempts',
         );
 
         // Agent B depends on A — should see warning marker
@@ -393,7 +394,7 @@ class SubagentOrchestratorTest extends TestCase
             function ($ctx, $task) use (&$attempt) {
                 $attempt++;
                 if ($attempt === 1) {
-                    return 'Error: context overflow after 3 trim attempts';
+                    return ToolCallMapper::ERROR_PREFIX.'context overflow after 3 trim attempts';
                 }
 
                 return 'success on retry';
@@ -442,12 +443,12 @@ class SubagentOrchestratorTest extends TestCase
             function ($ctx, $task) use (&$attempt) {
                 $attempt++;
 
-                return 'Error: something broke';
+                return ToolCallMapper::ERROR_PREFIX.'something broke';
             },
         );
 
         $result = $future->await();
-        $this->assertSame('Error: something broke', $result);
+        $this->assertSame(ToolCallMapper::ERROR_PREFIX.'something broke', $result);
         $this->assertSame(3, $attempt); // original + 2 retries
 
         $stats = $orchestrator->getStats('exhaust-1');
@@ -466,7 +467,7 @@ class SubagentOrchestratorTest extends TestCase
             function ($ctx, $task) use (&$attempt) {
                 $attempt++;
                 if ($attempt <= 2) {
-                    return 'Error: transient failure';
+                    return ToolCallMapper::ERROR_PREFIX.'transient failure';
                 }
 
                 return 'recovered';
@@ -1225,5 +1226,67 @@ class SubagentOrchestratorTest extends TestCase
     private static function assertStringContains(string $needle, string $haystack): void
     {
         self::assertStringContainsString($needle, $haystack);
+    }
+
+    // --- Cycle detection with pruned agents ---
+
+    public function test_cycle_detection_with_pruned_agent(): void
+    {
+        // Agent A completes and gets pruned (stats removed from $this->stats).
+        // Agent B is then spawned with depends_on=['pruned-A'].
+        // The cycle detector should treat pruned agents as leaves (no outgoing deps),
+        // and the dependency resolution should throw "Unknown dependency" at runtime.
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'prunable', AgentType::Explore, 'await', 'prune-dep-A', [], null,
+            fn ($ctx, $task) => 'result-A',
+        )->await();
+
+        // Prune the completed agent
+        $this->orchestrator->pruneCompleted();
+        $this->assertNull($this->orchestrator->getStats('prune-dep-A'));
+
+        // Spawning B with dependency on pruned-A should NOT throw at spawn time
+        // (cycle detector treats pruned agents as leaves)
+        $future = $this->orchestrator->spawnAgent(
+            $this->rootContext, 'depends-on-pruned', AgentType::Explore, 'await', 'prune-dep-B', ['prune-dep-A'], null,
+            fn ($ctx, $task) => 'should not reach',
+        );
+
+        // But at runtime, the dependency lookup in $this->agents should fail
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Unknown dependency agent: 'prune-dep-A'");
+        $future->await();
+    }
+
+    // --- Root agent slot management ---
+
+    public function test_root_agent_slot_management(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        // Root agent doesn't hold a slot — spawn a child that takes the only slot
+        $childRan = false;
+        $future = $orchestrator->spawnAgent(
+            $context, 'child task', AgentType::Explore, 'await', 'slot-child', [], null,
+            function ($ctx, $task) use (&$childRan) {
+                $childRan = true;
+
+                return 'child done';
+            },
+        );
+
+        $this->assertSame('child done', $future->await());
+        $this->assertTrue($childRan);
+
+        // After child completes, slot should be released.
+        // Spawn another child to verify no deadlock (slot leak).
+        $future2 = $orchestrator->spawnAgent(
+            $context, 'second child', AgentType::Explore, 'await', 'slot-child-2', [], null,
+            fn ($ctx, $task) => 'child 2 done',
+        );
+
+        $this->assertSame('child 2 done', $future2->await());
     }
 }

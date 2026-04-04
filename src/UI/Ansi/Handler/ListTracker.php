@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Ansi\Handler;
 
 use Kosmokrator\UI\Ansi\AnsiTableRenderer;
+use Kosmokrator\UI\Ansi\MarkdownToAnsi;
 use Kosmokrator\UI\Theme;
 use League\CommonMark\Extension\CommonMark\Node\Block\ListBlock;
 
@@ -133,7 +134,7 @@ final class ListTracker
             $continuationIndent = $indent.$bulletIndent.str_repeat(' ', mb_strlen($bullet));
             $contWidth = AnsiTableRenderer::visibleWidth($continuationIndent);
             $availableWidth = max(40, $termWidth - $contWidth - 2);
-            $lines = self::wrapAnsiText($inlineBuffer, $availableWidth);
+            $lines = MarkdownToAnsi::wrapAnsiText($inlineBuffer, $availableWidth);
 
             $output .= $indent.$bulletIndent.Theme::dim().$bullet.Theme::reset().array_shift($lines).Theme::reset()."\n";
             foreach ($lines as $line) {
@@ -146,7 +147,7 @@ final class ListTracker
             $continuationIndent = $indent.$bulletIndent.'  ';
             $contWidth = AnsiTableRenderer::visibleWidth($continuationIndent);
             $availableWidth = max(40, $termWidth - $contWidth - 2);
-            $lines = self::wrapAnsiText($inlineBuffer, $availableWidth);
+            $lines = MarkdownToAnsi::wrapAnsiText($inlineBuffer, $availableWidth);
 
             foreach ($lines as $line) {
                 $output .= $continuationIndent.$line.Theme::reset()."\n";
@@ -154,39 +155,5 @@ final class ListTracker
         }
 
         return $output;
-    }
-
-    /**
-     * Word-wrap text that may contain ANSI escape codes.
-     *
-     * @param  string  $text  Text with possible ANSI sequences
-     * @param  int  $width  Maximum visible width per line
-     * @return list<string>
-     */
-    private static function wrapAnsiText(string $text, int $width): array
-    {
-        $words = preg_split('/(?<=\s)(?=\S)/', $text);
-        $lines = [];
-        $currentLine = '';
-        $currentWidth = 0;
-
-        foreach ($words as $word) {
-            $wordWidth = AnsiTableRenderer::visibleWidth($word);
-
-            if ($currentWidth > 0 && $currentWidth + $wordWidth > $width) {
-                $lines[] = rtrim($currentLine);
-                $currentLine = $word;
-                $currentWidth = $wordWidth;
-            } else {
-                $currentLine .= $word;
-                $currentWidth += $wordWidth;
-            }
-        }
-
-        if ($currentLine !== '') {
-            $lines[] = rtrim($currentLine);
-        }
-
-        return $lines ?: [''];
     }
 }

@@ -15,16 +15,21 @@ use Prism\Prism\ValueObjects\ToolResult;
 /**
  * Rough character-based token counter for estimating context usage.
  *
- * Uses a fixed chars-per-token ratio (≈4) to avoid pulling in a real
- * tokenizer. Good enough for budget-threshold checks against ContextBudget.
+ * Uses a fixed chars-per-token ratio (≈3.2) calibrated for code-heavy content
+ * which tends to have shorter tokens. Adds per-message overhead to account
+ * for message framing, role prefixes, and control tokens.
+ *
  * Not suitable for exact billing or API parameter sizing.
  *
  * @see ContextBudget Which consumes these estimates for threshold decisions
  */
 class TokenEstimator
 {
-    /** Approximate characters per token for English/code text. */
-    private const CHARS_PER_TOKEN = 4;
+    /** Approximate characters per token for code-heavy English text. */
+    private const CHARS_PER_TOKEN = 3.2;
+
+    /** Per-message overhead tokens (role prefix, framing, control tokens). */
+    private const MESSAGE_OVERHEAD_TOKENS = 10;
 
     /**
      * Estimate the token count for a plain-text string.
@@ -45,7 +50,7 @@ class TokenEstimator
      */
     public static function estimateMessage(Message $message): int
     {
-        return match (true) {
+        $contentTokens = match (true) {
             $message instanceof UserMessage => self::estimate($message->content),
             $message instanceof AssistantMessage => self::estimate($message->content)
                 + self::estimateToolCalls($message->toolCalls),
@@ -53,6 +58,8 @@ class TokenEstimator
             $message instanceof SystemMessage => self::estimate($message->content),
             default => 0,
         };
+
+        return $contentTokens + self::MESSAGE_OVERHEAD_TOKENS;
     }
 
     /**

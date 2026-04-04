@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\Cancellation;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Prism\Prism\Contracts\Message;
@@ -118,9 +119,9 @@ PROMPT;
      * @param  int  $keepRecent  Number of most-recent messages to preserve unchanged
      * @return array{summary: string, tokens_in: int, tokens_out: int} Compaction result with LLM token usage
      */
-    public function compact(ConversationHistory $history, int $keepRecent = 3): array
+    public function compact(ConversationHistory $history, int $keepRecent = 3, ?Cancellation $cancellation = null): array
     {
-        $plan = $this->buildPlan($history, keepRecent: $keepRecent);
+        $plan = $this->buildPlan($history, keepRecent: $keepRecent, cancellation: $cancellation);
 
         return [
             'summary' => $plan->summary,
@@ -137,7 +138,7 @@ PROMPT;
      * @param  int  $keepRecent  Number of most-recent messages to preserve unchanged
      * @return CompactionPlan Plan with replacement messages, summary, and token usage
      */
-    public function buildPlan(ConversationHistory $history, array $protectedMessages = [], int $keepRecent = 3): CompactionPlan
+    public function buildPlan(ConversationHistory $history, array $protectedMessages = [], int $keepRecent = 3, ?Cancellation $cancellation = null): CompactionPlan
     {
         $messages = $history->messages();
         $total = count($messages);
@@ -164,7 +165,7 @@ PROMPT;
         $response = $this->llm->chat([
             new SystemMessage(self::COMPACTION_SYSTEM_PROMPT),
             new UserMessage(sprintf(self::COMPACTION_USER_PROMPT, $formatted)),
-        ]);
+        ], cancellation: $cancellation);
 
         $summary = trim($response->text);
         $recent = array_slice($messages, $keepFrom);

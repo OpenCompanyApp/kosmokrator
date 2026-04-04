@@ -139,7 +139,7 @@ In headless mode (subagents via `AgentLoop::runHeadless()`), no `ContextCompacto
 
 ---
 
-### C3. SubagentOrchestrator — Failed Agent Futures Never Pruned
+### C3. SubagentOrchestrator — Failed Agent Futures Never Pruned ✅ Fixed
 
 **File:** `src/Agent/SubagentOrchestrator.php:340`
 
@@ -165,7 +165,7 @@ $terminalStates = ['done' => true, 'cancelled' => true];
 
 ---
 
-### C5. GrepTool Spawns `which rg` TWICE per Call, No Caching
+### C5. GrepTool Spawns `which rg` TWICE per Call, No Caching ✅ Fixed
 
 **File:** `src/Tool/Coding/GrepTool.php:47,52,88–93`
 
@@ -176,7 +176,7 @@ $terminalStates = ['done' => true, 'cancelled' => true];
 
 ---
 
-### C6. GrepTool Has No Timeout
+### C6. GrepTool Has No Timeout ✅ Fixed
 
 **File:** `src/Tool/Coding/GrepTool.php:64–67`
 
@@ -187,7 +187,7 @@ Unlike `BashTool`, `GrepTool` has zero timeout protection. A hung grep (network 
 
 ---
 
-### C7. BashTool Timer NOT Cancelled on Exception
+### C7. BashTool Timer NOT Cancelled on Exception ✅ Fixed
 
 **File:** `src/Tool/Coding/BashTool.php:71–99`
 
@@ -213,7 +213,7 @@ Unlike `BashTool`, `GrepTool` has zero timeout protection. A hung grep (network 
 
 ## High Findings
 
-### H1. SubagentOrchestrator Has No `__destruct()` — Background Agents Orphaned
+### H1. SubagentOrchestrator Has No `__destruct()` — Background Agents Orphaned ✅ Fixed
 
 **File:** `src/Agent/SubagentOrchestrator.php:20–517`
 
@@ -288,7 +288,7 @@ Every `PrismService::chat()` call creates a fresh provider + `PendingRequest` HT
 
 ---
 
-### H8. ConversationHistory Tool Result `args` Not Freed After Pruning
+### H8. ConversationHistory Tool Result `args` Not Freed After Pruning ✅ Fixed
 
 **File:** `src/Agent/ConversationHistory.php:15`
 

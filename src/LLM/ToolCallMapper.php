@@ -19,6 +19,12 @@ use Prism\Prism\ValueObjects\ToolResult;
 final class ToolCallMapper
 {
     /**
+     * Unique prefix used to mark error results inside Prism's ToolResult.
+     * The \x01 byte cannot appear in normal tool output, preventing false positives.
+     */
+    public const ERROR_PREFIX = "\x01ERROR:";
+
+    /**
      * Create a ToolResult representing a successful tool execution.
      *
      * @param  string  $toolCallId  The tool call ID from the LLM response
@@ -42,7 +48,7 @@ final class ToolCallMapper
      * @param  string  $toolCallId  The tool call ID from the LLM response
      * @param  string  $toolName  Name of the tool that failed
      * @param  array<string, mixed>  $args  Arguments the tool was called with
-     * @param  string  $error  The error message
+     * @param  string  $error  The error message (will be prefixed with ERROR_PREFIX)
      */
     public static function toErrorResult(string $toolCallId, string $toolName, array $args, string $error): ToolResult
     {
@@ -50,7 +56,7 @@ final class ToolCallMapper
             toolCallId: $toolCallId,
             toolName: $toolName,
             args: $args,
-            result: $error,
+            result: self::ERROR_PREFIX.$error,
         );
     }
 
@@ -115,8 +121,31 @@ final class ToolCallMapper
         return match (true) {
             is_string($output) => $output,
             $output instanceof ToolOutput => $output->result,
-            $output instanceof ToolError => "Error: {$output->message}",
+            $output instanceof ToolError => self::ERROR_PREFIX.$output->message,
             default => (string) $output,
         };
+    }
+
+    /**
+     * Check whether a ToolResult was created by toErrorResult() or carries an error marker.
+     */
+    public static function isErrorResult(ToolResult $result): bool
+    {
+        return is_string($result->result) && str_starts_with($result->result, self::ERROR_PREFIX);
+    }
+
+    /**
+     * Strip the error prefix from a ToolResult, returning the human-readable message.
+     *
+     * Returns the raw string unchanged if it doesn't carry the error prefix.
+     */
+    public static function cleanErrorResult(ToolResult $result): string
+    {
+        $str = (string) $result->result;
+        if (str_starts_with($str, self::ERROR_PREFIX)) {
+            return substr($str, strlen(self::ERROR_PREFIX));
+        }
+
+        return $str;
     }
 }

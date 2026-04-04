@@ -20,6 +20,8 @@ final class DiffRenderer
 {
     private const int CONTEXT_LINES = 3;
 
+    private const int MAX_HUNKS = 500;
+
     private const string HUNK_SEPARATOR = '· · ✧ · ·';
 
     /** Skip word-level diff when >40% of tokens changed. */
@@ -28,10 +30,32 @@ final class DiffRenderer
     private ?Highlighter $highlighter = null;
 
     /**
+     * Format a byte count as a human-readable size string.
+     */
+    private static function formatBytes(int $bytes): string
+    {
+        if ($bytes < 1024) {
+            return $bytes.'B';
+        }
+
+        return round($bytes / 1024, 1).'kB';
+    }
+
+    /**
      * Render a unified diff as a single ANSI string (for TUI CollapsibleWidget).
      */
     public function render(string $old, string $new, string $path): string
     {
+        // Binary file detection: check for NUL bytes
+        if (str_contains($old, "\0") || str_contains($new, "\0")) {
+            $oldSize = self::formatBytes(strlen($old));
+            $newSize = self::formatBytes(strlen($new));
+            $dim = Theme::dim();
+            $r = Theme::reset();
+
+            return "{$dim}[Binary file changed: old {$oldSize} → new {$newSize}]{$r}";
+        }
+
         $lines = $this->renderLines($old, $new, $path);
 
         return $lines !== [] ? implode("\n", $lines) : '';
@@ -58,14 +82,20 @@ final class DiffRenderer
         $differ = new Differ(new DiffOnlyOutputBuilder(''));
         $diffArray = $differ->diffToArray($paddedOld, $paddedNew);
 
-        // Strip trailing newlines from each entry
-        foreach ($diffArray as &$entry) {
+        // Strip trailing newlines from each entry; detect no-newline-at-EOF
+        $noNewlineFlags = [];
+        foreach ($diffArray as $idx => &$entry) {
+            if (! str_ends_with($entry[0], "\n")) {
+                $noNewlineFlags[$idx] = true;
+            }
             $entry[0] = rtrim($entry[0], "\r\n");
         }
         unset($entry);
 
         // Remove empty trailing entry caused by trailing newline in input
         while ($diffArray !== [] && end($diffArray)[0] === '' && end($diffArray)[1] === Differ::OLD) {
+            $lastIdx = array_key_last($diffArray);
+            unset($noNewlineFlags[$lastIdx]);
             array_pop($diffArray);
         }
 
@@ -98,9 +128,22 @@ final class DiffRenderer
             return [];
         }
 
+        // Large diff truncation
+        $truncated = false;
+        $omittedCount = 0;
+        if (count($hunks) > self::MAX_HUNKS) {
+            $omittedCount = count($hunks) - self::MAX_HUNKS;
+            $hunks = array_slice($hunks, 0, self::MAX_HUNKS);
+            $truncated = true;
+        }
+
         // Compute gutter width from max line number
         $maxLineNum = $this->computeMaxLineNumber($hunks, $diffArray, $baseOffset);
         $gw = max(3, strlen((string) $maxLineNum));
+
+        // For context lines we show two numbers: "{$oldNum} {$newNum}"
+        // So the context gutter width is 2*gw + 1 (space between numbers)
+        $contextGw = 2 * $gw + 1;
 
         // Render hunks
         $r = Theme::reset();
@@ -111,7 +154,7 @@ final class DiffRenderer
 
         foreach ($hunks as $hunkIdx => $hunk) {
             if ($hunkIdx > 0) {
-                $pad = str_repeat(' ', $gw + 4);
+                $pad = str_repeat(' ', $contextGw + 4);
                 $sep = self::HUNK_SEPARATOR;
                 $output[] = "{$dim}{$pad}{$sep}{$r}";
             }
@@ -122,14 +165,29 @@ final class DiffRenderer
             // Apply word-level diffs to paired lines within this hunk
             $hunkEntries = $this->applyWordDiffs($hunk['entries'], $diffArray);
 
-            foreach ($hunkEntries as $entry) {
+            foreach ($hunkEntries as $entryIdx => $entry) {
+                // Check if the *previous* entry had the no-newline flag
+                // We need to look up the original index in diffArray
+                // The entries in hunkEntries are copies, so we track by content match
+                if ($entryIdx > 0) {
+                    $prevEntry = $hunkEntries[$entryIdx - 1];
+                    // Find original index of previous entry in diffArray
+                    foreach ($diffArray as $origIdx => $origEntry) {
+                        if ($origEntry === $prevEntry && isset($noNewlineFlags[$origIdx])) {
+                            $output[] = Theme::dim().'\\ No newline at end of file'.Theme::reset();
+                            break;
+                        }
+                    }
+                }
+
                 $type = $entry[1];
                 $highlighted = $entry[2] ?? $entry[0];
 
                 if ($type === Differ::OLD) {
-                    // Context line
-                    $num = str_pad((string) $newLine, $gw, ' ', STR_PAD_LEFT);
-                    $output[] = "{$dim}{$num}    {$highlighted}{$r}";
+                    // Context line: show both old and new line numbers
+                    $oldNum = str_pad((string) $oldLine, $gw, ' ', STR_PAD_LEFT);
+                    $newNum = str_pad((string) $newLine, $gw, ' ', STR_PAD_LEFT);
+                    $output[] = "{$dim}{$oldNum} {$newNum} │ {$highlighted}{$r}";
                     $oldLine++;
                     $newLine++;
                 } elseif ($type === Differ::REMOVED) {
@@ -150,6 +208,12 @@ final class DiffRenderer
             }
         }
 
+        // Large diff truncation notice
+        if ($truncated) {
+            $pad = str_repeat(' ', $contextGw + 4);
+            $output[] = "{$dim}{$pad}... {$omittedCount} more hunks omitted{$r}";
+        }
+
         // Change summary
         $parts = [];
         if ($totalAdded > 0) {
@@ -159,7 +223,7 @@ final class DiffRenderer
             $parts[] = "{$totalRemoved} ".($totalRemoved === 1 ? 'removal' : 'removals');
         }
         if ($parts !== []) {
-            $pad = str_repeat(' ', $gw + 4);
+            $pad = str_repeat(' ', $contextGw + 4);
             $output[] = "{$dim}{$pad}✧ ".implode(', ', $parts)."{$r}";
         }
 
@@ -405,6 +469,9 @@ final class DiffRenderer
             return $highlighted;
         }
 
+        // UTF-8 validation guard: fall back to byte-level highlighting
+        $byteLevel = ! mb_check_encoding($highlighted, 'UTF-8');
+
         $result = '';
         $visiblePos = 0;
         $rangeIdx = 0;
@@ -437,16 +504,21 @@ final class DiffRenderer
                 $rangeIdx++;
             }
 
-            // Handle multi-byte UTF-8 characters
-            $byte = ord($highlighted[$i]);
-            if ($byte < 0x80) {
+            if ($byteLevel) {
+                // Byte-level fallback: each byte is one visible character
                 $charLen = 1;
-            } elseif ($byte < 0xE0) {
-                $charLen = 2;
-            } elseif ($byte < 0xF0) {
-                $charLen = 3;
             } else {
-                $charLen = 4;
+                // Handle multi-byte UTF-8 characters
+                $byte = ord($highlighted[$i]);
+                if ($byte < 0x80) {
+                    $charLen = 1;
+                } elseif ($byte < 0xE0) {
+                    $charLen = 2;
+                } elseif ($byte < 0xF0) {
+                    $charLen = 3;
+                } else {
+                    $charLen = 4;
+                }
             }
 
             $result .= substr($highlighted, $i, $charLen);
@@ -474,7 +546,7 @@ final class DiffRenderer
             return [$old, $new, 0];
         }
 
-        $pos = strpos($fileContent, $new);
+        $pos = strrpos($fileContent, $new);
         if ($pos === false) {
             return [$old, $new, 0];
         }
@@ -536,7 +608,9 @@ final class DiffRenderer
 
         try {
             return $this->getHighlighter()->parse($code, $language);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            error_log("[DiffRenderer] Highlight failed: {$e->getMessage()}");
+
             return $code;
         }
     }

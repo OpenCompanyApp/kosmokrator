@@ -46,8 +46,13 @@ class ForgetCommand implements SlashCommand
         $id = (int) trim($args);
 
         if ($id > 0) {
-            $ctx->sessionManager->deleteMemory($id);
-            $ctx->ui->showNotice("Memory #{$id} deleted.");
+            $existing = $ctx->sessionManager->findMemory($id);
+            if ($existing !== null) {
+                $ctx->sessionManager->deleteMemory($id);
+                $ctx->ui->showNotice("Memory #{$id} deleted.");
+            } else {
+                $ctx->ui->showNotice("Memory #{$id} not found.");
+            }
         } else {
             $ctx->ui->showNotice('Usage: /forget <id>');
         }

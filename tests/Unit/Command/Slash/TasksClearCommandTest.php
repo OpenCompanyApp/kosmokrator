@@ -42,7 +42,7 @@ class TasksClearCommandTest extends TestCase
 
     public function test_name(): void
     {
-        $this->assertSame('/tasks clear', $this->command->name());
+        $this->assertSame('/tasks-clear', $this->command->name());
     }
 
     public function test_execute_clears_tasks(): void

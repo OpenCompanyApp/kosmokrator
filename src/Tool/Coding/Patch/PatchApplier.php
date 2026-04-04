@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding\Patch;
 
+use Kosmokrator\Exception\FileOperationException;
 use Kosmokrator\Tool\Permission\PathResolver;
 use Kosmokrator\Tool\Permission\PermissionRule;
 
@@ -39,7 +40,7 @@ final class PatchApplier
                 'add' => $summary['added'] += $this->applyAdd($operation),
                 'update' => $this->applyUpdate($operation, $summary),
                 'delete' => $summary['deleted'] += $this->applyDelete($operation),
-                default => throw new \RuntimeException("Unsupported patch operation '{$operation->kind}'."),
+                default => throw new FileOperationException("Unsupported patch operation '{$operation->kind}'."),
             };
         }
 
@@ -68,7 +69,7 @@ final class PatchApplier
     {
         $path = trim($path);
         if ($path === '' || $path === '.') {
-            throw new \RuntimeException('Patch contains an invalid file path.');
+            throw new FileOperationException('Patch contains an invalid file path.');
         }
 
         // Check both the raw path and any symlink-resolved variant
@@ -83,7 +84,7 @@ final class PatchApplier
                 $basename = basename($candidate);
                 if (PermissionRule::matchesGlob($candidate, $pattern)
                     || PermissionRule::matchesGlob($basename, $pattern)) {
-                    throw new \RuntimeException("Cannot access '{$path}' — matches blocked pattern '{$pattern}'.");
+                    throw new FileOperationException("Cannot access '{$path}' — matches blocked pattern '{$pattern}'.");
                 }
             }
         }
@@ -93,13 +94,13 @@ final class PatchApplier
     private function applyAdd(PatchOperation $operation): int
     {
         if (file_exists($operation->path)) {
-            throw new \RuntimeException("Cannot add file '{$operation->path}' because it already exists.");
+            throw new FileOperationException("Cannot add file '{$operation->path}' because it already exists.");
         }
 
         $this->ensureParentDirectory($operation->path);
         $content = implode("\n", $operation->bodyLines);
         if (file_put_contents($operation->path, $content) === false) {
-            throw new \RuntimeException("Failed to write file '{$operation->path}'.");
+            throw new FileOperationException("Failed to write file '{$operation->path}'.");
         }
 
         return 1;
@@ -113,12 +114,12 @@ final class PatchApplier
     private function applyUpdate(PatchOperation $operation, array &$summary): void
     {
         if (! is_file($operation->path)) {
-            throw new \RuntimeException("Cannot update missing file '{$operation->path}'.");
+            throw new FileOperationException("Cannot update missing file '{$operation->path}'.");
         }
 
         $content = file_get_contents($operation->path);
         if ($content === false) {
-            throw new \RuntimeException("Failed to read file '{$operation->path}'.");
+            throw new FileOperationException("Failed to read file '{$operation->path}'.");
         }
 
         $updatedContent = $this->applyUpdateHunks($content, $operation->bodyLines, $operation->path);
@@ -127,19 +128,19 @@ final class PatchApplier
         // When moving, verify the destination doesn't already exist before writing
         if ($operation->moveTo !== null && $operation->moveTo !== $operation->path) {
             if (file_exists($operation->moveTo)) {
-                throw new \RuntimeException("Cannot move to '{$operation->moveTo}' because it already exists.");
+                throw new FileOperationException("Cannot move to '{$operation->moveTo}' because it already exists.");
             }
             $this->ensureParentDirectory($operation->moveTo);
         }
 
         if (file_put_contents($targetPath, $updatedContent) === false) {
-            throw new \RuntimeException("Failed to write file '{$targetPath}'.");
+            throw new FileOperationException("Failed to write file '{$targetPath}'.");
         }
 
         // Remove the original file after a successful move
         if ($operation->moveTo !== null && $operation->moveTo !== $operation->path) {
             if (! unlink($operation->path)) {
-                throw new \RuntimeException("Failed to remove original file '{$operation->path}' after move.");
+                throw new FileOperationException("Failed to remove original file '{$operation->path}' after move.");
             }
             $summary['moved']++;
         }
@@ -151,15 +152,15 @@ final class PatchApplier
     private function applyDelete(PatchOperation $operation): int
     {
         if (! file_exists($operation->path)) {
-            throw new \RuntimeException("Cannot delete missing file '{$operation->path}'.");
+            throw new FileOperationException("Cannot delete missing file '{$operation->path}'.");
         }
 
         if (is_dir($operation->path)) {
-            throw new \RuntimeException("Cannot delete directory '{$operation->path}' with apply_patch.");
+            throw new FileOperationException("Cannot delete directory '{$operation->path}' with apply_patch.");
         }
 
         if (! unlink($operation->path)) {
-            throw new \RuntimeException("Failed to delete file '{$operation->path}'.");
+            throw new FileOperationException("Failed to delete file '{$operation->path}'.");
         }
 
         return 1;
@@ -200,7 +201,7 @@ final class PatchApplier
         }
 
         if ($chunks === []) {
-            throw new \RuntimeException("Update for '{$path}' did not contain any patch hunks.");
+            throw new FileOperationException("Update for '{$path}' did not contain any patch hunks.");
         }
 
         foreach ($chunks as $chunk) {
@@ -250,12 +251,12 @@ final class PatchApplier
         [$search, $replacement] = $this->resolveLineEndings($content, $old, $new);
         $first = strpos($content, $search);
         if ($first === false) {
-            throw new \RuntimeException("Patch context not found in '{$path}'.");
+            throw new FileOperationException("Patch context not found in '{$path}'.");
         }
 
         $second = strpos($content, $search, $first + 1);
         if ($second !== false) {
-            throw new \RuntimeException("Patch context is ambiguous in '{$path}'.");
+            throw new FileOperationException("Patch context is ambiguous in '{$path}'.");
         }
 
         return substr($content, 0, $first).$replacement.substr($content, $first + strlen($search));
@@ -289,7 +290,7 @@ final class PatchApplier
         }
 
         if (! mkdir($dir, 0755, true) && ! is_dir($dir)) {
-            throw new \RuntimeException("Failed to create directory '{$dir}'.");
+            throw new FileOperationException("Failed to create directory '{$dir}'.");
         }
     }
 }

@@ -19,7 +19,7 @@ class ApplyPatchToolTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir().'/kosmokrator_patch_'.uniqid();
         mkdir($this->tempDir, 0755, true);
-        $this->tool = new ApplyPatchTool(new PatchParser, new PatchApplier);
+        $this->tool = new ApplyPatchTool(new PatchParser, new PatchApplier([], $this->tempDir));
     }
 
     protected function tearDown(): void
@@ -83,7 +83,7 @@ PATCH,
 
     public function test_rejects_blocked_paths(): void
     {
-        $tool = new ApplyPatchTool(new PatchParser, new PatchApplier(['*.env']));
+        $tool = new ApplyPatchTool(new PatchParser, new PatchApplier(['*.env'], $this->tempDir));
 
         $result = $tool->execute([
             'patch' => <<<PATCH

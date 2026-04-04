@@ -105,6 +105,19 @@ class AgentCommand extends Command
      */
     private function repl(AgentSession $session): int
     {
+        // Install signal handlers for graceful cleanup on SIGINT/SIGTERM.
+        if (function_exists('pcntl_async_signals')) {
+            pcntl_async_signals(true);
+            $signalHandler = function () use ($session) {
+                $session->orchestrator?->cancelAll();
+                $this->container->make(ShellSessionManager::class)->killAll();
+                $session->ui->teardown();
+                exit(0);
+            };
+            pcntl_signal(SIGINT, $signalHandler);
+            pcntl_signal(SIGTERM, $signalHandler);
+        }
+
         $taskStore = $this->container->make(TaskStore::class);
         $config = $this->container->make('config');
         $settings = $this->container->make(SettingsRepositoryInterface::class);
@@ -126,6 +139,7 @@ class AgentCommand extends Command
 
         $registry = $this->buildSlashCommandRegistry();
         $powerRegistry = $this->buildPowerCommandRegistry();
+        $registry->register(new Slash\HelpCommand($registry, $powerRegistry));
         $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models, $providers);
         $nextInput = null;
         $nextInputShown = false;
@@ -151,7 +165,7 @@ class AgentCommand extends Command
             $nextInput = null;
             $nextInputShown = false;
 
-            if ($input === '') {
+            if (trim($input) === '') {
                 continue;
             }
 
@@ -214,6 +228,14 @@ class AgentCommand extends Command
                 if ($result->action === SlashCommandAction::Inject) {
                     $nextInput = $result->input;
                 }
+
+                continue;
+            }
+
+            // Unknown slash command — reject rather than sending to LLM
+            if (str_starts_with($input, '/')) {
+                $cmd = preg_split('/\s+/', $input, 2)[0];
+                $session->ui->showNotice("Unknown command: {$cmd}. Type /help for available commands.");
 
                 continue;
             }
@@ -343,38 +365,30 @@ class AgentCommand extends Command
 
     /**
      * Registers all power workflow commands into a new registry.
+     *
+     * Auto-discovers classes in src/Command/Power/ that implement PowerCommand
+     * instead of requiring manual registration for each command.
      */
     private function buildPowerCommandRegistry(): PowerCommandRegistry
     {
         $registry = new PowerCommandRegistry;
 
-        // Ship now
-        $registry->register(new Power\UnleashCommand);
-        $registry->register(new Power\TraceCommand);
-        $registry->register(new Power\AutopilotCommand);
-        $registry->register(new Power\DeslopCommand);
-        $registry->register(new Power\DeepInitCommand);
+        $powerDir = dirname(__DIR__).'/Command/Power';
+        $namespace = 'Kosmokrator\\Command\\Power\\';
 
-        // Next wave
-        $registry->register(new Power\RalphCommand);
-        $registry->register(new Power\TeamCommand);
-        $registry->register(new Power\UltraQaCommand);
-        $registry->register(new Power\InterviewCommand);
+        foreach (glob($powerDir.'/*Command.php') as $file) {
+            $className = $namespace.basename($file, '.php');
 
-        // Extended
-        $registry->register(new Power\ReviewCommand);
-        $registry->register(new Power\ResearchCommand);
-        $registry->register(new Power\DeepDiveCommand);
-        $registry->register(new Power\BabysitCommand);
-        $registry->register(new Power\ReleaseCommand);
-        $registry->register(new Power\DocsCommand);
-        $registry->register(new Power\ConsensusCommand);
+            if (! class_exists($className)) {
+                continue;
+            }
 
-        // Future
-        $registry->register(new Power\DoctorCommand);
-        $registry->register(new Power\LearnerCommand);
-        $registry->register(new Power\CancelCommand);
-        $registry->register(new Power\ReplayCommand);
+            $reflection = new \ReflectionClass($className);
+
+            if ($reflection->implementsInterface(PowerCommand::class) && ! $reflection->isAbstract()) {
+                $registry->register($reflection->newInstance());
+            }
+        }
 
         return $registry;
     }

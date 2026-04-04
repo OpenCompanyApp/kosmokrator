@@ -37,6 +37,8 @@ final class TuiModalManager
 {
     private ?Suspension $askSuspension = null;
 
+    private bool $activeModal = false;
+
     public function __construct(
         private readonly ContainerWidget $overlay,
         private readonly AbstractWidget $sessionRoot,
@@ -55,6 +57,11 @@ final class TuiModalManager
      */
     public function askToolPermission(string $toolName, array $args): string
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         $preview = (new PermissionPreviewBuilder)->build($toolName, $args);
         $widget = new PermissionPromptWidget($toolName, $preview);
         $widget->setId('permission-prompt');
@@ -73,7 +80,11 @@ final class TuiModalManager
             $suspension->resume('deny');
         });
 
-        $decision = $suspension->suspend();
+        try {
+            $decision = $suspension->suspend();
+        } finally {
+            $this->activeModal = false;
+        }
 
         $this->overlay->remove($widget);
         $this->tui->setFocus($this->input);
@@ -89,6 +100,11 @@ final class TuiModalManager
      */
     public function approvePlan(string $currentPermissionMode): ?array
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         $widget = new PlanApprovalWidget($currentPermissionMode);
         $widget->setId('plan-approval');
 
@@ -109,7 +125,11 @@ final class TuiModalManager
             $suspension->resume(null);
         });
 
-        $result = $suspension->suspend();
+        try {
+            $result = $suspension->suspend();
+        } finally {
+            $this->activeModal = false;
+        }
 
         $this->overlay->remove($widget);
         $this->tui->setFocus($this->input);
@@ -129,6 +149,11 @@ final class TuiModalManager
      */
     public function askUser(string $question): string
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         $r = Theme::reset();
         $accent = Theme::accent();
 
@@ -138,14 +163,19 @@ final class TuiModalManager
         $this->tui->setFocus($this->input);
         $this->flushRender();
 
-        $this->askSuspension = EventLoop::getSuspension();
-        $answer = $this->askSuspension->suspend();
+        try {
+            $this->askSuspension = EventLoop::getSuspension();
+            $answer = $this->askSuspension->suspend();
 
-        // Clean up overlay and show Q&A inline in conversation
-        $this->overlay->remove($widget);
-        $this->forceRender();
+            // Clean up overlay and show Q&A inline in conversation
+            $this->overlay->remove($widget);
+            $this->forceRender();
 
-        return $answer;
+            return $answer;
+        } finally {
+            $this->askSuspension = null;
+            $this->activeModal = false;
+        }
     }
 
     /**
@@ -160,6 +190,11 @@ final class TuiModalManager
      */
     public function askChoice(string $question, array $choices): string
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         $r = Theme::reset();
 
         $widgets = [];
@@ -225,7 +260,11 @@ final class TuiModalManager
             $suspension->resume('dismissed');
         });
 
-        $result = $suspension->suspend();
+        try {
+            $result = $suspension->suspend();
+        } finally {
+            $this->activeModal = false;
+        }
 
         // Clean up overlay
         foreach ($widgets as $w) {
@@ -246,6 +285,11 @@ final class TuiModalManager
      */
     public function showSettings(array $currentSettings): array
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         $widget = new SettingsWorkspaceWidget($currentSettings);
         $widget->setId('settings-workspace');
         $this->tui->remove($this->sessionRoot);
@@ -263,7 +307,11 @@ final class TuiModalManager
             $suspension->resume(false);
         });
 
-        $suspension->suspend();
+        try {
+            $suspension->suspend();
+        } finally {
+            $this->activeModal = false;
+        }
 
         $this->tui->remove($widget);
         $this->tui->add($this->sessionRoot);
@@ -281,7 +329,14 @@ final class TuiModalManager
      */
     public function pickSession(array $items): ?string
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         if ($items === []) {
+            $this->activeModal = false;
+
             return null;
         }
 
@@ -303,7 +358,11 @@ final class TuiModalManager
             $suspension->resume(null);
         });
 
-        $result = $suspension->suspend();
+        try {
+            $result = $suspension->suspend();
+        } finally {
+            $this->activeModal = false;
+        }
 
         $this->overlay->remove($selectList);
         $this->tui->setFocus($this->input);
@@ -321,6 +380,11 @@ final class TuiModalManager
      */
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
     {
+        if ($this->activeModal) {
+            throw new \LogicException('A modal is already active');
+        }
+
+        $this->activeModal = true;
         $widget = new SwarmDashboardWidget($summary, $allStats);
         $widget->setId('agents-dashboard');
 
@@ -340,13 +404,17 @@ final class TuiModalManager
                     $data = $refresh();
                     $widget->setData($data['summary'], $data['stats']);
                     $this->forceRender();
-                } catch (\Throwable) {
-                    // Ignore refresh errors
+                } catch (\Throwable $e) {
+                    error_log("[TuiModalManager] Refresh error: {$e->getMessage()}");
                 }
             });
         }
 
-        $suspension->suspend();
+        try {
+            $suspension->suspend();
+        } finally {
+            $this->activeModal = false;
+        }
 
         if ($timerId !== null) {
             EventLoop::cancel($timerId);

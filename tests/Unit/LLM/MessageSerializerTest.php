@@ -208,4 +208,23 @@ class MessageSerializerTest extends TestCase
         $this->assertSame('file_read', $restored[0]->toolName);
         $this->assertSame('contents here', $restored[0]->result);
     }
+
+    public function test_null_tool_results_creates_null_message(): void
+    {
+        $row = ['role' => 'tool_result', 'content' => null, 'tool_calls' => null, 'tool_results' => null];
+
+        $message = $this->serializer->deserializeMessage($row);
+        $this->assertNull($message);
+    }
+
+    public function test_malformed_json_tool_results_handled_gracefully(): void
+    {
+        // tool_results column contains invalid JSON
+        $row = ['role' => 'tool_result', 'content' => null, 'tool_calls' => null, 'tool_results' => '{not valid json'];
+
+        $message = $this->serializer->deserializeMessage($row);
+        // deserializeToolResults returns [] for invalid JSON, so ToolResultMessage gets empty array
+        $this->assertInstanceOf(ToolResultMessage::class, $message);
+        $this->assertCount(0, $message->toolResults);
+    }
 }

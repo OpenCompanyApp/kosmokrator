@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
@@ -108,6 +110,13 @@ class PrismService implements LlmClientInterface
     {
         $response = $this->text($messages, $tools);
 
+        // Extract reasoning/thinking content from Prism's additionalContent
+        $reasoningContent = '';
+        $additionalContent = $response->additionalContent;
+        if (isset($additionalContent['thinking']) && is_string($additionalContent['thinking'])) {
+            $reasoningContent = $additionalContent['thinking'];
+        }
+
         return new LlmResponse(
             text: $response->text,
             finishReason: $response->finishReason,
@@ -117,6 +126,7 @@ class PrismService implements LlmClientInterface
             cacheWriteInputTokens: $response->usage->cacheWriteInputTokens ?? 0,
             cacheReadInputTokens: $response->usage->cacheReadInputTokens ?? 0,
             thoughtTokens: $response->usage->thoughtTokens ?? 0,
+            reasoningContent: $reasoningContent,
         );
     }
 

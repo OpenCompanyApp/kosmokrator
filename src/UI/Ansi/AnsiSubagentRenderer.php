@@ -26,13 +26,13 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
             return;
         }
 
-        $r = "\033[0m";
+        $r = Theme::reset();
         $dim = "\033[38;5;243m";
-        $green = "\033[38;2;80;200;120m";
-        $gold = "\033[38;2;218;165;32m";
-        $red = "\033[38;2;255;100;100m";
-        $blue = "\033[38;2;100;149;237m";
-        $border = "\033[38;5;240m";
+        $green = Theme::success();
+        $gold = Theme::accent();
+        $red = Theme::error();
+        $blue = Theme::waiting();
+        $border = Theme::dim();
 
         $running = count(array_filter($stats, fn ($s) => $s->status === 'running'));
         $done = count(array_filter($stats, fn ($s) => $s->status === 'done'));
@@ -102,7 +102,7 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
 
         $r = Theme::reset();
         $dim = Theme::dim();
-        $cyan = "\033[38;2;100;200;220m";
+        $cyan = Theme::agentDefault();
         $border = Theme::borderTask();
 
         $count = count($entries);
@@ -142,7 +142,7 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
         $dim = Theme::dim();
         $green = Theme::success();
         $red = Theme::error();
-        $cyan = "\033[38;2;100;200;220m";
+        $cyan = Theme::agentDefault();
         $border = Theme::borderTask();
 
         // Filter out background acks — show remaining (failures, awaited results)

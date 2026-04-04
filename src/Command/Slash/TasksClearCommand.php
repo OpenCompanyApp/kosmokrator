@@ -15,7 +15,7 @@ class TasksClearCommand implements SlashCommand
 {
     public function name(): string
     {
-        return '/tasks clear';
+        return '/tasks-clear';
     }
 
     /** @return string[] */

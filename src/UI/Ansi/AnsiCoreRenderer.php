@@ -70,7 +70,9 @@ final class AnsiCoreRenderer implements CoreRendererInterface
 
     public function renderIntro(bool $animated): void
     {
-        if ($animated) {
+        if (getenv('KOSMOKRATOR_NO_ANIM') === '1') {
+            $this->intro->renderStatic();
+        } elseif ($animated) {
             $this->intro->animate();
         } else {
             $this->intro->renderStatic();

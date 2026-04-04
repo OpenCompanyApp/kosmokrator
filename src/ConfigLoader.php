@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator;
 
 use Illuminate\Config\Repository;
@@ -72,10 +74,16 @@ class ConfigLoader
         $content = preg_replace_callback('/\$\{(\w+)\}/', function (array $matches) {
             $value = $_ENV[$matches[1]] ?? $_SERVER[$matches[1]] ?? getenv($matches[1]);
 
-            return $value !== false ? $value : '';
+            return $value !== false ? $value : null;
         }, $content);
 
-        return Yaml::parse($content) ?? [];
+        try {
+            return Yaml::parse($content) ?? [];
+        } catch (\Throwable $e) {
+            error_log("ConfigLoader: Failed to parse YAML file {$path}: ".$e->getMessage());
+
+            return [];
+        }
     }
 
     /** Load user-level config from ~/.kosmokrator/config.yaml. */

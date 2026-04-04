@@ -94,7 +94,7 @@ class OutputTruncator
 
         // Byte check runs after line truncation to catch oversized single lines
         if (strlen($output) > $this->maxBytes) {
-            $output = substr($output, 0, $this->maxBytes);
+            $output = mb_strcut($output, 0, $this->maxBytes, 'UTF-8');
         }
 
         return $output."\n\n[truncated - full output saved to {$fullPath}; inspect with targeted grep/file_read rather than pasting it back into context]";
@@ -116,7 +116,11 @@ class OutputTruncator
         // Sanitize the ID to produce a filesystem-safe filename
         $safeId = $toolCallId !== '' ? $toolCallId : uniqid('anon_');
         $path = $this->storagePath.'/tool_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $safeId).'.txt';
-        file_put_contents($path, $output);
+        $written = file_put_contents($path, $output);
+
+        if ($written === false) {
+            return '[error: could not save full output to disk]';
+        }
 
         return $path;
     }

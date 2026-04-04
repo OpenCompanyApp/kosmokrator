@@ -20,7 +20,17 @@ final class SessionFormatter
             return '?';
         }
 
-        $seconds = time() - (int) ((float) $timestamp);
+        $parsed = strtotime($timestamp);
+        if ($parsed === false) {
+            // Fall back to treating the timestamp as a numeric Unix timestamp
+            $numeric = (int) ((float) $timestamp);
+            if ($numeric <= 0) {
+                return '?';
+            }
+            $parsed = $numeric;
+        }
+
+        $seconds = time() - $parsed;
 
         if ($seconds < 60) {
             return 'just now';

@@ -23,13 +23,18 @@ final class StuckDetector
 
     private int $turnsSinceEscalation = 0;
 
+    /** Number of consecutive non-stuck turns required to reset escalation (cool-down). */
+    private int $cooldownCounter = 0;
+
     /**
      * @param  int  $windowSize  Number of recent tool call signatures to track
      * @param  int  $repetitionThreshold  Times the same signature must appear to trigger stuck detection
+     * @param  int  $cooldownThreshold  Consecutive diverse turns before resetting escalation
      */
     public function __construct(
         private readonly int $windowSize = 8,
         private readonly int $repetitionThreshold = 3,
+        private readonly int $cooldownThreshold = 2,
     ) {}
 
     /**
@@ -46,19 +51,26 @@ final class StuckDetector
         }
         $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
 
-        // Check if the latest call's signature appears N+ times in the window
-        $latestSig = end($this->toolCallWindow);
-        $latestCount = count(array_filter($this->toolCallWindow, fn ($s) => $s === $latestSig));
-        $isStuck = $latestCount >= $this->repetitionThreshold;
+        // Count occurrences of every unique signature in the window
+        $counts = array_count_values($this->toolCallWindow);
+        $maxCount = $counts !== [] ? max($counts) : 0;
+        $isStuck = $maxCount >= $this->repetitionThreshold;
 
         if (! $isStuck) {
             if ($this->stuckEscalation > 0) {
-                $this->stuckEscalation = 0;
-                $this->turnsSinceEscalation = 0;
+                $this->cooldownCounter++;
+                if ($this->cooldownCounter >= $this->cooldownThreshold) {
+                    $this->stuckEscalation = 0;
+                    $this->turnsSinceEscalation = 0;
+                    $this->cooldownCounter = 0;
+                }
             }
 
             return 'ok';
         }
+
+        // Still stuck — reset cooldown
+        $this->cooldownCounter = 0;
 
         // First detection → nudge
         if ($this->stuckEscalation === 0) {
@@ -94,6 +106,7 @@ final class StuckDetector
         $this->toolCallWindow = [];
         $this->stuckEscalation = 0;
         $this->turnsSinceEscalation = 0;
+        $this->cooldownCounter = 0;
     }
 
     /**

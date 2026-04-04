@@ -373,8 +373,14 @@ PROMPT;
         } finally {
             $stdout .= stream_get_contents($pipes[1]);
             $stderr .= stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
+            try {
+                fclose($pipes[1]);
+            } catch (\Throwable) {
+            }
+            try {
+                fclose($pipes[2]);
+            } catch (\Throwable) {
+            }
             proc_close($process);
         }
 

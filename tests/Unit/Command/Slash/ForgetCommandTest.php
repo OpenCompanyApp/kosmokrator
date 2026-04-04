@@ -51,6 +51,10 @@ class ForgetCommandTest extends TestCase
     {
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
+            ->method('findMemory')
+            ->with(42)
+            ->willReturn(['id' => 42, 'title' => 'test']);
+        $sessionManager->expects($this->once())
             ->method('deleteMemory')
             ->with(42);
 

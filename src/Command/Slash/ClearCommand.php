@@ -7,6 +7,7 @@ namespace Kosmokrator\Command\Slash;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
+use Kosmokrator\UI\Theme;
 
 /**
  * Clears the terminal screen using ANSI escape sequences.
@@ -43,8 +44,8 @@ class ClearCommand implements SlashCommand
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
-        // ANSI escape: clear screen and move cursor to home position
-        echo "\033[2J\033[H";
+        // Clear screen via Theme helper (consistent ANSI sequences)
+        echo Theme::clearScreen();
 
         return SlashCommandResult::continue();
     }

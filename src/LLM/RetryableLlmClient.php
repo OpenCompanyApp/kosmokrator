@@ -78,7 +78,8 @@ class RetryableLlmClient implements LlmClientInterface
                 if ($this->onRetry !== null) {
                     try {
                         ($this->onRetry)($attempt, $delay, $e->getMessage());
-                    } catch (\Throwable) {
+                    } catch (\Throwable $callbackError) {
+                        $this->log->warning('onRetry callback failed', ['error' => $callbackError->getMessage()]);
                     }
                 }
 
@@ -151,7 +152,12 @@ class RetryableLlmClient implements LlmClientInterface
         // Exponential backoff with jitter: ~2s, ~4s, ~8s, ~16s, ~32s, ~60s, ~60s, ...
         $base = min(pow(2, min($attempt, 6)), 60.0);
 
-        return (float) ($base + random_int(0, max(1, (int) ($base * 0.3))));
+        // Symmetric jitter ±15% of base, clamped to >= 50% of base
+        $jitterRange = max(1, (int) ($base * 0.15));
+        $delay = $base + random_int(-$jitterRange, $jitterRange);
+        $minDelay = $base * 0.5;
+
+        return (float) max($delay, $minDelay);
     }
 
     /**

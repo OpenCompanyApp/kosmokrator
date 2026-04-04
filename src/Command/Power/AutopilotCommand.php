@@ -70,7 +70,7 @@ class AutopilotCommand implements PowerCommand
             ## Phase 5: VALIDATE (Acceptance)
             - Review each acceptance criterion from Phase 1.
             - For each one, state: PASS (with evidence) or FAIL (with explanation).
-            - If any criterion fails, loop back to Phase 3 to fix it.
+            - If any criterion fails after 3 attempts, report what failed and stop. Do not loop indefinitely.
             - When all criteria pass, produce a summary of what was done.
 
             Rules:

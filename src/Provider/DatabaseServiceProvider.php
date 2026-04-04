@@ -43,10 +43,9 @@ class DatabaseServiceProvider extends ServiceProvider
             $this->container->make(CodexTokenStoreContract::class),
             $this->container->make('config'),
         ));
-    }
 
-    public function boot(): void
-    {
+        // Inject SQLite-stored settings during registration so they're available
+        // before RelayRegistry and LLM clients are constructed
         $this->injectSqliteSettings();
     }
 
@@ -91,10 +90,18 @@ class DatabaseServiceProvider extends ServiceProvider
      */
     private function migrateYamlKeys(Repository $config, SettingsRepositoryInterface $settings): void
     {
+        // Check one-time flag to avoid running migration every boot
+        if ($settings->get('global', 'migration.yaml_keys_migrated') === '1') {
+            return;
+        }
+
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
         $yamlPath = $home.'/.kosmokrator/config.yaml';
 
         if (! file_exists($yamlPath)) {
+            // Mark as migrated even if no YAML file exists
+            $settings->set('global', 'migration.yaml_keys_migrated', '1');
+
             return;
         }
 
@@ -134,13 +141,19 @@ class DatabaseServiceProvider extends ServiceProvider
             $settings->set('global', 'agent.default_model', $yaml['agent']['default_model']);
         }
 
-        // Rewrite YAML without sensitive data
+        // Rewrite YAML without sensitive data (atomic write)
         if ($migrated || ! isset($yaml['providers'])) {
             if (empty($yaml)) {
                 @unlink($yamlPath);
             } else {
-                file_put_contents($yamlPath, Yaml::dump($yaml, 4, 2));
+                $dir = dirname($yamlPath);
+                $tmpPath = $dir.'/'.basename($yamlPath).'.tmp.'.uniqid('', true);
+                file_put_contents($tmpPath, Yaml::dump($yaml, 4, 2));
+                rename($tmpPath, $yamlPath);
             }
         }
+
+        // Mark migration as complete
+        $settings->set('global', 'migration.yaml_keys_migrated', '1');
     }
 }

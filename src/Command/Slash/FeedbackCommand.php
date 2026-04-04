@@ -42,6 +42,9 @@ class FeedbackCommand implements SlashCommand
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $feedback = trim($args);
+        // Sanitize braces to prevent prompt injection via template placeholders
+        $feedback = str_replace(['{', '}'], ['\{', '\}'], $feedback);
+
         if ($feedback === '') {
             $ctx->ui->showNotice('Usage: /feedback <description of your feedback or bug>');
 

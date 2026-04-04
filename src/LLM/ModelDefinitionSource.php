@@ -83,22 +83,29 @@ class ModelDefinitionSource
             return $this->models[$key];
         }
 
-        // Substring match (e.g. "z/GLM-5.1" matches "glm-5.1")
-        // Use longest match first, then alphabetical for deterministic tiebreaking
+        // Suffix match: the stored key must be a suffix of the input model key.
+        // Reject matches where the stored key is too short (less than 4 chars).
+        // Use longest match first, then alphabetical for deterministic tiebreaking.
         $bestMatch = null;
         $bestLength = 0;
         $bestName = '';
 
         foreach ($this->models as $name => $spec) {
             $lowerName = strtolower($name);
-            if (! str_contains($key, $lowerName)) {
+            $nameLen = strlen($lowerName);
+
+            if ($nameLen < 4) {
                 continue;
             }
 
-            $len = strlen($lowerName);
-            if ($len > $bestLength || ($len === $bestLength && $lowerName < $bestName)) {
+            // Check if the stored key is a suffix of the input key
+            if (! str_ends_with($key, $lowerName)) {
+                continue;
+            }
+
+            if ($nameLen > $bestLength || ($nameLen === $bestLength && $lowerName < $bestName)) {
                 $bestMatch = $spec;
-                $bestLength = $len;
+                $bestLength = $nameLen;
                 $bestName = $lowerName;
             }
         }

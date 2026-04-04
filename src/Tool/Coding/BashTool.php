@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\Tool\Coding;
 
 use Amp\Process\Process;

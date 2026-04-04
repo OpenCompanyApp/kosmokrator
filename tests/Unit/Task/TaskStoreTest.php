@@ -130,6 +130,8 @@ class TaskStoreTest extends TestCase
         $this->store->add(new Task('Blocker', id: 'a'));
         $this->store->add(new Task('Blocked', id: 'b'));
         $this->store->update('b', ['add_blocked_by' => ['a']]);
+
+        $this->store->update('a', ['status' => 'in_progress']);
         $this->store->update('a', ['status' => 'completed']);
 
         $this->assertFalse($this->store->isBlocked('b'));
@@ -141,9 +143,11 @@ class TaskStoreTest extends TestCase
         $this->store->add(new Task('Child 1', parentId: 'p', id: 'c1'));
         $this->store->add(new Task('Child 2', parentId: 'p', id: 'c2'));
 
+        $this->store->update('c1', ['status' => 'in_progress']);
         $this->store->update('c1', ['status' => 'completed']);
         $this->assertSame(TaskStatus::Pending, $this->store->get('p')->status);
 
+        $this->store->update('c2', ['status' => 'in_progress']);
         $this->store->update('c2', ['status' => 'completed']);
         $this->assertSame(TaskStatus::Completed, $this->store->get('p')->status);
     }
@@ -154,7 +158,9 @@ class TaskStoreTest extends TestCase
         $this->store->add(new Task('Child 1', parentId: 'p', id: 'c1'));
         $this->store->add(new Task('Child 2', parentId: 'p', id: 'c2'));
 
+        $this->store->update('c1', ['status' => 'in_progress']);
         $this->store->update('c1', ['status' => 'completed']);
+        $this->store->update('c2', ['status' => 'in_progress']);
         $this->store->update('c2', ['status' => 'cancelled']);
 
         $this->assertSame(TaskStatus::Completed, $this->store->get('p')->status);

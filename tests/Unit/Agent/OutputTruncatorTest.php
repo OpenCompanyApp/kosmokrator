@@ -87,4 +87,66 @@ class OutputTruncatorTest extends TestCase
         $this->assertStringContainsString($this->tmpDir, $result);
         $this->assertStringContainsString('[truncated - full output saved to', $result);
     }
+
+    public function test_truncate_preserves_multibyte_utf8(): void
+    {
+        $truncator = new OutputTruncator(maxLines: 100_000, maxBytes: 50, storagePath: $this->tmpDir);
+        // Mix emoji 🎉 (4 bytes) and CJK 你好世界 (12 bytes) — repeat to exceed 50 bytes
+        $output = str_repeat('🎉你好世界', 10); // ~160 bytes
+
+        $result = $truncator->truncate($output, 'tc_utf8');
+
+        $this->assertTrue(mb_check_encoding($result, 'UTF-8'), 'Truncated output must be valid UTF-8');
+        $this->assertStringContainsString('[truncated', $result);
+
+        // Extract the content portion before the truncation marker
+        $markerPos = strpos($result, "\n\n[truncated");
+        $content = $markerPos !== false ? substr($result, 0, $markerPos) : $result;
+        $this->assertTrue(mb_check_encoding($content, 'UTF-8'), 'Content before marker must be valid UTF-8');
+    }
+
+    public function test_truncate_empty_output(): void
+    {
+        $truncator = new OutputTruncator(maxLines: 100, maxBytes: 10, storagePath: $this->tmpDir);
+
+        $result = $truncator->truncate('', 'tc_empty');
+
+        $this->assertSame('', $result);
+        $this->assertStringNotContainsString('[truncated', $result);
+    }
+
+    public function test_truncate_only_newlines(): void
+    {
+        $truncator = new OutputTruncator(maxLines: 100, maxBytes: 100_000, storagePath: $this->tmpDir);
+        $output = str_repeat("\n", 200);
+
+        $result = $truncator->truncate($output, 'tc_newlines');
+
+        $this->assertStringContainsString('[truncated', $result);
+    }
+
+    public function test_truncate_binary_content(): void
+    {
+        $truncator = new OutputTruncator(maxLines: 100_000, maxBytes: 20, storagePath: $this->tmpDir);
+        $output = random_bytes(200);
+
+        $result = $truncator->truncate($output, 'tc_binary');
+
+        $this->assertStringContainsString('[truncated', $result);
+    }
+
+    public function test_truncate_very_long_single_line(): void
+    {
+        $truncator = new OutputTruncator(maxLines: 100_000, maxBytes: 100, storagePath: $this->tmpDir);
+        $output = str_repeat('a', 500);
+
+        $result = $truncator->truncate($output, 'tc_longline');
+
+        $this->assertStringContainsString('[truncated', $result);
+
+        // The main output part (before the marker) should be ≤ 100 bytes
+        $markerPos = strpos($result, "\n\n[truncated");
+        $content = $markerPos !== false ? substr($result, 0, $markerPos) : $result;
+        $this->assertLessThanOrEqual(100, strlen($content));
+    }
 }

@@ -6,6 +6,7 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
+use Kosmokrator\UI\Theme;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -215,14 +216,14 @@ final class TuiAnimationManager
         // Breathing pulse at 30fps — red color modulation
         $this->compactingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
             $this->compactingBreathTick++;
-            $r = "\033[0m";
+            $r = Theme::reset();
 
             // Slow sin wave (~3s full cycle) modulating red tones
             $t = sin($this->compactingBreathTick * 0.07);
             $rr = (int) (208 + 40 * $t);
             $rg = (int) (48 + 16 * $t);
             $rb = (int) (48 + 16 * $t);
-            $color = "\033[38;2;{$rr};{$rg};{$rb}m";
+            $color = Theme::rgb($rr, $rg, $rb);
 
             if ($this->compactingLoader !== null) {
                 $elapsed = (int) (microtime(true) - $this->compactingStartTime);
@@ -351,6 +352,11 @@ final class TuiAnimationManager
             $this->thinkingTimerId = null;
         }
 
+        if ($this->compactingTimerId !== null) {
+            EventLoop::cancel($this->compactingTimerId);
+            $this->compactingTimerId = null;
+        }
+
         if ($this->loader !== null) {
             $this->clearThinkingLoader();
         }
@@ -377,7 +383,7 @@ final class TuiAnimationManager
 
         $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase, $palette) {
             $this->breathTick++;
-            $r = "\033[0m";
+            $r = Theme::reset();
 
             $t = sin($this->breathTick * 0.07);
 
@@ -392,7 +398,7 @@ final class TuiAnimationManager
                 $cg = (int) (160 + 40 * $t);
                 $cb = (int) (208 + 47 * $t);
             }
-            $this->breathColor = "\033[38;2;{$cr};{$cg};{$cb}m";
+            $this->breathColor = Theme::rgb($cr, $cg, $cb);
 
             if ($this->loader !== null && $phrase !== '') {
                 $dim = "\033[38;5;245m";

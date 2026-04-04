@@ -1144,14 +1144,21 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             margin-bottom: 0.4rem;
         }
 
+        .docs-content .table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 1.5rem;
+        }
+
         .docs-content table {
             width: 100%;
+            min-width: 500px;
             border-collapse: separate;
             border-spacing: 0;
             border-radius: 10px;
             overflow: hidden;
             border: 1px solid var(--border);
-            margin-bottom: 1.5rem;
+            margin-bottom: 0;
         }
 
         .docs-content th {
@@ -1192,6 +1199,43 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
 
         .docs-content .tip strong {
             color: var(--crimson-light);
+        }
+
+        /* Install tabs */
+        .install-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 0;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .install-tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .install-tab:hover { color: var(--star-white); }
+
+        .install-tab.active {
+            color: var(--crimson-light);
+            border-bottom-color: var(--crimson);
+        }
+
+        .install-panel {
+            display: none;
+        }
+
+        .install-panel.active {
+            display: block;
         }
 
         /* Docs index cards */
@@ -1297,6 +1341,8 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             .docs-sidebar {
                 position: relative;
                 top: auto;
+                width: 100%;
+                max-width: 100%;
             }
 
             .docs-sidebar .docs-nav {
@@ -1310,6 +1356,16 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
 
             .docs-sidebar .docs-nav.open { display: flex; }
             .docs-mobile-toggle { display: block; }
+
+            .docs-content pre {
+                font-size: 0.78rem;
+                padding: 1rem;
+            }
+
+            .docs-content th, .docs-content td {
+                padding: 0.5rem 0.7rem;
+                font-size: 0.82rem;
+            }
         }
 
         @media (max-width: 480px) {

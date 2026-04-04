@@ -354,57 +354,51 @@ ob_start();
                     <p class="section-desc">Static binary, PHAR, or from source &mdash; pick whichever fits your setup.</p>
                 </div>
 
-                <div class="reveal" style="max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem;">
-                    <div class="quickstart-code">
-                        <div class="terminal-header">
-                            <div class="terminal-dot dot-red"></div>
-                            <div class="terminal-dot dot-yellow"></div>
-                            <div class="terminal-dot dot-green"></div>
-                            <span class="terminal-title">Static Binary &mdash; No PHP Required</span>
-                        </div>
-                        <div class="terminal-body">
-                            <div class="terminal-line"><span class="code-comment"># macOS (Apple Silicon)</span></div>
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \</span></div>
-                            <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
-                            <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># macOS (Intel)</span></div>
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \</span></div>
-                            <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
-                            <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># Linux (x86_64)</span></div>
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \</span></div>
-                            <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
-                            <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># Linux (ARM)</span></div>
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \</span></div>
-                            <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                <div class="reveal" style="max-width: 820px; margin: 0 auto;">
+                    <div class="install-tabs">
+                        <button class="install-tab active" data-tab="binary">Binary</button>
+                        <button class="install-tab" data-tab="phar">PHAR</button>
+                        <button class="install-tab" data-tab="source">Source</button>
+                    </div>
+
+                    <div class="install-panel active" id="tab-binary">
+                        <div class="quickstart-code" style="border-radius: 0 0 14px 14px; border-top: none;">
+                            <div class="terminal-body">
+                                <div class="terminal-line"><span class="code-comment"># ~25MB static binary &mdash; no PHP required</span></div>
+                                <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># macOS (Apple Silicon)</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \</span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                                <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># macOS (Intel)</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L .../kosmokrator-macos-x86_64 \</span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                                <div class="terminal-line" style="margin-top:0.75rem"><span class="code-comment"># Linux (x86_64 / ARM)</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L .../kosmokrator-linux-x86_64 \  <span class="code-comment"># or kosmokrator-linux-aarch64</span></span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="quickstart-code">
-                        <div class="terminal-header">
-                            <div class="terminal-dot dot-red"></div>
-                            <div class="terminal-dot dot-yellow"></div>
-                            <div class="terminal-dot dot-green"></div>
-                            <span class="terminal-title">PHAR &mdash; ~5MB, requires PHP 8.4+</span>
-                        </div>
-                        <div class="terminal-body">
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \</span></div>
-                            <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                    <div class="install-panel" id="tab-phar">
+                        <div class="quickstart-code" style="border-radius: 0 0 14px 14px; border-top: none;">
+                            <div class="terminal-body">
+                                <div class="terminal-line"><span class="code-comment"># ~5MB, requires PHP 8.4+ with pcntl, posix, mbstring</span></div>
+                                <div class="terminal-line" style="margin-top:0.5rem"><span class="prompt">$</span> <span class="command">curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \</span></div>
+                                <div class="terminal-line"><span class="command">  -o /usr/local/bin/kosmokrator &amp;&amp; chmod +x /usr/local/bin/kosmokrator</span></div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="quickstart-code">
-                        <div class="terminal-header">
-                            <div class="terminal-dot dot-red"></div>
-                            <div class="terminal-dot dot-yellow"></div>
-                            <div class="terminal-dot dot-green"></div>
-                            <span class="terminal-title">From Source</span>
-                        </div>
-                        <div class="terminal-body">
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">git clone https://github.com/OpenCompanyApp/kosmokrator.git</span></div>
-                            <div class="terminal-line"><span class="prompt">$</span> <span class="command">cd kosmokrator &amp;&amp; composer install</span></div>
+                    <div class="install-panel" id="tab-source">
+                        <div class="quickstart-code" style="border-radius: 0 0 14px 14px; border-top: none;">
+                            <div class="terminal-body">
+                                <div class="terminal-line"><span class="code-comment"># Requires PHP 8.4+, Composer</span></div>
+                                <div class="terminal-line" style="margin-top:0.5rem"><span class="prompt">$</span> <span class="command">git clone https://github.com/OpenCompanyApp/kosmokrator.git</span></div>
+                                <div class="terminal-line"><span class="prompt">$</span> <span class="command">cd kosmokrator &amp;&amp; composer install</span></div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="quickstart-code">
+                    <div class="quickstart-code" style="margin-top: 1.25rem;">
                         <div class="terminal-header">
                             <div class="terminal-dot dot-red"></div>
                             <div class="terminal-dot dot-yellow"></div>
@@ -417,7 +411,7 @@ ob_start();
                         </div>
                     </div>
 
-                    <p style="text-align: center; color: var(--text-muted); font-size: 0.92rem; margin-top: 0.5rem;">
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.92rem; margin-top: 1rem;">
                         Supports <strong style="color: var(--crimson-light);">40+ LLM providers</strong> &mdash; OpenAI, Anthropic, Google, DeepSeek, Groq, Mistral, xAI, OpenRouter, StepFun, Ollama, and any OpenAI-compatible endpoint.
                     </p>
                 </div>
@@ -578,6 +572,16 @@ ob_start();
                 }, line.delay);
             });
         }
+
+        // Install tabs
+        document.querySelectorAll('.install-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
 
         // Counter animation
         const counters = document.querySelectorAll('[data-count]');

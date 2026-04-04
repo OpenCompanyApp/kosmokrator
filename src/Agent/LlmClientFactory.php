@@ -76,7 +76,7 @@ final class LlmClientFactory
             }
         } elseif ($authMode === 'api_key') {
             $apiKey = $providers->apiKey($provider);
-            if ($apiKey === '' || $apiKey === null) {
+            if ($apiKey === '') {
                 throw new \RuntimeException("No API key configured for {$provider}.");
             }
         }

@@ -553,6 +553,17 @@ class SubagentOrchestrator
         }
     }
 
+    /**
+     * Suppress unhandled future errors from all pending agent futures.
+     * Call after cancelAll() to prevent UnhandledFutureError during cleanup.
+     */
+    public function ignorePendingFutures(): void
+    {
+        foreach ($this->agents as $future) {
+            $future->ignore();
+        }
+    }
+
     public function generateId(): string
     {
         return 'agent-'.++$this->autoIdCounter;

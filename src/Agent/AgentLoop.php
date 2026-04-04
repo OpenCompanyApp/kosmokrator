@@ -773,8 +773,8 @@ class AgentLoop
         $parts = [];
         foreach ($results as $id => $result) {
             $stats = $this->agentContext->orchestrator->getStats($id);
-            $type = $stats?->agentType ?? 'agent';
-            $tools = $stats?->toolCalls ?? 0;
+            $type = $stats->agentType ?? 'agent';
+            $tools = $stats->toolCalls ?? 0;
             $parts[] = "[Background {$type} agent '{$id}' completed ({$tools} tool calls)]:\n{$result}";
         }
 
@@ -784,13 +784,13 @@ class AgentLoop
             $stats = $this->agentContext->orchestrator->getStats($id);
             $batchEntries[] = [
                 'args' => [
-                    'type' => $stats?->agentType ?? 'explore',
+                    'type' => $stats->agentType ?? 'explore',
                     'id' => $id,
-                    'task' => $stats?->task ?? '',
+                    'task' => $stats->task ?? '',
                     'mode' => 'background',
                 ],
                 'result' => $result,
-                'success' => $stats?->status !== 'failed',
+                'success' => $stats->status !== 'failed',
             ];
         }
         $this->ui->showSubagentBatch($batchEntries);

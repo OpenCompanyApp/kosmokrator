@@ -84,24 +84,36 @@ class SubagentToolTest extends TestCase
 
     public function test_await_returns_result(): void
     {
-        $tool = $this->makeTool($this->makeContext());
-        $result = $tool->execute(['task' => 'find files', 'type' => 'explore', 'mode' => 'await']);
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute(['task' => 'find files', 'type' => 'explore', 'mode' => 'await']);
+        })->await();
+
         $this->assertTrue($result->success);
         $this->assertStringContainsString('executed: find files', $result->output);
     }
 
     public function test_background_returns_ack(): void
     {
-        $tool = $this->makeTool($this->makeContext());
-        $result = $tool->execute(['task' => 'background work', 'type' => 'explore', 'mode' => 'background']);
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute(['task' => 'background work', 'type' => 'explore', 'mode' => 'background']);
+        })->await();
+
         $this->assertTrue($result->success);
         $this->assertStringContainsString('spawned in background', $result->output);
     }
 
     public function test_defaults_type_explore_mode_await(): void
     {
-        $tool = $this->makeTool($this->makeContext());
-        $result = $tool->execute(['task' => 'just a task']);
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute(['task' => 'just a task']);
+        })->await();
+
         $this->assertTrue($result->success);
         $this->assertStringContainsString('executed: just a task', $result->output);
     }

@@ -409,7 +409,7 @@ final class ToolExecutor
             $orchestrator = $agentContext?->orchestrator;
             $subagentBatch[] = [
                 'args' => $toolCall->arguments(),
-                'result' => $result->result,
+                'result' => (string) $result->result,
                 'success' => $success,
                 'children' => $orchestrator !== null ? $this->treeBuilder->buildSubtree($orchestrator, $agentId) : [],
                 'stats' => $orchestrator?->getStats($agentId),

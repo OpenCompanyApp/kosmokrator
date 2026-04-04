@@ -16,45 +16,64 @@ class ShellSessionManagerTest extends TestCase
 {
     public function test_start_returns_initial_output_and_auto_cleans_after_final_drain(): void
     {
-        $manager = new ShellSessionManager(new NullLogger, 200, 5, 5);
+        $exception = null;
+        \Amp\async(function () use (&$exception) {
+            $manager = new ShellSessionManager(new NullLogger, 200, 5, 5);
 
-        $result = $manager->start('printf hello', waitMs: 200);
+            $result = $manager->start('printf hello', waitMs: 200);
 
-        $this->assertStringContainsString('Session sh_', $result['output']);
-        $this->assertStringContainsString('hello', $result['output']);
+            $this->assertStringContainsString('Session sh_', $result['output']);
+            $this->assertStringContainsString('hello', $result['output']);
 
-        $this->expectException(\RuntimeException::class);
-        $manager->read($result['id'], 0);
+            // Poll until the session is auto-cleaned (the short-lived process exits,
+            // output is fully drained, and the session is removed from the registry).
+            // The auto-cleanup happens inside read/write calls via forgetIfDrained().
+            for ($i = 0; $i < 20; $i++) {
+                try {
+                    $manager->read($result['id'], 0);
+                } catch (\RuntimeException $e) {
+                    $exception = $e;
+                    break;
+                }
+                \Amp\delay(0.02);
+            }
+        })->await();
+
+        $this->assertInstanceOf(\RuntimeException::class, $exception, 'Session should be auto-cleaned after process exits');
     }
 
     public function test_interactive_session_round_trip_and_kill(): void
     {
-        $manager = new ShellSessionManager(new NullLogger, 100, 5, 5);
+        \Amp\async(function () {
+            $manager = new ShellSessionManager(new NullLogger, 100, 5, 5);
 
-        $start = $manager->start('cat', waitMs: 20);
-        $this->assertStringContainsString('(no new output yet)', $start['output']);
+            $start = $manager->start('cat', waitMs: 20);
+            $this->assertStringContainsString('(no new output yet)', $start['output']);
 
-        $echoed = $manager->write($start['id'], 'hello', true, 100);
-        $this->assertStringContainsString('hello', $echoed);
+            $echoed = $manager->write($start['id'], 'hello', true, 100);
+            $this->assertStringContainsString('hello', $echoed);
 
-        $killed = $manager->kill($start['id']);
-        $this->assertStringContainsString('Session '.$start['id'].' killed.', $killed);
+            $killed = $manager->kill($start['id']);
+            $this->assertStringContainsString('Session '.$start['id'].' killed.', $killed);
+        })->await();
     }
 
     public function test_read_only_session_blocks_mutative_input(): void
     {
-        $manager = new ShellSessionManager(new NullLogger, 50, 5, 5);
-        $session = $manager->start('cat', readOnly: true, waitMs: 10);
+        \Amp\async(function () {
+            $manager = new ShellSessionManager(new NullLogger, 50, 5, 5);
+            $session = $manager->start('cat', readOnly: true, waitMs: 10);
 
-        $permissions = new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *']));
-        $tool = new ShellWriteTool($manager, $permissions);
+            $permissions = new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *']));
+            $tool = new ShellWriteTool($manager, $permissions);
 
-        $result = $tool->execute([
-            'session_id' => $session['id'],
-            'input' => 'touch forbidden.txt',
-        ]);
+            $result = $tool->execute([
+                'session_id' => $session['id'],
+                'input' => 'touch forbidden.txt',
+            ]);
 
-        $this->assertFalse($result->success);
-        $this->assertStringContainsString('read-only shell session', $result->output);
+            $this->assertFalse($result->success);
+            $this->assertStringContainsString('read-only shell session', $result->output);
+        })->await();
     }
 }

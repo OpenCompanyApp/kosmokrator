@@ -7,8 +7,8 @@ namespace Kosmokrator\Settings;
 /**
  * Resolves the filesystem paths for global and project-level config files.
  *
- * Used by SettingsManager to locate and persist YAML configuration files
- * in XDG-style directories (global) or .kosmokrator/ (project).
+ * All global config lives under ~/.kosmokrator/. Project-level config
+ * lives in .kosmokrator/ relative to the project root.
  */
 final class SettingsPaths
 {
@@ -37,7 +37,7 @@ final class SettingsPaths
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
 
-        return $home.'/.config/kosmokrator/config.yaml';
+        return $home.'/.kosmokrator/config.yaml';
     }
 
     /**
@@ -74,7 +74,6 @@ final class SettingsPaths
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
 
         return [
-            $home.'/.config/kosmokrator/config.yaml',
             $home.'/.kosmokrator/config.yaml',
         ];
     }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Kosmokrator\Task\TaskStore;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 /**
@@ -14,7 +13,7 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
  */
 final class ProtectedContextBuilder
 {
-    public function __construct(?TaskStore $taskStore = null) {}
+    public function __construct() {}
 
     /**
      * @param  AgentMode  $mode  Current agent operating mode

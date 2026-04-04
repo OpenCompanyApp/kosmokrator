@@ -732,7 +732,7 @@ final class SettingsCommand implements SlashCommand
     }
 
     /**
-     * @return list<string>
+     * @return array<int, array{value: string, label: string, description: string}>
      */
     private function authActionOptions(string $authMode): array
     {
@@ -758,7 +758,7 @@ final class SettingsCommand implements SlashCommand
     }
 
     /**
-     * @return array<string, list<string>>
+     * @return array<string, array<int, array{value: string, label: string, description: string}>>
      */
     private function authActionOptionsByProvider(ProviderCatalog $catalog): array
     {

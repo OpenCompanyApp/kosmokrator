@@ -7,9 +7,11 @@ namespace Kosmokrator\LLM;
 use Amp\Cancellation;
 use Amp\Http\Client\HttpException;
 use OpenCompany\PrismRelay\Errors\ProviderError;
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
 use Prism\Prism\Exceptions\PrismRateLimitedException;
 use Prism\Prism\Exceptions\PrismServerException;
+use Prism\Prism\Tool;
 use Psr\Log\LoggerInterface;
 
 /**

@@ -31,7 +31,7 @@ class ConfigLoader
             $config[$key] = $this->parseYaml($path);
         }
 
-        // Merge user config (~/.config/kosmokrator/config.yaml, legacy ~/.kosmokrator/config.yaml)
+        // Merge user config (~/.kosmokrator/config.yaml)
         $userConfig = $this->loadUserConfig();
         if ($userConfig !== null) {
             $config = $this->mergeDeep($config, $userConfig);
@@ -78,26 +78,17 @@ class ConfigLoader
         return Yaml::parse($content) ?? [];
     }
 
-    /** Load and merge user-level configs from ~/.kosmokrator/ and ~/.config/kosmokrator/. */
+    /** Load user-level config from ~/.kosmokrator/config.yaml. */
     private function loadUserConfig(): ?array
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-        $paths = [
-            $home.'/.kosmokrator/config.yaml',
-            $home.'/.config/kosmokrator/config.yaml',
-        ];
+        $path = $home.'/.kosmokrator/config.yaml';
 
-        $merged = null;
-        foreach ($paths as $path) {
-            if (! file_exists($path)) {
-                continue;
-            }
-
-            $parsed = $this->normalizeExternalConfig($this->parseYaml($path));
-            $merged = $merged === null ? $parsed : $this->mergeDeep($merged, $parsed);
+        if (! file_exists($path)) {
+            return null;
         }
 
-        return $merged;
+        return $this->normalizeExternalConfig($this->parseYaml($path));
     }
 
     /** Load and merge project-level configs by walking from cwd up to root. */

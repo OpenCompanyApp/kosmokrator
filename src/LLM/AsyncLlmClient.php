@@ -15,7 +15,6 @@ use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 
 /**
@@ -146,23 +145,6 @@ class AsyncLlmClient implements LlmClientInterface
         $response = $this->httpClient->request($request, $cancellation);
 
         return $this->parseResponse($response, $cancellation);
-    }
-
-    /**
-     * Convert Prism Message objects to the OpenAI-compatible wire format.
-     *
-     * @param  Message[]  $messages
-     * @return array<int, array<string, mixed>>
-     */
-    private function mapMessages(array $messages): array
-    {
-        $allMessages = $messages;
-
-        if (trim($this->systemPrompt) !== '') {
-            array_unshift($allMessages, new SystemMessage($this->systemPrompt));
-        }
-
-        return $this->relay->mapOpenAiCompatibleMessages($this->provider, $allMessages);
     }
 
     public function getProvider(): string

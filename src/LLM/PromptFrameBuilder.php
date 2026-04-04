@@ -44,15 +44,13 @@ final class PromptFrameBuilder
 
         $prompts = [];
 
-        if ($stablePrefix !== false && $stablePrefix !== '') {
-            $prompts[] = new SystemMessage($stablePrefix);
-        }
+        $prompts[] = new SystemMessage($stablePrefix);
 
-        if ($volatileTail !== false && $volatileTail !== '') {
+        if ($volatileTail !== '') {
             $prompts[] = new SystemMessage($volatileTail);
         }
 
-        return $prompts === [] ? [new SystemMessage($systemPrompt)] : $prompts;
+        return $prompts;
     }
 
     /**

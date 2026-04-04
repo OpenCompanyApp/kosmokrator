@@ -32,7 +32,7 @@ class SubagentFactory
      * @param  ModelCatalog|null  $models  LLM model catalog for compaction model selection
      * @param  OutputTruncator|null  $truncator  Truncates oversized tool output
      * @param  PermissionEvaluator|null  $permissions  Permission policy evaluator
-     * @param  Closure|Cancellation|null  $rootCancellation  Cancellation token from the root session
+     * @param  \Closure|Cancellation|null  $rootCancellation  Cancellation token from the root session
      * @param  string  $llmClientClass  'async' or 'prism' — determines client type
      * @param  SubagentModelConfig  $modelConfig  Per-depth model/provider configuration
      * @param  int|null  $maxTokens  Maximum response tokens

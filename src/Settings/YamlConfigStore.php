@@ -116,7 +116,7 @@ final class YamlConfigStore
     {
         $segments = explode('.', $path);
         $leaf = array_pop($segments);
-        if ($leaf === null) {
+        if ($segments === [] || $leaf === '') {
             return;
         }
 
@@ -132,7 +132,9 @@ final class YamlConfigStore
         $this->cleanupEmptyParents($data);
     }
 
-    /** Recursively remove empty array leaves left after an unset. */
+    /** Recursively remove empty array leaves left after an unset.
+     * @param  array<string, mixed>  $data
+     */
     private function cleanupEmptyParents(array &$data): void
     {
         foreach ($data as $key => &$value) {

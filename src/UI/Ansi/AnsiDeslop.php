@@ -61,7 +61,6 @@ class AnsiDeslop implements AnsiAnimation
     {
         $r = Theme::reset();
 
-        /** @var array<string, array{char: string, row: int, col: int, cr: int, cg: int, cb: int}> */
         $this->prevCells = [];
 
         $totalSteps = 16;

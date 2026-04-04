@@ -60,7 +60,7 @@ final class ContextPipelineFactory
         $pruner = new ContextPruner($pruneProtect, $pruneMinSavings);
 
         $deduplicator = new ToolResultDeduplicator;
-        $protectedContextBuilder = new ProtectedContextBuilder($this->taskStore);
+        $protectedContextBuilder = new ProtectedContextBuilder;
 
         return new ContextPipeline(
             budget: $contextBudget,

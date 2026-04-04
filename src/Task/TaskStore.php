@@ -250,6 +250,7 @@ class TaskStore
             TaskStatus::InProgress => $inProgressColor ?? "\033[38;2;255;200;80m",
             TaskStatus::Completed => "\033[38;2;80;220;100m",
             TaskStatus::Cancelled => "\033[38;2;255;80;60m",
+            TaskStatus::Failed => "\033[38;2;255;80;60m",
         };
 
         $indent = str_repeat('  ', $depth);
@@ -305,23 +306,6 @@ class TaskStore
     public function clearAll(): void
     {
         $this->tasks = [];
-    }
-
-    /**
-     * Recursively check whether a task has any non-terminal descendants.
-     */
-    private function hasActiveChildren(string $taskId): bool
-    {
-        foreach ($this->children($taskId) as $child) {
-            if (! $child->status->isTerminal()) {
-                return true;
-            }
-            if ($this->hasActiveChildren($child->id)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

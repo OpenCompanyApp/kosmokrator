@@ -13,7 +13,6 @@ namespace Kosmokrator\Settings;
 final readonly class SettingDefinition
 {
     /**
-     * @param  list<string>  $categories
      * @param  list<string>  $options
      */
     public function __construct(

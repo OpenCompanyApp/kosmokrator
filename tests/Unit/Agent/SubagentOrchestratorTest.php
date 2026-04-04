@@ -27,12 +27,12 @@ class SubagentOrchestratorTest extends TestCase
 
     protected function tearDown(): void
     {
-        // Suppress unhandled future errors from agents that were cancelled/abandoned during tests.
-        // These futures resolve with errors in the event loop after the test completes.
         $this->orchestrator->cancelAll();
         $previousHandler = EventLoop::setErrorHandler(function (\Throwable $e) {});
-        // Give the event loop a tick to process pending cancellations
-        \Amp\delay(0.01);
+        // Tick the event loop to let cancellation propagate to pending fibers
+        \Amp\delay(0.05);
+        // Suppress UnhandledFutureError from futures that resolve with errors
+        $this->orchestrator->ignorePendingFutures();
         EventLoop::setErrorHandler($previousHandler);
     }
 

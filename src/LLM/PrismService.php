@@ -89,7 +89,7 @@ class PrismService implements LlmClientInterface
 
     public function getReasoningEffort(): string
     {
-        return $this->reasoningEffort ?? 'off';
+        return $this->reasoningEffort;
     }
 
     public function setReasoningEffort(string $effort): void

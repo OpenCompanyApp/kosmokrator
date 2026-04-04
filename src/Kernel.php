@@ -95,7 +95,7 @@ class Kernel
     /** Wire Laravel facades to the container so Http, Config etc. resolve correctly. */
     private function registerFacades(): void
     {
-        /** @var \Illuminate\Contracts\Foundation\Application $app */
+        /** @var Container $app */
         $app = $this->container;
         Facade::setFacadeApplication($app);
     }

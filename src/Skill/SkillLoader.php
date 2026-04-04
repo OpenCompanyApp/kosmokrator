@@ -8,14 +8,32 @@ use Symfony\Component\Yaml\Yaml;
 
 class SkillLoader
 {
-    public function __construct(
-        private readonly string $projectSkillsDir,
-        private readonly string $userSkillsDir,
-    ) {}
+    /** @var array<array{dir: string, scope: SkillScope}> Ordered lowest → highest precedence */
+    private readonly array $sources;
 
     /**
-     * Load all skills from both project and user directories.
-     * Project skills take precedence over user skills with the same name.
+     * @param  string  $projectRoot  Project root directory (for .kosmokrator/skills/ and .agents/skills/)
+     * @param  string  $userSkillsDir  User-global skills directory (~/.kosmokrator/skills/)
+     */
+    public function __construct(
+        private readonly string $projectRoot,
+        private readonly string $userSkillsDir,
+    ) {
+        // Lowest precedence first — later entries override earlier ones
+        $this->sources = [
+            ['dir' => $this->userSkillsDir, 'scope' => SkillScope::User],
+            ['dir' => $this->projectRoot.'/.agents/skills', 'scope' => SkillScope::Project],
+            ['dir' => $this->projectRoot.'/.kosmokrator/skills', 'scope' => SkillScope::Project],
+        ];
+    }
+
+    /**
+     * Load all skills from all discovery directories.
+     *
+     * Precedence (highest → lowest):
+     *   1. .kosmokrator/skills/  (project canonical)
+     *   2. .agents/skills/       (ecosystem standard)
+     *   3. ~/.kosmokrator/skills/ (user global)
      *
      * @return array<string, Skill> name → Skill
      */
@@ -23,14 +41,10 @@ class SkillLoader
     {
         $skills = [];
 
-        // User skills first (lower precedence)
-        foreach ($this->loadFrom($this->userSkillsDir, SkillScope::User) as $skill) {
-            $skills[$skill->name] = $skill;
-        }
-
-        // Project skills override user skills
-        foreach ($this->loadFrom($this->projectSkillsDir, SkillScope::Project) as $skill) {
-            $skills[$skill->name] = $skill;
+        foreach ($this->sources as $source) {
+            foreach ($this->loadFrom($source['dir'], $source['scope']) as $skill) {
+                $skills[$skill->name] = $skill;
+            }
         }
 
         return $skills;
@@ -116,13 +130,26 @@ class SkillLoader
         );
     }
 
+    /**
+     * The primary project skills directory (for $create scaffolding).
+     */
     public function getProjectSkillsDir(): string
     {
-        return $this->projectSkillsDir;
+        return $this->projectRoot.'/.kosmokrator/skills';
     }
 
     public function getUserSkillsDir(): string
     {
         return $this->userSkillsDir;
+    }
+
+    /**
+     * All discovery directories in precedence order (highest first).
+     *
+     * @return string[]
+     */
+    public function getDiscoveryDirs(): array
+    {
+        return array_reverse(array_column($this->sources, 'dir'));
     }
 }

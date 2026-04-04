@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Provider;
 
+use Illuminate\Container\Container;
 use Illuminate\Contracts\Foundation\Application;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
@@ -43,7 +44,7 @@ class LlmServiceProvider extends ServiceProvider
         // Simulate Laravel's Application interface just enough for PrismServiceProvider
         $this->container->instance('app', $this->container);
 
-        /** @var Application $app */
+        /** @var Container $app */
         $app = $this->container;
         $provider = new PrismServiceProvider($app);
         $provider->register();

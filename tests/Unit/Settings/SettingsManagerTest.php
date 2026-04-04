@@ -116,7 +116,7 @@ final class SettingsManagerTest extends TestCase
         $path = $this->manager->globalConfigPath();
 
         $this->assertIsString($path);
-        $this->assertStringContainsString('.config/kosmokrator/config.yaml', $path);
+        $this->assertStringContainsString('.kosmokrator/config.yaml', $path);
     }
 
     // ── projectConfigPath() ────────────────────────────────────────────
@@ -141,7 +141,7 @@ final class SettingsManagerTest extends TestCase
     public function test_set_writes_to_global_scope(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-test-'.uniqid();
-        $globalDir = $tmpDir.'/.config/kosmokrator';
+        $globalDir = $tmpDir.'/.kosmokrator';
         mkdir($globalDir, 0777, true);
 
         // Override HOME so the global config path points to our temp dir.
@@ -194,7 +194,7 @@ final class SettingsManagerTest extends TestCase
     public function test_set_raw_and_get_raw_round_trip_with_temp_files(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-roundtrip-'.uniqid();
-        $globalDir = $tmpDir.'/.config/kosmokrator';
+        $globalDir = $tmpDir.'/.kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -233,7 +233,7 @@ final class SettingsManagerTest extends TestCase
     public function test_unset_raw_removes_value(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-unset-'.uniqid();
-        $globalDir = $tmpDir.'/.config/kosmokrator';
+        $globalDir = $tmpDir.'/.kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -269,7 +269,7 @@ final class SettingsManagerTest extends TestCase
     public function test_provider_last_model_round_trip(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-provider-'.uniqid();
-        $globalDir = $tmpDir.'/.config/kosmokrator';
+        $globalDir = $tmpDir.'/.kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -310,7 +310,7 @@ final class SettingsManagerTest extends TestCase
     public function test_delete_removes_setting_from_global(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-delete-'.uniqid();
-        $globalDir = $tmpDir.'/.config/kosmokrator';
+        $globalDir = $tmpDir.'/.kosmokrator';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');

@@ -55,7 +55,8 @@ class SkillDispatcher
         $skills = $this->registry->all();
 
         if ($skills === []) {
-            $this->ui->showNotice("No skills found.\n  Project: {$this->loader->getProjectSkillsDir()}\n  User: {$this->loader->getUserSkillsDir()}\n  Use \$create <name> to create one.");
+            $dirs = implode("\n  ", $this->loader->getDiscoveryDirs());
+            $this->ui->showNotice("No skills found.\nSearched:\n  {$dirs}\nUse \$create <name> to create one.");
 
             return;
         }
@@ -109,25 +110,23 @@ class SkillDispatcher
         return "A new skill template has been created at {$file}. Read the file, then help the user define what this skill should do. Ask what workflow or instructions they want, then write the SKILL.md with a clear description and detailed agent instructions.";
     }
 
-    private function showSkill(string $name): ?string
+    private function showSkill(string $name): void
     {
         if ($name === '') {
             $this->ui->showNotice('Usage: $show <skill-name>');
 
-            return null;
+            return;
         }
 
         $skill = $this->registry->get($name);
         if ($skill === null) {
             $this->ui->showNotice("Unknown skill: {$name}");
 
-            return null;
+            return;
         }
 
         $scope = $skill->scope === SkillScope::Project ? 'project' : 'user';
         $this->ui->showNotice("Skill: {$skill->name} ({$scope})\nPath: {$skill->path}\n\n{$skill->content}");
-
-        return null;
     }
 
     private function editSkill(string $name): ?string
@@ -150,26 +149,24 @@ class SkillDispatcher
         return "Read the skill file at {$skill->path} and help the user modify it. Show the current content, ask what they want to change, then update the file.";
     }
 
-    private function deleteSkill(string $name): ?string
+    private function deleteSkill(string $name): void
     {
         if ($name === '') {
             $this->ui->showNotice('Usage: $delete <skill-name>');
 
-            return null;
+            return;
         }
 
         $skill = $this->registry->get($name);
         if ($skill === null) {
             $this->ui->showNotice("Unknown skill: {$name}");
 
-            return null;
+            return;
         }
 
         $dir = dirname($skill->path);
         $this->removeDirectory($dir);
         $this->ui->showNotice("Deleted skill: {$skill->name} ({$dir})");
-
-        return null;
     }
 
     private function invokeSkill(string $raw): ?string

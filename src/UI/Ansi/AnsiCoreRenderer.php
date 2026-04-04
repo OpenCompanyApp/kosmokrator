@@ -342,6 +342,8 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         $animation->animate();
     }
 
+    public function setSkillCompletions(array $completions): void {}
+
     /** Returns the current mode label for use by other sub-renderers. */
     public function getCurrentModeLabel(): string
     {

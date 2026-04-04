@@ -29,19 +29,18 @@ final class SettingsPathsTest extends TestCase
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
 
         $this->assertSame(
-            $home.'/.config/kosmokrator/config.yaml',
+            $home.'/.kosmokrator/config.yaml',
             $paths->globalWritePath(),
         );
     }
 
-    public function test_global_candidates_returns_two_paths(): void
+    public function test_global_candidates_returns_single_path(): void
     {
         $paths = new SettingsPaths;
         $candidates = $paths->globalCandidates();
 
-        $this->assertCount(2, $candidates);
-        $this->assertStringContainsString('/.config/kosmokrator/config.yaml', $candidates[0]);
-        $this->assertStringContainsString('/.kosmokrator/config.yaml', $candidates[1]);
+        $this->assertCount(1, $candidates);
+        $this->assertStringContainsString('/.kosmokrator/config.yaml', $candidates[0]);
     }
 
     public function test_project_candidates_with_null_root_returns_empty(): void

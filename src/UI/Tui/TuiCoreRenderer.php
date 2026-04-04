@@ -1121,6 +1121,9 @@ HELP;
                 $lastColon = strrpos($value, ':');
                 $filter = substr($value, $lastColon);
                 $this->showCommandCompletion($filter === ':' ? '' : $filter, self::POWER_COMMANDS);
+            } elseif (str_starts_with($value, '$')) {
+                $filter = $value === '$' ? '' : $value;
+                $this->showCommandCompletion($filter, array_merge(self::DOLLAR_COMMANDS, $this->skillCompletions));
             } else {
                 $this->hideSlashCompletion();
             }

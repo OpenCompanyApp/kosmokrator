@@ -314,6 +314,6 @@ class ConversationHistory
             $removed++;
         }
 
-        return $removed !== 0;
+        return $removed > 0;
     }
 }

@@ -132,8 +132,8 @@ class ConfigLoaderTest extends TestCase
         file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  temperature: 0.0");
 
         $fakeHome = $this->tempDir.'/home_xdg';
-        mkdir($fakeHome.'/.config/kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.config/kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    temperature: 0.4");
+        mkdir($fakeHome.'/.kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    temperature: 0.4");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -231,8 +231,8 @@ class ConfigLoaderTest extends TestCase
     public function test_relay_provider_blocks_are_loaded_from_external_config(): void
     {
         $fakeHome = $this->tempDir.'/relay_home';
-        mkdir($fakeHome.'/.config/kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.config/kosmokrator/config.yaml', <<<'YAML'
+        mkdir($fakeHome.'/.kosmokrator', 0755, true);
+        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', <<<'YAML'
 relay:
   providers:
     mimo:

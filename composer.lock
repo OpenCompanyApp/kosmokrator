@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a23c50277fb753586f1ae546fbde8d2c",
+    "content-hash": "585a185e1265aba29d0328a6a5a2477c",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3632,12 +3632,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/OpenCompanyApp/prism-relay.git",
-                "reference": "6355287"
+                "reference": "9c3e22d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/OpenCompanyApp/prism-relay/zipball/6355287",
-                "reference": "6355287",
+                "url": "https://api.github.com/repos/OpenCompanyApp/prism-relay/zipball/9c3e22d",
+                "reference": "9c3e22d",
                 "shasum": ""
             },
             "require": {
@@ -3672,7 +3672,7 @@
                 "source": "https://github.com/OpenCompanyApp/prism-relay/tree/main",
                 "issues": "https://github.com/OpenCompanyApp/prism-relay/issues"
             },
-            "time": "2026-04-03T17:22:30+00:00"
+            "time": "2026-04-05T20:20:09+00:00"
         },
         {
             "name": "phpoption/phpoption",

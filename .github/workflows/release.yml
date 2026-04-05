@@ -79,10 +79,8 @@ jobs:
         include:
           - platform: macos-aarch64
             runner: macos-14
-            spc-arch: aarch64
           - platform: linux-x86_64
             runner: ubuntu-latest
-            spc-arch: x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -92,7 +90,7 @@ jobs:
           name: kosmokrator-phar
           path: builds
 
-      - name: Install static-php-cli (spc)
+      - name: Download static-php-cli (spc)
         run: |
           if [ "${{ matrix.platform }}" = "linux-x86_64" ]; then
             curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-linux-x86_64
@@ -101,33 +99,19 @@ jobs:
           fi
           chmod +x spc
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev zlib1g-dev libzip-dev libonig-dev
-
-      - name: Download PHP source & dependencies
-        run: |
-          ./spc download --for-extensions="pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3" \
-            --with-php=8.4
-
       - name: Build static PHP with micro SFX
-        run: |
-          ./spc build \
-            "pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3" \
-            --build-micro
+        run: ./spc craft .github/spc/craft.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Combine PHAR with micro SFX
-        run: |
-          ./spc micro:combine builds/kosmokrator.phar --output=kosmokrator-${{ matrix.platform }}
-          chmod +x kosmokrator-${{ matrix.platform }}
+        run: ./spc micro:combine builds/kosmokrator.phar --output=kosmokrator-${{ matrix.platform }}
 
       - name: Verify binary
         run: |
+          chmod +x kosmokrator-${{ matrix.platform }}
           ls -lh kosmokrator-${{ matrix.platform }}
           file kosmokrator-${{ matrix.platform }}
-          ./kosmokrator-${{ matrix.platform }} --version || echo "Binary built (version check may need TTY)"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -154,14 +138,12 @@ jobs:
           mkdir -p release
           cp artifacts/kosmokrator-phar/kosmokrator.phar release/kosmokrator.phar
 
-          # Copy binary artifacts if they exist
           for platform in macos-aarch64 linux-x86_64; do
             if [ -f "artifacts/kosmokrator-${platform}/kosmokrator-${platform}" ]; then
               cp "artifacts/kosmokrator-${platform}/kosmokrator-${platform}" "release/kosmokrator-${platform}"
             fi
           done
 
-          # Generate checksums
           cd release
           sha256sum * > checksums.sha256 || shasum -a 256 * > checksums.sha256
           echo "Release assets:"

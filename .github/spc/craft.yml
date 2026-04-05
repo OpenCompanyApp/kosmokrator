@@ -1,0 +1,5 @@
+php-version: 8.4
+extensions: "pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3"
+sapi: micro
+download-options:
+  prefer-pre-built: true

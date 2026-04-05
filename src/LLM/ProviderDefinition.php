@@ -26,6 +26,7 @@ final readonly class ProviderDefinition
      * @param  list<ModelDefinition>  $models  All models available under this provider
      * @param  list<string>  $inputModalities  Supported input types at the provider level
      * @param  list<string>  $outputModalities  Supported output types at the provider level
+     * @param  bool  $freeTextModel  True if the user types arbitrary model codes instead of picking from a list
      */
     public function __construct(
         public string $id,
@@ -39,5 +40,6 @@ final readonly class ProviderDefinition
         public array $models,
         public array $inputModalities = ['text'],
         public array $outputModalities = ['text'],
+        public bool $freeTextModel = false,
     ) {}
 }

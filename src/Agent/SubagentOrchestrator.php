@@ -68,6 +68,7 @@ class SubagentOrchestrator
     public function __destruct()
     {
         $this->cancelAll();
+        $this->ignorePendingFutures();
     }
 
     public function getMaxDepth(): int
@@ -330,6 +331,10 @@ class SubagentOrchestrator
                 // Inject failure as a pending result so the parent is notified
                 if ($mode === 'background') {
                     $this->pendingResults[$stats->parentId][$id] = ToolCallMapper::ERROR_PREFIX."Agent '{$id}' failed — {$stats->error}";
+
+                    // Don't throw — nobody awaits background futures, so an unhandled
+                    // exception would become an UnhandledFutureError on GC.
+                    return ToolCallMapper::ERROR_PREFIX."Agent '{$id}' failed — {$stats->error}";
                 }
 
                 throw $e;

@@ -238,5 +238,9 @@ class GuardianEvaluatorTest extends TestCase
         yield 'wc' => ['wc -l src/Kernel.php'];
         yield 'which' => ['which php'];
         yield 'pwd' => ['pwd'];
+        yield 'grep piped to head' => ['grep -i "zen" vendor/file.php 2>/dev/null | head -20'];
+        yield 'grep piped to cut and sort' => ['grep -i "opencode" file.php | cut -d"\'" -f2 | sort | uniq'];
+        yield 'cat piped to wc' => ['cat file.txt | wc -l'];
+        yield 'echo piped to grep' => ['echo "hello" | grep hello'];
     }
 }

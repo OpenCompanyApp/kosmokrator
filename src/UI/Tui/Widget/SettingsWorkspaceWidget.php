@@ -778,9 +778,48 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         $models = $this->optionsForField(['id' => $modelFieldId]);
         $modelValues = array_map(static fn (array $item): string => $item['value'], $models);
+
+        // Free-text providers have no fixed options — any model value is valid
+        if ($models === [] && $this->providerIsFreeTextForField($modelFieldId)) {
+            return;
+        }
+
         if (! in_array($current, $modelValues, true)) {
             $this->values[$modelFieldId] = '';
         }
+    }
+
+    private function providerIsFreeTextForField(string $modelFieldId): bool
+    {
+        $freeTextProviders = $this->view['free_text_model_providers'] ?? [];
+
+        return match ($modelFieldId) {
+            'agent.default_model' => in_array((string) ($this->values['agent.default_provider'] ?? ''), $freeTextProviders, true),
+            'agent.subagent_model' => in_array(
+                (string) ($this->values['agent.subagent_provider'] ?? '') !== ''
+                    ? $this->values['agent.subagent_provider']
+                    : ($this->values['agent.default_provider'] ?? ''),
+                $freeTextProviders,
+                true,
+            ),
+            'agent.subagent_depth2_model' => in_array(
+                (string) ($this->values['agent.subagent_depth2_provider'] ?? '') !== ''
+                    ? $this->values['agent.subagent_depth2_provider']
+                    : (($this->values['agent.subagent_provider'] ?? '') !== ''
+                        ? $this->values['agent.subagent_provider']
+                        : ($this->values['agent.default_provider'] ?? '')),
+                $freeTextProviders,
+                true,
+            ),
+            'agent.audio_model' => in_array(
+                (string) ($this->values['agent.audio_provider'] ?? '') !== ''
+                    ? $this->values['agent.audio_provider']
+                    : ($this->values['agent.default_provider'] ?? ''),
+                $freeTextProviders,
+                true,
+            ),
+            default => false,
+        };
     }
 
     /**
@@ -1054,19 +1093,27 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         if ($provider !== '' && in_array((string) ($field['id'] ?? ''), ['agent.default_provider', 'agent.default_model', 'provider.model_inventory'], true)) {
             $lines[] = $this->boxLine('', $width);
-            $lines[] = $this->boxLine('Available Models', $width, Theme::accent());
-            $modelOptions = $this->view['model_options_by_provider'][$provider] ?? [];
-            $labels = array_map(
-                static fn (array $item): string => (string) (($item['label'] ?? '') !== '' ? $item['label'] : ($item['value'] ?? '')),
-                array_slice($modelOptions, 0, 24),
-            );
+            $freeTextProviders = $this->view['free_text_model_providers'] ?? [];
+            if (in_array($provider, $freeTextProviders, true)) {
+                $lines[] = $this->boxLine('Model Entry', $width, Theme::accent());
+                $lines[] = $this->boxLine('Type any model code (e.g. google/gemini-2.5-pro)', $width);
+                $lines[] = $this->boxLine('This provider supports hundreds of models.', $width);
+                $lines[] = $this->boxLine('Enter the model code directly in the model field.', $width);
+            } else {
+                $lines[] = $this->boxLine('Available Models', $width, Theme::accent());
+                $modelOptions = $this->view['model_options_by_provider'][$provider] ?? [];
+                $labels = array_map(
+                    static fn (array $item): string => (string) (($item['label'] ?? '') !== '' ? $item['label'] : ($item['value'] ?? '')),
+                    array_slice($modelOptions, 0, 24),
+                );
 
-            foreach ($this->wrap(implode(', ', $labels), $width - 2) as $line) {
-                $lines[] = $this->boxLine($line, $width);
-            }
+                foreach ($this->wrap(implode(', ', $labels), $width - 2) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
 
-            if (count($modelOptions) > 24) {
-                $lines[] = $this->boxLine('...and '.(count($modelOptions) - 24).' more', $width);
+                if (count($modelOptions) > 24) {
+                    $lines[] = $this->boxLine('...and '.(count($modelOptions) - 24).' more', $width);
+                }
             }
         }
 
@@ -1369,10 +1416,23 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     private function modelBrowserItems(): array
     {
         $items = [];
+        $freeTextProviders = $this->view['free_text_model_providers'] ?? [];
 
         foreach ($this->view['models_provider_options'] ?? $this->view['provider_options'] ?? [] as $providerOption) {
             $provider = (string) ($providerOption['value'] ?? '');
             if ($provider === '') {
+                continue;
+            }
+
+            if (in_array($provider, $freeTextProviders, true)) {
+                $items[] = [
+                    'type' => 'provider',
+                    'provider' => $provider,
+                    'model' => '',
+                    'label' => (string) ($providerOption['label'] ?? $provider),
+                    'description' => 'any model (free-text entry)',
+                ];
+
                 continue;
             }
 
@@ -1711,6 +1771,11 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         if ($id === 'provider.model_inventory') {
             $provider = (string) ($this->values['agent.default_provider'] ?? '');
             $count = count($this->view['model_options_by_provider'][$provider] ?? []);
+
+            $freeTextProviders = $this->view['free_text_model_providers'] ?? [];
+            if (in_array($provider, $freeTextProviders, true)) {
+                return 'Any model (free-text entry)';
+            }
 
             return $count > 0 ? $count.' models' : 'No models';
         }

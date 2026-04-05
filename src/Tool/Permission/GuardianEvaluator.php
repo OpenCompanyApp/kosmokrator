@@ -140,6 +140,20 @@ class GuardianEvaluator
     ];
 
     /**
+     * Shell operators that indicate potentially mutative constructs:
+     * command chaining (;, &), output redirection (>), command substitution (` $),
+     * and newlines (multiple commands). Pipes (|) and input redirection (<) are
+     * excluded since they are inherently read-only.
+     */
+    private const MUTATIVE_SHELL_PATTERN = '/[;&`$>\n]/';
+
+    /**
+     * Redirections that are safe (non-mutative) — stderr to /dev/null and
+     * stderr-to-stdout merges. These are commonly used in read-only commands.
+     */
+    private const SAFE_REDIRECTION_PATTERN = '/2>\/dev\/null|2>&1|2>&-/';
+
+    /**
      * Check if a command is mutative (modifies files, packages, or system state).
      * Used to enforce read-only bash in Ask mode.
      */
@@ -147,11 +161,42 @@ class GuardianEvaluator
     {
         $command = trim($command);
 
-        if ($this->containsShellOperators($command)) {
+        // Check each piped segment individually — pipes are read-only, but
+        // individual segments can still be mutative (e.g. "cat f | tee out").
+        $segments = explode('|', $command);
+
+        foreach ($segments as $segment) {
+            if ($this->segmentIsMutative(trim($segment))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check whether a single command segment (no pipes) is mutative.
+     * Strips safe redirections (e.g. 2>/dev/null) before checking operators.
+     */
+    private function segmentIsMutative(string $segment): bool
+    {
+        // Strip safe redirections before checking for mutative operators
+        $stripped = (string) preg_replace(self::SAFE_REDIRECTION_PATTERN, '', $segment);
+
+        if ((bool) preg_match(self::MUTATIVE_SHELL_PATTERN, $stripped)) {
             return true;
         }
 
-        $lower = strtolower($command);
+        return $this->segmentMatchesMutativePattern($segment);
+    }
+
+    /**
+     * Check whether a single command segment (no pipes/chaining) matches
+     * a known mutative command pattern.
+     */
+    private function segmentMatchesMutativePattern(string $segment): bool
+    {
+        $lower = strtolower($segment);
         foreach (self::MUTATIVE_PATTERNS as $pattern) {
             if (str_starts_with($lower, $pattern) || $lower === rtrim($pattern)) {
                 return true;
@@ -180,4 +225,5 @@ class GuardianEvaluator
     {
         return (bool) preg_match(self::SHELL_META_PATTERN, $command);
     }
+
 }

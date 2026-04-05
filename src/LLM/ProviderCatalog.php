@@ -15,6 +15,7 @@ final class ProviderCatalog
     /** @var list<string> */
     private const HIDDEN_PROVIDER_IDS = [
         'zhipuai',
+        'opencode-zen',
     ];
 
     /** @var array<string, array{label: string, description: string, auth: string}> */
@@ -40,6 +41,11 @@ final class ProviderCatalog
         'z-api' => ['label' => 'Z.AI API', 'description' => 'Z.AI standard API endpoint via API key', 'auth' => 'api_key'],
         'stepfun' => ['label' => 'StepFun', 'description' => 'StepFun models via API key', 'auth' => 'api_key'],
         'stepfun-plan' => ['label' => 'StepFun Plan', 'description' => 'StepFun Step Plan subscription endpoint via API key', 'auth' => 'api_key'],
+    ];
+
+    /** Providers where the user types arbitrary model codes instead of picking from a fixed list. */
+    private const FREE_TEXT_MODEL_PROVIDERS = [
+        'openrouter',
     ];
 
     /** @var list<string> */
@@ -154,6 +160,7 @@ final class ProviderCatalog
             models: $models,
             inputModalities: $providerModalities['input'],
             outputModalities: $providerModalities['output'],
+            freeTextModel: in_array($provider, self::FREE_TEXT_MODEL_PROVIDERS, true),
         );
     }
 
@@ -175,6 +182,10 @@ final class ProviderCatalog
 
     public function supportsModel(string $provider, string $model): bool
     {
+        if (in_array($provider, self::FREE_TEXT_MODEL_PROVIDERS, true)) {
+            return true;
+        }
+
         return in_array(strtolower($model), array_map('strtolower', $this->modelIds($provider)), true);
     }
 
@@ -188,7 +199,7 @@ final class ProviderCatalog
                 'value' => $provider->id,
                 'label' => $provider->label,
                 'description' => "{$provider->id} · {$provider->description} · "
-                    .count($provider->models).' models · '
+                    .($provider->freeTextModel ? 'any model · ' : count($provider->models).' models · ')
                     .($provider->source === 'custom' ? 'Custom' : 'Built-in'),
             ],
             $this->providers(),
@@ -203,6 +214,12 @@ final class ProviderCatalog
         $options = [];
 
         foreach ($this->providers() as $provider) {
+            if ($provider->freeTextModel) {
+                $options[$provider->id] = [];
+
+                continue;
+            }
+
             $options[$provider->id] = array_map(
                 fn (ModelDefinition $model): array => [
                     'value' => $model->id,

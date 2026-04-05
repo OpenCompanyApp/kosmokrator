@@ -14,6 +14,7 @@ use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderDefinition;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
@@ -216,17 +217,32 @@ final class SettingsCommand implements SlashCommand
             }
 
             if ($categoryId === 'models') {
-                $providerModelCount = count($catalog->modelIds((string) ($fields[0]['value'] ?? $currentProvider)));
-                $fields[] = [
-                    'id' => 'provider.model_inventory',
-                    'label' => 'Configured models',
-                    'value' => $providerModelCount > 0 ? $providerModelCount.' models' : 'No models',
-                    'source' => 'runtime',
-                    'effect' => 'next_session',
-                    'type' => 'readonly',
-                    'options' => [],
-                    'description' => 'Models currently available for the selected provider. Full list appears in the details panel below.',
-                ];
+                $providerId = (string) ($fields[0]['value'] ?? $currentProvider);
+                $providerDef = $catalog->provider($providerId);
+                if ($providerDef !== null && $providerDef->freeTextModel) {
+                    $fields[] = [
+                        'id' => 'provider.model_inventory',
+                        'label' => 'Model entry',
+                        'value' => 'Any model (free-text entry)',
+                        'source' => 'runtime',
+                        'effect' => 'next_session',
+                        'type' => 'readonly',
+                        'options' => [],
+                        'description' => 'Type any model code directly in the model field (e.g. google/gemini-2.5-pro). This provider supports hundreds of models.',
+                    ];
+                } else {
+                    $providerModelCount = count($catalog->modelIds($providerId));
+                    $fields[] = [
+                        'id' => 'provider.model_inventory',
+                        'label' => 'Configured models',
+                        'value' => $providerModelCount > 0 ? $providerModelCount.' models' : 'No models',
+                        'source' => 'runtime',
+                        'effect' => 'next_session',
+                        'type' => 'readonly',
+                        'options' => [],
+                        'description' => 'Models currently available for the selected provider. Full list appears in the details panel below.',
+                    ];
+                }
             }
 
             if ($categoryId === 'provider_setup') {
@@ -477,6 +493,10 @@ final class SettingsCommand implements SlashCommand
             'provider_options' => $catalog->providerOptions(),
             'setup_provider_options' => $this->setupProviderOptions($catalog),
             'model_options_by_provider' => $catalog->modelOptionsByProvider(),
+            'free_text_model_providers' => array_map(
+                static fn (ProviderDefinition $p): string => $p->id,
+                array_filter($catalog->providers(), static fn (ProviderDefinition $p): bool => $p->freeTextModel),
+            ),
             'models_provider_options' => $this->configuredProviderOptions($catalog, $currentProvider),
             'models_model_options_by_provider' => $this->configuredModelOptionsByProvider($catalog, $currentProvider),
             'provider_statuses' => $providerStatuses,
@@ -709,6 +729,7 @@ final class SettingsCommand implements SlashCommand
                 'auth_status' => $catalog->authStatus($provider->id),
                 'input_modalities' => $provider->inputModalities,
                 'output_modalities' => $provider->outputModalities,
+                'free_text_model' => $provider->freeTextModel,
             ];
         }
 

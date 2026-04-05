@@ -176,17 +176,17 @@ class SubagentOrchestratorTest extends TestCase
 
     public function test_failed_dependency_does_not_kill_dependent(): void
     {
-        // Agent A fails
+        // Agent A fails (background mode — returns error string instead of throwing)
         $this->orchestrator->spawnAgent(
             $this->rootContext, 'fail', AgentType::Explore, 'background', 'dep-fail', [], null,
             fn ($ctx, $task) => throw new \RuntimeException('upstream crash'),
         );
 
-        // Agent B depends on A — should still run with error marker
+        // Agent B depends on A — should still run with error info in the task
         $futureB = $this->orchestrator->spawnAgent(
             $this->rootContext, 'consumer', AgentType::Explore, 'await', 'dep-consumer', ['dep-fail'], null,
             function ($ctx, $task) {
-                $this->assertStringContainsString('[FAILED]', $task);
+                $this->assertStringContainsString('THIS DEPENDENCY FAILED', $task);
                 $this->assertStringContainsString('upstream crash', $task);
 
                 return 'recovered';
@@ -669,20 +669,15 @@ class SubagentOrchestratorTest extends TestCase
 
         $orchestrator->cancelAll();
 
-        // Both should throw CancelledException
-        try {
-            $f1->await();
-            $this->fail('Expected CancelledException for cancel-1');
-        } catch (CancelledException) {
-            // expected
-        }
+        // Background agents resolve with error strings instead of throwing,
+        // preventing UnhandledFutureError when no one awaits them.
+        $result1 = $f1->await();
+        $this->assertStringContainsString('cancel-1', $result1);
+        $this->assertStringContainsString('failed', $result1);
 
-        try {
-            $f2->await();
-            $this->fail('Expected CancelledException for cancel-2');
-        } catch (CancelledException) {
-            // expected
-        }
+        $result2 = $f2->await();
+        $this->assertStringContainsString('cancel-2', $result2);
+        $this->assertStringContainsString('failed', $result2);
 
         $this->assertSame('failed', $orchestrator->getStats('cancel-1')->status);
         $this->assertSame('failed', $orchestrator->getStats('cancel-2')->status);

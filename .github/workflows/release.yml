@@ -105,12 +105,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev zlib1g-dev libzip-dev
+          sudo apt-get install -y build-essential pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev zlib1g-dev libzip-dev libonig-dev
 
       - name: Download PHP source & dependencies
         run: |
           ./spc download --for-extensions="pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3" \
-            --with-php=8.4 --prefer-pre-built
+            --with-php=8.4
 
       - name: Build static PHP with micro SFX
         run: |

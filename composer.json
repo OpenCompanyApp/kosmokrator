@@ -15,7 +15,7 @@
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
         "opencompany/prism-codex": "dev-main",
-        "opencompanyapp/prism-relay": "dev-main#9c3e22d",
+        "opencompanyapp/prism-relay": "dev-main",
         "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
         "sebastian/diff": "^7.0",

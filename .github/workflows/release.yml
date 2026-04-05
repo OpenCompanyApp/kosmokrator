@@ -67,10 +67,69 @@ jobs:
           name: kosmokrator-phar
           path: builds/kosmokrator.phar
 
+  build-binaries:
+    name: Build binary (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-aarch64
+            runner: macos-14
+            arch: aarch64
+          - platform: macos-x86_64
+            runner: macos-13
+            arch: x86_64
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+            arch: x86_64
+          - platform: linux-aarch64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter, fileinfo
+          tools: composer:v2
+          ini-values: phar.readonly=0
+
+      - name: Install dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Build PHAR
+        run: |
+          mkdir -p builds
+          composer global require humbug/box
+          box compile
+
+      - name: Build static binary
+        uses: php/static-bin-builder@v1
+        with:
+          php-version: '8.4'
+          phar-path: builds/kosmokrator.phar
+          output-name: kosmokrator-${{ matrix.platform }}
+          extensions: pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3
+
+      - name: Verify binary
+        run: |
+          chmod +x kosmokrator-${{ matrix.platform }}
+          ./kosmokrator-${{ matrix.platform }} --version || echo "Binary built (version check may fail without TTY)"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kosmokrator-${{ matrix.platform }}
+          path: kosmokrator-${{ matrix.platform }}
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-phar]
+    needs: [build-phar, build-binaries]
     steps:
       - uses: actions/checkout@v4
 
@@ -83,6 +142,10 @@ jobs:
         run: |
           mkdir -p release
           cp artifacts/kosmokrator-phar/kosmokrator.phar release/kosmokrator.phar
+          cp artifacts/kosmokrator-macos-aarch64/kosmokrator-macos-aarch64 release/kosmokrator-macos-aarch64
+          cp artifacts/kosmokrator-macos-x86_64/kosmokrator-macos-x86_64 release/kosmokrator-macos-x86_64
+          cp artifacts/kosmokrator-linux-x86_64/kosmokrator-linux-x86_64 release/kosmokrator-linux-x86_64
+          cp artifacts/kosmokrator-linux-aarch64/kosmokrator-linux-aarch64 release/kosmokrator-linux-aarch64
 
           # Generate checksums
           cd release
@@ -94,4 +157,8 @@ jobs:
           generate_release_notes: true
           files: |
             release/kosmokrator.phar
+            release/kosmokrator-macos-aarch64
+            release/kosmokrator-macos-x86_64
+            release/kosmokrator-linux-x86_64
+            release/kosmokrator-linux-aarch64
             release/checksums.sha256

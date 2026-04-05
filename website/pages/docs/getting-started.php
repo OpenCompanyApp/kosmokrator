@@ -52,14 +52,14 @@ ob_start();
 
 <div id="install-binary" class="install-panel active">
     <p>
-        No PHP required. Download the binary for your platform and make it
-        executable. macOS Apple Silicon shown; see
-        <a href="/docs/installation#static-binary">Installation</a> for Intel
-        and Linux builds.
+        Auto-detects your OS and architecture. No PHP required.
     </p>
-    <pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
-  -o /usr/local/bin/kosmokrator \
-  && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
+    <pre><code>curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash</code></pre>
+    <p class="muted">
+        Or download manually &mdash; see
+        <a href="/docs/installation#static-binary">Installation</a> for all
+        platform binaries.
+    </p>
 </div>
 
 <div id="install-phar" class="install-panel">
@@ -67,7 +67,7 @@ ob_start();
         Requires PHP 8.4+. Download the PHAR and place it on your
         <code>$PATH</code>.
     </p>
-    <pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+    <pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
   -o /usr/local/bin/kosmokrator \
   && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 </div>

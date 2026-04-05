@@ -49,17 +49,33 @@ Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streamin
 
 ## Installation
 
-### Static binary (no PHP required)
+### Quick install (recommended)
 
-Download a self-contained binary for your platform — no PHP installation needed:
+Auto-detects your OS and architecture:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash
+```
+
+### Manual download
+
+Pick the binary for your platform — no PHP required:
 
 ```bash
 # macOS (Apple Silicon)
-sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+
+# macOS (Intel)
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
   -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 
 # Linux (x86_64)
-sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+
+# Linux (ARM)
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
   -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 ```
 
@@ -68,7 +84,7 @@ sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/downl
 If you already have PHP installed, the PHAR is smaller (~5MB vs ~25MB):
 
 ```bash
-sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
   -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 ```
 

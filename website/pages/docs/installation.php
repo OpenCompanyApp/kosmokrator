@@ -11,42 +11,45 @@ ob_start();
 </p>
 
 <!-- ------------------------------------------------------------------ -->
-<h2 id="static-binary">Static Binary (No PHP Required)</h2>
+<h2 id="quick-install">Quick Install (Recommended)</h2>
 
 <p>
-    The static binary is the fastest way to get started. It bundles the PHP
-    runtime, all extensions, and the full KosmoKrator application into a single
-    executable of roughly 25 MB. There is nothing else to install &mdash; no PHP,
-    no Composer, no extensions. Download, make it executable, and run.
+    The install script auto-detects your OS and architecture, downloads the
+    right static binary, and places it on your <code>$PATH</code>. No PHP
+    required &mdash; everything is bundled.
 </p>
 
+<pre><code>curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash</code></pre>
+
+<!-- ------------------------------------------------------------------ -->
+<h2 id="static-binary">Static Binary (Manual)</h2>
+
 <p>
-    Binaries are published for every tagged release and are available from the
-    GitHub Releases page. Pick the one that matches your operating system and
-    architecture.
+    If you prefer to download manually, pick the binary for your platform.
+    Each is a self-contained ~25 MB executable with the PHP runtime bundled.
 </p>
 
 <h3 id="binary-macos-arm">macOS &mdash; Apple Silicon (aarch64)</h3>
 
-<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+<pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
   -o /usr/local/bin/kosmokrator \
   && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <h3 id="binary-macos-intel">macOS &mdash; Intel (x86_64)</h3>
 
-<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
+<pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
   -o /usr/local/bin/kosmokrator \
   && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <h3 id="binary-linux-x86">Linux &mdash; x86_64</h3>
 
-<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+<pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
   -o /usr/local/bin/kosmokrator \
   && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
 <h3 id="binary-linux-arm">Linux &mdash; ARM (aarch64)</h3>
 
-<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
+<pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
   -o /usr/local/bin/kosmokrator \
   && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
@@ -84,7 +87,7 @@ ob_start();
 
 <h3 id="phar-download">Download</h3>
 
-<pre><code>sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+<pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
   -o /usr/local/bin/kosmokrator \
   && sudo chmod +x /usr/local/bin/kosmokrator</code></pre>
 
@@ -575,7 +578,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+          sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
             -o /usr/local/bin/kosmokrator \
             && sudo chmod +x /usr/local/bin/kosmokrator
 

@@ -15,7 +15,9 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
+use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\PermissionRule;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\UI\RendererInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -209,12 +211,13 @@ class AgentLoopTest extends TestCase
 
     public function test_plan_mode_blocks_mutative_bash(): void
     {
+        $rules = [new PermissionRule('bash', PermissionAction::Allow)];
         $this->loop = new AgentLoop(
             $this->llm,
             $this->ui,
             new NullLogger,
             'You are a test assistant.',
-            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+            new PermissionEvaluator($rules, new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
         $this->loop->setMode(AgentMode::Plan);
 
@@ -250,12 +253,13 @@ class AgentLoopTest extends TestCase
 
     public function test_ask_mode_blocks_mutative_bash(): void
     {
+        $rules = [new PermissionRule('bash', PermissionAction::Allow)];
         $this->loop = new AgentLoop(
             $this->llm,
             $this->ui,
             new NullLogger,
             'You are a test assistant.',
-            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+            new PermissionEvaluator($rules, new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
         $this->loop->setMode(AgentMode::Ask);
 
@@ -291,12 +295,13 @@ class AgentLoopTest extends TestCase
 
     public function test_plan_mode_blocks_mutative_shell_start(): void
     {
+        $rules = [new PermissionRule('shell_start', PermissionAction::Allow)];
         $this->loop = new AgentLoop(
             $this->llm,
             $this->ui,
             new NullLogger,
             'You are a test assistant.',
-            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+            new PermissionEvaluator($rules, new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
         $this->loop->setMode(AgentMode::Plan);
 
@@ -332,12 +337,13 @@ class AgentLoopTest extends TestCase
 
     public function test_ask_mode_blocks_mutative_shell_write(): void
     {
+        $rules = [new PermissionRule('shell_write', PermissionAction::Allow)];
         $this->loop = new AgentLoop(
             $this->llm,
             $this->ui,
             new NullLogger,
             'You are a test assistant.',
-            new PermissionEvaluator([], new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
+            new PermissionEvaluator($rules, new SessionGrants, [], new GuardianEvaluator(getcwd(), ['git *'])),
         );
         $this->loop->setMode(AgentMode::Ask);
 

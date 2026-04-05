@@ -12,6 +12,7 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
 use PHPUnit\Framework\TestCase;
+use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Psr\Log\NullLogger;
 
 class SessionManagerTest extends TestCase
@@ -116,7 +117,7 @@ class SessionManagerTest extends TestCase
         $manager = new SessionManager($sessions, $messages, $settings, $memories, new NullLogger);
 
         // No session — saveMessage should silently return without persisting
-        $manager->saveMessage(new \Prism\Prism\ValueObjects\Messages\UserMessage('hello'));
+        $manager->saveMessage(new UserMessage('hello'));
 
         // Verify no messages were persisted by creating a session and checking
         $sessionId = $manager->createSession('model');

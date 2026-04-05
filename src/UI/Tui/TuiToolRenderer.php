@@ -442,7 +442,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         }
 
         $trimmed = trim($result);
-        if (str_starts_with($trimmed, ToolCallMapper::ERROR_PREFIX)) {
+        if (str_starts_with($trimmed, ToolCallMapper::ERROR_PREFIX) || str_starts_with($trimmed, 'Error: ')) {
             return false;
         }
 

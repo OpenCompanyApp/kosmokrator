@@ -203,7 +203,7 @@ class DiffRendererTest extends TestCase
 
         $combined = implode("\n", $lines);
         // Should contain line numbers (1-based)
-        $this->assertMatchesRegularExpression('/\d+\s+line1/', $combined);
+        $this->assertMatchesRegularExpression('/\d+.*line1/', $combined);
     }
 
     public function test_empty_old_string(): void

@@ -515,7 +515,7 @@ class AgentLoop
 
                     $this->log->error('Headless agent error', ['error' => $e->getMessage(), 'round' => $round]);
 
-                    return ToolCallMapper::ERROR_PREFIX.$e->getMessage();
+                    return 'Error: '.$e->getMessage();
                 }
 
                 if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
@@ -804,6 +804,10 @@ class AgentLoop
             return;
         }
 
+        // Always prune completed agents at the start of each round so
+        // await-mode agent stats don't accumulate and inflate the live tree.
+        $this->agentContext->orchestrator->pruneCompleted();
+
         $results = $this->agentContext->orchestrator->collectPendingResults($this->agentContext->id);
         if (empty($results)) {
             return;
@@ -837,9 +841,6 @@ class AgentLoop
         $this->history->addUser(implode("\n\n---\n\n", $parts));
         $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
         $this->log->debug('Injected background results', ['count' => count($results)]);
-
-        // Free memory for completed agents whose results we just consumed
-        $this->agentContext->orchestrator->pruneCompleted();
     }
 
     /**

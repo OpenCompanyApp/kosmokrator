@@ -54,7 +54,11 @@ final class StuckDetector
         // Count occurrences of every unique signature in the window
         $counts = array_count_values($this->toolCallWindow);
         $maxCount = $counts !== [] ? max($counts) : 0;
-        $isStuck = $maxCount >= $this->repetitionThreshold;
+
+        // Only consider stuck if the latest call matches the dominant repeated signature
+        $latestSig = end($this->toolCallWindow);
+        $dominantSig = $maxCount > 0 ? array_search($maxCount, $counts, true) : null;
+        $isStuck = $maxCount >= $this->repetitionThreshold && $latestSig === $dominantSig;
 
         if (! $isStuck) {
             if ($this->stuckEscalation > 0) {

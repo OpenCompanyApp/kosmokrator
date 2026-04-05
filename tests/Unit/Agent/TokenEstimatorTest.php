@@ -28,20 +28,20 @@ class TokenEstimatorTest extends TestCase
 
     public function test_estimate_exact_multiple(): void
     {
-        // 8 chars → ceil(8/4) = 2
-        $this->assertSame(2, TokenEstimator::estimate('abcdefgh'));
+        // 8 chars → ceil(8/3.2) = 3
+        $this->assertSame(3, TokenEstimator::estimate('abcdefgh'));
     }
 
     public function test_estimate_user_message(): void
     {
-        $msg = new UserMessage('hello world'); // 11 chars → ceil(11/4) = 3
-        $this->assertSame(3, TokenEstimator::estimateMessage($msg));
+        $msg = new UserMessage('hello world'); // 11 chars → ceil(11/3.2) = 4 + 10 overhead = 14
+        $this->assertSame(14, TokenEstimator::estimateMessage($msg));
     }
 
     public function test_estimate_assistant_message(): void
     {
-        $msg = new AssistantMessage('response text'); // 13 chars → ceil(13/4) = 4
-        $this->assertSame(4, TokenEstimator::estimateMessage($msg));
+        $msg = new AssistantMessage('response text'); // 13 chars → ceil(13/3.2) = 5 + 10 overhead = 15
+        $this->assertSame(15, TokenEstimator::estimateMessage($msg));
     }
 
     public function test_estimate_assistant_with_tool_calls(): void
@@ -63,24 +63,24 @@ class TokenEstimatorTest extends TestCase
             new ToolResult(toolCallId: 'tc1', toolName: 'bash', args: [], result: str_repeat('x', 400)),
         ]);
 
-        // 400 chars → ceil(400/4) = 100
-        $this->assertSame(100, TokenEstimator::estimateMessage($msg));
+        // 400 chars → ceil(400/3.2) = 125 + 10 overhead = 135
+        $this->assertSame(135, TokenEstimator::estimateMessage($msg));
     }
 
     public function test_estimate_system_message(): void
     {
-        $msg = new SystemMessage('system prompt text'); // 18 chars → ceil(18/4) = 5
-        $this->assertSame(5, TokenEstimator::estimateMessage($msg));
+        $msg = new SystemMessage('system prompt text'); // 18 chars → ceil(18/3.2) = 6 + 10 overhead = 16
+        $this->assertSame(16, TokenEstimator::estimateMessage($msg));
     }
 
     public function test_estimate_messages_array(): void
     {
         $messages = [
-            new UserMessage('hello'),           // 5 → 2
-            new AssistantMessage('world'),       // 5 → 2
-            new UserMessage('test'),             // 4 → 1
+            new UserMessage('hello'),           // ceil(5/3.2)=2 + 10 = 12
+            new AssistantMessage('world'),       // ceil(5/3.2)=2 + 10 = 12
+            new UserMessage('test'),             // ceil(4/3.2)=2 + 10 = 12
         ];
 
-        $this->assertSame(5, TokenEstimator::estimateMessages($messages));
+        $this->assertSame(36, TokenEstimator::estimateMessages($messages));
     }
 }

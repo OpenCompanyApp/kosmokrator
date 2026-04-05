@@ -120,7 +120,7 @@ class TaskUpdateToolTest extends TestCase
     {
         $this->store->add(new Task('Work', id: 'abc'));
 
-        $result = $this->tool->execute(['id' => 'abc', 'status' => 'completed']);
+        $result = $this->tool->execute(['id' => 'abc', 'status' => 'in_progress']);
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('ID: abc', $result->output);

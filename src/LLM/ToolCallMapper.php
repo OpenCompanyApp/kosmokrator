@@ -89,7 +89,7 @@ final class ToolCallMapper
         return new ToolResult(
             toolCallId: $original->toolCallId,
             toolName: $original->toolName,
-            args: [],
+            args: $original->args,
             result: $replacementContent,
         );
     }

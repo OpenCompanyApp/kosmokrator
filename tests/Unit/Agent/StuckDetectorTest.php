@@ -181,9 +181,9 @@ class StuckDetectorTest extends TestCase
         $this->assertSame('ok', $detector->check([$A]));      // window=[A]
         $this->assertSame('ok', $detector->check([$A]));      // window=[A,A]
         $this->assertSame('nudge', $detector->check([$A]));   // window=[A,A,A] → nudge, escalation=1
-        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,A,B] → A=3, still stuck, turnsSince=1
-        $this->assertSame(1, $detector->getEscalation());     // Not reset — stuck branch, no cooldown
-        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, diverse, cooldown=1
-        $this->assertSame(1, $detector->getEscalation());     // Still not reset — need 2 diverse turns (cooldownThreshold=2)
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,A,B] → A=3 but latest B≠A, recovering, cooldown=1
+        $this->assertSame(1, $detector->getEscalation());     // Not reset — need 2 diverse turns (cooldownThreshold=2)
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, diverse, cooldown=2 → reset
+        $this->assertSame(0, $detector->getEscalation());     // Reset — 2 diverse turns met cooldownThreshold
     }
 }

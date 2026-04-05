@@ -70,7 +70,7 @@ class SelfUpdaterTest extends TestCase
 
         $tmp = tempnam(sys_get_temp_dir(), 'kosmo_test_');
         // ELF header (Linux binary magic bytes)
-        file_put_contents($tmp, "\x7fELF" . str_repeat("\x00", 60));
+        file_put_contents($tmp, "\x7fELF".str_repeat("\x00", 60));
 
         try {
             $this->assertFalse($method->invoke($updater, $tmp));

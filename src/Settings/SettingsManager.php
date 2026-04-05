@@ -266,17 +266,6 @@ final class SettingsManager
     /** Re-read all config files and refresh the in-memory repository after a write. */
     private function reloadRepository(): void
     {
-        // Incremental update: reload and merge only the top-level keys we manage,
-        // avoiding a full ConfigLoader re-parse from disk on every settings write.
-        static $lastReload = 0;
-        $now = microtime(true);
-
-        // Throttle: if reloaded within the last 100ms, skip (batched writes from same call)
-        if ($now - $lastReload < 0.1) {
-            return;
-        }
-        $lastReload = $now;
-
         $reloaded = (new ConfigLoader($this->baseConfigPath))->load();
 
         foreach (['app', 'kosmokrator', 'prism', 'models', 'relay'] as $key) {

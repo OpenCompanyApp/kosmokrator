@@ -65,10 +65,6 @@ sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/downl
 # Linux (x86_64)
 sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
   -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
-
-# Linux (ARM64)
-sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 ```
 
 ### PHAR (requires PHP 8.4+)

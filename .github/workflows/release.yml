@@ -71,56 +71,66 @@ jobs:
   build-binaries:
     name: Build binary (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
-    needs: quality
-    if: always() && needs.quality.result != 'cancelled'
+    needs: [quality, build-phar]
+    if: always() && needs.quality.result != 'cancelled' && needs.build-phar.result == 'success'
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-aarch64
             runner: macos-14
-            arch: aarch64
+            spc-arch: aarch64
           - platform: macos-x86_64
             runner: macos-13
-            arch: x86_64
+            spc-arch: x86_64
           - platform: linux-x86_64
             runner: ubuntu-latest
-            arch: x86_64
-          - platform: linux-aarch64
-            runner: ubuntu-24.04-arm
-            arch: aarch64
+            spc-arch: x86_64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - name: Download PHAR
+        uses: actions/download-artifact@v4
         with:
-          php-version: '8.4'
-          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter, fileinfo
-          tools: composer:v2
-          ini-values: phar.readonly=0
+          name: kosmokrator-phar
+          path: builds
 
-      - name: Install dependencies
-        run: composer install --no-dev --optimize-autoloader --no-interaction
-
-      - name: Build PHAR
+      - name: Install static-php-cli (spc)
         run: |
-          mkdir -p builds
-          composer global require humbug/box
-          box compile
+          if [ "${{ matrix.platform }}" = "linux-x86_64" ]; then
+            curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-linux-x86_64
+          elif [ "${{ matrix.platform }}" = "macos-aarch64" ]; then
+            curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-macos-aarch64
+          elif [ "${{ matrix.platform }}" = "macos-x86_64" ]; then
+            curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-macos-x86_64
+          fi
+          chmod +x spc
 
-      - name: Build static binary
-        uses: php/static-bin-builder@v1
-        with:
-          php-version: '8.4'
-          phar-path: builds/kosmokrator.phar
-          output-name: kosmokrator-${{ matrix.platform }}
-          extensions: pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev zlib1g-dev libzip-dev
+
+      - name: Download PHP source & extensions
+        run: ./spc download --with-php=8.4
+
+      - name: Build static PHP with micro SFX
+        run: |
+          ./spc build \
+            "pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3" \
+            --build-micro
+
+      - name: Combine PHAR with micro SFX
+        run: |
+          ./spc micro:combine builds/kosmokrator.phar --output=kosmokrator-${{ matrix.platform }}
+          chmod +x kosmokrator-${{ matrix.platform }}
 
       - name: Verify binary
         run: |
-          chmod +x kosmokrator-${{ matrix.platform }}
-          ./kosmokrator-${{ matrix.platform }} --version || echo "Binary built (version check may fail without TTY)"
+          ls -lh kosmokrator-${{ matrix.platform }}
+          file kosmokrator-${{ matrix.platform }}
+          ./kosmokrator-${{ matrix.platform }} --version || echo "Binary built (version check may need TTY)"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -132,6 +142,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [build-phar, build-binaries]
+    if: always() && needs.build-phar.result == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -139,28 +150,29 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: kosmokrator-*
 
       - name: Prepare release assets
         run: |
           mkdir -p release
           cp artifacts/kosmokrator-phar/kosmokrator.phar release/kosmokrator.phar
-          cp artifacts/kosmokrator-macos-aarch64/kosmokrator-macos-aarch64 release/kosmokrator-macos-aarch64
-          cp artifacts/kosmokrator-macos-x86_64/kosmokrator-macos-x86_64 release/kosmokrator-macos-x86_64
-          cp artifacts/kosmokrator-linux-x86_64/kosmokrator-linux-x86_64 release/kosmokrator-linux-x86_64
-          cp artifacts/kosmokrator-linux-aarch64/kosmokrator-linux-aarch64 release/kosmokrator-linux-aarch64
+
+          # Copy binary artifacts if they exist
+          for platform in macos-aarch64 macos-x86_64 linux-x86_64; do
+            if [ -f "artifacts/kosmokrator-${platform}/kosmokrator-${platform}" ]; then
+              cp "artifacts/kosmokrator-${platform}/kosmokrator-${platform}" "release/kosmokrator-${platform}"
+            fi
+          done
 
           # Generate checksums
           cd release
           sha256sum * > checksums.sha256 || shasum -a 256 * > checksums.sha256
+          echo "Release assets:"
+          ls -lh
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            release/kosmokrator.phar
-            release/kosmokrator-macos-aarch64
-            release/kosmokrator-macos-x86_64
-            release/kosmokrator-linux-x86_64
-            release/kosmokrator-linux-aarch64
-            release/checksums.sha256
+            release/*

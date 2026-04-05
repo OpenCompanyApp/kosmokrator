@@ -35,6 +35,7 @@ jobs:
     name: Build PHAR
     runs-on: ubuntu-latest
     needs: quality
+    if: always() && needs.quality.result != 'cancelled'
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +72,7 @@ jobs:
     name: Build binary (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     needs: quality
+    if: always() && needs.quality.result != 'cancelled'
     strategy:
       fail-fast: false
       matrix:

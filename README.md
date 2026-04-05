@@ -58,10 +58,6 @@ Download a self-contained binary for your platform — no PHP installation neede
 sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
   -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
 
-# macOS (Intel)
-sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
-
 # Linux (x86_64)
 sudo curl -L https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
   -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator

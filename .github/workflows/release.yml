@@ -80,9 +80,6 @@ jobs:
           - platform: macos-aarch64
             runner: macos-14
             spc-arch: aarch64
-          - platform: macos-x86_64
-            runner: macos-13
-            spc-arch: x86_64
           - platform: linux-x86_64
             runner: ubuntu-latest
             spc-arch: x86_64
@@ -101,8 +98,6 @@ jobs:
             curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-linux-x86_64
           elif [ "${{ matrix.platform }}" = "macos-aarch64" ]; then
             curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-macos-aarch64
-          elif [ "${{ matrix.platform }}" = "macos-x86_64" ]; then
-            curl -fsSL -o spc https://dl.static-php.dev/static-php-cli/spc-bin/nightly/spc-macos-x86_64
           fi
           chmod +x spc
 
@@ -112,8 +107,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev zlib1g-dev libzip-dev
 
-      - name: Download PHP source & extensions
-        run: ./spc download --with-php=8.4
+      - name: Download PHP source & dependencies
+        run: |
+          ./spc download --for-extensions="pcntl,posix,mbstring,curl,openssl,dom,xml,simplexml,tokenizer,filter,ctype,phar,zlib,fileinfo,pdo,pdo_sqlite,sqlite3" \
+            --with-php=8.4 --prefer-pre-built
 
       - name: Build static PHP with micro SFX
         run: |
@@ -158,7 +155,7 @@ jobs:
           cp artifacts/kosmokrator-phar/kosmokrator.phar release/kosmokrator.phar
 
           # Copy binary artifacts if they exist
-          for platform in macos-aarch64 macos-x86_64 linux-x86_64; do
+          for platform in macos-aarch64 linux-x86_64; do
             if [ -f "artifacts/kosmokrator-${platform}/kosmokrator-${platform}" ]; then
               cp "artifacts/kosmokrator-${platform}/kosmokrator-${platform}" "release/kosmokrator-${platform}"
             fi

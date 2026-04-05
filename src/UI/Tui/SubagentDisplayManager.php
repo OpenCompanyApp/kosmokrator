@@ -275,7 +275,7 @@ final class SubagentDisplayManager
         }
 
         // Filter out background acks — show remaining (failures, awaited results)
-        $entries = array_values(array_filter($entries, fn ($e) => ! ($e['background'] ?? false)));
+        $entries = array_values(array_filter($entries, fn ($e) => ($e['args']['mode'] ?? 'await') !== 'background' && ! str_contains($e['result'] ?? '', 'spawned in background')));
         if (empty($entries)) {
             // All background — keep loader and tree running
             return;

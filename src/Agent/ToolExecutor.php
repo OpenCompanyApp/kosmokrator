@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Kosmokrator\LLM\ToolCallMapper;
-use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
@@ -156,22 +155,9 @@ final class ToolExecutor
                         SafeDisplay::call(fn () => $this->ui->showAutoApproveIndicator($toolCall->name), $this->log);
                     }
                     SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
-
-                    // Wire bash streaming callback
-                    if ($toolCall->name === 'bash' && $tool instanceof BashTool) {
-                        $tool->progressCallback = fn (string $chunk) => SafeDisplay::call(
-                            fn () => $this->ui->updateToolExecuting($chunk), $this->log
-                        );
-                    }
                 }
 
-                try {
-                    $result = $this->executeSingleTool($toolCall, $tool, $stats, $mode);
-                } finally {
-                    if ($toolCall->name === 'bash' && $tool instanceof BashTool) {
-                        $tool->progressCallback = null;
-                    }
-                }
+                $result = $this->executeSingleTool($toolCall, $tool, $stats, $mode);
 
                 if ($toolCall->name !== 'subagent') {
                     SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);

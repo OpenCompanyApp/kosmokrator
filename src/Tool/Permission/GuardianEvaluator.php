@@ -225,5 +225,4 @@ class GuardianEvaluator
     {
         return (bool) preg_match(self::SHELL_META_PATTERN, $command);
     }
-
 }

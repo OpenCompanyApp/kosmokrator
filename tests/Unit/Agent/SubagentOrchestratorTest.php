@@ -1003,7 +1003,7 @@ class SubagentOrchestratorTest extends TestCase
         \Amp\delay(0.01);
     }
 
-    public function test_prune_completed_keeps_failed_agents(): void
+    public function test_prune_completed_removes_failed_agents(): void
     {
         try {
             $this->orchestrator->spawnAgent(
@@ -1014,8 +1014,8 @@ class SubagentOrchestratorTest extends TestCase
         }
 
         $pruned = $this->orchestrator->pruneCompleted();
-        $this->assertSame(0, $pruned, 'Failed agents should not be pruned');
-        $this->assertNotNull($this->orchestrator->getStats('prune-fail'));
+        $this->assertSame(1, $pruned, 'Failed agents are terminal and should be pruned');
+        $this->assertNull($this->orchestrator->getStats('prune-fail'));
     }
 
     public function test_prune_completed_removes_cancelled_agents(): void
@@ -1034,15 +1034,15 @@ class SubagentOrchestratorTest extends TestCase
 
         \Amp\delay(0.01);
         $orchestrator->cancelAll();
-        try {
-            $future->await();
-        } catch (CancelledException) {
-        }
+
+        // Background agents return error strings instead of throwing
+        $result = $future->await();
+        $this->assertStringContainsString('prune-cancel', $result);
 
         $this->assertSame('failed', $orchestrator->getStats('prune-cancel')->status);
         $pruned = $orchestrator->pruneCompleted();
-        $this->assertSame(0, $pruned, 'Failed agents (cancelled via exception) should not be pruned');
-        $this->assertNotNull($orchestrator->getStats('prune-cancel'));
+        $this->assertSame(1, $pruned, 'Cancelled agents are terminal and should be pruned');
+        $this->assertNull($orchestrator->getStats('prune-cancel'));
     }
 
     public function test_prune_completed_returns_count(): void

@@ -24,14 +24,13 @@ class PermissionConfigParserTest extends TestCase
         $result = $parser->parse($config);
         $rules = $result['rules'];
 
-        $this->assertCount(3, $rules);
-        $this->assertSame('file_write', $rules[0]->toolName);
-        $this->assertSame(PermissionAction::Ask, $rules[0]->action);
-        $this->assertSame([], $rules[0]->denyPatterns);
-
-        $this->assertSame('bash', $rules[2]->toolName);
-        $this->assertSame(PermissionAction::Ask, $rules[2]->action);
-        $this->assertSame([], $rules[2]->denyPatterns);
+        // 14 default safe tools (Allow) + 3 approval_required (Ask)
+        $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
+        $this->assertCount(3, $askRules);
+        $this->assertSame('file_write', $askRules[0]->toolName);
+        $this->assertSame([], $askRules[0]->denyPatterns);
+        $this->assertSame('bash', $askRules[2]->toolName);
+        $this->assertSame([], $askRules[2]->denyPatterns);
     }
 
     public function test_parses_blocked_commands_as_deny_patterns(): void
@@ -52,9 +51,10 @@ class PermissionConfigParserTest extends TestCase
         $result = $parser->parse($config);
         $rules = $result['rules'];
 
-        $this->assertCount(1, $rules);
-        $this->assertSame('bash', $rules[0]->toolName);
-        $this->assertSame(['rm -rf /', 'rm -rf ~', 'mkfs*'], $rules[0]->denyPatterns);
+        $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
+        $this->assertCount(1, $askRules);
+        $this->assertSame('bash', $askRules[0]->toolName);
+        $this->assertSame(['rm -rf /', 'rm -rf ~', 'mkfs*'], $askRules[0]->denyPatterns);
     }
 
     public function test_shell_start_and_shell_write_also_receive_blocked_command_patterns(): void
@@ -74,19 +74,23 @@ class PermissionConfigParserTest extends TestCase
         $result = $parser->parse($config);
         $rules = $result['rules'];
 
-        $this->assertCount(2, $rules);
-        $this->assertSame(['rm -rf /', 'mkfs*'], $rules[0]->denyPatterns);
-        $this->assertSame(['rm -rf /', 'mkfs*'], $rules[1]->denyPatterns);
+        $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
+        $this->assertCount(2, $askRules);
+        $this->assertSame(['rm -rf /', 'mkfs*'], $askRules[0]->denyPatterns);
+        $this->assertSame(['rm -rf /', 'mkfs*'], $askRules[1]->denyPatterns);
     }
 
-    public function test_empty_config_returns_no_rules(): void
+    public function test_empty_config_returns_default_safe_rules(): void
     {
         $config = new Repository([]);
 
         $parser = new PermissionConfigParser;
         $result = $parser->parse($config);
 
-        $this->assertSame([], $result['rules']);
+        // Default safe tools are still included even with empty config
+        $this->assertNotEmpty($result['rules']);
+        $allowRules = array_filter($result['rules'], fn ($r) => $r->action === PermissionAction::Allow);
+        $this->assertNotEmpty($allowRules);
         $this->assertSame([], $result['blocked_paths']);
     }
 
@@ -166,5 +170,68 @@ class PermissionConfigParserTest extends TestCase
 
         $this->assertSame([], $result['guardian_safe_commands']);
         $this->assertSame('guardian', $result['default_permission_mode']);
+    }
+
+    public function test_safe_tools_parsed_as_allow_rules(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'safe_tools' => ['file_read', 'glob', 'grep'],
+                    'approval_required' => ['bash'],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser;
+        $result = $parser->parse($config);
+        $rules = $result['rules'];
+
+        $allowRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Allow));
+        $this->assertCount(3, $allowRules);
+        $this->assertSame('file_read', $allowRules[0]->toolName);
+        $this->assertSame('glob', $allowRules[1]->toolName);
+        $this->assertSame('grep', $allowRules[2]->toolName);
+    }
+
+    public function test_safe_tools_come_before_ask_rules(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'safe_tools' => ['file_read'],
+                    'approval_required' => ['file_write'],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser;
+        $result = $parser->parse($config);
+        $rules = $result['rules'];
+
+        $this->assertCount(2, $rules);
+        $this->assertSame(PermissionAction::Allow, $rules[0]->action);
+        $this->assertSame('file_read', $rules[0]->toolName);
+        $this->assertSame(PermissionAction::Ask, $rules[1]->action);
+        $this->assertSame('file_write', $rules[1]->toolName);
+    }
+
+    public function test_custom_safe_tools_override_defaults(): void
+    {
+        $config = new Repository([
+            'kosmokrator' => [
+                'tools' => [
+                    'safe_tools' => ['my_custom_tool'],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser;
+        $result = $parser->parse($config);
+        $rules = $result['rules'];
+
+        $this->assertCount(1, $rules);
+        $this->assertSame('my_custom_tool', $rules[0]->toolName);
+        $this->assertSame(PermissionAction::Allow, $rules[0]->action);
     }
 }

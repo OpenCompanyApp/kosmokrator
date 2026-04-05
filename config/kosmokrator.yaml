@@ -100,6 +100,21 @@ ui:
   theme: default
 
 tools:
+  safe_tools:
+    - file_read
+    - glob
+    - grep
+    - task_create
+    - task_update
+    - task_list
+    - task_get
+    - shell_read
+    - shell_kill
+    - memory_save
+    - memory_search
+    - ask_user
+    - ask_choice
+    - subagent
   approval_required:
     - file_write
     - file_edit
@@ -121,6 +136,7 @@ tools:
     - "*id_rsa*"
     - "*id_ed25519*"
     - "*.key"
+  allowed_paths: []
   default_permission_mode: guardian
   guardian_safe_commands:
     - "git *"

@@ -2,6 +2,7 @@
 
 namespace Kosmokrator\Tests\Unit\Tool\Permission;
 
+use Kosmokrator\Tool\Permission\Check\ProjectBoundaryCheck;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -21,11 +22,13 @@ class PermissionEvaluatorTest extends TestCase
 
     // --- Basic evaluation ---
 
-    public function test_tool_not_in_rules_returns_allow(): void
+    public function test_tool_not_in_rules_returns_deny(): void
     {
         $evaluator = new PermissionEvaluator([], $this->grants);
 
-        $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('file_read', ['path' => '/tmp/test'])->action);
+        $result = $evaluator->evaluate('file_read', ['path' => '/tmp/test']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+        $this->assertStringContainsString('not explicitly allowed', $result->reason);
     }
 
     public function test_tool_in_approval_required_returns_ask_in_argus(): void
@@ -41,14 +44,16 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'ls -la'])->action);
     }
 
-    public function test_unmatched_tool_still_allowed(): void
+    public function test_unmatched_tool_denied(): void
     {
         $rules = [
             new PermissionRule('bash', PermissionAction::Ask),
         ];
         $evaluator = new PermissionEvaluator($rules, $this->grants);
 
-        $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('grep', ['pattern' => 'foo'])->action);
+        $result = $evaluator->evaluate('grep', ['pattern' => 'foo']);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+        $this->assertStringContainsString('not explicitly allowed', $result->reason);
     }
 
     // --- Deny patterns ---
@@ -212,9 +217,12 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertSame(PermissionAction::Ask, $result->action);
     }
 
-    public function test_allow_result_not_auto_approved_for_unmatched_tool(): void
+    public function test_safe_tool_with_allow_rule_not_auto_approved(): void
     {
-        $evaluator = new PermissionEvaluator([], $this->grants);
+        $rules = [
+            new PermissionRule('file_read', PermissionAction::Allow),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
 
         $result = $evaluator->evaluate('file_read', ['path' => 'src/Foo.php']);
         $this->assertSame(PermissionAction::Allow, $result->action);
@@ -258,7 +266,11 @@ class PermissionEvaluatorTest extends TestCase
 
     public function test_blocked_path_does_not_match_safe_paths(): void
     {
-        $evaluator = new PermissionEvaluator([], $this->grants, ['*.env', '.git/*']);
+        $rules = [
+            new PermissionRule('file_read', PermissionAction::Allow),
+            new PermissionRule('grep', PermissionAction::Allow),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants, ['*.env', '.git/*']);
 
         $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('file_read', ['path' => 'src/App.php'])->action);
         $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('grep', ['pattern' => 'foo', 'path' => 'src/'])->action);
@@ -469,5 +481,100 @@ class PermissionEvaluatorTest extends TestCase
 
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/test']);
         $this->assertSame(PermissionAction::Deny, $result->action);
+    }
+
+    // --- Project boundary integration ---
+
+    public function test_boundary_skips_in_prometheus_mode(): void
+    {
+        $projectRoot = realpath(getcwd());
+        $rules = [
+            new PermissionRule('file_write', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator(
+            $rules,
+            $this->grants,
+            [],
+            null,
+            new ProjectBoundaryCheck($projectRoot, [], function () use (&$evaluator) {
+                return $evaluator->getPermissionMode();
+            }),
+        );
+        $evaluator->setPermissionMode(PermissionMode::Prometheus);
+
+        // Outside project + Prometheus → auto-approved (boundary is exempt)
+        $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
+        $this->assertSame(PermissionAction::Allow, $result->action);
+        $this->assertTrue($result->autoApproved);
+    }
+
+    public function test_boundary_asks_in_guardian_mode(): void
+    {
+        $projectRoot = realpath(getcwd());
+        $rules = [
+            new PermissionRule('file_write', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator(
+            $rules,
+            $this->grants,
+            [],
+            null,
+            new ProjectBoundaryCheck($projectRoot, [], function () use (&$evaluator) {
+                return $evaluator->getPermissionMode();
+            }),
+        );
+        $evaluator->setPermissionMode(PermissionMode::Guardian);
+
+        // Outside project + Guardian → Ask (boundary check triggers)
+        $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
+        $this->assertSame(PermissionAction::Ask, $result->action);
+        $this->assertStringContainsString('outside the project root', $result->reason);
+    }
+
+    public function test_session_grant_bypasses_boundary(): void
+    {
+        $projectRoot = realpath(getcwd());
+        $rules = [
+            new PermissionRule('file_write', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator(
+            $rules,
+            $this->grants,
+            [],
+            null,
+            new ProjectBoundaryCheck($projectRoot, [], function () use (&$evaluator) {
+                return $evaluator->getPermissionMode();
+            }),
+        );
+        $evaluator->setPermissionMode(PermissionMode::Guardian);
+        $evaluator->grantSession('file_write');
+
+        // Session grant runs before boundary → Allow
+        $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
+        $this->assertSame(PermissionAction::Allow, $result->action);
+    }
+
+    public function test_boundary_allows_within_project(): void
+    {
+        $projectRoot = realpath(getcwd());
+        $guardian = new GuardianEvaluator($projectRoot, []);
+        $rules = [
+            new PermissionRule('file_write', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator(
+            $rules,
+            $this->grants,
+            [],
+            $guardian,
+            new ProjectBoundaryCheck($projectRoot, [], function () use (&$evaluator) {
+                return $evaluator->getPermissionMode();
+            }),
+        );
+        $evaluator->setPermissionMode(PermissionMode::Guardian);
+
+        // Inside project + Guardian → auto-approved by Guardian heuristic
+        $result = $evaluator->evaluate('file_write', ['path' => $projectRoot.'/src/NewFile.php', 'content' => 'x']);
+        $this->assertSame(PermissionAction::Allow, $result->action);
+        $this->assertTrue($result->autoApproved);
     }
 }

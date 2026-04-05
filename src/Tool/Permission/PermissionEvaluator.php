@@ -7,6 +7,7 @@ namespace Kosmokrator\Tool\Permission;
 use Kosmokrator\Tool\Permission\Check\BlockedPathCheck;
 use Kosmokrator\Tool\Permission\Check\DenyPatternCheck;
 use Kosmokrator\Tool\Permission\Check\ModeOverrideCheck;
+use Kosmokrator\Tool\Permission\Check\ProjectBoundaryCheck;
 use Kosmokrator\Tool\Permission\Check\RuleCheck;
 use Kosmokrator\Tool\Permission\Check\SessionGrantCheck;
 
@@ -14,7 +15,8 @@ use Kosmokrator\Tool\Permission\Check\SessionGrantCheck;
  * Central permission decision engine: evaluates every tool call against a chain
  * of PermissionCheck stages to produce a PermissionResult (Allow / Ask / Deny).
  *
- * The chain order is: blocked paths -> deny patterns -> session grants -> rules -> mode overrides.
+ * The chain order is: blocked paths -> deny patterns -> session grants ->
+ * project boundary -> rules -> mode overrides.
  * The first check that returns a non-null result halts the chain.
  *
  * Lives in the tool-call hot path — called before every tool execution.
@@ -29,24 +31,27 @@ class PermissionEvaluator
     /**
      * @param  PermissionRule[]  $rules
      * @param  string[]  $blockedPaths  Glob patterns for paths that should be denied
+     * @param  ProjectBoundaryCheck|null  $boundaryCheck  Optional project boundary enforcement
      */
     public function __construct(
         private readonly array $rules,
         private readonly SessionGrants $grants,
         private readonly array $blockedPaths = [],
         private readonly ?GuardianEvaluator $guardian = null,
+        ?ProjectBoundaryCheck $boundaryCheck = null,
     ) {
-        $this->chain = [
+        $this->chain = array_values(array_filter([
             new BlockedPathCheck($this->blockedPaths),
             new DenyPatternCheck($this->rules),
             new SessionGrantCheck($this->grants),
+            $boundaryCheck,
             new RuleCheck($this->rules),
             new ModeOverrideCheck(
                 $this->rules,
                 fn (): PermissionMode => $this->permissionMode,
                 $this->guardian,
             ),
-        ];
+        ]));
     }
 
     /**
@@ -64,8 +69,11 @@ class PermissionEvaluator
             }
         }
 
-        // No check halted the chain — allow by default
-        return new PermissionResult(PermissionAction::Allow);
+        // No check halted the chain — deny by default (fail closed)
+        return new PermissionResult(
+            PermissionAction::Deny,
+            "Tool '{$toolName}' is not explicitly allowed by policy.",
+        );
     }
 
     /** Switch the active permission mode at runtime. */

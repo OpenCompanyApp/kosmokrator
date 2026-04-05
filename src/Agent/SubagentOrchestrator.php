@@ -410,8 +410,16 @@ class SubagentOrchestrator
         $terminalStates = ['done' => true, 'cancelled' => true, 'failed' => true];
         $pruned = 0;
 
+        // Build set of agent IDs that still have uncollected pending results
+        $pendingIds = [];
+        foreach ($this->pendingResults as $bucket) {
+            foreach ($bucket as $id => $_) {
+                $pendingIds[$id] = true;
+            }
+        }
+
         foreach ($this->stats as $id => $stats) {
-            if (isset($terminalStates[$stats->status])) {
+            if (isset($terminalStates[$stats->status]) && ! isset($pendingIds[$id])) {
                 unset($this->stats[$id], $this->agents[$id]);
                 $pruned++;
             }

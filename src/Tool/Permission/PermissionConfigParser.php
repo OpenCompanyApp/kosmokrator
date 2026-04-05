@@ -17,6 +17,16 @@ class PermissionConfigParser
      *
      * @return array{rules: PermissionRule[], blocked_paths: string[], guardian_safe_commands: string[], default_permission_mode: string}
      */
+    /** Default tools that are always allowed without prompting. */
+    private const DEFAULT_SAFE_TOOLS = [
+        'file_read', 'glob', 'grep',
+        'task_create', 'task_update', 'task_list', 'task_get',
+        'shell_read', 'shell_kill',
+        'memory_save', 'memory_search',
+        'ask_user', 'ask_choice',
+        'subagent',
+    ];
+
     public function parse(Repository $config): array
     {
         $rules = [];
@@ -26,7 +36,17 @@ class PermissionConfigParser
         $blockedPaths = $config->get('kosmokrator.tools.blocked_paths', []);
         $safeCommands = $config->get('kosmokrator.tools.guardian_safe_commands', []);
         $defaultMode = $config->get('kosmokrator.tools.default_permission_mode', 'guardian');
+        $safeTools = $config->get('kosmokrator.tools.safe_tools', self::DEFAULT_SAFE_TOOLS);
 
+        // Allow rules for safe tools (must come before Ask rules so RuleCheck finds them first)
+        foreach ($safeTools as $toolName) {
+            $rules[] = new PermissionRule(
+                toolName: $toolName,
+                action: PermissionAction::Allow,
+            );
+        }
+
+        // Ask rules for tools requiring approval
         foreach ($approvalRequired as $toolName) {
             $denyPatterns = in_array($toolName, ['bash', 'shell_start', 'shell_write'], true) ? $blockedCommands : [];
 

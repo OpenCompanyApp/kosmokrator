@@ -1040,6 +1040,11 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertStringContainsString('prune-cancel', $result);
 
         $this->assertSame('failed', $orchestrator->getStats('prune-cancel')->status);
+
+        // Collect pending results first — pruneCompleted() skips agents with uncollected results
+        $pending = $orchestrator->collectPendingResults('root');
+        $this->assertArrayHasKey('prune-cancel', $pending);
+
         $pruned = $orchestrator->pruneCompleted();
         $this->assertSame(1, $pruned, 'Cancelled agents are terminal and should be pruned');
         $this->assertNull($orchestrator->getStats('prune-cancel'));

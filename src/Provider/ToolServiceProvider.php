@@ -27,6 +27,7 @@ use Kosmokrator\Tool\Coding\ShellReadTool;
 use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Coding\ShellStartTool;
 use Kosmokrator\Tool\Coding\ShellWriteTool;
+use Kosmokrator\Tool\Permission\Check\ProjectBoundaryCheck;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
 use Kosmokrator\Tool\Permission\PermissionConfigParser;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -48,11 +49,17 @@ class ToolServiceProvider extends ServiceProvider
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
         $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
         $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
+        $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+        $allowedPaths = $this->resolveAllowedPaths(
+            $config->get('kosmokrator.tools.allowed_paths', []),
+        );
 
         $this->container->singleton(TaskStore::class);
         $this->container->singleton(PatchParser::class);
         $this->container->singleton(PatchApplier::class, fn () => new PatchApplier(
             $config->get('kosmokrator.tools.blocked_paths', []),
+            $projectRoot,
+            $allowedPaths,
         ));
         $this->container->singleton(ShellSessionManager::class, fn () => new ShellSessionManager(
             $this->container->make(LoggerInterface::class),
@@ -62,11 +69,10 @@ class ToolServiceProvider extends ServiceProvider
         ));
 
         $this->container->singleton(SessionGrants::class);
-        $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
+        $this->container->singleton(PermissionEvaluator::class, function () use ($config, $projectRoot, $allowedPaths) {
             $parser = new PermissionConfigParser;
             $parsed = $parser->parse($config);
 
-            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
             $guardian = new GuardianEvaluator($projectRoot, $parsed['guardian_safe_commands']);
             $defaultMode = PermissionMode::tryFrom($parsed['default_permission_mode']) ?? PermissionMode::Guardian;
 
@@ -75,6 +81,15 @@ class ToolServiceProvider extends ServiceProvider
                 $this->container->make(SessionGrants::class),
                 $parsed['blocked_paths'],
                 $guardian,
+                // Reference capture: $evaluator isn't assigned yet during construction,
+                // but the closure is only called later during evaluate() calls.
+                new ProjectBoundaryCheck(
+                    $projectRoot,
+                    $allowedPaths,
+                    function () use (&$evaluator) {
+                        return $evaluator->getPermissionMode();
+                    },
+                ),
             );
             $evaluator->setPermissionMode($defaultMode);
 
@@ -119,5 +134,35 @@ class ToolServiceProvider extends ServiceProvider
 
             return $registry;
         });
+    }
+
+    /**
+     * Resolve allowed_paths config entries to absolute paths.
+     * Expands ~, strips trailing glob wildcards, and filters unresolvable entries.
+     *
+     * @param  string[]  $rawPaths
+     * @return string[]
+     */
+    private function resolveAllowedPaths(array $rawPaths): array
+    {
+        $home = getenv('HOME') ?: '';
+        $resolved = [];
+
+        foreach ($rawPaths as $path) {
+            // Expand ~ to home directory
+            if ($home !== '' && str_starts_with($path, '~/')) {
+                $path = $home.substr($path, 1);
+            }
+
+            // Strip trailing glob wildcards (e.g. ~/.kosmokrator/* → ~/.kosmokrator)
+            $path = rtrim($path, '/*');
+
+            $real = realpath($path);
+            if ($real !== false) {
+                $resolved[] = $real;
+            }
+        }
+
+        return $resolved;
     }
 }

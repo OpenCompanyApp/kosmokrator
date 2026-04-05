@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Tool\Coding\Patch;
 
 use Kosmokrator\Exception\FileOperationException;
+use Kosmokrator\Tool\Permission\Check\ProjectBoundaryCheck;
 use Kosmokrator\Tool\Permission\PathResolver;
 use Kosmokrator\Tool\Permission\PermissionRule;
 
@@ -16,12 +17,27 @@ use Kosmokrator\Tool\Permission\PermissionRule;
  */
 final class PatchApplier
 {
+    private readonly ?string $resolvedProjectRoot;
+
+    /** @var string[] */
+    private readonly array $resolvedAllowedPaths;
+
     /**
      * @param  string[]  $blockedPaths  Glob patterns for paths that must not be touched
+     * @param  string|null  $projectRoot  Project root for boundary enforcement (null = no boundary)
+     * @param  string[]  $allowedPaths  Pre-resolved allowed path prefixes for boundary checking
      */
     public function __construct(
         private readonly array $blockedPaths = [],
-    ) {}
+        ?string $projectRoot = null,
+        array $allowedPaths = [],
+    ) {
+        // Resolve symlinks (e.g. /var → /private/var on macOS) to match PathResolver behavior
+        $this->resolvedProjectRoot = $projectRoot !== null ? (realpath($projectRoot) ?: $projectRoot) : null;
+        $this->resolvedAllowedPaths = array_values(array_filter(
+            array_map(fn (string $p) => realpath($p) ?: null, $allowedPaths),
+        ));
+    }
 
     /**
      * Execute a batch of patch operations and return a summary counts.
@@ -87,6 +103,12 @@ final class PatchApplier
                     throw new FileOperationException("Cannot access '{$path}' — matches blocked pattern '{$pattern}'.");
                 }
             }
+        }
+
+        // Project boundary enforcement
+        if ($this->resolvedProjectRoot !== null
+            && ! ProjectBoundaryCheck::pathWithinBoundary($path, $this->resolvedProjectRoot, $this->resolvedAllowedPaths)) {
+            throw new FileOperationException("Cannot access '{$path}' — path is outside the project boundary.");
         }
     }
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\Tool\Coding;
 
 /**
@@ -21,18 +23,29 @@ final class PathValidator
      */
     public static function resolveAndValidatePath(string $path, string $projectRoot): string
     {
+        // Resolve project root to its realpath (macOS /var → /private/var, etc.)
+        $resolvedRoot = realpath($projectRoot) ?: $projectRoot;
+
         $resolved = realpath($path);
 
         if ($resolved === false) {
-            // File doesn't exist yet — resolve parent directory + basename
-            $parent = realpath(dirname($path));
+            // File doesn't exist yet — walk up the directory tree to find an existing ancestor
+            $dir = dirname($path);
+            $basename = basename($path);
+            $parts = [];
 
-            if ($parent !== false) {
-                $resolved = $parent.'/'.basename($path);
+            while ($dir !== '/' && $dir !== '.' && realpath($dir) === false) {
+                $parts[] = basename($dir);
+                $dir = dirname($dir);
+            }
+
+            $resolvedDir = realpath($dir);
+            if ($resolvedDir !== false) {
+                $resolved = $resolvedDir.'/'.implode('/', array_reverse($parts)).($parts !== [] ? '/' : '').$basename;
             }
         }
 
-        if ($resolved === false || ! str_starts_with($resolved, $projectRoot)) {
+        if ($resolved === false || ! str_starts_with($resolved, $resolvedRoot)) {
             throw new \RuntimeException("Path escapes project root: {$path}");
         }
 

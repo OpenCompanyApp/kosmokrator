@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
-use Generator;
 use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Prism;
+use Prism\Prism\Streaming\Events\StreamEndEvent;
 use Prism\Prism\Streaming\Events\StreamEvent;
+use Prism\Prism\Streaming\Events\TextDeltaEvent;
+use Prism\Prism\Streaming\Events\ThinkingEvent;
+use Prism\Prism\Streaming\Events\ToolCallEvent;
 use Prism\Prism\Text\PendingRequest;
 use Prism\Prism\Text\Response;
 use Prism\Prism\Tool;
@@ -138,15 +141,54 @@ class PrismService implements LlmClientInterface
      *
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
-     * @return Generator<StreamEvent>
+     * @return \Generator<int, LlmStreamingEvent>
      */
-    public function stream(array $messages, array $tools = []): Generator
+    public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
     {
-        return (function () use ($messages, $tools): Generator {
+        return (function () use ($messages, $tools): \Generator {
             $this->relay->beforeRequest($this->provider, $this->model);
 
+            $reasoningBuffer = '';
+
             try {
-                yield from $this->buildRequest($messages, $tools)->asStream();
+                /** @var StreamEvent $event */
+                foreach ($this->buildRequest($messages, $tools)->asStream() as $event) {
+                    if ($event instanceof TextDeltaEvent) {
+                        // Flush accumulated reasoning before text starts
+                        if ($reasoningBuffer !== '') {
+                            yield LlmStreamingEvent::thinkingDelta($reasoningBuffer);
+                            $reasoningBuffer = '';
+                        }
+
+                        yield LlmStreamingEvent::textDelta($event->delta);
+                    } elseif ($event instanceof ThinkingEvent) {
+                        $reasoningBuffer .= $event->delta;
+                        // Flush reasoning in line-based chunks for smoother display
+                        while (($nl = strpos($reasoningBuffer, "\n")) !== false) {
+                            yield LlmStreamingEvent::thinkingDelta(substr($reasoningBuffer, 0, $nl + 1));
+                            $reasoningBuffer = substr($reasoningBuffer, $nl + 1);
+                        }
+                    } elseif ($event instanceof ToolCallEvent) {
+                        $tc = $event->toolCall;
+                        yield LlmStreamingEvent::toolCall($tc->id, $tc->name, $tc->arguments());
+                    } elseif ($event instanceof StreamEndEvent) {
+                        // Flush remaining reasoning
+                        if ($reasoningBuffer !== '') {
+                            yield LlmStreamingEvent::thinkingDelta($reasoningBuffer);
+                            $reasoningBuffer = '';
+                        }
+
+                        $usage = $event->usage;
+                        yield LlmStreamingEvent::streamEnd(
+                            $usage->promptTokens ?? 0,
+                            $usage->completionTokens ?? 0,
+                            $usage->cacheWriteInputTokens ?? 0,
+                            $usage->cacheReadInputTokens ?? 0,
+                            $usage->thoughtTokens ?? 0,
+                            $event->finishReason,
+                        );
+                    }
+                }
             } catch (\Throwable $e) {
                 throw $this->relay->normalizeError($e, $this->provider, $this->model);
             }

@@ -6,7 +6,6 @@ namespace Kosmokrator\Session;
 
 use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
-use Kosmokrator\Agent\MemorySelector;
 use Kosmokrator\Agent\ToolResultDeduplicator;
 use Kosmokrator\LLM\MessageSerializer;
 use Kosmokrator\Settings\SettingsManager;
@@ -18,6 +17,7 @@ use Psr\Log\LoggerInterface;
  *
  * Coordinates the repositories that back a single conversation session,
  * including history persistence, compaction, and project-scoped settings.
+ * Memory operations are delegated to MemoryManager.
  */
 class SessionManager
 {
@@ -29,6 +29,8 @@ class SessionManager
 
     private readonly MessageSerializer $serializer;
 
+    private readonly MemoryManager $memoryManager;
+
     public function __construct(
         private readonly SessionRepositoryInterface $sessions,
         private readonly MessageRepositoryInterface $messages,
@@ -38,6 +40,7 @@ class SessionManager
         private readonly ?SettingsManager $configSettings = null,
     ) {
         $this->serializer = new MessageSerializer;
+        $this->memoryManager = new MemoryManager($this->memories, log: $this->log);
     }
 
     /**
@@ -50,6 +53,7 @@ class SessionManager
         $this->project = $project;
         $this->projectScope = SettingsRepository::projectScope($project);
         $this->configSettings?->setProjectRoot($project);
+        $this->memoryManager->setProject($project);
     }
 
     /**
@@ -78,6 +82,7 @@ class SessionManager
     {
         $id = $this->sessions->create($this->project ?? getcwd(), $model);
         $this->currentSessionId = $id;
+        $this->memoryManager->setCurrentSessionId($id);
         $this->log->info('Session created', ['id' => $id]);
 
         return $id;
@@ -99,6 +104,7 @@ class SessionManager
     public function setCurrentSession(string $id): void
     {
         $this->currentSessionId = $id;
+        $this->memoryManager->setCurrentSessionId($id);
     }
 
     /**
@@ -208,6 +214,7 @@ class SessionManager
     public function resumeSession(string $sessionId): ConversationHistory
     {
         $this->currentSessionId = $sessionId;
+        $this->memoryManager->setCurrentSessionId($sessionId);
         $this->sessions->touch($sessionId);
 
         return $this->loadHistory($sessionId);
@@ -269,13 +276,21 @@ class SessionManager
     }
 
     /**
+     * Get the MemoryManager instance for direct access when needed.
+     */
+    public function memoryManager(): MemoryManager
+    {
+        return $this->memoryManager;
+    }
+
+    /**
      * Retrieve all active memories for the current project.
      *
      * @return array<int, array<string, mixed>>
      */
     public function getMemories(): array
     {
-        return $this->memories->forProject($this->project);
+        return $this->memoryManager->getMemories();
     }
 
     /**
@@ -297,16 +312,7 @@ class SessionManager
         bool $pinned = false,
         ?string $expiresAt = null,
     ): int {
-        return $this->memories->add(
-            type: $type,
-            title: $title,
-            content: $content,
-            project: $this->project,
-            sessionId: $this->currentSessionId,
-            memoryClass: $memoryClass,
-            pinned: $pinned,
-            expiresAt: $expiresAt,
-        );
+        return $this->memoryManager->addMemory($type, $title, $content, $memoryClass, $pinned, $expiresAt);
     }
 
     /**
@@ -317,7 +323,7 @@ class SessionManager
      */
     public function findMemory(int $id): ?array
     {
-        return $this->memories->find($id);
+        return $this->memoryManager->findMemory($id);
     }
 
     /**
@@ -338,7 +344,7 @@ class SessionManager
         ?bool $pinned = null,
         ?string $expiresAt = null,
     ): void {
-        $this->memories->update($id, $content, $title, $memoryClass, $pinned, $expiresAt);
+        $this->memoryManager->updateMemory($id, $content, $title, $memoryClass, $pinned, $expiresAt);
     }
 
     /**
@@ -352,7 +358,7 @@ class SessionManager
      */
     public function searchMemories(?string $type = null, ?string $query = null, int $limit = 20, ?string $memoryClass = null): array
     {
-        return $this->memories->search($this->project, $type, $query, $limit, $memoryClass);
+        return $this->memoryManager->searchMemories($type, $query, $limit, $memoryClass);
     }
 
     /**
@@ -362,7 +368,7 @@ class SessionManager
      */
     public function deleteMemory(int $id): void
     {
-        $this->memories->delete($id);
+        $this->memoryManager->deleteMemory($id);
     }
 
     /**
@@ -374,7 +380,7 @@ class SessionManager
      */
     public function getRelevantMemories(?string $query = null, int $limit = 6): array
     {
-        return $this->selectRelevantMemories($query, $limit, true);
+        return $this->memoryManager->getRelevantMemories($query, $limit);
     }
 
     /**
@@ -387,14 +393,7 @@ class SessionManager
      */
     public function selectRelevantMemories(?string $query = null, int $limit = 6, bool $markSurfaced = true): array
     {
-        $selector = new MemorySelector;
-        $selected = $selector->select($this->getMemories(), $query, $limit);
-        if ($markSurfaced) {
-            $ids = array_map(fn (array $memory): int => (int) $memory['id'], $selected);
-            $this->memories->touchSurfaced($ids);
-        }
-
-        return $selected;
+        return $this->memoryManager->selectRelevantMemories($query, $limit, $markSurfaced);
     }
 
     /**
@@ -420,10 +419,7 @@ class SessionManager
      */
     public function consolidateMemories(): int
     {
-        $removed = $this->memories->pruneExpired($this->project);
-        $removed += $this->memories->trimCompactionMemories($this->project, 10);
-
-        return $removed;
+        return $this->memoryManager->consolidateMemories();
     }
 
     /**
@@ -438,6 +434,48 @@ class SessionManager
         }
 
         return $this->messages->sumTokens($this->currentSessionId);
+    }
+
+    /**
+     * Delete a session and all its messages by ID.
+     *
+     * If the deleted session is the current one, the current session ID is cleared.
+     *
+     * @param  string  $id  Full session UUID or unique prefix
+     * @return bool True if the session was found and deleted
+     */
+    public function deleteSession(string $id): bool
+    {
+        $session = $this->sessions->find($id) ?? $this->sessions->findByPrefix($id);
+        if ($session === null) {
+            return false;
+        }
+
+        $this->sessions->delete($session['id']);
+
+        if ($this->currentSessionId === $session['id']) {
+            $this->currentSessionId = null;
+            $this->memoryManager->setCurrentSessionId(null);
+        }
+
+        $this->log->info('Session deleted', ['id' => $session['id']]);
+
+        return true;
+    }
+
+    /**
+     * Delete old sessions to prevent unbounded database growth.
+     *
+     * @param  int  $olderThanDays  Delete sessions not updated in this many days
+     * @param  int  $keepPerProject  Always keep at least this many sessions per project
+     * @return int Number of sessions deleted
+     */
+    public function cleanupOldSessions(int $olderThanDays = 30, int $keepPerProject = 5): int
+    {
+        $count = $this->sessions->cleanup($olderThanDays, $keepPerProject);
+        $this->log->info('Session cleanup completed', ['deleted' => $count]);
+
+        return $count;
     }
 
     /**

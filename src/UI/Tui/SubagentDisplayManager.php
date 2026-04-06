@@ -122,16 +122,19 @@ final class SubagentDisplayManager
             return;
         }
 
-        // Fresh container at current conversation position — old one stays with its results
-        $this->container = new ContainerWidget;
-        $this->container->setId('subagent-container');
-        try {
-            $this->conversation->add($this->container);
-        } catch (\Throwable $e) {
-            $this->log?->warning('Failed to add subagent container', ['error' => $e->getMessage()]);
-            $this->container = null;
+        // Reuse existing container if agents are already running — avoids duplicate trees
+        if ($this->container === null || $this->batchDisplayed) {
+            $this->container = new ContainerWidget;
+            $this->container->setId('subagent-container');
+            try {
+                $this->conversation->add($this->container);
+            } catch (\Throwable $e) {
+                $this->log?->warning('Failed to add subagent container', ['error' => $e->getMessage()]);
+                $this->container = null;
 
-            return;
+                return;
+            }
+            $this->treeWidget = null;
         }
         $this->batchDisplayed = false;
 
@@ -140,11 +143,12 @@ final class SubagentDisplayManager
         $text = $this->renderLiveTree($this->treeBuilder->buildSpawnTree($entries));
 
         if ($this->treeWidget !== null) {
-            $container->remove($this->treeWidget);
+            $this->treeWidget->setText($text);
+        } else {
+            $this->treeWidget = new TextWidget($text);
+            $this->treeWidget->setId('subagent-tree');
+            $container->add($this->treeWidget);
         }
-        $this->treeWidget = new TextWidget($text);
-        $this->treeWidget->setId('subagent-tree');
-        $container->add($this->treeWidget);
         ($this->renderCallback)();
     }
 
@@ -183,7 +187,7 @@ final class SubagentDisplayManager
         $this->loader = new CancellableLoaderWidget("{$blue}{$label}{$r}");
         $this->loader->addStyleClass('subagent-loader');
         $this->loader->setSpinner('cosmos');
-        $this->loader->setIntervalMs(120);
+        $this->loader->setIntervalMs(50);
         $this->startTime = microtime(true);
         $this->loaderBreathTick = 0;
         $this->cachedLoaderLabel = $label;
@@ -201,8 +205,8 @@ final class SubagentDisplayManager
             }
         }
 
-        // Breathing timer — blue color modulation at ~20fps, label update every ~1s
-        $this->elapsedTimerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {
+        // Breathing timer — blue color modulation at ~30fps, label update every ~1s
+        $this->elapsedTimerId = EventLoop::repeat(0.033, function () use ($dim, $r): void {
             if ($this->loader === null) {
                 return;
             }
@@ -223,8 +227,8 @@ final class SubagentDisplayManager
                 $color = Theme::warning();
             }
 
-            // Update label from tree data every ~1s (every 20th tick)
-            if ($this->loaderBreathTick % 20 === 0 && $this->treeProvider !== null) {
+            // Update label from tree data every ~1s (every 30th tick at 33ms)
+            if ($this->loaderBreathTick % 30 === 0 && $this->treeProvider !== null) {
                 try {
                     $tree = ($this->treeProvider)();
                     if ($tree !== []) {

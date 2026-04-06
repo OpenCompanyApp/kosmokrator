@@ -47,8 +47,9 @@ PATCH;
         $this->assertSame('Scope', $preview['sections'][1]['label']);
         $this->assertSame('writes workspace files', $preview['sections'][1]['lines'][0]);
         $this->assertSame('Preview', $preview['sections'][2]['label']);
-        $this->assertContains('@@', $preview['sections'][2]['lines']);
-        $this->assertContains('- old line', $preview['sections'][2]['lines']);
-        $this->assertContains('+ new line', $preview['sections'][2]['lines']);
+        $previewLines = implode("\n", $preview['sections'][2]['lines']);
+        $this->assertStringContainsString('@@', $previewLines);
+        $this->assertStringContainsString('- old line', $previewLines);
+        $this->assertStringContainsString('+ new line', $previewLines);
     }
 }

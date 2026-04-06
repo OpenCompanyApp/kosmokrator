@@ -119,16 +119,43 @@ final class PermissionPreviewBuilder
      */
     private function previewEdit(array $args): array
     {
-        $old = trim((string) ($args['old_string'] ?? ''));
-        $new = trim((string) ($args['new_string'] ?? ''));
+        $old = (string) ($args['old_string'] ?? '');
+        $new = (string) ($args['new_string'] ?? '');
+
+        if (trim($old) === '' && trim($new) === '') {
+            return ['edits existing file content'];
+        }
 
         $lines = [];
-        if ($old !== '') {
-            $lines[] = '- '.$this->truncateLine($this->firstMeaningfulLine($old));
+        $maxLines = 6;
+
+        // Show removed lines (red-tinted)
+        foreach (preg_split('/\R/', $old) ?: [] as $oldLine) {
+            $trimmed = trim($oldLine);
+            if ($trimmed === '') {
+                continue;
+            }
+            $lines[] = Theme::error().'- '.$this->truncateLine($trimmed);
+            if (count($lines) >= $maxLines) {
+                break;
+            }
         }
-        if ($new !== '') {
-            $lines[] = '+ '.$this->truncateLine($this->firstMeaningfulLine($new));
+
+        // Show added lines (green-tinted)
+        $removedCount = count($lines);
+        foreach (preg_split('/\R/', $new) ?: [] as $newLine) {
+            $trimmed = trim($newLine);
+            if ($trimmed === '') {
+                continue;
+            }
+            $lines[] = Theme::success().'+ '.$this->truncateLine($trimmed);
+            if (count($lines) >= $maxLines + $removedCount) {
+                break;
+            }
         }
+
+        // Cap total lines
+        $lines = array_slice($lines, 0, $maxLines);
 
         return $lines !== [] ? $lines : ['edits existing file content'];
     }
@@ -138,17 +165,26 @@ final class PermissionPreviewBuilder
      */
     private function previewText(string $text): array
     {
+        $allLines = preg_split('/\R/', trim($text)) ?: [];
+        $maxPreview = 8;
         $lines = [];
-        foreach (preg_split('/\R/', trim($text)) ?: [] as $line) {
+
+        foreach ($allLines as $line) {
             $trimmed = trim($line);
             if ($trimmed === '') {
                 continue;
             }
 
-            $lines[] = $this->truncateLine($trimmed);
-            if (count($lines) === 3) {
+            $lines[] = Theme::text().$this->truncateLine($trimmed);
+            if (count($lines) === $maxPreview) {
                 break;
             }
+        }
+
+        $totalNonEmpty = count(array_filter($allLines, fn (string $l): bool => trim($l) !== ''));
+        if ($totalNonEmpty > $maxPreview) {
+            $remaining = $totalNonEmpty - $maxPreview;
+            $lines[] = Theme::dim()."… ({$remaining} more lines)";
         }
 
         return $lines !== [] ? $lines : ['no preview available'];
@@ -181,6 +217,7 @@ final class PermissionPreviewBuilder
     private function previewPatch(string $patch): array
     {
         $preview = [];
+        $maxLines = 10;
         foreach (preg_split('/\R/', $patch) ?: [] as $line) {
             $trimmed = rtrim($line);
             if ($trimmed === '' || str_starts_with($trimmed, '*** ')) {
@@ -188,12 +225,16 @@ final class PermissionPreviewBuilder
             }
 
             if ($trimmed === '@@' || str_starts_with($trimmed, '@@ ')) {
-                $preview[] = $this->truncateLine($trimmed);
+                $preview[] = Theme::dim().$this->truncateLine($trimmed);
+            } elseif ($trimmed[0] === '+') {
+                $preview[] = Theme::success().$this->truncateLine($trimmed);
+            } elseif ($trimmed[0] === '-') {
+                $preview[] = Theme::error().$this->truncateLine($trimmed);
             } elseif (in_array($trimmed[0], ['+', '-', ' '], true)) {
-                $preview[] = $this->truncateLine($trimmed);
+                $preview[] = Theme::text().$this->truncateLine($trimmed);
             }
 
-            if (count($preview) === 4) {
+            if (count($preview) === $maxLines) {
                 break;
             }
         }

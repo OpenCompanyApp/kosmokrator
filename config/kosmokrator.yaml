@@ -136,7 +136,9 @@ tools:
     - "*id_rsa*"
     - "*id_ed25519*"
     - "*.key"
-  allowed_paths: []
+  allowed_paths:
+    - "~/.kosmokrator"
+    - "/tmp"
   default_permission_mode: guardian
   guardian_safe_commands:
     - "git *"

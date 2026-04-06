@@ -138,4 +138,86 @@ class SessionRepository implements SessionRepositoryInterface
 
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
+
+    /**
+     * Delete a session and all its associated messages.
+     *
+     * Uses a transaction to ensure atomicity: messages are deleted first (via FK
+     * or explicit DELETE), then the session row itself.
+     */
+    public function delete(string $id): void
+    {
+        $pdo = $this->db->connection();
+        $pdo->beginTransaction();
+
+        try {
+            $stmt = $pdo->prepare('DELETE FROM messages WHERE session_id = :id');
+            $stmt->execute(['id' => $id]);
+
+            $stmt = $pdo->prepare('DELETE FROM sessions WHERE id = :id');
+            $stmt->execute(['id' => $id]);
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Delete sessions older than a given age, keeping a minimum number per project.
+     *
+     * Protected sessions (those within the keep-alive window or the per-project minimum)
+     * are never deleted.
+     *
+     * @param  int  $olderThanDays  Delete sessions not updated in this many days
+     * @param  int  $keepPerProject  Always keep at least this many recent sessions per project
+     * @return int Number of sessions deleted
+     */
+    public function cleanup(int $olderThanDays, int $keepPerProject = 5): int
+    {
+        $pdo = $this->db->connection();
+
+        // Use ROW_NUMBER to correctly partition per project, then exclude protected sessions
+        $stmt = $pdo->prepare('
+            SELECT id FROM sessions
+            WHERE updated_at < :cutoff
+              AND id NOT IN (
+                  SELECT id FROM (
+                      SELECT id, ROW_NUMBER() OVER (PARTITION BY project ORDER BY updated_at DESC) AS rn
+                      FROM sessions
+                  ) ranked
+                  WHERE rn <= :keep
+              )
+        ');
+        $cutoff = number_format(microtime(true) - ($olderThanDays * 86400), 6, '.', '');
+        $stmt->bindValue('cutoff', $cutoff);
+        $stmt->bindValue('keep', $keepPerProject, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $ids = array_map(fn (array $row): string => $row['id'], $stmt->fetchAll());
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        // Delete messages and sessions in bulk
+        $pdo->beginTransaction();
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $stmt = $pdo->prepare("DELETE FROM messages WHERE session_id IN ({$placeholders})");
+            $stmt->execute($ids);
+
+            $stmt = $pdo->prepare("DELETE FROM sessions WHERE id IN ({$placeholders})");
+            $stmt->execute($ids);
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        return count($ids);
+    }
 }

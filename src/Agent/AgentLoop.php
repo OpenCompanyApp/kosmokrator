@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\Cancellation;
 use Amp\CancelledException;
 use Illuminate\Contracts\Events\Dispatcher;
 use Kosmokrator\Agent\Event\ContextCompacted;
@@ -23,6 +24,7 @@ use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\ToolCall;
+use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -47,17 +49,7 @@ class AgentLoop
 
     private AgentMode $mode = AgentMode::Edit;
 
-    private int $sessionTokensIn = 0;
-
-    private int $sessionTokensOut = 0;
-
-    private int $sessionCacheReadInputTokens = 0;
-
-    private int $sessionCacheWriteInputTokens = 0;
-
-    private int $lastCacheReadInputTokens = 0;
-
-    private int $lastCacheWriteInputTokens = 0;
+    private SessionTokenTracker $tokens;
 
     private ?AgentContext $agentContext = null;
 
@@ -89,6 +81,7 @@ class AgentLoop
         private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
     ) {
         $this->history = new ConversationHistory;
+        $this->tokens = new SessionTokenTracker;
         $this->stuckDetector = new StuckDetector;
         $this->toolExecutor = new ToolExecutor($ui, $log, $permissions, $truncator, $treeBuilder);
         $this->contextManager = new ContextManager(
@@ -108,8 +101,8 @@ class AgentLoop
         // Restore cumulative token totals from persisted messages
         if ($this->sessionManager !== null) {
             $totals = $this->sessionManager->getSessionTokenTotals();
-            $this->sessionTokensIn = $totals['tokens_in'];
-            $this->sessionTokensOut = $totals['tokens_out'];
+            $this->tokens->tokensIn = $totals['tokens_in'];
+            $this->tokens->tokensOut = $totals['tokens_out'];
         }
     }
 
@@ -206,8 +199,7 @@ class AgentLoop
                 \Amp\delay(0);
 
                 [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history, $this->mode, $this->agentContext);
-                $this->sessionTokensIn += $compactIn;
-                $this->sessionTokensOut += $compactOut;
+                $this->tokens->accumulate($compactIn, $compactOut);
                 if ($compactIn > 0 || $compactOut > 0) {
                     $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
                 }
@@ -218,36 +210,35 @@ class AgentLoop
 
                 try {
                     $cancellation = $this->ui->getCancellation();
-                    $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+                    $responseData = $this->callLlm($cancellation);
+
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Tools), $this->log);
                     $trimAttempts = 0;
 
-                    $fullText = $response->text;
-                    $toolCalls = $response->toolCalls;
-                    $finishReason = $response->finishReason;
-                    $tokensIn = $response->promptTokens;
-                    $tokensOut = $response->completionTokens;
-                    $cacheReadInputTokens = $response->cacheReadInputTokens;
-                    $cacheWriteInputTokens = $response->cacheWriteInputTokens;
+                    $fullText = $responseData->text;
+                    $toolCalls = $responseData->toolCalls;
+                    $finishReason = $responseData->finishReason;
+                    $tokensIn = $responseData->tokensIn;
+                    $tokensOut = $responseData->tokensOut;
+                    $cacheReadInputTokens = $responseData->cacheReadInputTokens;
+                    $cacheWriteInputTokens = $responseData->cacheWriteInputTokens;
 
                     // Accumulate session-level token usage
-                    $this->sessionTokensIn += $tokensIn;
-                    $this->sessionTokensOut += $tokensOut;
-                    $this->sessionCacheReadInputTokens += $cacheReadInputTokens;
-                    $this->sessionCacheWriteInputTokens += $cacheWriteInputTokens;
-                    $this->lastCacheReadInputTokens = $cacheReadInputTokens;
-                    $this->lastCacheWriteInputTokens = $cacheWriteInputTokens;
+                    $this->tokens->accumulate($tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
 
                     $this->events?->dispatch(new LlmResponseReceived(
                         $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens,
                         $this->contextManager->getModelName(),
                     ));
 
-                    if ($response->reasoningContent !== '') {
-                        SafeDisplay::call(fn () => $this->ui->showReasoningContent($response->reasoningContent), $this->log);
+                    // Show reasoning as a single collapsed block (both streaming and non-streaming)
+                    // Only show reasoning if it has meaningful content (skip trivial fragments)
+                    if (mb_strlen(trim($responseData->reasoningContent)) > 40) {
+                        SafeDisplay::call(fn () => $this->ui->showReasoningContent($responseData->reasoningContent), $this->log);
                     }
 
-                    if ($fullText !== '') {
+                    // For non-streaming path, display the full text; streaming already showed it
+                    if ($fullText !== '' && ! $this->llm->supportsStreaming()) {
                         SafeDisplay::call(fn () => $this->ui->streamChunk($fullText), $this->log);
                     }
                 } catch (CancelledException $e) {
@@ -259,28 +250,8 @@ class AgentLoop
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
 
                     // Context window overflow — compact or trim and retry
-                    if ($this->isContextOverflow($e) && $trimAttempts < 3) {
-                        $trimAttempts++;
+                    if ($this->handleContextOverflow($e, $trimAttempts)) {
                         $round--;
-                        $messagesBefore = count($this->history->messages());
-
-                        if ($this->compactor !== null && $trimAttempts === 1) {
-                            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
-                            $this->sessionTokensIn += $cIn;
-                            $this->sessionTokensOut += $cOut;
-                            if ($cIn > 0 || $cOut > 0) {
-                                $this->resetToolCachesAfterCompaction();
-                                $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
-                            }
-                        } else {
-                            $this->history->trimOldest();
-                        }
-
-                        $this->log->warning('Context overflow, compacted/trimmed', [
-                            'attempt' => $trimAttempts,
-                            'messages_before' => $messagesBefore,
-                            'messages_after' => count($this->history->messages()),
-                        ]);
 
                         continue;
                     }
@@ -306,8 +277,6 @@ class AgentLoop
                 if ($fullText !== '') {
                     SafeDisplay::call(fn () => $this->ui->streamComplete(), $this->log);
                 }
-
-                // If there were tool calls, execute them and loop
                 if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
                     $this->history->addAssistant($fullText, $toolCalls);
                     $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
@@ -318,13 +287,7 @@ class AgentLoop
                             $this->mode, $this->agentContext, $this->stats,
                         );
                     } catch (\Throwable $e) {
-                        $this->log->error('Tool execution failed', ['error' => $e->getMessage()]);
-                        SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
-                        SafeDisplay::call(fn () => $this->ui->showError('Tool execution error: '.$e->getMessage()), $this->log);
-                        $toolResults = array_map(
-                            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
-                            $toolCalls,
-                        );
+                        $toolResults = $this->handleToolExecutionError($e, $toolCalls, interactive: true);
                     }
 
                     $this->history->addToolResults($toolResults);
@@ -362,32 +325,25 @@ class AgentLoop
                     continue;
                 }
 
-                // No tool calls — final response
-                $this->log->info('LLM response complete', [
-                    'model' => $this->contextManager->getModelName(),
-                    'tokens_in' => $tokensIn,
-                    'tokens_out' => $tokensOut,
-                    'cache_read_input_tokens' => $cacheReadInputTokens,
-                    'cache_write_input_tokens' => $cacheWriteInputTokens,
-                    'rounds' => $round,
-                ]);
-                $this->history->addAssistant($fullText);
-                $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
-                $modelName = $this->contextManager->getModelName();
-                if ($this->compactor !== null && $this->contextManager->shouldCompactHistory($this->history, $this->mode, $this->agentContext)) {
-                    [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
-                    $this->sessionTokensIn += $cIn;
-                    $this->sessionTokensOut += $cOut;
-                    if ($cIn > 0 || $cOut > 0) {
-                        $this->resetToolCachesAfterCompaction();
-                        $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
-                    }
+                // Truncated response — max_tokens hit, continue to get more
+                if ($finishReason === FinishReason::Length) {
+                    $this->log->warning('LLM response truncated (max_tokens)', ['round' => $round]);
+                    $this->history->addAssistant($fullText);
+                    $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
+
+                    // Ask the LLM to continue from where it left off
+                    $this->history->addUser('Continue from where you left off. Do not repeat what you already said.');
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Thinking), $this->log);
+
+                    continue;
                 }
 
-                $this->logMemoryUsage();
+                // No tool calls — final response
+                $this->handleFinalResponse($fullText, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $round);
 
                 SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
 
+                $modelName = $this->contextManager->getModelName();
                 SafeDisplay::call(fn () => $this->ui->showStatus(
                     $this->formatStatusModelLabel($modelName),
                     $tokensIn,
@@ -429,14 +385,13 @@ class AgentLoop
 
                 $this->log->debug('Headless round start', [
                     'round' => $round,
-                    'tokens_in' => $this->sessionTokensIn,
-                    'tokens_out' => $this->sessionTokensOut,
+                    'tokens_in' => $this->tokens->tokensIn,
+                    'tokens_out' => $this->tokens->tokensOut,
                     'history_messages' => count($this->history->messages()),
                 ]);
 
                 [$compactIn, $compactOut] = $this->contextManager->headlessPreFlightCheck($this->history, $this->mode, $this->agentContext);
-                $this->sessionTokensIn += $compactIn;
-                $this->sessionTokensOut += $compactOut;
+                $this->tokens->accumulate($compactIn, $compactOut);
                 if ($compactIn > 0 || $compactOut > 0) {
                     $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
                 }
@@ -445,21 +400,20 @@ class AgentLoop
 
                 try {
                     $cancellation = $this->ui->getCancellation();
-                    $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+                    $responseData = $this->callLlm($cancellation);
                     $trimAttempts = 0;
 
-                    $fullText = $response->text;
-                    $toolCalls = $response->toolCalls;
-                    $finishReason = $response->finishReason;
+                    $fullText = $responseData->text;
+                    $toolCalls = $responseData->toolCalls;
+                    $finishReason = $responseData->finishReason;
 
-                    $this->sessionTokensIn += $response->promptTokens;
-                    $this->sessionTokensOut += $response->completionTokens;
-                    $this->stats?->addTokens($response->promptTokens, $response->completionTokens);
+                    $this->tokens->accumulate($responseData->tokensIn, $responseData->tokensOut, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens);
+                    $this->stats?->addTokens($responseData->tokensIn, $responseData->tokensOut);
                     $this->stats?->touchActivity();
 
                     $this->events?->dispatch(new LlmResponseReceived(
-                        $response->promptTokens, $response->completionTokens,
-                        $response->cacheReadInputTokens, $response->cacheWriteInputTokens,
+                        $responseData->tokensIn, $responseData->tokensOut,
+                        $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens,
                         $this->contextManager->getModelName(),
                     ));
 
@@ -468,8 +422,8 @@ class AgentLoop
                         'finish_reason' => $finishReason->value,
                         'tool_calls' => count($toolCalls),
                         'text_length' => strlen($fullText),
-                        'prompt_tokens' => $response->promptTokens,
-                        'completion_tokens' => $response->completionTokens,
+                        'prompt_tokens' => $responseData->tokensIn,
+                        'completion_tokens' => $responseData->tokensOut,
                     ]);
                 } catch (CancelledException $e) {
                     $watchdogReason = $this->watchdogCancellationReason($e);
@@ -490,25 +444,8 @@ class AgentLoop
 
                     return '(cancelled)';
                 } catch (\Throwable $e) {
-                    if ($this->isContextOverflow($e) && $trimAttempts < 3) {
-                        $trimAttempts++;
+                    if ($this->handleContextOverflow($e, $trimAttempts)) {
                         $round--;
-                        $messagesBefore = count($this->history->messages());
-                        if ($this->compactor !== null && $trimAttempts === 1) {
-                            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
-                            $this->sessionTokensIn += $cIn;
-                            $this->sessionTokensOut += $cOut;
-                            if ($cIn > 0 || $cOut > 0) {
-                                $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
-                            }
-                        } else {
-                            $this->history->trimOldest();
-                        }
-                        $this->log->warning('Headless context overflow, trimmed', [
-                            'attempt' => $trimAttempts,
-                            'messages_before' => $messagesBefore,
-                            'messages_after' => count($this->history->messages()),
-                        ]);
 
                         continue;
                     }
@@ -527,11 +464,7 @@ class AgentLoop
                             $this->mode, $this->agentContext, $this->stats,
                         );
                     } catch (\Throwable $e) {
-                        $this->log->error('Headless tool execution failed', ['error' => $e->getMessage()]);
-                        $toolResults = array_map(
-                            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
-                            $toolCalls,
-                        );
+                        $toolResults = $this->handleToolExecutionError($e, $toolCalls, interactive: false);
                     }
 
                     $this->history->addToolResults($toolResults);
@@ -583,14 +516,8 @@ class AgentLoop
                 }
 
                 // Final response
-                $this->log->info('Headless agent complete', [
-                    'rounds' => $round,
-                    'total_tokens_in' => $this->sessionTokensIn,
-                    'total_tokens_out' => $this->sessionTokensOut,
-                    'response_length' => strlen($fullText),
-                ]);
+                $this->handleFinalResponse($fullText, $responseData->tokensIn, $responseData->tokensOut, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens, $round);
                 $this->stats?->touchActivity();
-                $this->history->addAssistant($fullText);
 
                 return $fullText;
             }
@@ -618,8 +545,8 @@ class AgentLoop
     /** Compute session cost combining this loop's tokens with subagent orchestrator totals. */
     private function calculateSessionCost(bool $display): float
     {
-        $tokensIn = $this->sessionTokensIn;
-        $tokensOut = $this->sessionTokensOut;
+        $tokensIn = $this->tokens->tokensIn;
+        $tokensOut = $this->tokens->tokensOut;
 
         if ($this->agentContext !== null) {
             $sub = $this->agentContext->orchestrator->totalTokens();
@@ -631,25 +558,25 @@ class AgentLoop
             $this->contextManager->getModelName(),
             $tokensIn,
             $tokensOut,
-            $this->sessionCacheReadInputTokens,
-            $this->sessionCacheWriteInputTokens,
+            $this->tokens->cacheReadInputTokens,
+            $this->tokens->cacheWriteInputTokens,
         ) : $this->estimateCost(
             $this->contextManager->getModelName(),
             $tokensIn,
             $tokensOut,
-            $this->sessionCacheReadInputTokens,
-            $this->sessionCacheWriteInputTokens,
+            $this->tokens->cacheReadInputTokens,
+            $this->tokens->cacheWriteInputTokens,
         );
     }
 
     public function getSessionTokensIn(): int
     {
-        return $this->sessionTokensIn;
+        return $this->tokens->tokensIn;
     }
 
     public function getSessionTokensOut(): int
     {
-        return $this->sessionTokensOut;
+        return $this->tokens->tokensOut;
     }
 
     private function watchdogCancellationReason(CancelledException $e): ?string
@@ -679,12 +606,7 @@ class AgentLoop
      */
     public function resetSessionCost(): void
     {
-        $this->sessionTokensIn = 0;
-        $this->sessionTokensOut = 0;
-        $this->sessionCacheReadInputTokens = 0;
-        $this->sessionCacheWriteInputTokens = 0;
-        $this->lastCacheReadInputTokens = 0;
-        $this->lastCacheWriteInputTokens = 0;
+        $this->tokens->reset();
     }
 
     /**
@@ -760,6 +682,116 @@ class AgentLoop
                 $tool->resetCache();
             }
         }
+    }
+
+    /**
+     * Call the LLM using streaming or non-streaming path as appropriate.
+     * Returns a normalized ResponseData regardless of which path was used.
+     */
+    private function callLlm(?Cancellation $cancellation): ResponseData
+    {
+        if ($this->llm->supportsStreaming()) {
+            [$fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent] =
+                $this->streamResponse($this->history->messages(), $this->tools, $cancellation);
+
+            return new ResponseData($fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent);
+        }
+
+        $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+
+        return new ResponseData(
+            $response->text,
+            $response->toolCalls,
+            $response->finishReason,
+            $response->promptTokens,
+            $response->completionTokens,
+            $response->cacheReadInputTokens,
+            $response->cacheWriteInputTokens,
+            $response->reasoningContent,
+        );
+    }
+
+    /**
+     * Handle context overflow by compacting or trimming history.
+     * Returns true if recovery succeeded and the loop should retry.
+     */
+    private function handleContextOverflow(\Throwable $e, int &$trimAttempts): bool
+    {
+        if (! $this->isContextOverflow($e) || $trimAttempts >= 3) {
+            return false;
+        }
+
+        $trimAttempts++;
+        $messagesBefore = count($this->history->messages());
+
+        if ($this->compactor !== null && $trimAttempts === 1) {
+            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
+            $this->tokens->accumulate($cIn, $cOut);
+            if ($cIn > 0 || $cOut > 0) {
+                $this->resetToolCachesAfterCompaction();
+                $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
+            }
+        } else {
+            $this->history->trimOldest();
+        }
+
+        $this->log->warning('Context overflow, compacted/trimmed', [
+            'attempt' => $trimAttempts,
+            'messages_before' => $messagesBefore,
+            'messages_after' => count($this->history->messages()),
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Handle a tool execution error by logging, optionally displaying UI feedback,
+     * and producing error results for each tool call.
+     *
+     * @param  ToolCall[]  $toolCalls
+     * @return array<int, ToolResult>
+     */
+    private function handleToolExecutionError(\Throwable $e, array $toolCalls, bool $interactive): array
+    {
+        $this->log->error($interactive ? 'Tool execution failed' : 'Headless tool execution failed', ['error' => $e->getMessage()]);
+
+        if ($interactive) {
+            SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+            SafeDisplay::call(fn () => $this->ui->showError('Tool execution error: '.$e->getMessage()), $this->log);
+        }
+
+        return array_map(
+            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
+            $toolCalls,
+        );
+    }
+
+    /**
+     * Handle the final LLM response: log completion, persist to history, and optionally compact.
+     */
+    private function handleFinalResponse(string $fullText, int $tokensIn, int $tokensOut, int $cacheRead, int $cacheWrite, int $round): void
+    {
+        $this->log->info('LLM response complete', [
+            'model' => $this->contextManager->getModelName(),
+            'tokens_in' => $tokensIn,
+            'tokens_out' => $tokensOut,
+            'cache_read_input_tokens' => $cacheRead,
+            'cache_write_input_tokens' => $cacheWrite,
+            'rounds' => $round,
+        ]);
+        $this->history->addAssistant($fullText);
+        $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
+
+        if ($this->compactor !== null && $this->contextManager->shouldCompactHistory($this->history, $this->mode, $this->agentContext)) {
+            [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
+            $this->tokens->accumulate($cIn, $cOut);
+            if ($cIn > 0 || $cOut > 0) {
+                $this->resetToolCachesAfterCompaction();
+                $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
+            }
+        }
+
+        $this->logMemoryUsage();
     }
 
     /** Heuristic check: does this exception indicate the context window was exceeded? */
@@ -885,12 +917,77 @@ class AgentLoop
         }
     }
 
-    /** Manually trigger history compaction (e.g. from a /compact slash command). */
+    /**
+     * Stream an LLM response, rendering text deltas line-by-line as they arrive.
+     *
+     * Returns the assembled [fullText, toolCalls, finishReason, tokensIn, tokensOut,
+     * cacheReadInputTokens, cacheWriteInputTokens, reasoningContent].
+     *
+     * @return array{string, ToolCall[], FinishReason, int, int, int, int, string}
+     */
+    private function streamResponse(array $messages, array $tools, ?Cancellation $cancellation): array
+    {
+        $fullText = '';
+        $reasoningContent = '';
+        $toolCalls = [];
+        $tokensIn = 0;
+        $tokensOut = 0;
+        $cacheReadInputTokens = 0;
+        $cacheWriteInputTokens = 0;
+        $finishReason = FinishReason::Stop;
+
+        // Buffer for line-by-line rendering: accumulate partial lines, flush on \n
+        $lineBuffer = '';
+
+        foreach ($this->llm->stream($messages, $tools, $cancellation) as $event) {
+            if ($event->type === 'text_delta') {
+                $fullText .= $event->delta;
+                $lineBuffer .= $event->delta;
+
+                // Flush line-by-line: yield complete lines to the renderer
+                while (($nl = strpos($lineBuffer, "\n")) !== false) {
+                    $line = substr($lineBuffer, 0, $nl + 1);
+                    $lineBuffer = substr($lineBuffer, $nl + 1);
+                    SafeDisplay::call(fn () => $this->ui->streamChunk($line), $this->log);
+                }
+            } elseif ($event->type === 'thinking_delta') {
+                // Accumulate reasoning silently — displayed once after stream completes
+                $reasoningContent .= $event->delta;
+            } elseif ($event->type === 'tool_call') {
+                $toolCalls[] = new ToolCall(
+                    id: $event->toolCall['id'],
+                    name: $event->toolCall['name'],
+                    arguments: $event->toolCall['arguments'],
+                );
+            } elseif ($event->type === 'stream_end') {
+                $tokensIn = $event->usage['prompt_tokens'] ?? 0;
+                $tokensOut = $event->usage['completion_tokens'] ?? 0;
+                $cacheWriteInputTokens = $event->usage['cache_write_input_tokens'] ?? 0;
+                $cacheReadInputTokens = $event->usage['cache_read_input_tokens'] ?? 0;
+                if ($event->finishReason !== null) {
+                    $finishReason = $event->finishReason;
+                }
+            }
+        }
+
+        // Flush remaining partial line
+        if ($lineBuffer !== '') {
+            SafeDisplay::call(fn () => $this->ui->streamChunk($lineBuffer), $this->log);
+        }
+
+        $this->log->debug('Stream response complete', [
+            'text_length' => strlen($fullText),
+            'tool_calls' => count($toolCalls),
+            'finish_reason' => $finishReason->name,
+        ]);
+
+        return [$fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent];
+    }
+
     public function performCompaction(): void
     {
         [$tokensIn, $tokensOut] = $this->contextManager->performCompaction($this->history);
-        $this->sessionTokensIn += $tokensIn;
-        $this->sessionTokensOut += $tokensOut;
+        $this->tokens->accumulate($tokensIn, $tokensOut);
         if ($tokensIn > 0 || $tokensOut > 0) {
             $this->events?->dispatch(new ContextCompacted(0, $tokensIn, $tokensOut));
         }

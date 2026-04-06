@@ -42,6 +42,12 @@ use Psr\Log\LoggerInterface;
  */
 class ToolServiceProvider extends ServiceProvider
 {
+    /** Paths outside the project root that tools may access without prompting. */
+    private const DEFAULT_ALLOWED_PATHS = [
+        '~/.kosmokrator',
+        '/tmp',
+    ];
+
     public function register(): void
     {
         $config = $this->container->make('config');
@@ -51,7 +57,7 @@ class ToolServiceProvider extends ServiceProvider
         $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
         $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
         $allowedPaths = $this->resolveAllowedPaths(
-            $config->get('kosmokrator.tools.allowed_paths', []),
+            $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
         );
 
         $this->container->singleton(TaskStore::class);
@@ -96,11 +102,11 @@ class ToolServiceProvider extends ServiceProvider
             return $evaluator;
         });
 
-        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout) {
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot) {
             $registry = new ToolRegistry;
-            $registry->register(new FileReadTool);
-            $registry->register(new FileWriteTool);
-            $registry->register(new FileEditTool);
+            $registry->register(new FileReadTool($projectRoot));
+            $registry->register(new FileWriteTool($projectRoot));
+            $registry->register(new FileEditTool($projectRoot));
             $registry->register(new ApplyPatchTool(
                 $this->container->make(PatchParser::class),
                 $this->container->make(PatchApplier::class),
@@ -163,6 +169,12 @@ class ToolServiceProvider extends ServiceProvider
             }
         }
 
-        return $resolved;
+        // Always allow the system temp directory (may differ from /tmp on some platforms)
+        $tmpDir = realpath(sys_get_temp_dir());
+        if ($tmpDir !== false && ! in_array($tmpDir, $resolved, true)) {
+            $resolved[] = $tmpDir;
+        }
+
+        return array_unique($resolved);
     }
 }

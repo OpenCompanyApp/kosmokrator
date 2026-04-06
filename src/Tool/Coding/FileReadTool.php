@@ -6,6 +6,7 @@ namespace Kosmokrator\Tool\Coding;
 
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
+use Throwable;
 
 /**
  * Reads file contents with line numbers, supporting offset/limit for partial reads.
@@ -21,6 +22,10 @@ class FileReadTool extends AbstractTool
 
     /** @var array<string, true> */
     private array $readCache = [];
+
+    public function __construct(
+        private readonly ?string $projectRoot = null,
+    ) {}
 
     public function name(): string
     {
@@ -55,6 +60,15 @@ class FileReadTool extends AbstractTool
         $path = $args['path'] ?? '';
         $offset = max(1, (int) ($args['offset'] ?? 1));
         $limit = min(5000, max(1, (int) ($args['limit'] ?? 2000)));
+
+        // Validate path stays within project root
+        if ($this->projectRoot !== null) {
+            try {
+                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot);
+            } catch (Throwable $e) {
+                return ToolResult::error($e->getMessage());
+            }
+        }
 
         if (! file_exists($path)) {
             return ToolResult::error("File not found: {$path}");

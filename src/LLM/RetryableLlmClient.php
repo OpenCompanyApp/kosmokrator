@@ -48,6 +48,70 @@ class RetryableLlmClient implements LlmClientInterface
         $this->maxAttempts = $maxAttempts;
     }
 
+    public function supportsStreaming(): bool
+    {
+        return $this->inner->supportsStreaming();
+    }
+
+    /**
+     * Stream a chat request with automatic retry on transient failures.
+     *
+     * Yields events eagerly for real-time display. If the stream fails before
+     * the first event, the request is retried transparently. Once any event has
+     * been yielded, the exception is re-thrown (we can't un-yield).
+     *
+     * @return \Generator<int, LlmStreamingEvent>
+     */
+    public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+    {
+        $attempt = 0;
+
+        while (true) {
+            try {
+                $generator = $this->inner->stream($messages, $tools, $cancellation);
+                $yielded = false;
+
+                foreach ($generator as $event) {
+                    $yielded = true;
+                    yield $event;
+                }
+
+                return;
+            } catch (\Throwable $e) {
+                // Once we've yielded events to the caller, we can't retry transparently
+                if ($yielded ?? false) {
+                    throw $e;
+                }
+
+                $attempt++;
+
+                if (! $this->isRetryable($e) || ($this->maxAttempts > 0 && $attempt >= $this->maxAttempts)) {
+                    throw $e;
+                }
+
+                $delay = $this->calculateDelay($e, $attempt);
+                $this->log->warning("LLM stream failed (attempt {$attempt}), retrying in {$delay}s", [
+                    'error' => $e->getMessage(),
+                    'exception' => get_class($e),
+                ]);
+
+                if ($this->onRetry !== null) {
+                    try {
+                        ($this->onRetry)($attempt, $delay, $e->getMessage());
+                    } catch (\Throwable $callbackError) {
+                        $this->log->warning('onRetry callback failed', ['error' => $callbackError->getMessage()]);
+                    }
+                }
+
+                if ($this->sleepFunction !== null) {
+                    ($this->sleepFunction)($delay, $cancellation);
+                } else {
+                    $this->smartDelay($delay, $cancellation);
+                }
+            }
+        }
+    }
+
     /**
      * Send a chat request with automatic retry on transient failures.
      *

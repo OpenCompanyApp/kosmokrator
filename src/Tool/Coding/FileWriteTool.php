@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
+use Kosmokrator\IO\AtomicFileWriter;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
+use Throwable;
 
 /**
  * Writes entire file contents, creating the file and any missing parent directories.
@@ -14,6 +16,10 @@ use Kosmokrator\Tool\ToolResult;
  */
 class FileWriteTool extends AbstractTool
 {
+    public function __construct(
+        private readonly ?string $projectRoot = null,
+    ) {}
+
     public function name(): string
     {
         return 'file_write';
@@ -41,6 +47,15 @@ class FileWriteTool extends AbstractTool
         $path = $args['path'] ?? '';
         $content = $args['content'] ?? '';
 
+        // Validate path stays within project root
+        if ($this->projectRoot !== null) {
+            try {
+                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot);
+            } catch (Throwable $e) {
+                return ToolResult::error($e->getMessage());
+            }
+        }
+
         $dir = dirname($path);
         if (! is_dir($dir)) {
             if (! mkdir($dir, 0755, true)) {
@@ -48,7 +63,9 @@ class FileWriteTool extends AbstractTool
             }
         }
 
-        if (file_put_contents($path, $content) === false) {
+        try {
+            AtomicFileWriter::write($path, $content);
+        } catch (\RuntimeException) {
             return ToolResult::error("Failed to write file: {$path}");
         }
 

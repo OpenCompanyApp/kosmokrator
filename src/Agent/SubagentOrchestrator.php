@@ -119,6 +119,11 @@ class SubagentOrchestrator
         $stats->depth = $childContext->depth;
         $this->stats[$id] = $stats;
 
+        // Auto-prune completed agents when stats grow beyond threshold to prevent unbounded RAM usage
+        if (count($this->stats) > 50) {
+            $this->pruneCompleted();
+        }
+
         // Detect circular dependencies before spawning
         if ($dependsOn !== [] && $this->wouldCreateCycle($id, $dependsOn)) {
             unset($this->stats[$id]);

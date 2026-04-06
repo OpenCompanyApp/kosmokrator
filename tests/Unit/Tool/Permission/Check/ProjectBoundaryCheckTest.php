@@ -256,6 +256,40 @@ class ProjectBoundaryCheckTest extends TestCase
         $this->assertNull($result);
     }
 
+    // --- Temp dir and kosmokrator dir ---
+
+    public function test_temp_dir_passes_when_in_allowed_paths(): void
+    {
+        $tmpDir = realpath(sys_get_temp_dir());
+        $check = $this->makeCheck([$tmpDir]);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'boundary_test_');
+        try {
+            $result = $check->evaluate('file_read', ['path' => $tmpFile]);
+            $this->assertNull($result, 'Temp dir files should pass when temp dir is in allowed_paths');
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+    public function test_home_kosmokrator_dir_passes_when_in_allowed_paths(): void
+    {
+        $home = getenv('HOME') ?: '';
+        if ($home === '') {
+            $this->markTestSkipped('HOME not set');
+        }
+
+        $kosmoDir = $home.'/.kosmokrator';
+        if (! is_dir($kosmoDir)) {
+            $this->markTestSkipped('~/.kosmokrator does not exist');
+        }
+
+        $check = $this->makeCheck([realpath($kosmoDir)]);
+
+        $result = $check->evaluate('file_read', ['path' => $kosmoDir.'/config.yaml']);
+        $this->assertNull($result, 'KosmoKrator home dir files should pass when in allowed_paths');
+    }
+
     // --- Static method ---
 
     public function test_path_within_boundary_static_method(): void

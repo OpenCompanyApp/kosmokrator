@@ -6,6 +6,7 @@ namespace Kosmokrator\Tool\Coding;
 
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
+use Throwable;
 
 /**
  * Performs a single exact find-and-replace in an existing file.
@@ -15,6 +16,10 @@ use Kosmokrator\Tool\ToolResult;
 class FileEditTool extends AbstractTool
 {
     private const CHUNK_SIZE = 65536;
+
+    public function __construct(
+        private readonly ?string $projectRoot = null,
+    ) {}
 
     public function name(): string
     {
@@ -47,6 +52,15 @@ class FileEditTool extends AbstractTool
 
         if ($oldString === '') {
             return ToolResult::error('old_string cannot be empty.');
+        }
+
+        // Validate path stays within project root
+        if ($this->projectRoot !== null) {
+            try {
+                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot);
+            } catch (Throwable $e) {
+                return ToolResult::error($e->getMessage());
+            }
         }
 
         if (! file_exists($path)) {

@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\UI\Tui\TuiConversationRenderer;
 use Kosmokrator\UI\Tui\TuiCoreRenderer;
+use Kosmokrator\UI\Tui\TuiInputHandler;
 use Kosmokrator\UI\Tui\TuiRenderer;
 use Kosmokrator\UI\Tui\TuiToolRenderer;
 use PHPUnit\Framework\TestCase;
@@ -500,11 +501,11 @@ final class TuiRendererTest extends TestCase
         $this->assertSame('3 items', $result);
     }
 
-    // ── SLASH_COMMANDS constant (TuiCoreRenderer) ───────────────────────
+    // ── SLASH_COMMANDS constant (TuiInputHandler) ────────────────────────
 
     public function test_slash_commands_contains_core_commands(): void
     {
-        $ref = new \ReflectionClass(TuiCoreRenderer::class);
+        $ref = new \ReflectionClass(TuiInputHandler::class);
         $constants = $ref->getConstants();
         $this->assertArrayHasKey('SLASH_COMMANDS', $constants);
 
@@ -530,7 +531,7 @@ final class TuiRendererTest extends TestCase
 
     public function test_slash_commands_all_have_required_keys(): void
     {
-        $ref = new \ReflectionClass(TuiCoreRenderer::class);
+        $ref = new \ReflectionClass(TuiInputHandler::class);
         $commands = $ref->getConstant('SLASH_COMMANDS');
 
         foreach ($commands as $i => $cmd) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Tool\Coding\Patch;
 
 use Kosmokrator\Exception\FileOperationException;
+use Kosmokrator\IO\AtomicFileWriter;
 use Kosmokrator\Tool\Permission\Check\ProjectBoundaryCheck;
 use Kosmokrator\Tool\Permission\PathResolver;
 use Kosmokrator\Tool\Permission\PermissionRule;
@@ -121,7 +122,10 @@ final class PatchApplier
 
         $this->ensureParentDirectory($operation->path);
         $content = implode("\n", $operation->bodyLines);
-        if (file_put_contents($operation->path, $content) === false) {
+
+        try {
+            AtomicFileWriter::write($operation->path, $content);
+        } catch (\RuntimeException $e) {
             throw new FileOperationException("Failed to write file '{$operation->path}'.");
         }
 
@@ -155,7 +159,9 @@ final class PatchApplier
             $this->ensureParentDirectory($operation->moveTo);
         }
 
-        if (file_put_contents($targetPath, $updatedContent) === false) {
+        try {
+            AtomicFileWriter::write($targetPath, $updatedContent);
+        } catch (\RuntimeException $e) {
             throw new FileOperationException("Failed to write file '{$targetPath}'.");
         }
 

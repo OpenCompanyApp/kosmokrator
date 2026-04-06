@@ -27,6 +27,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 
 - `src/Agent/` — Agent core: AgentLoop (REPL orchestrator), ToolExecutor, ContextManager, StuckDetector, subagent system
 - `src/LLM/` — LLM clients: AsyncLlmClient (Amp HTTP, async), PrismService (Prism PHP, sync), RetryableLlmClient (decorator)
+  - **prism-relay boundary**: Provider-specific logic (SSE parsing quirks, `stream_options` support, usage extraction formats, `finish_reason` mapping, error normalization, prompt caching strategies) belongs in the `opencompany/prism-relay` package, NOT in KosmoKrator's `src/LLM/`. KosmoKrator's LLM layer should only contain agent-level orchestration: retry policy, streaming-to-UI bridging, cancellation handling. Provider capabilities (e.g. `supportsStreamUsage()`) are declared in prism-relay's `ProviderCapabilities` and `RelayRegistry`, consumed via the registry in AsyncLlmClient.
 - `src/UI/` — Rendering layer with split interface hierarchy
   - `UI/Tui/` — Symfony TUI renderer: TuiRenderer, TuiModalManager (dialogs), TuiAnimationManager (breathing/spinners), SubagentDisplayManager, widgets
   - `UI/Ansi/` — Pure ANSI fallback: AnsiRenderer, MarkdownToAnsi (with Handler/ for table/list extraction), AnsiTableRenderer

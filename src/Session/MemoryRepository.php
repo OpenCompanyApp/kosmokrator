@@ -57,12 +57,13 @@ class MemoryRepository implements MemoryRepositoryInterface
     }
 
     /**
-     * Load all non-expired memories visible to a project (includes global/project-null memories).
+     * Load non-expired memories visible to a project (includes global/project-null memories).
      *
      * @param  string|null  $project  Project scope, or null for global-only
+     * @param  int  $limit  Maximum memories to load (prevents unbounded RAM usage)
      * @return array<int, array<string, mixed>>
      */
-    public function forProject(?string $project): array
+    public function forProject(?string $project, int $limit = 200): array
     {
         $now = date('c');
         if ($project === null) {
@@ -70,18 +71,20 @@ class MemoryRepository implements MemoryRepositoryInterface
                 'SELECT * FROM memories
                  WHERE project IS NULL
                    AND (expires_at IS NULL OR expires_at > :now)
-                 ORDER BY pinned DESC, memory_class ASC, created_at DESC'
+                 ORDER BY pinned DESC, memory_class ASC, created_at DESC
+                 LIMIT :limit'
             );
-            $stmt->execute(['now' => $now]);
+            $stmt->execute(['now' => $now, 'limit' => $limit]);
         } else {
             // Include both project-specific and global (null) memories
             $stmt = $this->db->connection()->prepare(
                 'SELECT * FROM memories
                  WHERE (project = :project OR project IS NULL)
                    AND (expires_at IS NULL OR expires_at > :now)
-                 ORDER BY pinned DESC, memory_class ASC, type, created_at DESC'
+                 ORDER BY pinned DESC, memory_class ASC, type, created_at DESC
+                 LIMIT :limit'
             );
-            $stmt->execute(['project' => $project, 'now' => $now]);
+            $stmt->execute(['project' => $project, 'now' => $now, 'limit' => $limit]);
         }
 
         return $stmt->fetchAll();

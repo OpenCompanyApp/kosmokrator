@@ -54,7 +54,7 @@ class SessionsCommandTest extends TestCase
 
     public function test_description(): void
     {
-        $this->assertSame('List recent sessions', $this->command->description());
+        $this->assertSame('List, delete, or clean up sessions', $this->command->description());
     }
 
     public function test_immediate(): void

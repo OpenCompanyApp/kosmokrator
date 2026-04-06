@@ -9,7 +9,13 @@ use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
 
 /**
- * Lists recent sessions for the current project with status previews.
+ * Lists, deletes, and cleans up sessions for the current project.
+ *
+ * Subcommands:
+ *   /sessions          — List recent sessions
+ *   /sessions clean    — Delete sessions older than 30 days (keeps 5 per project)
+ *   /sessions clean N  — Delete sessions older than N days
+ *   /sessions delete <id> — Delete a specific session by ID or prefix
  */
 class SessionsCommand implements SlashCommand
 {
@@ -27,7 +33,7 @@ class SessionsCommand implements SlashCommand
     /** @return string One-line description for the help listing */
     public function description(): string
     {
-        return 'List recent sessions';
+        return 'List, delete, or clean up sessions';
     }
 
     /** @return bool Whether this command executes immediately (no agent turn needed) */
@@ -37,11 +43,36 @@ class SessionsCommand implements SlashCommand
     }
 
     /**
-     * @param  string  $args  Unused command arguments
+     * @param  string  $args  Subcommand arguments (empty, "clean [N]", or "delete <id>")
      * @param  SlashCommandContext  $ctx  Current session context
      * @return SlashCommandResult Always continues the session
      */
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
+    {
+        $trimmed = trim($args);
+
+        if ($trimmed === '') {
+            return $this->listSessions($ctx);
+        }
+
+        if (str_starts_with($trimmed, 'clean')) {
+            $daysArg = trim(substr($trimmed, 5));
+
+            return $this->cleanupSessions($ctx, $daysArg);
+        }
+
+        if (str_starts_with($trimmed, 'delete ')) {
+            $id = trim(substr($trimmed, 7));
+
+            return $this->deleteSession($ctx, $id);
+        }
+
+        $ctx->ui->showNotice('Usage: /sessions [clean [N]] [delete <id>]');
+
+        return SlashCommandResult::continue();
+    }
+
+    private function listSessions(SlashCommandContext $ctx): SlashCommandResult
     {
         $sessions = $ctx->sessionManager->listSessions(10);
 
@@ -53,6 +84,40 @@ class SessionsCommand implements SlashCommand
                 $lines[] = self::formatSessionLine($s, $ctx->sessionManager->currentSessionId());
             }
             $ctx->ui->showNotice("Recent sessions:\n".implode("\n", $lines));
+        }
+
+        return SlashCommandResult::continue();
+    }
+
+    private function cleanupSessions(SlashCommandContext $ctx, string $daysArg): SlashCommandResult
+    {
+        $days = is_numeric($daysArg) && (int) $daysArg > 0 ? (int) $daysArg : 30;
+        $count = $ctx->sessionManager->cleanupOldSessions($days);
+
+        if ($count === 0) {
+            $ctx->ui->showNotice("No sessions older than {$days} days to clean up.");
+        } else {
+            $ctx->ui->showNotice("Cleaned up {$count} session(s) older than {$days} days.");
+        }
+
+        return SlashCommandResult::continue();
+    }
+
+    private function deleteSession(SlashCommandContext $ctx, string $id): SlashCommandResult
+    {
+        if ($id === '') {
+            $ctx->ui->showNotice('Usage: /sessions delete <session-id>');
+
+            return SlashCommandResult::continue();
+        }
+
+        $deleted = $ctx->sessionManager->deleteSession($id);
+
+        if ($deleted) {
+            $shortId = substr($id, 0, 8);
+            $ctx->ui->showNotice("Session {$shortId} deleted.");
+        } else {
+            $ctx->ui->showNotice("Session not found: {$id}");
         }
 
         return SlashCommandResult::continue();

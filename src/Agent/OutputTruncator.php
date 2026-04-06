@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\IO\AtomicFileWriter;
+
 /**
  * Truncates oversized tool output before it enters the conversation context.
  *
@@ -116,9 +118,10 @@ class OutputTruncator
         // Sanitize the ID to produce a filesystem-safe filename
         $safeId = $toolCallId !== '' ? $toolCallId : uniqid('anon_');
         $path = $this->storagePath.'/tool_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $safeId).'.txt';
-        $written = file_put_contents($path, $output);
 
-        if ($written === false) {
+        try {
+            AtomicFileWriter::write($path, $output);
+        } catch (\RuntimeException) {
             return '[error: could not save full output to disk]';
         }
 

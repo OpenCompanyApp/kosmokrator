@@ -201,6 +201,16 @@ final class SettingsCommandTest extends TestCase
 
             public function setReasoningEffort(string $effort): void {}
 
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                yield from [];
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+
             public function setApiKey(string $apiKey): void
             {
                 $this->apiKey = $apiKey;

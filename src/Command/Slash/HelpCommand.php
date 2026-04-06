@@ -55,12 +55,27 @@ class HelpCommand implements SlashCommand
 
         // Power commands
         $lines[] = '';
-        $lines[] = 'Power commands:';
+        $lines[] = 'Power commands (prefix with :):';
         foreach ($this->powerRegistry->all() as $command) {
             $aliases = $command->aliases();
             $aliasStr = $aliases !== [] ? ' ('.implode(', ', $aliases).')' : '';
             $lines[] = sprintf('  %-20s %s%s', ':'.$command->name(), $command->description(), $aliasStr);
         }
+
+        // Modes
+        $lines[] = '';
+        $lines[] = 'Modes:';
+        $lines[] = '  /edit                Full read-write access (default)';
+        $lines[] = '  /plan                Read-only + subagent — research & plan';
+        $lines[] = '  /ask                 Read-only — answer questions';
+
+        // Keybindings
+        $lines[] = '';
+        $lines[] = 'Keybindings:';
+        $lines[] = '  Enter                Send message';
+        $lines[] = '  Ctrl+O               Expand/collapse tool output (TUI)';
+        $lines[] = '  Page Up / Page Down  Scroll conversation (TUI)';
+        $lines[] = '  Ctrl+C               Cancel current operation';
 
         $ctx->ui->showNotice(implode("\n", $lines));
 

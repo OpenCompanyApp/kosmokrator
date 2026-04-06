@@ -84,6 +84,15 @@ class AsyncLlmClient implements LlmClientInterface
         return in_array($provider, self::OPENAI_COMPATIBLE_PROVIDERS, true);
     }
 
+    public function supportsStreaming(): bool
+    {
+        if ($this->registry !== null) {
+            return $this->registry->capabilities($this->provider)['streaming'];
+        }
+
+        return ProviderCapabilities::for($this->provider, $this->registry)->supportsStreaming();
+    }
+
     public function setSystemPrompt(string $prompt): void
     {
         $this->systemPrompt = $prompt;
@@ -102,51 +111,263 @@ class AsyncLlmClient implements LlmClientInterface
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
-        $cachePlan = $this->buildPromptCachePlan($messages);
-
-        $allMessages = [...$cachePlan->systemPrompts, ...$cachePlan->messages];
-
-        $payload = [
-            'model' => $this->model,
-            'messages' => $this->relay->mapOpenAiCompatibleMessages($this->provider, $allMessages),
-        ];
-
-        if ($cachePlan->providerOptions !== []) {
-            $payload = array_merge($payload, $cachePlan->providerOptions);
-        }
-
-        if (! empty($tools)) {
-            $payload['tools'] = $this->mapTools($tools);
-            $payload['tool_choice'] = 'auto';
-        }
-
-        if ($this->maxTokens !== null) {
-            $payload['max_tokens'] = $this->maxTokens;
-        }
-
-        if ($this->temperature !== null && $this->supportsTemperature()) {
-            $payload['temperature'] = $this->temperature;
-        }
-
-        if ($this->reasoningEffort !== 'off') {
-            $reasoningParams = ReasoningStrategy::requestParams($this->provider, $this->reasoningEffort);
-            if ($reasoningParams !== []) {
-                $payload = array_merge($payload, $reasoningParams);
-            }
-        }
-
-        $request = new Request($this->baseUrl.'/chat/completions', 'POST');
-        $request->setHeader('Authorization', 'Bearer '.$this->apiKey);
-        $request->setHeader('Content-Type', 'application/json');
-        $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
-        $request->setTransferTimeout(600);
-        $request->setInactivityTimeout(300);
+        $payload = $this->buildPayload($messages, $tools, streaming: false);
+        $request = $this->buildRequest($payload);
 
         // This suspends the fiber — Revolt event loop ticks freely
         $this->relay->beforeRequest($this->provider, $this->model);
         $response = $this->httpClient->request($request, $cancellation);
 
         return $this->parseResponse($response, $cancellation);
+    }
+
+    /**
+     * Stream a chat-completion request via SSE, yielding incremental events.
+     *
+     * Sends the same payload as chat() but with stream=true, then reads the
+     * SSE response line-by-line, yielding LlmStreamingEvent for each delta.
+     *
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return \Generator<int, LlmStreamingEvent>
+     */
+    public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+    {
+        $payload = $this->buildPayload($messages, $tools, streaming: true);
+        $request = $this->buildRequest($payload);
+
+        $this->relay->beforeRequest($this->provider, $this->model);
+        $response = $this->httpClient->request($request, $cancellation);
+
+        $this->guardResponseStatus($response, $cancellation);
+
+        // Parse SSE stream line-by-line
+        $toolCallBuffers = [];
+        $reasoningBuffer = '';
+        $promptTokens = 0;
+        $completionTokens = 0;
+        $cacheWriteInputTokens = 0;
+        $cacheReadInputTokens = 0;
+        $thoughtTokens = 0;
+        $lastFinishReason = null;
+
+        $body = $response->getBody();
+        $buffer = '';
+
+        while (true) {
+            $chunk = $body->read($cancellation);
+            if ($chunk === null) {
+                break;
+            }
+
+            $buffer .= $chunk;
+
+            // Process complete lines from the buffer
+            while (($newlinePos = strpos($buffer, "\n")) !== false) {
+                $line = substr($buffer, 0, $newlinePos);
+                $buffer = substr($buffer, $newlinePos + 1);
+
+                $line = rtrim($line, "\r");
+
+                // SSE lines starting with "data: " contain JSON payload
+                if (! str_starts_with($line, 'data: ')) {
+                    continue;
+                }
+
+                $data = trim(substr($line, 6));
+
+                // End of stream
+                if ($data === '[DONE]') {
+                    // Flush any remaining reasoning content
+                    if ($reasoningBuffer !== '') {
+                        yield LlmStreamingEvent::thinkingDelta($reasoningBuffer);
+                        $reasoningBuffer = '';
+                    }
+
+                    // Flush any accumulated tool calls (may have been missed if
+                    // finish_reason arrived in a usage-only chunk without choices)
+                    foreach ($toolCallBuffers as $tc) {
+                        yield LlmStreamingEvent::toolCall(
+                            $tc['id'],
+                            $tc['name'],
+                            self::sanitizeJson($tc['arguments'] ?: '{}'),
+                        );
+                    }
+
+                    // Infer finish reason from accumulated state
+                    $inferredReason = $toolCallBuffers !== []
+                        ? FinishReason::ToolCalls
+                        : ($lastFinishReason ?? FinishReason::Stop);
+
+                    yield LlmStreamingEvent::streamEnd(
+                        $promptTokens,
+                        $completionTokens,
+                        $cacheWriteInputTokens,
+                        $cacheReadInputTokens,
+                        $thoughtTokens,
+                        $inferredReason,
+                    );
+
+                    return;
+                }
+
+                $json = json_decode($data, true);
+
+                // Usage-only chunks (no choices) — extract usage data but don't skip
+                if ($json !== null && ! isset($json['choices'][0])) {
+                    if (isset($json['usage'])) {
+                        $usage = $json['usage'];
+                        $promptTokens = $usage['prompt_tokens'] ?? $promptTokens;
+                        $completionTokens = $usage['completion_tokens'] ?? $completionTokens;
+                        $cacheWriteInputTokens = (int) ($usage['cache_creation_input_tokens'] ?? $cacheWriteInputTokens);
+                        $cacheReadInputTokens = (int) (($usage['prompt_tokens_details']['cached_tokens'] ?? null)
+                            ?? ($usage['input_tokens_details']['cached_tokens'] ?? null)
+                            ?? $cacheReadInputTokens);
+                        $thoughtTokens = (int) (($usage['completion_tokens_details']['reasoning_tokens'] ?? null)
+                            ?? ($usage['output_tokens_details']['reasoning_tokens'] ?? null)
+                            ?? $thoughtTokens);
+                    }
+
+                    continue;
+                }
+
+                if ($json === null) {
+                    continue;
+                }
+
+                $choice = $json['choices'][0];
+                $delta = $choice['delta'] ?? [];
+
+                // Extract usage from final chunk (some providers include it in the last SSE event)
+                if (isset($json['usage'])) {
+                    $usage = $json['usage'];
+                    $promptTokens = $usage['prompt_tokens'] ?? $promptTokens;
+                    $completionTokens = $usage['completion_tokens'] ?? $completionTokens;
+                    $cacheWriteInputTokens = (int) ($usage['cache_creation_input_tokens'] ?? $cacheWriteInputTokens);
+                    $cacheReadInputTokens = (int) (($usage['prompt_tokens_details']['cached_tokens'] ?? null)
+                        ?? ($usage['input_tokens_details']['cached_tokens'] ?? null)
+                        ?? $cacheReadInputTokens);
+                    $thoughtTokens = (int) (($usage['completion_tokens_details']['reasoning_tokens'] ?? null)
+                        ?? ($usage['output_tokens_details']['reasoning_tokens'] ?? null)
+                        ?? $thoughtTokens);
+                }
+
+                // Text delta
+                $content = $delta['content'] ?? null;
+                if ($content !== null && $content !== '') {
+                    // Flush accumulated reasoning before text starts
+                    if ($reasoningBuffer !== '') {
+                        yield LlmStreamingEvent::thinkingDelta($reasoningBuffer);
+                        $reasoningBuffer = '';
+                    }
+
+                    yield LlmStreamingEvent::textDelta($content);
+                }
+
+                // Reasoning/thinking delta
+                $reasoningDelta = (string) ($delta['reasoning_content'] ?? $delta['reasoning'] ?? '');
+                if ($reasoningDelta !== '') {
+                    $reasoningBuffer .= $reasoningDelta;
+                    // Flush reasoning in line-based chunks for smoother display
+                    while (($nl = strpos($reasoningBuffer, "\n")) !== false) {
+                        yield LlmStreamingEvent::thinkingDelta(substr($reasoningBuffer, 0, $nl + 1));
+                        $reasoningBuffer = substr($reasoningBuffer, $nl + 1);
+                    }
+                }
+
+                // Tool call deltas
+                $toolCallDeltas = $delta['tool_calls'] ?? [];
+                foreach ($toolCallDeltas as $tc) {
+                    $idx = $tc['index'] ?? 0;
+                    if (! isset($toolCallBuffers[$idx])) {
+                        $toolCallBuffers[$idx] = ['id' => '', 'name' => '', 'arguments' => ''];
+                    }
+                    if (isset($tc['id'])) {
+                        $toolCallBuffers[$idx]['id'] = $tc['id'];
+                    }
+                    if (isset($tc['function']['name'])) {
+                        $toolCallBuffers[$idx]['name'] = $tc['function']['name'];
+                    }
+                    if (isset($tc['function']['arguments'])) {
+                        $toolCallBuffers[$idx]['arguments'] .= $tc['function']['arguments'];
+                    }
+                }
+
+                // If finish_reason is set, yield tool calls and end
+                $finishReason = $choice['finish_reason'] ?? null;
+                if ($finishReason !== null && $finishReason !== '' && $finishReason !== 'null') {
+                    $lastFinishReason = $this->mapFinishReason($finishReason);
+                    // Flush any remaining reasoning content
+                    if ($reasoningBuffer !== '') {
+                        yield LlmStreamingEvent::thinkingDelta($reasoningBuffer);
+                        $reasoningBuffer = '';
+                    }
+
+                    // Yield completed tool calls
+                    foreach ($toolCallBuffers as $tc) {
+                        yield LlmStreamingEvent::toolCall(
+                            $tc['id'],
+                            $tc['name'],
+                            self::sanitizeJson($tc['arguments'] ?: '{}'),
+                        );
+                    }
+
+                    yield LlmStreamingEvent::streamEnd(
+                        $promptTokens,
+                        $completionTokens,
+                        $cacheWriteInputTokens,
+                        $cacheReadInputTokens,
+                        $thoughtTokens,
+                        $lastFinishReason,
+                    );
+
+                    return;
+                }
+            }
+        }
+
+        // Stream ended without [DONE] — process any remaining buffer data
+        if ($buffer !== '') {
+            $line = rtrim($buffer, "\r\n");
+            if (str_starts_with($line, 'data: ')) {
+                $data = trim(substr($line, 6));
+                if ($data !== '[DONE]') {
+                    $json = json_decode($data, true);
+                    if ($json !== null && isset($json['choices'][0])) {
+                        $fr = $json['choices'][0]['finish_reason'] ?? null;
+                        if ($fr !== null && $fr !== '' && $fr !== 'null') {
+                            $lastFinishReason = $this->mapFinishReason($fr);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Yield end with whatever we have
+        if ($reasoningBuffer !== '') {
+            yield LlmStreamingEvent::thinkingDelta($reasoningBuffer);
+        }
+
+        foreach ($toolCallBuffers as $tc) {
+            yield LlmStreamingEvent::toolCall(
+                $tc['id'],
+                $tc['name'],
+                self::sanitizeJson($tc['arguments'] ?: '{}'),
+            );
+        }
+
+        $inferredReason = $toolCallBuffers !== []
+            ? FinishReason::ToolCalls
+            : ($lastFinishReason ?? FinishReason::Stop);
+
+        yield LlmStreamingEvent::streamEnd(
+            $promptTokens,
+            $completionTokens,
+            $cacheWriteInputTokens,
+            $cacheReadInputTokens,
+            $thoughtTokens,
+            $inferredReason,
+        );
     }
 
     public function getProvider(): string
@@ -223,38 +444,140 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
-     * Decode the raw HTTP response into an LlmResponse value object.
-     *
-     * Handles error status codes by throwing RetryableHttpException (429/5xx) or RuntimeException.
-     * Extracts token usage, tool calls, and cache/reasoning token details from the response body.
+     * Check whether the current provider supports stream_options.include_usage.
+     * Ollama and some local model servers hang when this is sent.
      */
-    private function parseResponse(Response $response, ?Cancellation $cancellation): LlmResponse
+    private function supportsStreamUsage(): bool
+    {
+        if ($this->registry !== null) {
+            return $this->registry->capabilities($this->provider)['stream_usage'];
+        }
+
+        return ProviderCapabilities::for($this->provider, $this->registry)->supportsStreamUsage();
+    }
+
+    /**
+     * Build the JSON payload for a chat/completions request.
+     *
+     * Consolidates model, messages, tools, max_tokens, temperature, reasoning params,
+     * provider options, and streaming flags into a single array.
+     *
+     * @param  Message[]  $messages  Conversation history
+     * @param  Tool[]  $tools  Available tools
+     * @param  bool  $streaming  Whether to enable SSE streaming
+     * @return array<string, mixed>
+     */
+    private function buildPayload(array $messages, array $tools, bool $streaming): array
+    {
+        $cachePlan = $this->buildPromptCachePlan($messages);
+        $allMessages = [...$cachePlan->systemPrompts, ...$cachePlan->messages];
+
+        $payload = [
+            'model' => $this->model,
+            'messages' => $this->relay->mapOpenAiCompatibleMessages($this->provider, $allMessages),
+        ];
+
+        if ($streaming) {
+            $payload['stream'] = true;
+
+            // Request usage data in stream — not supported by all providers (Ollama hangs)
+            if ($this->supportsStreamUsage()) {
+                $payload['stream_options'] = ['include_usage' => true];
+            }
+        }
+
+        if ($cachePlan->providerOptions !== []) {
+            $payload = array_merge($payload, $cachePlan->providerOptions);
+        }
+
+        if (! empty($tools)) {
+            $payload['tools'] = $this->mapTools($tools);
+            $payload['tool_choice'] = 'auto';
+        }
+
+        if ($this->maxTokens !== null) {
+            $payload['max_tokens'] = $this->maxTokens;
+        }
+
+        if ($this->temperature !== null && $this->supportsTemperature()) {
+            $payload['temperature'] = $this->temperature;
+        }
+
+        if ($this->reasoningEffort !== 'off') {
+            $reasoningParams = ReasoningStrategy::requestParams($this->provider, $this->reasoningEffort);
+            if ($reasoningParams !== []) {
+                $payload = array_merge($payload, $reasoningParams);
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Build an HTTP request for the chat/completions endpoint with standard headers and timeouts.
+     *
+     * @param  array<string, mixed>  $payload  JSON-serializable request body
+     */
+    private function buildRequest(array $payload): Request
+    {
+        $request = new Request($this->baseUrl.'/chat/completions', 'POST');
+        $request->setHeader('Authorization', 'Bearer '.$this->apiKey);
+        $request->setHeader('Content-Type', 'application/json');
+        $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
+        $request->setTransferTimeout(600);
+        $request->setInactivityTimeout(300);
+
+        return $request;
+    }
+
+    /**
+     * Throw on non-200 HTTP status, using RetryableHttpException for 429/5xx.
+     *
+     * Shared by both stream() and parseResponse() to avoid duplicating error handling.
+     *
+     * @throws RetryableHttpException On 429/5xx responses
+     * @throws \RuntimeException On non-retryable HTTP errors
+     */
+    private function guardResponseStatus(Response $response, ?Cancellation $cancellation): void
     {
         $status = $response->getStatus();
 
-        if ($status !== 200) {
-            $body = $response->getBody()->buffer($cancellation);
-            $error = json_decode($body, true);
-            $message = $error['error']['message'] ?? $body;
+        if ($status === 200) {
+            return;
+        }
 
-            if ($status === 429 || $status >= 500) {
-                throw $this->relay->normalizeError(
-                    new RetryableHttpException(
-                        $status,
-                        "API error ({$status}): {$message}",
-                        $this->parseRetryAfter($response),
-                    ),
-                    $this->provider,
-                    $this->model,
-                );
-            }
+        $body = $response->getBody()->buffer($cancellation);
+        $error = json_decode($body, true);
+        $message = $error['error']['message'] ?? $body;
 
+        if ($status === 429 || $status >= 500) {
             throw $this->relay->normalizeError(
-                new \RuntimeException("API error ({$status}): {$message}"),
+                new RetryableHttpException(
+                    $status,
+                    "API error ({$status}): {$message}",
+                    $this->parseRetryAfter($response),
+                ),
                 $this->provider,
                 $this->model,
             );
         }
+
+        throw $this->relay->normalizeError(
+            new \RuntimeException("API error ({$status}): {$message}"),
+            $this->provider,
+            $this->model,
+        );
+    }
+
+    /**
+     * Decode the raw HTTP response into an LlmResponse value object.
+     *
+     * Guards against error status codes, then extracts token usage, tool calls,
+     * and cache/reasoning token details from the response body.
+     */
+    private function parseResponse(Response $response, ?Cancellation $cancellation): LlmResponse
+    {
+        $this->guardResponseStatus($response, $cancellation);
 
         // Non-blocking body read
         $body = $response->getBody()->buffer($cancellation);

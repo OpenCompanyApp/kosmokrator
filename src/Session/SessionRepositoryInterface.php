@@ -51,4 +51,20 @@ interface SessionRepositoryInterface
      * @return array|null Most recently updated session row, or null if none exist
      */
     public function latest(string $project): ?array;
+
+    /**
+     * Delete a session and all its associated messages.
+     *
+     * @param  string  $id  Session UUID to delete
+     */
+    public function delete(string $id): void;
+
+    /**
+     * Delete sessions older than a given age, keeping a minimum number of recent sessions per project.
+     *
+     * @param  int  $olderThanDays  Delete sessions not updated in this many days
+     * @param  int  $keepPerProject  Always keep at least this many sessions per project
+     * @return int Number of sessions deleted
+     */
+    public function cleanup(int $olderThanDays, int $keepPerProject = 5): int;
 }

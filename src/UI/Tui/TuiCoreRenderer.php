@@ -19,12 +19,9 @@ use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
 use Kosmokrator\UI\Tui\Widget\HistoryStatusWidget;
-use Kosmokrator\UI\Tui\Widget\ToggleableWidgetInterface;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
-use Symfony\Component\Tui\Event\ChangeEvent;
-use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;
 use Symfony\Component\Tui\Tui;
@@ -33,7 +30,6 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
-use Symfony\Component\Tui\Widget\SelectListWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -102,10 +98,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?Suspension $promptSuspension = null;
 
-    private ?SelectListWidget $slashCompletion = null;
-
-    /** @var array<array{value: string, label: string, description: string}> */
-    private array $skillCompletions = [];
+    private ?TuiInputHandler $inputHandler = null;
 
     private ?TaskStore $taskStore = null;
 
@@ -115,61 +108,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
     private int $scrollOffset = 0;
 
     private bool $hasHiddenActivityBelow = false;
-
-    private const SLASH_COMMANDS = [
-        ['value' => '/edit', 'label' => '/edit', 'description' => 'Switch to edit mode (full tool access)'],
-        ['value' => '/plan', 'label' => '/plan', 'description' => 'Switch to plan mode (read-only)'],
-        ['value' => '/ask', 'label' => '/ask', 'description' => 'Switch to ask mode (read-only, conversational)'],
-        ['value' => '/guardian', 'label' => '/guardian', 'description' => 'Guardian mode — smart auto-approve for safe operations'],
-        ['value' => '/argus', 'label' => '/argus', 'description' => 'Argus mode — ask before every write and command'],
-        ['value' => '/prometheus', 'label' => '/prometheus', 'description' => 'Prometheus mode — auto-approve all tool calls'],
-        ['value' => '/compact', 'label' => '/compact', 'description' => 'Compact conversation context'],
-        ['value' => '/new', 'label' => '/new', 'description' => 'Start a new session (clear history)'],
-        ['value' => '/clear', 'label' => '/clear', 'description' => 'Clear the screen'],
-        ['value' => '/quit', 'label' => '/quit', 'description' => 'Exit KosmoKrator'],
-        ['value' => '/seed', 'label' => '/seed', 'description' => 'Show a mock demo session'],
-        ['value' => '/settings', 'label' => '/settings', 'description' => 'Open the settings panel'],
-        ['value' => '/resume', 'label' => '/resume', 'description' => 'Resume a previous session'],
-        ['value' => '/sessions', 'label' => '/sessions', 'description' => 'List recent sessions'],
-        ['value' => '/memories', 'label' => '/memories', 'description' => 'Show stored memories'],
-        ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
-        ['value' => '/agents', 'label' => '/agents', 'description' => 'Show swarm progress dashboard'],
-        ['value' => '/theogony', 'label' => '/theogony', 'description' => 'Play the KosmoKrator origin spectacle'],
-        ['value' => '/update', 'label' => '/update', 'description' => 'Check for and install updates'],
-        ['value' => '/feedback', 'label' => '/feedback', 'description' => 'Submit feedback or a bug report'],
-        ['value' => '/rename', 'label' => '/rename', 'description' => 'Rename the current session'],
-    ];
-
-    private const POWER_COMMANDS = [
-        ['value' => ':unleash', 'label' => ':unleash', 'description' => 'Unleash a massive swarm of agents on a task'],
-        ['value' => ':trace', 'label' => ':trace', 'description' => 'Evidence-driven deep trace analysis'],
-        ['value' => ':autopilot', 'label' => ':autopilot', 'description' => 'Full autonomous pipeline from idea to verified code'],
-        ['value' => ':deslop', 'label' => ':deslop', 'description' => 'Regression-safe cleanup of AI-generated bloat'],
-        ['value' => ':deepinit', 'label' => ':deepinit', 'description' => 'Deep codebase documentation and knowledge map'],
-        ['value' => ':ralph', 'label' => ':ralph', 'description' => 'Persistent retry loop — the boulder never stops'],
-        ['value' => ':team', 'label' => ':team', 'description' => 'Staged pipeline with specialized agent roles'],
-        ['value' => ':ultraqa', 'label' => ':ultraqa', 'description' => 'Autonomous QA cycling until all tests pass'],
-        ['value' => ':interview', 'label' => ':interview', 'description' => 'Socratic requirements gathering'],
-        ['value' => ':doctor', 'label' => ':doctor', 'description' => 'Self-diagnostic check of environment and project'],
-        ['value' => ':learner', 'label' => ':learner', 'description' => 'Extract a reusable pattern from this conversation'],
-        ['value' => ':cancel', 'label' => ':cancel', 'description' => 'Gracefully cancel any active workflow or swarm'],
-        ['value' => ':replay', 'label' => ':replay', 'description' => 'Replay and modify a previous workflow'],
-        ['value' => ':review', 'label' => ':review', 'description' => 'Parallel code review across 4 dimensions'],
-        ['value' => ':research', 'label' => ':research', 'description' => 'Parallel research agents for investigation'],
-        ['value' => ':deepdive', 'label' => ':deepdive', 'description' => 'Trace the WHY, then define the WHAT'],
-        ['value' => ':babysit', 'label' => ':babysit', 'description' => 'Monitor a PR until merged'],
-        ['value' => ':release', 'label' => ':release', 'description' => 'Automated release: bump, test, tag, publish'],
-        ['value' => ':docs', 'label' => ':docs', 'description' => 'Audit and refresh documentation'],
-        ['value' => ':consensus', 'label' => ':consensus', 'description' => 'Planner → Architect → Critic deliberation'],
-    ];
-
-    private const DOLLAR_COMMANDS = [
-        ['value' => '$list', 'label' => '$list', 'description' => 'List all available skills'],
-        ['value' => '$create', 'label' => '$create', 'description' => 'Create a new skill'],
-        ['value' => '$show', 'label' => '$show', 'description' => 'Show skill details'],
-        ['value' => '$edit', 'label' => '$edit', 'description' => 'Edit an existing skill'],
-        ['value' => '$delete', 'label' => '$delete', 'description' => 'Delete a skill'],
-    ];
 
     // ── Public accessors for shared state ───────────────────────────────
 
@@ -558,20 +496,12 @@ HELP;
 
     public function showError(string $message): void
     {
-        $this->flushPendingQuestionRecap();
-        $widget = new TextWidget("✗ Error: {$message}");
-        $widget->addStyleClass('tool-error');
-        $this->addConversationWidget($widget);
-        $this->flushRender();
+        $this->showMessage("✗ Error: {$message}", 'tool-error');
     }
 
     public function showNotice(string $message): void
     {
-        $this->flushPendingQuestionRecap();
-        $widget = new TextWidget($message);
-        $widget->addStyleClass('subtitle');
-        $this->addConversationWidget($widget);
-        $this->flushRender();
+        $this->showMessage($message, 'subtitle');
     }
 
     public function showMode(string $label, string $color = ''): void
@@ -701,7 +631,7 @@ HELP;
 
     public function setSkillCompletions(array $completions): void
     {
-        $this->skillCompletions = $completions;
+        $this->inputHandler?->setSkillCompletions($completions);
     }
 
     public function refreshTaskBar(): void
@@ -914,6 +844,15 @@ HELP;
         return max(6, $this->tui->getTerminal()->getRows() - 10);
     }
 
+    private function showMessage(string $text, string $styleClass): void
+    {
+        $this->flushPendingQuestionRecap();
+        $widget = new TextWidget($text);
+        $widget->addStyleClass($styleClass);
+        $this->addConversationWidget($widget);
+        $this->flushRender();
+    }
+
     private function cycleMode(): string
     {
         $modes = ['edit', 'plan', 'ask'];
@@ -927,262 +866,30 @@ HELP;
         return $next;
     }
 
-    /**
-     * @param  array<array{value: string, label: string, description: string}>  $commands
-     */
-    private function showCommandCompletion(string $filter, array $commands): void
+    private function bindInputHandlers(): void
     {
-        $filtered = array_values(array_filter(
-            $commands,
-            fn (array $cmd) => $filter === '' || str_starts_with($cmd['value'], $filter),
-        ));
-
-        if ($filtered === []) {
-            $this->hideSlashCompletion();
-
-            return;
-        }
-
-        if ($this->slashCompletion === null) {
-            $this->slashCompletion = new SelectListWidget($filtered);
-            $this->slashCompletion->setId('slash-completion');
-            $this->slashCompletion->addStyleClass('slash-completion');
-            $this->overlay->add($this->slashCompletion);
-        } else {
-            $this->slashCompletion->setItems($filtered);
-        }
-
-        $this->flushRender();
-    }
-
-    private function hideSlashCompletion(): void
-    {
-        if ($this->slashCompletion !== null) {
-            $this->overlay->remove($this->slashCompletion);
-            $this->slashCompletion = null;
-            $this->flushRender();
-        }
-    }
-
-    private function toggleAllToolResults(): void
-    {
-        $toggle = function (array $widgets) use (&$toggle): void {
-            foreach ($widgets as $widget) {
-                if ($widget instanceof ToggleableWidgetInterface) {
-                    $widget->toggle();
-                }
-                if ($widget instanceof ContainerWidget) {
-                    $toggle($widget->all());
-                }
-            }
-        };
-        $toggle($this->conversation->all());
-        $this->flushRender();
-    }
-
-    public function bindInputHandlers(): void
-    {
-        $this->input->onInput(function (string $data): bool {
-            $kb = $this->input->getKeybindings();
-
-            if ($this->slashCompletion !== null) {
-                if ($kb->matches($data, 'cursor_up') || $kb->matches($data, 'cursor_down')) {
-                    $this->slashCompletion->handleInput($data);
-                    $this->flushRender();
-
-                    return true;
-                }
-                if ($kb->matches($data, 'submit')) {
-                    $selected = $this->slashCompletion->getSelectedItem();
-                    if ($selected !== null) {
-                        $command = $selected['value'];
-                        // For combined power commands, replace only the last :segment
-                        $currentText = $this->input->getText();
-                        if (str_starts_with($command, ':') && ($lastColon = strrpos($currentText, ':')) > 0) {
-                            $command = substr($currentText, 0, $lastColon).$command;
-                        }
-                        $this->input->setText('');
-                        $this->hideSlashCompletion();
-                        if ($this->promptSuspension !== null) {
-                            $suspension = $this->promptSuspension;
-                            $this->promptSuspension = null;
-                            $suspension->resume($command);
-                        }
-                    }
-
-                    return true;
-                }
-                if ($data === "\t") {
-                    $selected = $this->slashCompletion->getSelectedItem();
-                    if ($selected !== null) {
-                        $tabValue = $selected['value'];
-                        // For combined power commands, replace only the last :segment
-                        $currentText = $this->input->getText();
-                        if (str_starts_with($tabValue, ':') && ($lastColon = strrpos($currentText, ':')) > 0) {
-                            $tabValue = substr($currentText, 0, $lastColon).$tabValue;
-                        }
-                        $this->input->setText($tabValue.' ');
-                    }
-                    $this->hideSlashCompletion();
-
-                    return true;
-                }
-                if ($data === "\x1b") {
-                    $this->hideSlashCompletion();
-
-                    return true;
-                }
-            }
-
-            if ($data === "\x01") {
-                if ($this->immediateCommandHandler !== null) {
-                    ($this->immediateCommandHandler)('/agents');
-                }
-
-                return true;
-            }
-
-            if ($kb->matches($data, 'history_up')) {
-                $this->scrollHistoryUp();
-
-                return true;
-            }
-
-            if ($kb->matches($data, 'history_down')) {
-                $this->scrollHistoryDown();
-
-                return true;
-            }
-
-            if ($this->isBrowsingHistory() && $kb->matches($data, 'history_end')) {
-                $this->jumpToLiveOutput();
-
-                return true;
-            }
-
-            if ($data === "\x0C") {
-                $this->forceRender();
-
-                return true;
-            }
-
-            if ($kb->matches($data, 'expand_tools')) {
-                $this->toggleAllToolResults();
-
-                return true;
-            }
-
-            if ($kb->matches($data, 'cycle_mode')) {
-                $nextMode = $this->cycleMode();
-
-                if ($this->promptSuspension !== null) {
-                    $savedText = $this->input->getText();
-                    $suspension = $this->promptSuspension;
-                    $this->promptSuspension = null;
-                    $this->pendingEditorRestore = $savedText;
-                    $suspension->resume("/{$nextMode}");
-                } else {
-                    $modeColors = [
-                        'edit' => Theme::rgb(80, 200, 120),
-                        'plan' => Theme::agentPlan(),
-                        'ask' => Theme::rgb(255, 180, 60),
-                    ];
-                    $this->showMode(ucfirst($nextMode), $modeColors[$nextMode] ?? '');
-                    $this->messageQueue[] = "/{$nextMode}";
-                    $this->requestCancellation?->cancel();
-                    $this->requestCancellation = null;
-                }
-
-                return true;
-            }
-
-            return false;
-        });
-
-        $this->input->onCancel(function () {
-            $askSuspension = $this->modalManager->getAskSuspension();
-            if ($askSuspension !== null) {
-                $this->modalManager->clearAskSuspension();
-                $askSuspension->resume('');
-
-                return;
-            }
-
-            if ($this->requestCancellation !== null) {
-                $this->requestCancellation->cancel();
-                $this->requestCancellation = null;
-
-                return;
-            }
-
-            if ($this->promptSuspension !== null) {
-                $suspension = $this->promptSuspension;
-                $this->promptSuspension = null;
-                $suspension->resume('/quit');
-
-                return;
-            }
-
-            if ($this->immediateCommandHandler !== null) {
-                ($this->immediateCommandHandler)('/quit');
-            }
-        });
-
-        $this->input->onChange(function (ChangeEvent $event) {
-            $value = $event->getValue();
-
-            if (str_starts_with($value, '/') && $value !== '/') {
-                $this->showCommandCompletion($value, self::SLASH_COMMANDS);
-            } elseif ($value === '/') {
-                $this->showCommandCompletion('', self::SLASH_COMMANDS);
-            } elseif (str_starts_with($value, ':')) {
-                // For combined commands, complete only the last :segment
-                $lastColon = strrpos($value, ':');
-                $filter = substr($value, $lastColon);
-                $this->showCommandCompletion($filter === ':' ? '' : $filter, self::POWER_COMMANDS);
-            } elseif (str_starts_with($value, '$')) {
-                $filter = $value === '$' ? '' : $value;
-                $this->showCommandCompletion($filter, array_merge(self::DOLLAR_COMMANDS, $this->skillCompletions));
-            } else {
-                $this->hideSlashCompletion();
-            }
-        });
-
-        $this->input->onSubmit(function (SubmitEvent $event) {
-            $value = $event->getValue();
-            $this->input->setText('');
-            $this->hideSlashCompletion();
-
-            $askSuspension = $this->modalManager->getAskSuspension();
-            if ($askSuspension !== null) {
-                $this->modalManager->clearAskSuspension();
-                $askSuspension->resume($value);
-
-                return;
-            }
-
-            if ($this->requestCancellation !== null) {
-                if (trim($value) !== '') {
-                    if ($this->immediateCommandHandler !== null && ($this->immediateCommandHandler)($value)) {
-                        return;
-                    }
-                    $this->queueMessage($value);
-                }
-
-                return;
-            }
-
-            if ($this->promptSuspension !== null) {
-                $suspension = $this->promptSuspension;
-                $this->promptSuspension = null;
-                $suspension->resume($value);
-
-                return;
-            }
-
-            if (trim($value) !== '') {
-                $this->queueMessage($value);
-            }
-        });
+        $this->inputHandler = new TuiInputHandler(
+            input: $this->input,
+            conversation: $this->conversation,
+            overlay: $this->overlay,
+            modalManager: $this->modalManager,
+            flushRender: $this->flushRender(...),
+            forceRender: $this->forceRender(...),
+            scrollHistoryUp: $this->scrollHistoryUp(...),
+            scrollHistoryDown: $this->scrollHistoryDown(...),
+            jumpToLiveOutput: $this->jumpToLiveOutput(...),
+            isBrowsingHistory: $this->isBrowsingHistory(...),
+            cycleMode: $this->cycleMode(...),
+            showMode: $this->showMode(...),
+            queueMessage: fn (string $msg) => $this->queueMessage($msg),
+            queueMessageSilent: fn (string $msg) => $this->messageQueue[] = $msg,
+            getImmediateCommandHandler: fn () => $this->immediateCommandHandler,
+            getPromptSuspension: fn () => $this->promptSuspension,
+            clearPromptSuspension: fn () => $this->promptSuspension = null,
+            setPendingEditorRestore: fn (?string $v) => $this->pendingEditorRestore = $v,
+            getRequestCancellation: fn () => $this->requestCancellation,
+            clearRequestCancellation: fn () => $this->requestCancellation = null,
+        );
+        $this->inputHandler->bind();
     }
 }

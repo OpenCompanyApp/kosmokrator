@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
+use Generator;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Tool;
 
@@ -25,6 +26,25 @@ interface LlmClientInterface
      * @return LlmResponse Parsed response with text, tool calls, and usage data
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse;
+
+    /**
+     * Stream a chat-completion request, yielding incremental events.
+     *
+     * Returns a Generator that yields LlmStreamingEvent objects as they arrive
+     * from the provider. The final event is always a 'stream_end' with usage data.
+     * Callers that don't need streaming should use chat() instead.
+     *
+     * @param  Message[]  $messages  Conversation history as Prism Message objects
+     * @param  Tool[]  $tools  Available tools for function calling
+     * @param  Cancellation  $cancellation  Optional Amp cancellation token
+     * @return Generator<LlmStreamingEvent>
+     */
+    public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): Generator;
+
+    /**
+     * Whether this client supports streaming for the current provider.
+     */
+    public function supportsStreaming(): bool;
 
     public function setSystemPrompt(string $prompt): void;
 

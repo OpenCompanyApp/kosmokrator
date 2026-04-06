@@ -54,18 +54,18 @@ Ranked by impact (severity × likelihood × affected surface).
 | 2 | **Permission evaluator defaults to Allow** | `PermissionEvaluator.php:66-68` | Any tool not explicitly covered by rules/grants/blocked-paths is auto-approved. Security should default-deny. |
 | 3 | **Non-atomic file writes** | `FileWriteTool.php:49` | `file_put_contents()` leaves partial files on crash. `FileEditTool` correctly uses temp+rename; `FileWriteTool` does not. |
 | 4 | **Shell sessions orphaned on process crash** | `ShellSessionManager.php:164-179` | No `__destruct()` or shutdown handler. SIGKILL leaves zombie processes. |
-| 5 | **`reloadRepository()` loses YAML overrides** | `SettingsManager.php:267-274` | After any settings write, in-memory config reverts to bundled defaults only, discarding user/project YAML. |
-| 6 | **Audio config mutates shared LLM client** | `SessionServiceProvider.php:56-65` | `setProvider()`/`setModel()` on the shared singleton permanently changes the LLM for all agent calls, not just audio. |
+| ~~5~~ | ~~**`reloadRepository()` loses YAML overrides**~~ | ~~`SettingsManager.php:267-274`~~ | **FIXED** — `reloadRepository()` now re-applies global and project YAML overrides after reload. |
+| ~~6~~ | ~~**Audio config mutates shared LLM client**~~ | ~~`SessionServiceProvider.php:56-65`~~ | **FIXED** — Audio now creates a dedicated `PrismService` instance instead of mutating the shared singleton. |
 | 7 | **TUI modal stacking causes deadlock** | `TuiModalManager.php` | No mutex prevents two modals from being shown simultaneously. If `askToolPermission()` fires during `askUser()`, deadlock. |
-| 8 | **No `SQLITE_BUSY` handling** | `Database.php:38-39` | Missing `PRAGMA busy_timeout`. Two KosmoKrator processes writing simultaneously crash immediately. |
+| ~~8~~ | ~~**No `SQLITE_BUSY` handling**~~ | ~~`Database.php:38-39`~~ | **FIXED** — `PRAGMA busy_timeout=5000` added. |
 | 9 | **Unlimited LLM retries by default** | `RetryableLlmClient.php:37`, `LlmServiceProvider.php:81` | `$maxAttempts = 0` = infinite retries. Persistent 429/5xx loops forever. |
-| 10 | **Tool result ordering doesn't match call order** | `ToolExecutor.php:212-217` | Denied results are appended after approved results, confusing the LLM which expects results in call order. |
-| 11 | **`OutputTruncator::truncate()` splits mid-UTF8** | `OutputTruncator.php:96-98` | `substr()` on byte boundary can slice through multi-byte characters, producing corrupted output sent to the LLM API. |
+| ~~10~~ | ~~**Tool result ordering doesn't match call order**~~ | ~~`ToolExecutor.php:212-217`~~ | **FIXED** — Results now merged in original tool call order (approved + denied interleaved). |
+| ~~11~~ | ~~**`OutputTruncator::truncate()` splits mid-UTF8**~~ | ~~`OutputTruncator.php:96-98`~~ | **FIXED** — Now uses `mb_strcut()` for UTF-8-safe truncation. |
 | 12 | **Context compactor LLM call has no cancellation** | `ContextCompactor.php:164-167` | User cancel during compaction doesn't abort the compaction LLM request. |
 | 13 | **No signal handling in AgentCommand** | `AgentCommand.php` | Ctrl+C skips teardown — no `killAll()`, no `cancelAll()`, no `ui->teardown()`. Orphaned processes, broken terminal state. |
 | 14 | **Silent message loss on null tool_result** | `MessageSerializer.php:109-111` | Missing `tool_results` data → `null` → silently filtered → broken conversation flow → API errors. |
 | 15 | **No session/message deletion** | `SessionRepositoryInterface.php` | Database grows without bound. No way to clean up old sessions or their messages. |
-| 16 | **`PrismService` drops `reasoningContent`** | `PrismService.php:111-120` | Reasoning/thinking content silently lost for Prism-backed providers (Anthropic, Gemini). |
+| ~~16~~ | ~~**`PrismService` drops `reasoningContent`**~~ | ~~`PrismService.php:111-120`~~ | **FIXED** — reasoning/thinking content extracted from `additionalContent` and passed through to `LlmResponse`. |
 | 17 | **AnsiTheogony: 80s unskippable animation** | `AnsiTheogony.php` | No skip mechanism. Screen shake bug (both branches produce same direction). |
 | 18 | **Triple concurrent 30fps render timers** | `TuiAnimationManager.php:378`, `TuiToolRenderer.php:267`, `SubagentDisplayManager.php:205` | Breathing + loader + tool-executing timers each trigger full terminal re-render independently. |
 | 19 | **Substring model matching can return wrong spec** | `ModelDefinitionSource.php:86-101` | `"gpt-4o-mini"` matches `"gpt-4o"` if mini not explicitly defined. Wrong pricing/context window. |
@@ -73,7 +73,7 @@ Ranked by impact (severity × likelihood × affected surface).
 | 21 | **Non-atomic config file writes** | `YamlConfigStore.php:60` | `file_put_contents()` without temp+rename. Crash mid-write = corrupted YAML. |
 | 22 | **`forProject()` loads ALL memories into RAM** | `MemoryRepository.php:65-88` | No limit/pagination. O(n log n) sort on full dataset every retrieval. |
 | 23 | **`AsyncLlmClient` provider list not checked by factory** | `LlmClientFactory.php:45` vs `AsyncLlmClient.php:34` | Two independent provider lists can drift. Factory creates client for providers not in the compatibility list. |
-| 24 | **`collectResult()` detects errors by "Error:" prefix** | `ToolExecutor.php:405` | `str_starts_with($result, 'Error:')` — grep output for the word "Error:" is falsely marked as failed. |
+| ~~24~~ | ~~**`collectResult()` detects errors by "Error:" prefix**~~ | ~~`ToolExecutor.php:405`~~ | **FIXED** — Now uses `ToolCallMapper::isErrorResult()` with binary `\x01ERROR:` prefix, eliminating false positives. |
 | 25 | **No terminal capability detection** | `UIManager.php:377-389`, `Theme.php` | Unconditional 24-bit color + Unicode. No `NO_COLOR`, `COLORTERM`, or `TERM` check. Garbled on limited terminals. |
 | 26 | **`yieldSlot`/`reclaimSlot` slot leak for root agent** | `SubagentOrchestrator.php:471-496` | Root agent never acquires semaphore lock but `reclaimSlot` consumes one permanently. After N calls → deadlock. |
 | 27 | **Shared `ContextBudget` across all subagent depths** | `SubagentFactory.php:87` | Deep child compaction deducts from root's budget pool. Root can run out prematurely. |
@@ -90,21 +90,21 @@ Ranked by impact (severity × likelihood × affected surface).
 **Files**: `src/Agent/AgentLoop.php` (858 lines), `ToolExecutor.php` (465 lines), `ContextManager.php`, `StuckDetector.php`, `OutputTruncator.php`, `TokenEstimator.php`
 
 #### Critical
-- `OutputTruncator::truncate()` uses byte-level `substr()` that can split mid-UTF8 character (`OutputTruncator.php:96-98`)
+- ~~`OutputTruncator::truncate()` uses byte-level `substr()` that can split mid-UTF8 character~~ (**FIXED** — uses `mb_strcut()`)
 - `BashTool::$progressCallback` is static mutable — race condition in concurrent bash execution (`ToolExecutor.php:162`)
 - Context compactor LLM call has no cancellation support (`ContextCompactor.php:164-167`)
 
 #### Important
-- **Tool result ordering bug**: denied results appended after approved, not matching tool call order (`ToolExecutor.php:212-217`)
+- ~~**Tool result ordering bug**: denied results appended after approved, not matching tool call order~~ (**FIXED** — results merged in original call order)
 - **Stuck detector misses oscillating patterns**: only checks last signature, escalation resets on any non-stuck round (`StuckDetector.php:49-58`)
 - **Token estimation 15-30% low for code**: fixed 4 chars/token ratio (`TokenEstimator.php:37`)
 - **No max-iteration guard in `run()`**: infinite tool-call loop possible in interactive mode (`AgentLoop.php:198`)
-- **`collectResult()` detects errors by "Error:" string prefix**: fragile, false positives on grep output (`ToolExecutor.php:405`)
+- ~~**`collectResult()` detects errors by "Error:" string prefix**: fragile, false positives on grep output~~ (**FIXED** — uses `ToolCallMapper::isErrorResult()`)
 - **`ContextBudget` default `reserveOutputTokens=0`**: no room for LLM response → API error (`ContextBudget.php:53-56`)
 - **`isContextOverflow()` is a fragile heuristic**: string matching on error messages from different providers (`AgentLoop.php:748-757`)
 - **`apply_patch` args don't populate `$writePaths`**: concurrent `file_read` of patched file gets stale data (`ToolExecutor.php:341-357`)
 - **No timeout on individual tool execution**: misbehaving tool blocks event loop (`ToolExecutor.php:168`)
-- **`shell_kill` not in read-only guard**: state-changing operation bypasses Ask/Plan mode checks (`ToolExecutor.php:109`)
+- ~~**`shell_kill` not in read-only guard**: state-changing operation bypasses Ask/Plan mode checks~~ (**FIXED** — `isReadOnlyShellTool()` includes `shell_kill`)
 - **`findTool()` is O(n) linear scan**: should use hash map (`ToolExecutor.php:437-446`)
 
 #### Minor
@@ -265,7 +265,7 @@ Ranked by impact (severity × likelihood × affected surface).
 **Files**: `src/Session/Database.php`, `MessageRepository.php`, `MessageSerializer.php`, `SessionManager.php`, `MemoryRepository.php`, `MemorySelector.php`
 
 #### Critical
-- **No `PRAGMA busy_timeout`**: concurrent writes crash with `SQLITE_BUSY` (`Database.php:38-39`)
+- ~~**No `PRAGMA busy_timeout`**: concurrent writes crash with `SQLITE_BUSY` (`Database.php:38-39`)~~ (**FIXED** — `busy_timeout=5000` added)
 - **Silent message loss on null tool_result**: message silently dropped → broken conversation → API errors (`MessageSerializer.php:109-111`)
 - **No session/message deletion**: database grows unbounded
 - **`forProject()` loads ALL memories**: no limit, O(n log n) sort every retrieval (`MemoryRepository.php:65-88`)
@@ -326,9 +326,9 @@ Ranked by impact (severity × likelihood × affected surface).
 **Files**: `src/Settings/SettingsManager.php`, `YamlConfigStore.php`, `SettingsSchema.php`, `ConfigLoader.php`, `src/Provider/*`
 
 #### Critical
-- **`reloadRepository()` loses user/project YAML overrides**: only reloads bundled defaults (`SettingsManager.php:267-274`)
-- **Non-atomic config writes**: `file_put_contents()` without temp+rename (`YamlConfigStore.php:60`)
-- **Audio config mutates shared LLM client**: `setProvider()`/`setModel()` on shared singleton (`SessionServiceProvider.php:56-65`)
+- ~~**`reloadRepository()` loses user/project YAML overrides**: only reloads bundled defaults (`SettingsManager.php:267-274`)~~ (**FIXED** — re-applies global and project YAML overrides after reload)
+- ~~**Non-atomic config writes**: `file_put_contents()` without temp+rename (`YamlConfigStore.php:60`)~~ (still open)
+- ~~**Audio config mutates shared LLM client**: `setProvider()`/`setModel()` on shared singleton (`SessionServiceProvider.php:56-65`)~~ (**FIXED** — dedicated `PrismService` instance for audio)
 - **Migration rewrites YAML every boot**: non-atomic, no one-time flag (`DatabaseServiceProvider.php:92-145`)
 - **Provider registration order is implicit**: hardcoded sequence, no dependency declaration (`Kernel.php:48-58`)
 - **`LlmServiceProvider` captures stale config**: singletons don't reflect runtime settings changes
@@ -448,7 +448,7 @@ Ranked by impact (severity × likelihood × affected surface).
 - **Fix**: Extract a shared `AtomicFileWriter` utility that does write-to-temp + `rename()`.
 
 ### 3. Fragile String-Based Detection (4 instances)
-- `collectResult()` — `"Error:"` prefix for success detection
+- ~~`collectResult()` — `"Error:"` prefix for success detection~~ (**FIXED**)
 - `isContextOverflow()` — string matching on error messages
 - `showBatch()` — substring `"spawned in background"` for filtering
 - `PermissionConfigParser` — tool name string matching for opt-in security
@@ -516,12 +516,12 @@ Across 8+ files, colors bypass `Theme` with slightly different RGB values. This 
 |---|------------|--------|--------|
 | 1 | Add `AtomicFileWriter` utility, use in `FileWriteTool`, `YamlConfigStore`, `PatchApplier` | 2h | Fixes 6 non-atomic write bugs |
 | 2 | Add path containment check in file tools (validate against project root) | 1h | Critical security fix |
-| 3 | Fix `OutputTruncator::truncate()` to use `mb_strcut()` instead of `substr()` | 15min | Prevents UTF-8 corruption |
-| 4 | Fix tool result ordering in `ToolExecutor` to match original call order | 30min | Fixes LLM confusion |
-| 5 | Add `PRAGMA busy_timeout=5000` to Database constructor | 1 line | Fixes concurrent process crashes |
+| ~~3~~ | ~~Fix `OutputTruncator::truncate()` to use `mb_strcut()` instead of `substr()`~~ | ~~15min~~ | **FIXED** |
+| ~~4~~ | ~~Fix tool result ordering in `ToolExecutor` to match original call order~~ | ~~30min~~ | **FIXED** |
+| ~~5~~ | ~~Add `PRAGMA busy_timeout=5000` to Database constructor~~ | ~~1 line~~ | **FIXED** |
 | 6 | Set `maxAttempts` default to 3 in `RetryableLlmClient` or `LlmServiceProvider` | 1 line | Prevents infinite retry loops |
-| 7 | Fix `reloadRepository()` to re-merge all YAML layers | 2h | Prevents config loss |
-| 8 | Fix audio config to clone LLM client instead of mutating shared singleton | 30min | Prevents all-agent LLM corruption |
+| ~~7~~ | ~~Fix `reloadRepository()` to re-merge all YAML layers~~ | ~~2h~~ | **FIXED** |
+| ~~8~~ | ~~Fix audio config to clone LLM client instead of mutating shared singleton~~ | ~~30min~~ | **FIXED** |
 | 9 | Add modal mutex in `TuiModalManager` | 1h | Prevents deadlock |
 
 ### P1 — Do Soon (Stability & UX)
@@ -532,8 +532,8 @@ Across 8+ files, colors bypass `Theme` with slightly different RGB values. This 
 | 11 | Add signal handler in `AgentCommand` for cleanup on SIGINT/SIGTERM | 2h | Prevents resource leaks |
 | 12 | Add `TerminalCapabilities` detection class | 3h | Enables light/dark, color depth, Unicode fallbacks |
 | 13 | Move 30+ hardcoded ANSI codes to `Theme` palette methods | 4h | Color consistency, maintainability |
-| 14 | Add `shell_kill` to read-only mode guard | 5min | Prevents state change in Ask/Plan mode |
-| 15 | Fix `collectResult()` to use typed error detection instead of string prefix | 1h | Prevents false negatives |
+| ~~14~~ | ~~Add `shell_kill` to read-only mode guard~~ | ~~5min~~ | **FIXED** — already in `isReadOnlyShellTool()` list |
+| ~~15~~ | ~~Fix `collectResult()` to use typed error detection instead of string prefix~~ | ~~1h~~ | **FIXED** — uses `ToolCallMapper::isErrorResult()` |
 | 16 | Add streaming output to ANSI renderer | 4h | Major UX improvement |
 | 17 | Add `/help` command | 1h | Discoverability |
 | 18 | Fix `PrismService` to pass through `reasoningContent` | 30min | Restores thinking content for Anthropic/Gemini |

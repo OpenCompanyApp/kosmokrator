@@ -117,6 +117,120 @@ final class AnsiDialogRenderer implements DialogRendererInterface
             return null;
         }
 
+        if (! defined('STDIN') || ! posix_isatty(STDIN)) {
+            return $this->pickSessionReadline($items);
+        }
+
+        $maxVisible = 8;
+        $selected = 0;
+        $total = count($items);
+
+        $originalTty = trim((string) shell_exec('stty -g 2>/dev/null'));
+        shell_exec('stty -icanon -echo 2>/dev/null');
+        echo Theme::hideCursor();
+
+        $restoreTerminal = static function () use ($originalTty): void {
+            echo Theme::showCursor();
+            shell_exec('stty '.escapeshellarg($originalTty).' 2>/dev/null');
+        };
+        register_shutdown_function($restoreTerminal);
+
+        $renderedLines = 0;
+
+        try {
+            $renderedLines = $this->renderSessionFrame($items, $selected, $maxVisible);
+
+            while (true) {
+                $input = fread(STDIN, 8);
+                if ($input === false || $input === '') {
+                    continue;
+                }
+
+                $prev = $selected;
+
+                if ($input === "\033[A") { // Up
+                    $selected = $selected > 0 ? $selected - 1 : $total - 1;
+                } elseif ($input === "\033[B") { // Down
+                    $selected = $selected < $total - 1 ? $selected + 1 : 0;
+                } elseif ($input === "\033[5~") { // PageUp
+                    $selected = max(0, $selected - $maxVisible);
+                } elseif ($input === "\033[6~") { // PageDown
+                    $selected = min($total - 1, $selected + $maxVisible);
+                } elseif ($input === "\n" || $input === "\r") {
+                    return $items[$selected]['value'];
+                } elseif ($input === "\033" || $input === "\x03" || $input === 'q') {
+                    return null;
+                } else {
+                    continue;
+                }
+
+                if ($prev !== $selected) {
+                    // Move cursor up to overwrite previous frame
+                    echo "\033[{$renderedLines}A";
+                    $renderedLines = $this->renderSessionFrame($items, $selected, $maxVisible);
+                }
+            }
+        } finally {
+            // Clear the frame before restoring
+            if ($renderedLines > 0) {
+                echo "\033[{$renderedLines}A";
+                for ($i = 0; $i < $renderedLines; $i++) {
+                    echo "\033[2K\n";
+                }
+                echo "\033[{$renderedLines}A";
+            }
+            $restoreTerminal();
+        }
+    }
+
+    /**
+     * Render the scrollable session picker frame and return line count.
+     *
+     * @param  array<array{value: string, label: string, description?: string}>  $items
+     */
+    private function renderSessionFrame(array $items, int $selected, int $maxVisible): int
+    {
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $accent = Theme::accent();
+        $white = "\033[1;37m";
+        $total = count($items);
+        $project = basename(getcwd());
+
+        $offset = max(0, min($selected - (int) floor($maxVisible / 2), $total - $maxVisible));
+        $end = min($offset + $maxVisible, $total);
+        $lines = 0;
+
+        echo "\033[2K{$white}  Sessions ({$project}):{$r}\n";
+        $lines++;
+
+        for ($i = $offset; $i < $end; $i++) {
+            $item = $items[$i];
+            $label = $item['label'];
+            $desc = $item['description'] ?? '';
+
+            if ($i === $selected) {
+                echo "\033[2K{$accent}  → {$label}  {$dim}{$desc}{$r}\n";
+            } else {
+                echo "\033[2K{$dim}    {$r}{$label}  {$dim}{$desc}{$r}\n";
+            }
+            $lines++;
+        }
+
+        $nav = '↑↓ navigate  Enter select  Esc cancel';
+        echo "\033[2K{$dim}  (".($selected + 1)."/{$total})  {$nav}{$r}\n";
+        $lines++;
+
+        return $lines;
+    }
+
+    /**
+     * Fallback numbered-list picker for non-TTY environments.
+     *
+     * @param  array<array{value: string, label: string, description?: string}>  $items
+     */
+    private function pickSessionReadline(array $items): ?string
+    {
         $r = Theme::reset();
         $dim = Theme::dim();
         $white = "\033[1;37m";

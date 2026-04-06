@@ -340,7 +340,7 @@ final class TuiModalManager
             return null;
         }
 
-        $selectList = new SelectListWidget($items, maxVisible: 8);
+        $selectList = new SelectListWidget($items, maxVisible: 12);
         $selectList->setId('session-picker');
         $selectList->addStyleClass('slash-completion');
 

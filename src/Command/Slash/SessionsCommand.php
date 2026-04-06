@@ -74,7 +74,7 @@ class SessionsCommand implements SlashCommand
 
     private function listSessions(SlashCommandContext $ctx): SlashCommandResult
     {
-        $sessions = $ctx->sessionManager->listSessions(10);
+        $sessions = $ctx->sessionManager->listSessions(50);
 
         if ($sessions === []) {
             $ctx->ui->showNotice('No sessions found for this project.');

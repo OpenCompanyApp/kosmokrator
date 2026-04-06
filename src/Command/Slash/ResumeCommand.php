@@ -41,7 +41,7 @@ class ResumeCommand implements SlashCommand
         // No args → show interactive session picker
         if ($args === '') {
             // Interactive picker
-            $sessions = $ctx->sessionManager->listSessions(10);
+            $sessions = $ctx->sessionManager->listSessions(50);
             if ($sessions === []) {
                 $ctx->ui->showNotice('No sessions to resume.');
 

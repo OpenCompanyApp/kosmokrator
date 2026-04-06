@@ -69,7 +69,20 @@ final class ToolExecutor
         $seenAskTool = false;
 
         foreach ($toolCalls as $toolCall) {
-            $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $toolCall->arguments()]);
+            // Guard against malformed JSON arguments from the LLM
+            try {
+                $args = $toolCall->arguments();
+            } catch (\JsonException $e) {
+                $output = "Invalid tool call arguments (malformed JSON): {$e->getMessage()}. Please retry with valid JSON arguments.";
+                $this->log->warning('Malformed tool call arguments', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
+                SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, []), $this->log);
+                SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
+                $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, [], $output);
+
+                continue;
+            }
+
+            $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $args]);
 
             if ($this->isAskTool($toolCall->name)) {
                 if ($seenAskTool) {

@@ -72,7 +72,7 @@ class ResumeCommandTest extends TestCase
     public function test_execute_with_empty_args_and_no_sessions_shows_notice(): void
     {
         $sessionManager = $this->createMock(SessionManager::class);
-        $sessionManager->expects($this->once())->method('listSessions')->with(10)->willReturn([]);
+        $sessionManager->expects($this->once())->method('listSessions')->with(50)->willReturn([]);
 
         $ui = $this->createMock(UIManager::class);
         $ui->expects($this->once())->method('showNotice')->with('No sessions to resume.');
@@ -97,7 +97,7 @@ class ResumeCommandTest extends TestCase
         ];
 
         $sessionManager = $this->createMock(SessionManager::class);
-        $sessionManager->expects($this->once())->method('listSessions')->with(10)->willReturn($sessions);
+        $sessionManager->expects($this->once())->method('listSessions')->with(50)->willReturn($sessions);
         $sessionManager->expects($this->once())->method('currentSessionId')->willReturn('other-id');
         $sessionManager->expects($this->once())->method('resumeSession')->with('sess-1')->willReturn(
             $history = $this->createStub(ConversationHistory::class)
@@ -144,7 +144,7 @@ class ResumeCommandTest extends TestCase
         ];
 
         $sessionManager = $this->createMock(SessionManager::class);
-        $sessionManager->expects($this->once())->method('listSessions')->with(10)->willReturn($sessions);
+        $sessionManager->expects($this->once())->method('listSessions')->with(50)->willReturn($sessions);
         $sessionManager->expects($this->once())->method('currentSessionId')->willReturn('other-id');
         $sessionManager->expects($this->never())->method('resumeSession');
 

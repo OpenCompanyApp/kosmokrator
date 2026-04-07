@@ -441,6 +441,9 @@ HELP;
         $lines = explode("\n", $content);
         $header = "{$dim}{$border}⟐{$r} {$dim}Reasoning{$r}";
 
+        // Add spacing between user message and reasoning block
+        $this->addConversationWidget(new TextWidget(''));
+
         $widget = new Widget\CollapsibleWidget(
             header: $header,
             content: $content,

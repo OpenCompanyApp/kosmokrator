@@ -232,8 +232,9 @@ class AgentLoop
                     ));
 
                     // Show reasoning as a single collapsed block (both streaming and non-streaming)
-                    // Only show reasoning if it has meaningful content (skip trivial fragments)
-                    if (mb_strlen(trim($responseData->reasoningContent)) > 40) {
+                    // Only show reasoning if the setting is enabled and content is meaningful
+                    $showReasoning = ($this->sessionManager?->getSetting('show_reasoning') ?? 'off') === 'on';
+                    if ($showReasoning && mb_strlen(trim($responseData->reasoningContent)) > 40) {
                         SafeDisplay::call(fn () => $this->ui->showReasoningContent($responseData->reasoningContent), $this->log);
                     }
 

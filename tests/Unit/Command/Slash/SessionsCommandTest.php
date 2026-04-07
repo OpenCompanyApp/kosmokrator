@@ -67,7 +67,7 @@ class SessionsCommandTest extends TestCase
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
             ->method('listSessions')
-            ->with(10)
+            ->with(50)
             ->willReturn([]);
 
         $ui = $this->createMock(UIManager::class);
@@ -105,7 +105,7 @@ class SessionsCommandTest extends TestCase
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
             ->method('listSessions')
-            ->with(10)
+            ->with(50)
             ->willReturn($sessions);
         $sessionManager->expects($this->exactly(2))
             ->method('currentSessionId')
@@ -150,7 +150,7 @@ class SessionsCommandTest extends TestCase
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
             ->method('listSessions')
-            ->with(10)
+            ->with(50)
             ->willReturn($sessions);
         $sessionManager->expects($this->once())
             ->method('currentSessionId')

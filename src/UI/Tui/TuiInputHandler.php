@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui;
 
+use Amp\DeferredCancellation;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\ToggleableWidgetInterface;
 use Revolt\EventLoop\Suspension;
@@ -102,7 +103,7 @@ final class TuiInputHandler
      * @param  \Closure(): (?Suspension)  $getPromptSuspension  Returns the current prompt suspension
      * @param  \Closure(null): void  $clearPromptSuspension  Clears the prompt suspension
      * @param  \Closure(?string): void  $setPendingEditorRestore  Sets pending editor restore value
-     * @param  \Closure(): ?\Amp\DeferredCancellation  $getRequestCancellation  Returns the current request cancellation
+     * @param  \Closure(): ?DeferredCancellation  $getRequestCancellation  Returns the current request cancellation
      * @param  \Closure(null): void  $clearRequestCancellation  Clears the request cancellation
      */
     public function __construct(

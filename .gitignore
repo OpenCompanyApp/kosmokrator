@@ -11,6 +11,6 @@
 /.playwright-cli
 /builds
 /.kosmokrator
-/storage/logs
+/storage
 tui_err.log
 tui_error.log

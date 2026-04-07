@@ -164,7 +164,7 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         $truncated = count($lines) > 10;
         $preview = implode("\n", array_slice($lines, 0, 10));
 
-        echo "\n{$dim}{$border}⟐ Reasoning{$r}\n";
+        echo "\n\n{$dim}{$border}⟐ Reasoning{$r}\n";
         echo "{$dim}{$preview}{$r}\n";
         if ($truncated) {
             echo "{$dim}  ... +".(count($lines) - 10)." lines{$r}\n";

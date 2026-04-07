@@ -48,7 +48,7 @@ class PermissionRule
             $reason = "Tool '{$toolName}' is denied by policy.";
         }
 
-        return new PermissionResult($this->action, $reason ?? '');
+        return new PermissionResult($this->action, $reason);
     }
 
     /**

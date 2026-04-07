@@ -31,7 +31,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('memory_search', $tools);
         $this->assertContains('memory_save', $tools);
         $this->assertContains('subagent', $tools);
-        $this->assertCount(20, $tools);
+        $this->assertCount(24, $tools);
     }
 
     public function test_plan_mode_has_read_only_tools(): void

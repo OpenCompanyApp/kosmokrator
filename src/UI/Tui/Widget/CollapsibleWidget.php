@@ -3,6 +3,7 @@
 namespace Kosmokrator\UI\Tui\Widget;
 
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Performance\CompactableWidgetInterface;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\AbstractWidget;
@@ -12,7 +13,7 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
  * expanding to full content on toggle. Used for command output, file diffs, and similar
  * expandable sections in the TUI.
  */
-class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterface
+class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterface, CompactableWidgetInterface
 {
     private const PREVIEW_LINES = 3;
 
@@ -20,6 +21,12 @@ class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterf
     private bool $expanded = false;
 
     private string $content;
+
+    private bool $compacted = false;
+
+    private ?string $compactedSummary = null;
+
+    private int $estimatedHeight = 0;
 
     /**
      * @param  string  $header  Status line (e.g. "✓")
@@ -34,6 +41,7 @@ class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterf
     ) {
         // Normalize tabs — TUI renderer expands them but visibleWidth may not
         $this->content = str_replace("\t", '   ', $content);
+        $this->estimatedHeight = max(1, $lineCount);
     }
 
     /** Toggle between collapsed (preview) and expanded views. */
@@ -109,5 +117,40 @@ class CollapsibleWidget extends AbstractWidget implements ToggleableWidgetInterf
         }
 
         return $result;
+    }
+
+    // ── CompactableWidgetInterface ──────────────────────────────────────
+
+    public function compact(): void
+    {
+        if ($this->compacted) {
+            return;
+        }
+
+        // Derive a summary from the header line (strips ANSI)
+        $summary = preg_replace('/\x1b\[[0-9;]*m/', '', $this->header);
+        $this->compactedSummary = trim($summary) !== ''
+            ? mb_substr(trim($summary), 0, 80)
+            : '(collapsible content)';
+
+        $this->compacted = true;
+
+        // Free the expensive content
+        $this->content = '';
+    }
+
+    public function isCompacted(): bool
+    {
+        return $this->compacted;
+    }
+
+    public function getSummaryLine(): string
+    {
+        return $this->compactedSummary ?? strip_tags($this->header);
+    }
+
+    public function getEstimatedHeight(): int
+    {
+        return $this->estimatedHeight;
     }
 }

@@ -7,6 +7,7 @@ namespace Kosmokrator\UI\Tui;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Layout\TerminalDimension;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
@@ -66,6 +67,7 @@ final class SubagentDisplayManager
         private readonly ?LoggerInterface $log = null,
         private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
         private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
+        private readonly ?\Closure $dimensionProvider = null,
     ) {}
 
     /**
@@ -81,6 +83,21 @@ final class SubagentDisplayManager
     public function hasRunningAgents(): bool
     {
         return $this->loader !== null;
+    }
+
+    /**
+     * Return the responsive tool-call width for collapsible widgets.
+     */
+    private function toolCallWidth(): int
+    {
+        if ($this->dimensionProvider !== null) {
+            $dimension = ($this->dimensionProvider)();
+            if ($dimension instanceof TerminalDimension) {
+                return $dimension->toolCallWidth();
+            }
+        }
+
+        return 120; // fallback
     }
 
     /**
@@ -316,7 +333,7 @@ final class SubagentDisplayManager
                 $container->add($treeWidget);
             }
 
-            $widget = new CollapsibleWidget("{$icon} {$label}{$stats}", $e['result'], 1, 120);
+            $widget = new CollapsibleWidget("{$icon} {$label}{$stats}", $e['result'], 1, $this->toolCallWidth());
             $widget->addStyleClass('tool-result');
             $container->add($widget);
             ($this->renderCallback)();
@@ -352,7 +369,7 @@ final class SubagentDisplayManager
         $container->add($summary);
 
         $details = implode("\n---\n", array_map(fn ($e) => $e['result'], $entries));
-        $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
+        $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, $this->toolCallWidth());
         $expand->addStyleClass('tool-result');
         $container->add($expand);
         ($this->renderCallback)();

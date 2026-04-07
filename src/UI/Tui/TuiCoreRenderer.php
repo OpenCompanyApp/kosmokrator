@@ -6,6 +6,7 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiAnimation;
@@ -16,9 +17,25 @@ use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Input\InputHistory;
+use Kosmokrator\UI\Tui\Input\KeybindingRegistry;
+use Kosmokrator\UI\Tui\Layout\DimensionProvider;
+use Kosmokrator\UI\Tui\Layout\TerminalDimension;
+use Kosmokrator\UI\Tui\Performance\RenderScheduler;
+use Kosmokrator\UI\Tui\Toast\ToastManager;
+use Kosmokrator\UI\Tui\Toast\ToastOverlayWidget;
+use Kosmokrator\UI\Tui\Terminal\AdvancedTextDecoration;
+use Kosmokrator\UI\Tui\Performance\WidgetCompactor;
+use Kosmokrator\UI\Tui\Streaming\StreamingThrottler;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
+use Kosmokrator\UI\Tui\Widget\CommandPaletteWidget;
 use Kosmokrator\UI\Tui\Widget\HistoryStatusWidget;
+use Kosmokrator\UI\Tui\Widget\ToggleableWidgetInterface;
+use Kosmokrator\UI\Tui\Widget\StatusBarWidget;
+use Kosmokrator\UI\Tui\Widget\ScrollbarState;
+use Kosmokrator\UI\Tui\Widget\ScrollbarWidget;
+use Kosmokrator\UI\Tui\Widget\StreamingMarkdownWidget;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -29,7 +46,6 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
-use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -48,7 +64,9 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private HistoryStatusWidget $historyStatus;
 
-    private ProgressBarWidget $statusBar;
+    private ?ScrollbarWidget $scrollbar = null;
+
+    private StatusBarWidget $statusBar;
 
     private ContainerWidget $overlay;
 
@@ -62,7 +80,11 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private TuiAnimationManager $animationManager;
 
+    private RenderScheduler $scheduler;
+
     private TuiModalManager $modalManager;
+
+    private TuiStateStore $state;
 
     private ?string $pendingEditorRestore = null;
 
@@ -74,8 +96,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
     private string $currentModeLabel = 'Edit';
 
     private string $currentModeColor = "\033[38;2;80;200;120m";
-
-    private string $statusDetail = 'Ready';
 
     private string $currentPermissionLabel = 'Guardian ◈';
 
@@ -89,9 +109,13 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?int $lastStatusMaxContext = null;
 
-    private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
+    private MarkdownWidget|AnsiArtWidget|StreamingMarkdownWidget|null $activeResponse = null;
 
     private bool $activeResponseIsAnsi = false;
+
+    private ?StreamingThrottler $streamThrottler = null;
+
+    private ?WidgetCompactor $compactor = null;
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -100,7 +124,13 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?TuiInputHandler $inputHandler = null;
 
+    private ?CommandPaletteWidget $commandPalette = null;
+
+    private KeybindingRegistry $keybindingRegistry;
+
     private ?TaskStore $taskStore = null;
+
+    private ?DimensionProvider $dimensionProvider = null;
 
     /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
     private array $pendingQuestionRecap = [];
@@ -116,6 +146,16 @@ final class TuiCoreRenderer implements CoreRendererInterface
         return $this->tui;
     }
 
+    /**
+     * Return the current terminal dimensions with breakpoint semantics.
+     */
+    public function getDimension(): TerminalDimension
+    {
+        $this->dimensionProvider ??= new DimensionProvider($this->tui);
+
+        return $this->dimensionProvider->provide();
+    }
+
     public function getConversation(): ContainerWidget
     {
         return $this->conversation;
@@ -124,6 +164,11 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function getOverlay(): ContainerWidget
     {
         return $this->overlay;
+    }
+
+    public function getCommandPalette(): ?CommandPaletteWidget
+    {
+        return $this->commandPalette;
     }
 
     public function getSession(): ContainerWidget
@@ -139,6 +184,11 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function getAnimationManager(): TuiAnimationManager
     {
         return $this->animationManager;
+    }
+
+    public function getScheduler(): RenderScheduler
+    {
+        return $this->scheduler;
     }
 
     public function getSubagentDisplay(): SubagentDisplayManager
@@ -180,6 +230,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     public function initialize(): void
     {
+        $this->state = new TuiStateStore();
         $this->tui = new Tui(KosmokratorStyleSheet::create());
 
         $this->session = new ContainerWidget;
@@ -191,20 +242,26 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
 
+        $this->compactor = new WidgetCompactor($this->conversation);
+
         $this->historyStatus = new HistoryStatusWidget;
         $this->historyStatus->setId('history-status');
 
-        $this->statusBar = new ProgressBarWidget(200_000, '%message%  %bar%');
+        $this->scrollbar = new ScrollbarWidget;
+        $this->scrollbar->setId('scrollbar');
+
+        $this->statusBar = new StatusBarWidget();
         $this->statusBar->setId('status-bar');
-        $this->statusBar->setBarCharacter('━');
-        $this->statusBar->setEmptyBarCharacter('─');
-        $this->statusBar->setProgressCharacter('━');
-        $this->statusBar->setBarWidth(20);
         $this->refreshStatusBar();
-        $this->statusBar->start(200_000, 0);
 
         $this->overlay = new ContainerWidget;
         $this->overlay->setId('overlay');
+
+        // Add toast overlay as permanent overlay widget
+        $toastOverlay = new ToastOverlayWidget(ToastManager::getInstance()->toasts);
+        $toastOverlay->setId('toast-overlay');
+        $toastOverlay->addStyleClass('overlay');
+        $this->overlay->add($toastOverlay);
 
         $this->taskBar = new TextWidget('');
         $this->taskBar->setId('task-bar');
@@ -217,6 +274,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
             breathColorProvider: fn () => $this->animationManager->getBreathColor(),
             renderCallback: fn () => $this->flushRender(),
             ensureSpinners: fn () => $this->animationManager->ensureSpinnersRegistered(),
+            dimensionProvider: fn () => $this->getDimension(),
         );
 
         $this->animationManager = new TuiAnimationManager(
@@ -230,18 +288,40 @@ final class TuiCoreRenderer implements CoreRendererInterface
             forceRenderCallback: fn () => $this->forceRender(),
         );
 
+        $this->scheduler = new RenderScheduler(
+            renderCallback: fn () => $this->flushRender(),
+            forceRenderCallback: fn () => $this->forceRender(),
+        );
+        $this->animationManager->setScheduler($this->scheduler);
+
         $this->input = new EditorWidget;
         $this->input->setId('prompt');
         $this->input->setMinVisibleLines(1);
-        $this->input->setMaxVisibleLines(2);
+        $this->input->setMaxVisibleLines(8);
         $this->input->setKeybindings(new Keybindings([
+            'help' => ['?'],
             'copy' => [],
             'new_line' => ['shift+enter', 'alt+enter'],
             'cycle_mode' => ['shift+tab'],
+            'command_palette' => ['ctrl+k'],
             'history_up' => [Key::PAGE_UP],
             'history_down' => [Key::PAGE_DOWN],
             'history_end' => [Key::END],
         ]));
+
+        $this->keybindingRegistry = new KeybindingRegistry();
+        $this->keybindingRegistry->registerContext('normal', [
+            'agents_dashboard' => ['ctrl+a'],
+            'command_palette' => ['ctrl+k'],
+        ], [
+            'agents_dashboard' => 'Agents dashboard',
+            'command_palette' => 'Command palette',
+        ], [
+            'agents_dashboard' => 'Tools',
+            'command_palette' => 'Navigation',
+        ]);
+
+        $this->initializeCommandPalette();
 
         $this->modalManager = new TuiModalManager(
             overlay: $this->overlay,
@@ -255,6 +335,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->bindInputHandlers();
 
         $this->session->add($this->conversation);
+        $this->session->add($this->scrollbar);
         $this->session->add($this->historyStatus);
         $this->session->add($this->overlay);
         $this->session->add($this->taskBar);
@@ -262,10 +343,16 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->session->add($this->input);
         $this->session->add($this->statusBar);
 
+        if ($this->commandPalette !== null) {
+            $this->overlay->add($this->commandPalette);
+        }
+
         $this->tui->add($this->session);
         $this->tui->setFocus($this->input);
 
         $this->tui->start();
+
+        echo AdvancedTextDecoration::mouseEnable();
     }
 
     public function renderIntro(bool $animated): void
@@ -275,7 +362,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
         if ($noAnim || ! $animated) {
             $intro->renderStatic();
-            sleep(1);
             echo "\033[2J\033[H";
         } else {
             $skipped = $intro->animate();
@@ -464,15 +550,25 @@ HELP;
                 $this->activeResponse->addStyleClass('ansi-art');
                 $this->activeResponseIsAnsi = true;
             } else {
-                $this->activeResponse = new MarkdownWidget('');
+                // Use StreamingMarkdownWidget for prefix-caching performance
+                $this->streamThrottler = new StreamingThrottler();
+                $this->streamThrottler->start();
+                $this->activeResponse = new StreamingMarkdownWidget($this->streamThrottler);
                 $this->activeResponse->addStyleClass('response');
                 $this->activeResponseIsAnsi = false;
             }
 
             $this->addConversationWidget($this->activeResponse);
         } elseif (! $this->activeResponseIsAnsi && $this->containsAnsiEscapes($text)) {
+            // Transition from streaming markdown to ANSI art
             $accumulated = $this->activeResponse->getText();
             $this->conversation->remove($this->activeResponse);
+
+            // Freeze/cleanup streaming state
+            if ($this->streamThrottler !== null) {
+                $this->streamThrottler->stop();
+                $this->streamThrottler = null;
+            }
 
             $this->activeResponse = new AnsiArtWidget($accumulated);
             $this->activeResponse->addStyleClass('ansi-art');
@@ -480,22 +576,36 @@ HELP;
             $this->addConversationWidget($this->activeResponse);
         }
 
-        $current = $this->activeResponse->getText();
-        $this->activeResponse->setText($current.$text);
+        // Append text — StreamingMarkdownWidget handles throttling internally
+        if ($this->activeResponse instanceof StreamingMarkdownWidget) {
+            $this->activeResponse->appendText($text);
+        } else {
+            // AnsiArtWidget fallback: concatenate manually
+            $current = $this->activeResponse->getText();
+            $this->activeResponse->setText($current.$text);
+        }
+
         $this->markHiddenConversationActivity();
         $this->flushRender();
     }
 
     public function streamComplete(): void
     {
+        if ($this->activeResponse instanceof StreamingMarkdownWidget) {
+            $columns = $this->tui->getTerminal()->getColumns();
+            $this->activeResponse->freeze($columns);
+        }
+
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
+        $this->streamThrottler = null;
         $this->finalizeDiscoveryBatch();
         $this->flushRender();
     }
 
     public function showError(string $message): void
     {
+        ToastManager::error($message, 4000);
         $this->showMessage("✗ Error: {$message}", 'tool-error');
     }
 
@@ -510,6 +620,7 @@ HELP;
         if ($color !== '') {
             $this->currentModeColor = $color;
         }
+        $this->state->setMode(strtolower($label));
         $this->refreshStatusBar();
         $this->flushRender();
     }
@@ -518,6 +629,7 @@ HELP;
     {
         $this->currentPermissionLabel = $label;
         $this->currentPermissionColor = $color;
+        $this->state->setPermissionMode(strtolower(explode(' ', $label)[0]));
         $this->refreshStatusBar();
         $this->flushRender();
     }
@@ -529,20 +641,14 @@ HELP;
         $this->lastStatusCost = $cost;
         $this->lastStatusMaxContext = $maxContext;
 
-        if ($this->statusBar->getMaxSteps() !== $maxContext) {
-            $this->statusBar->start($maxContext, $tokensIn);
-        } else {
-            $this->statusBar->setProgress($tokensIn);
-        }
+        $this->state->setModel($model);
+        $this->state->setTokensIn($tokensIn);
+        $this->state->setTokensOut($tokensOut);
+        $this->state->setCost($cost);
+        $this->state->setMaxContext($maxContext);
 
-        $inLabel = Theme::formatTokenCount($tokensIn);
-        $maxLabel = Theme::formatTokenCount($maxContext);
-        $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-        $r = Theme::reset();
-        $sep = Theme::dim()."·{$r}";
-        $dimWhite = Theme::dimWhite();
-        $ctxColor = Theme::contextColor($ratio);
-        $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}";
+        $this->statusBar->setTokenUsage($tokensIn, $maxContext);
+        $this->statusBar->setModelAndCost($model, $cost);
         $this->refreshStatusBar();
         $this->flushRender();
     }
@@ -551,27 +657,10 @@ HELP;
     {
         $tokensIn = min($this->lastStatusTokensIn ?? 0, $maxContext);
 
-        if ($this->statusBar->getMaxSteps() !== $maxContext) {
-            $this->statusBar->start($maxContext, $tokensIn);
-        } else {
-            $this->statusBar->setProgress($tokensIn);
-        }
-
         $label = $provider.'/'.$model;
-        $r = Theme::reset();
-        $dimWhite = Theme::dimWhite();
 
-        if ($this->lastStatusMaxContext === null) {
-            $this->statusDetail = "{$dimWhite}{$label}{$r}";
-        } else {
-            $inLabel = Theme::formatTokenCount($tokensIn);
-            $maxLabel = Theme::formatTokenCount($maxContext);
-            $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-            $sep = Theme::dim()."·{$r}";
-            $ctxColor = Theme::contextColor($ratio);
-            $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}";
-        }
-
+        $this->statusBar->setTokenUsage($tokensIn, $maxContext);
+        $this->statusBar->setModelAndCost($label, $this->lastStatusCost ?? 0.0);
         $this->refreshStatusBar();
         $this->flushRender();
     }
@@ -592,6 +681,8 @@ HELP;
 
     public function teardown(): void
     {
+        echo AdvancedTextDecoration::mouseDisable();
+
         if ($this->tui->isRunning()) {
             $this->tui->stop();
         }
@@ -692,6 +783,7 @@ HELP;
     {
         $this->conversation->add($widget);
         $this->markHiddenConversationActivity();
+        $this->compactor?->onWidgetAdded();
     }
 
     public function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
@@ -725,11 +817,14 @@ HELP;
         $this->conversation->clear();
         $this->activeResponse = null;
         $this->activeResponseIsAnsi = false;
+        $this->streamThrottler = null;
         $this->pendingQuestionRecap = [];
         $this->scrollOffset = 0;
         $this->hasHiddenActivityBelow = false;
         $this->historyStatus->hide();
         $this->tui->setScrollOffset(0);
+        $this->scrollbar?->setState(null);
+        $this->compactor?->reset();
 
         if ($this->toolStateResetCallback !== null) {
             ($this->toolStateResetCallback)();
@@ -769,13 +864,8 @@ HELP;
 
     private function refreshStatusBar(): void
     {
-        $r = Theme::reset();
-        $sep = Theme::dim()."·{$r}";
-        $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r} {$sep} "
-            ."{$this->currentPermissionColor}{$this->currentPermissionLabel}{$r} {$sep} "
-            .$this->statusDetail
-        );
+        $this->statusBar->setMode($this->currentModeLabel, $this->currentModeColor);
+        $this->statusBar->setPermission($this->currentPermissionLabel, $this->currentPermissionColor);
     }
 
     private function containsAnsiEscapes(string $text): bool
@@ -820,6 +910,7 @@ HELP;
     {
         $this->tui->setScrollOffset($this->scrollOffset);
         $this->refreshHistoryStatus();
+        $this->updateScrollbar();
         $this->flushRender();
     }
 
@@ -827,11 +918,13 @@ HELP;
     {
         if (! $this->isBrowsingHistory()) {
             $this->historyStatus->hide();
+            $this->updateScrollbar();
 
             return;
         }
 
         $this->historyStatus->show($this->hasHiddenActivityBelow);
+        $this->updateScrollbar();
     }
 
     private function isBrowsingHistory(): bool
@@ -844,6 +937,31 @@ HELP;
         return max(6, $this->tui->getTerminal()->getRows() - 10);
     }
 
+    private function updateScrollbar(): void
+    {
+        if ($this->scrollbar === null) {
+            return;
+        }
+
+        if (! $this->isBrowsingHistory()) {
+            $this->scrollbar->setState(null);
+
+            return;
+        }
+
+        $rows = $this->tui->getTerminal()->getRows();
+        // Estimate: conversation takes most of the terminal minus status bar, input, etc.
+        $viewportLines = max(1, $rows - 6);
+        // Total content is estimated as viewport + scrollOffset (we can't know exact content size)
+        $totalLines = $viewportLines + $this->scrollOffset;
+
+        $this->scrollbar->setState(new ScrollbarState(
+            contentLength: $totalLines,
+            viewportLength: $viewportLines,
+            position: $this->scrollOffset,
+        ));
+    }
+
     private function showMessage(string $text, string $styleClass): void
     {
         $this->flushPendingQuestionRecap();
@@ -851,6 +969,97 @@ HELP;
         $widget->addStyleClass($styleClass);
         $this->addConversationWidget($widget);
         $this->flushRender();
+    }
+
+    /**
+     * Initialize the command palette with all command sources.
+     */
+    private function initializeCommandPalette(): void
+    {
+        $this->commandPalette = new CommandPaletteWidget();
+        $this->commandPalette->setId('command-palette');
+        $this->commandPalette->addStyleClass('overlay');
+
+        // Wire execute callback to resume the prompt suspension with the command
+        $this->commandPalette->onExecute(function (string $action): void {
+            if ($action === '__toggle_tools') {
+                // Toggle tool results without resuming the prompt
+                $toggle = function (array $widgets) use (&$toggle): void {
+                    foreach ($widgets as $widget) {
+                        if ($widget instanceof ToggleableWidgetInterface) {
+                            $widget->toggle();
+                        }
+                        if ($widget instanceof ContainerWidget) {
+                            $toggle($widget->all());
+                        }
+                    }
+                };
+                $toggle($this->conversation->all());
+                $this->flushRender();
+
+                return;
+            }
+
+            $suspension = $this->promptSuspension;
+            if ($suspension !== null) {
+                $this->promptSuspension = null;
+                $this->input->setText('');
+                $suspension->resume($action);
+            } else {
+                // No active suspension — queue silently
+                $this->messageQueue[] = $action;
+            }
+        });
+
+        // Build items from all command sources
+        $items = [];
+
+        // Slash commands
+        foreach (TuiInputHandler::SLASH_COMMANDS as $cmd) {
+            $category = match (true) {
+                str_starts_with($cmd['value'], '/edit') || str_starts_with($cmd['value'], '/plan') || str_starts_with($cmd['value'], '/ask') => 'Modes',
+                str_starts_with($cmd['value'], '/guardian') || str_starts_with($cmd['value'], '/argus') || str_starts_with($cmd['value'], '/prometheus') => 'Permissions',
+                default => 'Commands',
+            };
+            $items[] = [
+                'label' => $cmd['label'],
+                'description' => $cmd['description'],
+                'category' => $category,
+                'action' => $cmd['value'],
+            ];
+        }
+
+        // Power commands
+        foreach (TuiInputHandler::POWER_COMMANDS as $cmd) {
+            $items[] = [
+                'label' => $cmd['label'],
+                'description' => $cmd['description'],
+                'category' => 'Power',
+                'action' => $cmd['value'],
+            ];
+        }
+
+        // Dollar commands
+        foreach (TuiInputHandler::DOLLAR_COMMANDS as $cmd) {
+            $items[] = [
+                'label' => $cmd['label'],
+                'description' => $cmd['description'],
+                'category' => 'Skills',
+                'action' => $cmd['value'],
+            ];
+        }
+
+        // Mode switches (descriptive labels that map to slash commands)
+        $items[] = ['label' => 'Edit Mode', 'description' => 'Full tool access (read/write)', 'category' => 'Modes', 'action' => '/edit'];
+        $items[] = ['label' => 'Plan Mode', 'description' => 'Read-only planning mode', 'category' => 'Modes', 'action' => '/plan'];
+        $items[] = ['label' => 'Ask Mode', 'description' => 'Read-only conversational Q&A', 'category' => 'Modes', 'action' => '/ask'];
+
+        // Actions
+        $items[] = ['label' => 'Toggle Tool Results', 'description' => 'Expand/collapse tool output in conversation', 'category' => 'Actions', 'action' => '__toggle_tools'];
+        $items[] = ['label' => 'Clear History', 'description' => 'Start a new session', 'category' => 'Actions', 'action' => '/new'];
+        $items[] = ['label' => 'Compact Context', 'description' => 'Summarize conversation to reduce token usage', 'category' => 'Actions', 'action' => '/compact'];
+
+        $this->commandPalette->setItems($items);
     }
 
     private function cycleMode(): string
@@ -889,7 +1098,12 @@ HELP;
             setPendingEditorRestore: fn (?string $v) => $this->pendingEditorRestore = $v,
             getRequestCancellation: fn () => $this->requestCancellation,
             clearRequestCancellation: fn () => $this->requestCancellation = null,
+            keybindingRegistry: $this->keybindingRegistry,
         );
+        $this->inputHandler->setInputHistory(new InputHistory);
+        if ($this->commandPalette !== null) {
+            $this->inputHandler->setCommandPalette($this->commandPalette);
+        }
         $this->inputHandler->bind();
     }
 }

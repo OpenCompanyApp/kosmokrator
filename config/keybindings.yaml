@@ -1,0 +1,179 @@
+# KosmoKrator keybinding defaults
+# Contexts map to UI modes/states. Each context contains action → key mappings.
+# Keys use Symfony TUI notation: ctrl+a, shift+enter, alt+backspace, page_up, f1, etc.
+# Multi-key sequences use space-separated keys in quotes: "g g", "d d"
+#
+# Merge semantics for user overrides:
+#   - Array values (key lists) are REPLACED, not merged.
+#   - Setting null or [] unbinds an action entirely.
+#   - New actions can be added.
+
+contexts:
+  normal:
+    description: "Default mode — prompt is focused, browsing conversation"
+
+    bindings:
+      # Navigation
+      history_up:       [page_up]
+      history_down:     [page_down]
+      history_end:      [end]
+      scroll_step_up:   [ctrl+up]
+      scroll_step_down: [ctrl+down]
+
+      # Mode & panels
+      cycle_mode:    [shift+tab]
+      expand_tools:  [ctrl+o]
+      force_render:  [ctrl+l]
+      agents_panel:  [ctrl+a]
+      help:          [f1, ctrl+g]
+
+      # Multi-key sequences
+      goto_top:      ["g g"]
+      goto_bottom:   ["G"]
+
+    labels:
+      history_up:       "Scroll up"
+      history_down:     "Scroll down"
+      history_end:      "Jump to live"
+      scroll_step_up:   "Scroll step up"
+      scroll_step_down: "Scroll step down"
+      cycle_mode:       "Cycle mode"
+      expand_tools:     "Toggle tools"
+      force_render:     "Force refresh"
+      agents_panel:     "Agents"
+      help:             "Help"
+      goto_top:         "Go to top"
+      goto_bottom:      "Go to bottom"
+
+    groups:
+      history_up:       "Navigation"
+      history_down:     "Navigation"
+      history_end:      "Navigation"
+      scroll_step_up:   "Navigation"
+      scroll_step_down: "Navigation"
+      goto_top:         "Navigation"
+      goto_bottom:      "Navigation"
+      cycle_mode:       "Mode & Panels"
+      expand_tools:     "Mode & Panels"
+      force_render:     "Mode & Panels"
+      agents_panel:     "Mode & Panels"
+      help:             "Mode & Panels"
+
+  completion:
+    description: "Slash/power/skill command completion dropdown is visible"
+
+    bindings:
+      up:           [up]
+      down:         [down]
+      confirm:      [enter]
+      tab_complete: [tab]
+      cancel:       [escape]
+
+    labels:
+      up:           "Previous item"
+      down:         "Next item"
+      confirm:      "Select"
+      tab_complete: "Accept"
+      cancel:       "Dismiss"
+
+    groups:
+      up:           "Navigation"
+      down:         "Navigation"
+      confirm:      "Action"
+      tab_complete: "Action"
+      cancel:       "Action"
+
+  dashboard:
+    description: "Swarm dashboard / agents panel overlay"
+
+    bindings:
+      cancel:        [escape, ctrl+c, q]
+      agents_panel:  [ctrl+a]
+
+    labels:
+      cancel:        "Close"
+      agents_panel:  "Toggle agents"
+
+  modal:
+    description: "Modal dialogs (permission prompt, plan approval, questions)"
+
+    bindings:
+      up:      [up]
+      down:    [down]
+      left:    [left]
+      right:   [right]
+      confirm: [enter]
+      cancel:  [escape, ctrl+c]
+
+    labels:
+      up:      "Previous"
+      down:    "Next"
+      left:    "Previous option"
+      right:   "Next option"
+      confirm: "Confirm"
+      cancel:  "Cancel"
+
+    groups:
+      up:      "Navigation"
+      down:    "Navigation"
+      left:    "Navigation"
+      right:   "Navigation"
+      confirm: "Action"
+      cancel:  "Action"
+
+  settings:
+    description: "Settings panel"
+
+    bindings:
+      up:        [up]
+      down:      [down]
+      left:      [left]
+      right:     [right]
+      confirm:   [enter]
+      cancel:    [escape, ctrl+c]
+      save:      [ctrl+s]
+      backspace: [backspace]
+      tab_next:  [tab]
+      tab_prev:  [shift+tab]
+
+    labels:
+      up:        "Up"
+      down:      "Down"
+      left:      "Left"
+      right:     "Right"
+      confirm:   "Select"
+      cancel:    "Close"
+      save:      "Save"
+      backspace: "Delete"
+      tab_next:  "Next category"
+      tab_prev:  "Previous category"
+
+    groups:
+      up:        "Navigation"
+      down:      "Navigation"
+      left:      "Navigation"
+      right:     "Navigation"
+      confirm:   "Action"
+      cancel:    "Action"
+      save:      "Action"
+      backspace: "Editing"
+      tab_next:  "Navigation"
+      tab_prev:  "Navigation"
+
+  editor:
+    description: "Text editor keybindings (passthrough to Symfony TUI EditorWidget)"
+
+    bindings:
+      # These override EditorWidget defaults at the config level.
+      # The copy action is disabled to prevent conflict with ctrl+c → cancel.
+      copy:      []
+      new_line:  [shift+enter, alt+enter]
+      submit:    [enter]
+
+    labels:
+      copy:      "Copy"
+      new_line:  "New line"
+      submit:    "Send message"
+
+# Sequence timeout in milliseconds (for multi-key bindings like "g g")
+sequence_timeout_ms: 500

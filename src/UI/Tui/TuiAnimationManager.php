@@ -7,6 +7,9 @@ namespace Kosmokrator\UI\Tui;
 use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Performance\RenderScheduler;
+use Kosmokrator\UI\Tui\Phase\Phase;
+use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -18,6 +21,11 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
  * registration, and phase lifecycle (Thinking → Tools → Idle). TuiRenderer
  * delegates all phase transitions here and reads back animation state via
  * getters for display in the task bar and subagent tree.
+ *
+ * Internally backed by a PhaseStateMachine that validates transitions and
+ * fires named listeners (think, execute, settle, compact, compactDone, cancel).
+ * The public API still accepts AgentPhase for backward compatibility and maps
+ * it to the corresponding Phase value before delegating to the machine.
  */
 final class TuiAnimationManager
 {
@@ -25,7 +33,7 @@ final class TuiAnimationManager
 
     private ?CancellableLoaderWidget $compactingLoader = null;
 
-    private AgentPhase $currentPhase = AgentPhase::Idle;
+    private PhaseStateMachine $machine;
 
     private float $thinkingStartTime = 0.0;
 
@@ -50,22 +58,27 @@ final class TuiAnimationManager
 
     private int $spinnerIndex = 0;
 
+    /** Tracks the palette ('blue'|'amber') currently in use by the breathing animation */
+    private string $breathPalette = 'blue';
+
+    private ?RenderScheduler $scheduler = null;
+
     private const THINKING_PHRASES = [
-        '◈ Consulting the Oracle at Delphi...',
-        '♃ Aligning the celestial spheres...',
-        '⚡ Channeling Prometheus\' fire...',
-        '♄ Weaving the threads of Fate...',
-        '☽ Reading the astral charts...',
-        '♂ Invoking the nine Muses...',
-        '♆ Traversing the Aether...',
-        '♅ Deciphering cosmic glyphs...',
-        '⚡ Summoning Athena\'s wisdom...',
-        '☉ Attuning to the Music of the Spheres...',
-        '♃ Gazing into the cosmic void...',
-        '◈ Unraveling the Labyrinth...',
-        '♆ Communing with the Titans...',
-        '♄ Forging in Hephaestus\' workshop...',
-        '☽ Scrying the heavens...',
+        '◈ Reading files...',
+        '♃ Editing code...',
+        '⚡ Searching codebase...',
+        '♄ Analyzing patterns...',
+        '☽ Generating response...',
+        '♂ Running commands...',
+        '♆ Processing context...',
+        '♅ Writing files...',
+        '⚡ Applying edits...',
+        '☉ Resolving dependencies...',
+        '♃ Scanning project...',
+        '◈ Evaluating options...',
+        '♆ Building understanding...',
+        '♄ Computing changes...',
+        '☽ Synthesizing results...',
     ];
 
     private const SPINNERS = [
@@ -111,7 +124,73 @@ final class TuiAnimationManager
         private readonly \Closure $subagentCleanupCallback,
         private readonly \Closure $renderCallback,
         private readonly \Closure $forceRenderCallback,
-    ) {}
+    ) {
+        $this->machine = new PhaseStateMachine();
+        $this->registerMachineListeners();
+    }
+
+    /**
+     * Inject the RenderScheduler for managed animation ticks.
+     *
+     * When set, breathing and compacting animations are registered with the
+     * scheduler instead of using independent EventLoop::repeat timers.
+     * The scheduler manages the tick rate based on activity level.
+     */
+    public function setScheduler(RenderScheduler $scheduler): void
+    {
+        $this->scheduler = $scheduler;
+    }
+
+    /**
+     * Register transition listeners on the state machine.
+     *
+     * Each named transition triggers the corresponding animation side effect:
+     *   - think       → start breathing animation (blue palette)
+     *   - execute     → switch breathing to amber palette
+     *   - settle      → stop breathing, clear thinking state
+     *   - compact     → start compacting animation (red palette)
+     *   - compactDone → stop compacting animation
+     *   - cancel      → clear thinking (cancel back to idle from thinking)
+     */
+    private function registerMachineListeners(): void
+    {
+        $this->machine->on('think', function (): void {
+            $this->scheduler?->setActivityLevel('thinking');
+            // enterThinking is called from setPhase() which passes the cancellation
+        });
+
+        $this->machine->on('execute', function (): void {
+            $this->scheduler?->setActivityLevel('thinking');
+            // Switch breathing animation to amber palette (keep loader + phrase intact)
+            if ($this->thinkingTimerId !== null) {
+                EventLoop::cancel($this->thinkingTimerId);
+                $this->thinkingTimerId = null;
+            }
+            $this->startBreathingAnimation($this->thinkingPhrase ?? '', 'amber');
+
+            ($this->renderCallback)();
+        });
+
+        $this->machine->on('settle', function (): void {
+            $this->scheduler?->setActivityLevel('idle');
+            $this->enterIdle();
+        });
+
+        $this->machine->on('cancel', function (): void {
+            $this->scheduler?->setActivityLevel('idle');
+            $this->enterIdle();
+        });
+
+        $this->machine->on('compact', function (): void {
+            $this->scheduler?->setActivityLevel('thinking');
+            $this->showCompacting();
+        });
+
+        $this->machine->on('compactDone', function (): void {
+            $this->scheduler?->setActivityLevel('idle');
+            $this->clearCompacting();
+        });
+    }
 
     /**
      * Get the current breathing animation color.
@@ -124,11 +203,19 @@ final class TuiAnimationManager
     }
 
     /**
-     * Get the current agent phase.
+     * Get the current agent phase (backward-compatible AgentPhase enum).
      */
     public function getCurrentPhase(): AgentPhase
     {
-        return $this->currentPhase;
+        return $this->machineToAgentPhase($this->machine->current());
+    }
+
+    /**
+     * Expose the internal state machine for reactive composition.
+     */
+    public function getMachine(): PhaseStateMachine
+    {
+        return $this->machine;
     }
 
     /**
@@ -158,27 +245,63 @@ final class TuiAnimationManager
     /**
      * Transition to a new agent phase.
      *
-     * Routes to the appropriate enter method based on the target phase.
-     * The cancellation token is created and owned by TuiRenderer; it is
-     * passed here so the loader's cancel handler can trigger it.
+     * Accepts both AgentPhase (backward compat) and Phase (new system).
+     * AgentPhase values are mapped to Phase before delegating to the
+     * state machine. The cancellation token is created and owned by
+     * TuiRenderer; it is passed here so the loader's cancel handler
+     * can trigger it.
      *
-     * @param  AgentPhase  $phase  Target phase
+     * @param  AgentPhase|Phase  $phase  Target phase
      * @param  ?DeferredCancellation  $cancellation  Active cancellation token (for Thinking phase)
      */
-    public function setPhase(AgentPhase $phase, ?DeferredCancellation $cancellation = null): void
+    public function setPhase(AgentPhase|Phase $phase, ?DeferredCancellation $cancellation = null): void
     {
-        if ($phase === $this->currentPhase) {
+        // Normalize to Phase
+        $target = $phase instanceof AgentPhase
+            ? $this->agentPhaseToPhase($phase)
+            : $phase;
+
+        // No-op if already in this phase
+        if ($target === $this->machine->current()) {
             return;
         }
 
-        $previous = $this->currentPhase;
-        $this->currentPhase = $phase;
+        // For the 'think' transition, we need to run enterThinking() before
+        // the machine transition so the loader is set up. For other transitions
+        // the machine listener handles the side effects.
+        $current = $this->machine->current();
 
-        match ($phase) {
-            AgentPhase::Thinking => $this->enterThinking($cancellation),
-            AgentPhase::Tools => $this->enterTools($previous),
-            AgentPhase::Idle => $this->enterIdle(),
-        };
+        if ($target === Phase::Thinking) {
+            // enterThinking sets up the loader + breathing, then we transition
+            $this->enterThinking($cancellation);
+            $this->machine->transition(Phase::Thinking);
+        } elseif ($target === Phase::Tools) {
+            $this->machine->transition(Phase::Tools);
+        } elseif ($target === Phase::Idle) {
+            $this->machine->transition(Phase::Idle);
+        } elseif ($target === Phase::Compacting) {
+            $this->machine->transition(Phase::Compacting);
+        }
+    }
+
+    /**
+     * Attempt a machine transition directly by Phase.
+     *
+     * Useful for callers that already have a Phase value. Unlike setPhase(),
+     * this method only accepts Phase and does not run the pre-transition
+     * thinking setup — it relies entirely on machine listeners.
+     *
+     * @throws \Kosmokrator\UI\Tui\Phase\InvalidTransitionException if transition is invalid
+     */
+    public function transition(Phase $target): void
+    {
+        if ($target === Phase::Thinking && $this->machine->current() !== Phase::Thinking) {
+            // enterThinking needs cancellation which isn't available here;
+            // callers should use setPhase() for Thinking transitions.
+            $this->enterThinking(null);
+        }
+
+        $this->machine->transition($target);
     }
 
     /**
@@ -274,6 +397,35 @@ final class TuiAnimationManager
         $this->spinnersRegistered = true;
     }
 
+    // ── Phase mapping helpers ────────────────────────────────────────────
+
+    /**
+     * Map AgentPhase → Phase for the state machine.
+     */
+    private function agentPhaseToPhase(AgentPhase $phase): Phase
+    {
+        return match ($phase) {
+            AgentPhase::Thinking => Phase::Thinking,
+            AgentPhase::Tools => Phase::Tools,
+            AgentPhase::Idle => Phase::Idle,
+        };
+    }
+
+    /**
+     * Map Phase → AgentPhase for backward-compatible API.
+     */
+    private function machineToAgentPhase(Phase $phase): AgentPhase
+    {
+        return match ($phase) {
+            Phase::Thinking => AgentPhase::Thinking,
+            Phase::Tools => AgentPhase::Tools,
+            Phase::Idle => AgentPhase::Idle,
+            Phase::Compacting => AgentPhase::Idle, // Compacting has no AgentPhase equivalent — map to Idle
+        };
+    }
+
+    // ── Private phase entry methods ──────────────────────────────────────
+
     /**
      * Enter thinking phase: create loader, start breathing animation.
      *
@@ -289,6 +441,7 @@ final class TuiAnimationManager
         $this->thinkingStartTime = microtime(true);
         $this->breathTick = 0;
         $this->thinkingPhrase = $phrase;
+        $this->breathPalette = 'blue';
 
         // Only show the standalone loader when there are no tasks —
         // when tasks exist, the breathing animation on in-progress tasks IS the indicator
@@ -319,25 +472,14 @@ final class TuiAnimationManager
         }
 
         // Breathing pulse at 30fps — animates loader text OR in-progress task color
-        $this->startBreathingAnimation($phrase, 'blue');
-
-        ($this->renderCallback)();
-    }
-
-    /**
-     * Transition from thinking to tools phase: keep loader alive, switch to amber palette.
-     *
-     * The loader continues animating throughout tool execution so the user sees
-     * activity. It is removed in enterIdle() or replaced in the next enterThinking().
-     */
-    private function enterTools(AgentPhase $previous): void
-    {
-        // Switch breathing animation to amber palette (keep loader + phrase intact)
-        if ($this->thinkingTimerId !== null) {
-            EventLoop::cancel($this->thinkingTimerId);
-            $this->thinkingTimerId = null;
+        if ($this->scheduler !== null) {
+            $this->scheduler->unregister('breathing');
+            $this->scheduler->register('breathing', function () use ($phrase): void {
+                $this->tickBreathing($phrase, 'blue');
+            });
+        } else {
+            $this->startBreathingAnimation($phrase, 'blue');
         }
-        $this->startBreathingAnimation($this->thinkingPhrase ?? '', 'amber');
 
         ($this->renderCallback)();
     }
@@ -347,6 +489,8 @@ final class TuiAnimationManager
      */
     private function enterIdle(): void
     {
+        // Unregister scheduler-based breathing animation
+        $this->scheduler?->unregister('breathing');
         if ($this->thinkingTimerId !== null) {
             EventLoop::cancel($this->thinkingTimerId);
             $this->thinkingTimerId = null;
@@ -363,6 +507,7 @@ final class TuiAnimationManager
 
         $this->thinkingPhrase = null;
         $this->breathColor = null;
+        $this->breathPalette = 'blue';
         ($this->refreshTaskBarCallback)();
         ($this->subagentCleanupCallback)();
 
@@ -379,51 +524,81 @@ final class TuiAnimationManager
     {
         if ($this->thinkingTimerId !== null) {
             EventLoop::cancel($this->thinkingTimerId);
+            $this->thinkingTimerId = null;
+        }
+
+        $this->breathPalette = $palette;
+
+        // When the scheduler is available, register the breathing callback there
+        // instead of creating an independent timer.
+        if ($this->scheduler !== null) {
+            $this->scheduler->unregister('breathing');
+            $this->scheduler->register('breathing', function () use ($phrase, $palette): void {
+                $this->tickBreathing($phrase, $palette);
+            });
+
+            return;
         }
 
         $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase, $palette) {
-            $this->breathTick++;
-            $r = Theme::reset();
-
-            $t = sin($this->breathTick * 0.07);
-
-            if ($palette === 'amber') {
-                // Warm amber tones for tool execution
-                $cr = (int) (200 + 40 * $t);
-                $cg = (int) (150 + 30 * $t);
-                $cb = (int) (60 + 20 * $t);
-            } else {
-                // Blue tones for thinking
-                $cr = (int) (112 + 40 * $t);
-                $cg = (int) (160 + 40 * $t);
-                $cb = (int) (208 + 47 * $t);
-            }
-            $this->breathColor = Theme::rgb($cr, $cg, $cb);
-
-            if ($this->loader !== null && $phrase !== '') {
-                $dim = "\033[38;5;245m";
-                $message = "{$this->breathColor}{$phrase}{$r}";
-
-                if (! ($this->hasSubagentActivityProvider)()) {
-                    $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
-                    $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                    $message .= "{$dim} · {$formatted}{$r}";
-                }
-
-                $this->loader->setMessage($message);
-            }
-
-            if (($this->hasTasksProvider)()) {
-                ($this->refreshTaskBarCallback)();
-            }
-
-            // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
-            if ($this->breathTick % 15 === 0) {
-                ($this->subagentTickCallback)();
-            }
-
-            ($this->renderCallback)();
+            $this->tickBreathing($phrase, $palette);
         });
+    }
+
+    /**
+     * Single tick of the breathing animation (state update only when using scheduler).
+     *
+     * When the scheduler is active, the render callback is invoked by the scheduler
+     * after all animations tick. When using the standalone timer, render is called
+     * at the end of this method.
+     */
+    private function tickBreathing(string $phrase, string $palette): void
+    {
+        $this->breathTick++;
+        $r = Theme::reset();
+
+        $t = sin($this->breathTick * 0.07);
+
+        if ($palette === 'amber') {
+            // Warm amber tones for tool execution
+            $cr = (int) (200 + 40 * $t);
+            $cg = (int) (150 + 30 * $t);
+            $cb = (int) (60 + 20 * $t);
+        } else {
+            // Blue tones for thinking
+            $cr = (int) (112 + 40 * $t);
+            $cg = (int) (160 + 40 * $t);
+            $cb = (int) (208 + 47 * $t);
+        }
+        $this->breathColor = Theme::rgb($cr, $cg, $cb);
+
+        if ($this->loader !== null && $phrase !== '') {
+            $dim = "\033[38;5;245m";
+            $message = "{$this->breathColor}{$phrase}{$r}";
+
+            if (! ($this->hasSubagentActivityProvider)()) {
+                $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+                $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                $message .= "{$dim} · {$formatted}{$r}";
+            }
+
+            $this->loader->setMessage($message);
+        }
+
+        if (($this->hasTasksProvider)()) {
+            ($this->refreshTaskBarCallback)();
+        }
+
+        // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
+        if ($this->breathTick % 15 === 0) {
+            ($this->subagentTickCallback)();
+        }
+
+        // When using independent timer, render directly.
+        // When using scheduler, the scheduler handles the render call.
+        if ($this->scheduler === null) {
+            ($this->renderCallback)();
+        }
     }
 
     private function clearThinkingLoader(): void

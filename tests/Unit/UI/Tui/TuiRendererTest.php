@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui;
 
+use Kosmokrator\UI\Tui\Layout\DimensionProvider;
 use Kosmokrator\UI\Tui\TuiConversationRenderer;
 use Kosmokrator\UI\Tui\TuiCoreRenderer;
 use Kosmokrator\UI\Tui\TuiInputHandler;
@@ -425,9 +426,10 @@ final class TuiRendererTest extends TestCase
 
     public function test_format_discovery_bash_label_long_command_truncated(): void
     {
-        $longCommand = str_repeat('x', 100);
+        $longCommand = str_repeat('x', 200);
         $result = $this->invokeTool('formatDiscoveryBashLabel', ['command' => $longCommand]);
-        $this->assertSame(90 + mb_strlen('…'), mb_strlen($result));
+        // discoveryLabelLength() at 120 cols = max(30, toolCallWidth(120) - 30) = 86
+        $this->assertSame(86 + mb_strlen('…'), mb_strlen($result));
         $this->assertStringEndsWith('…', $result);
     }
 
@@ -562,10 +564,11 @@ final class TuiRendererTest extends TestCase
     public function test_update_tool_executing_truncates_long_line(): void
     {
         $tool = $this->createToolRenderer();
-        $long = str_repeat('x', 120);
+        $long = str_repeat('x', 200);
         $tool->updateToolExecuting($long);
         $preview = $this->getToolProperty($tool, 'toolExecutingPreview');
-        $this->assertSame(101, mb_strlen($preview)); // 100 + '…'
+        // previewLength() at 120 cols = 120
+        $this->assertSame(120 + mb_strlen('…'), mb_strlen($preview));
         $this->assertStringEndsWith('…', $preview);
     }
 
@@ -637,7 +640,22 @@ final class TuiRendererTest extends TestCase
      */
     private function createToolRenderer(): TuiToolRenderer
     {
-        return new TuiToolRenderer(new TuiCoreRenderer);
+        $core = new TuiCoreRenderer;
+
+        // Inject a DimensionProvider backed by a mock TerminalInterface that returns 120×40.
+        $terminal = $this->createMock(\Symfony\Component\Tui\Terminal\TerminalInterface::class);
+        $terminal->method('getColumns')->willReturn(120);
+        $terminal->method('getRows')->willReturn(40);
+
+        $tui = $this->createMock(\Symfony\Component\Tui\Tui::class);
+        $tui->method('getTerminal')->willReturn($terminal);
+
+        $provider = new DimensionProvider($tui);
+
+        $ref = new \ReflectionProperty($core, 'dimensionProvider');
+        $ref->setValue($core, $provider);
+
+        return new TuiToolRenderer($core);
     }
 
     /**

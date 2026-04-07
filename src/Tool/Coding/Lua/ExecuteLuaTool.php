@@ -40,7 +40,7 @@ class ExecuteLuaTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Execute Lua code with app.* namespace access. Use app.integrations.* for API calls, app.tools.* for native tools (file_read, glob, grep, bash, etc.). Always use lua_read_doc first to look up function names and parameters. Use print() or dump() for output.';
+        return 'Execute Lua code with app.* namespace access. Use app.integrations.* for API calls, app.tools.* for native tools (file_read, glob, grep, bash, subagent, etc.). Always use lua_read_doc first to look up function names and parameters. Use print() or dump() for output.';
     }
 
     public function parameters(): array

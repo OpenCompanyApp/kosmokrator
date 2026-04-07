@@ -97,7 +97,7 @@ final class AgentSessionBuilder
                         ."multiple sequential tool calls. Lua runs locally with zero LLM cost per operation.\n\n"
                         .'Native tools are also available in Lua: `app.tools.file_read({path=...})`, '
                         .'`app.tools.glob({pattern=...})`, `app.tools.grep({pattern=...})`, '
-                        ."`app.tools.bash({command=...})`, etc.\n\n"
+                        ."`app.tools.bash({command=...})`, `app.tools.subagent({task=...})`, etc.\n\n"
                         .$summary."\n\n"
                         .'Use lua_list_docs to discover available namespaces, lua_search_docs to find specific functions, '
                         ."and lua_read_doc for detailed parameter docs. Always read docs before writing Lua code.\n\n"

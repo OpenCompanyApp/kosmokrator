@@ -182,7 +182,7 @@ class LuaDocService
         }
 
         // Native tools namespace
-        $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, etc.). See lua_read_doc page 'overview' for details.";
+        $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
 
         return implode("\n\n", $parts);
     }

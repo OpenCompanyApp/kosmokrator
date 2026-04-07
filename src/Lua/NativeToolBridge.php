@@ -67,8 +67,8 @@ class NativeToolBridge
 
         foreach ($registry->all() as $tool) {
             $name = $tool->name();
-            // Exclude Lua tools themselves (avoid recursion) and subagent
-            if (in_array($name, ['execute_lua', 'lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'subagent', 'ask_user', 'ask_choice'], true)) {
+            // Exclude Lua tools themselves (avoid recursion) and interactive prompt tools
+            if (in_array($name, ['execute_lua', 'lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'ask_user', 'ask_choice'], true)) {
                 continue;
             }
 

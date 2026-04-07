@@ -178,7 +178,7 @@ class SubagentFactory
                         $luaDocs = "\n\n# Lua Integration Access\n\n"
                             ."Use `execute_lua` for complex multi-step operations.\n\n"
                             .'Native tools: `app.tools.file_read({path=...})`, `app.tools.glob({pattern=...})`, '
-                            ."`app.tools.grep({pattern=...})`, `app.tools.bash({command=...})`.\n\n"
+                            ."`app.tools.grep({pattern=...})`, `app.tools.bash({command=...})`, `app.tools.subagent({task=...})`.\n\n"
                             .$summary."\n\n"
                             ."Use lua_list_docs, lua_search_docs, and lua_read_doc to discover available functions.\n\n"
                             .'Permission notes: some integration write operations may require approval (ask mode). '

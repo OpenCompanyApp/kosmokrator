@@ -99,7 +99,18 @@ ui:
   intro_animated: true
   theme: default
 
+# Integration packages (e.g. Plausible, CoinGecko) discovered from composer.lock.
+# Per-integration settings are managed via /settings → Integrations at runtime.
+# Permissions for each integration operation: allow (auto), ask (prompt), deny (block).
+integrations:
+  permissions_default: ask  # Default for operations not explicitly set
+
 tools:
+  # Tools that are always denied, overriding all modes (including Prometheus).
+  # Useful for hard-disabling tools in specific projects or CI environments.
+  # Example: denied_tools: [file_write, bash]
+  denied_tools: []
+
   safe_tools:
     - file_read
     - glob
@@ -115,6 +126,9 @@ tools:
     - ask_user
     - ask_choice
     - subagent
+    - lua_list_docs
+    - lua_search_docs
+    - lua_read_doc
   approval_required:
     - file_write
     - file_edit
@@ -122,6 +136,7 @@ tools:
     - bash
     - shell_start
     - shell_write
+    - execute_lua
   bash:
     timeout: 120
     blocked_commands:

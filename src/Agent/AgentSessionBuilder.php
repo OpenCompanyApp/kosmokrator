@@ -8,6 +8,7 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\AskChoiceTool;
@@ -84,6 +85,29 @@ final class AgentSessionBuilder
         $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
             .InstructionLoader::gather()
             .EnvironmentContext::gather();
+
+        // Append Lua integration docs if available
+        if ($this->container->bound(LuaDocService::class)) {
+            try {
+                $luaDocService = $this->container->make(LuaDocService::class);
+                $summary = $luaDocService->getNamespaceSummary();
+                if ($summary !== '') {
+                    $baseSystemPrompt .= "\n\n# Lua Integration Access\n\n"
+                        .'For complex multi-step operations, use `execute_lua` instead of '
+                        ."multiple sequential tool calls. Lua runs locally with zero LLM cost per operation.\n\n"
+                        .'Native tools are also available in Lua: `app.tools.file_read({path=...})`, '
+                        .'`app.tools.glob({pattern=...})`, `app.tools.grep({pattern=...})`, '
+                        ."`app.tools.bash({command=...})`, etc.\n\n"
+                        .$summary."\n\n"
+                        .'Use lua_list_docs to discover available namespaces, lua_search_docs to find specific functions, '
+                        ."and lua_read_doc for detailed parameter docs. Always read docs before writing Lua code.\n\n"
+                        .'Permission notes: some integration write operations may require approval (ask mode). '
+                        .'If you get a permission error, ask the user to change the setting in /settings → Integrations.';
+                }
+            } catch (\Throwable) {
+                // Integration docs not available — skip gracefully
+            }
+        }
 
         // Task store
         $taskStore = $this->container->make(TaskStore::class);

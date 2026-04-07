@@ -25,6 +25,9 @@ class GuardianEvaluator
         'shell_kill',
         'memory_save',
         'memory_search',
+        'lua_list_docs',
+        'lua_search_docs',
+        'lua_read_doc',
     ];
 
     /**
@@ -58,6 +61,11 @@ class GuardianEvaluator
 
         if ($toolName === 'bash') {
             return $this->isSafeCommand($args['command'] ?? '');
+        }
+
+        if ($toolName === 'execute_lua') {
+            // Always auto-approve — inner integration permissions enforce per-tool granularity
+            return true;
         }
 
         if ($toolName === 'shell_start') {

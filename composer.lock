@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "50a7456df39577b70dccd7d5b5dcc600",
+    "content-hash": "edaf746ca7b16d40bf61370ddeb6b6f9",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3625,6 +3625,51 @@
                 "issues": "https://github.com/OpenCompanyApp/prism-codex/issues"
             },
             "time": "2026-04-03T11:52:31+00:00"
+        },
+        {
+            "name": "opencompanyapp/integration-core",
+            "version": "dev-feat/new-integrations",
+            "dist": {
+                "type": "path",
+                "url": "/Users/rutger/Sites/integrations/core",
+                "reference": "bb3350a35c4fa2a69d184b382aec774b67521f62"
+            },
+            "require": {
+                "illuminate/support": "^11.0 || ^12.0 || ^13.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\IntegrationCore\\IntegrationCoreServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\IntegrationCore\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "Core framework for OpenCompany integration packages — contracts, credential abstraction, and auto-discovery registry.",
+            "keywords": [
+                "agents",
+                "integrations",
+                "opencompany",
+                "tools"
+            ],
+            "transport-options": {
+                "relative": false
+            }
         },
         {
             "name": "opencompanyapp/prism-relay",
@@ -9349,6 +9394,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "opencompany/prism-codex": 20,
+        "opencompanyapp/integration-core": 20,
         "opencompanyapp/prism-relay": 20,
         "symfony/tui": 20
     },

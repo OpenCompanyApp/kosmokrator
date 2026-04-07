@@ -9,6 +9,8 @@ use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
+use Kosmokrator\Integration\IntegrationManager;
+use Kosmokrator\Integration\YamlCredentialResolver;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\LlmClientInterface;
@@ -138,7 +140,9 @@ final class SettingsCommand implements SlashCommand
                 'custom_provider.max_output',
                 'custom_provider.input_modalities',
                 'custom_provider.output_modalities' => null,
-                default => $ctx->sessionManager->setSetting($id, $stringValue, $scope),
+                default => str_starts_with($id, 'integration.')
+                    ? $this->applyIntegrationSetting($settings, $id, $stringValue, $scope)
+                    : $ctx->sessionManager->setSetting($id, $stringValue, $scope),
             };
         }
 
@@ -477,6 +481,10 @@ final class SettingsCommand implements SlashCommand
                         'description' => 'Run a provider-specific auth workflow.',
                     ],
                 ]);
+            }
+
+            if ($categoryId === 'integrations') {
+                $fields = array_merge($fields, $this->buildIntegrationFields($settings));
             }
 
             $categories[] = [
@@ -881,5 +889,161 @@ final class SettingsCommand implements SlashCommand
             'context.prune_min_savings' => (string) ($ctx->agentLoop->getPruner()?->getMinSavings() ?? $fallback ?? 20000),
             default => $fallback === null ? '' : (string) $fallback,
         };
+    }
+
+    /**
+     * Build dynamic fields for the Integrations settings category.
+     *
+     * Shows per-integration enabled toggle, read permission, and write permission.
+     * Only integrations that are CLI-compatible (no OAuth) are shown.
+     *
+     * @return array<int, array{id: string, label: string, value: string, source: string, effect: string, type: string, options: list<string>, description: string}>
+     */
+    private function buildIntegrationFields(SettingsManager $settings): array
+    {
+        $fields = [];
+
+        if (! $this->container->bound(IntegrationManager::class)) {
+            $fields[] = [
+                'id' => 'integrations._unavailable',
+                'label' => 'Integration system not available',
+                'value' => 'No integration packages installed.',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'type' => 'readonly',
+                'options' => [],
+                'description' => 'Install opencompanyapp/integration-* packages to enable integrations.',
+            ];
+
+            return $fields;
+        }
+
+        $manager = $this->container->make(IntegrationManager::class);
+        $providers = $manager->getLocallyRunnableProviders();
+
+        if ($providers === []) {
+            $fields[] = [
+                'id' => 'integrations._none',
+                'label' => 'No integrations available',
+                'value' => 'No CLI-compatible integration packages found.',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'type' => 'readonly',
+                'options' => [],
+                'description' => 'Install opencompanyapp/integration-* packages to enable integrations.',
+            ];
+
+            return $fields;
+        }
+
+        foreach ($providers as $name => $provider) {
+            $meta = $provider->appMeta();
+            $description = $meta['description'] ?? $name;
+            $isConfigured = $this->container->make(YamlCredentialResolver::class)->isConfigured($name);
+
+            // Enabled toggle
+            $enabled = $settings->getRaw("integrations.{$name}.enabled");
+            $fields[] = [
+                'id' => "integration.{$name}.enabled",
+                'label' => $description.($isConfigured ? '' : ' (not configured)'),
+                'value' => ($enabled === true || $enabled === 'on') ? 'on' : 'off',
+                'source' => $enabled !== null ? 'global' : 'default',
+                'effect' => 'next_session',
+                'type' => 'toggle',
+                'options' => ['on', 'off'],
+                'description' => "Enable or disable the {$name} integration.",
+            ];
+
+            // Read permission
+            $readPerm = $settings->getRaw("integrations.{$name}.permissions.read") ?? 'allow';
+            $fields[] = [
+                'id' => "integration.{$name}.permissions.read",
+                'label' => '  Read access',
+                'value' => $readPerm,
+                'source' => $settings->getRaw("integrations.{$name}.permissions.read") !== null ? 'global' : 'default',
+                'effect' => 'applies_now',
+                'type' => 'choice',
+                'options' => ['allow', 'ask', 'deny'],
+                'description' => "Read access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
+            ];
+
+            // Write permission
+            $writePerm = $settings->getRaw("integrations.{$name}.permissions.write") ?? 'ask';
+            $fields[] = [
+                'id' => "integration.{$name}.permissions.write",
+                'label' => '  Write access',
+                'value' => $writePerm,
+                'source' => $settings->getRaw("integrations.{$name}.permissions.write") !== null ? 'global' : 'default',
+                'effect' => 'applies_now',
+                'type' => 'choice',
+                'options' => ['allow', 'ask', 'deny'],
+                'description' => "Write access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
+            ];
+        }
+
+        // Bulk operations
+        $fields[] = [
+            'id' => 'integration._bulk_allow',
+            'label' => 'Allow all integrations (read + write)',
+            'value' => '',
+            'source' => 'runtime',
+            'effect' => 'applies_now',
+            'type' => 'choice',
+            'options' => ['', 'yes'],
+            'description' => 'Set all integration read and write permissions to "allow".',
+        ];
+        $fields[] = [
+            'id' => 'integration._bulk_ask_writes',
+            'label' => 'Require approval for all writes',
+            'value' => '',
+            'source' => 'runtime',
+            'effect' => 'applies_now',
+            'type' => 'choice',
+            'options' => ['', 'yes'],
+            'description' => 'Set all integration write permissions to "ask". Read stays as-is.',
+        ];
+
+        return $fields;
+    }
+
+    private function applyIntegrationSetting(SettingsManager $settings, string $id, string $value, string $scope): void
+    {
+        // Handle bulk operations
+        if ($id === 'integration._bulk_allow' && $value === 'yes') {
+            if ($this->container->bound(IntegrationManager::class)) {
+                $manager = $this->container->make(IntegrationManager::class);
+                $manager->setAllPermissions('allow', null, $scope);
+            }
+
+            return;
+        }
+
+        if ($id === 'integration._bulk_ask_writes' && $value === 'yes') {
+            if ($this->container->bound(IntegrationManager::class)) {
+                $manager = $this->container->make(IntegrationManager::class);
+                $manager->setAllPermissions('ask', 'write', $scope);
+            }
+
+            return;
+        }
+
+        // Parse integration.{name}.enabled → set in YAML
+        if (preg_match('/^integration\.([^.]+)\.enabled$/', $id, $m)) {
+            $settings->setRaw("integrations.{$m[1]}.enabled", $value === 'on', $scope);
+
+            return;
+        }
+
+        // Parse integration.{name}.permissions.{operation} → set in YAML
+        if (preg_match('/^integration\.([^.]+)\.permissions\.(read|write)$/', $id, $m)) {
+            if (in_array($value, ['allow', 'ask', 'deny'], true)) {
+                $settings->setRaw("integrations.{$m[1]}.permissions.{$m[2]}", $value, $scope);
+            }
+
+            return;
+        }
+
+        // Fallback: store as-is
+        $settings->setRaw($id, $value, $scope);
     }
 }

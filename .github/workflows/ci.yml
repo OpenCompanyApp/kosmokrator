@@ -42,8 +42,11 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction
 
-      - name: Run tests
+      - name: Run unit tests
         run: php vendor/bin/phpunit tests/Unit --no-coverage
+
+      - name: Run integration tests
+        run: php vendor/bin/phpunit tests/Integration --no-coverage
 
   pint:
     name: Code Style

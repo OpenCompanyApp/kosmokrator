@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Integration\IntegrationManager;
+use Kosmokrator\Lua\LuaDocService;
+use Kosmokrator\Lua\LuaSandboxService;
+use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
@@ -20,6 +24,10 @@ use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
 use Kosmokrator\Tool\Coding\GlobTool;
 use Kosmokrator\Tool\Coding\GrepTool;
+use Kosmokrator\Tool\Coding\Lua\ExecuteLuaTool;
+use Kosmokrator\Tool\Coding\Lua\ListDocsTool;
+use Kosmokrator\Tool\Coding\Lua\ReadDocTool;
+use Kosmokrator\Tool\Coding\Lua\SearchDocsTool;
 use Kosmokrator\Tool\Coding\Patch\PatchApplier;
 use Kosmokrator\Tool\Coding\Patch\PatchParser;
 use Kosmokrator\Tool\Coding\ShellKillTool;
@@ -34,6 +42,8 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
+use Lua\Sandbox;
+use OpenCompany\IntegrationCore\Contracts\LuaToolInvoker;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -137,6 +147,24 @@ class ToolServiceProvider extends ServiceProvider
             $sessionManager = $this->container->make(SessionManager::class);
             $registry->register(new MemorySaveTool($sessionManager));
             $registry->register(new MemorySearchTool($sessionManager));
+
+            // Lua integration tools — only if Lua extension is available
+            if (class_exists(Sandbox::class) && $this->container->bound(LuaDocService::class)) {
+                $luaDocService = $this->container->make(LuaDocService::class);
+                $registry->register(new ListDocsTool($luaDocService));
+                $registry->register(new SearchDocsTool($luaDocService));
+                $registry->register(new ReadDocTool($luaDocService));
+                $registry->register(new ExecuteLuaTool(
+                    $this->container->make(LuaSandboxService::class),
+                    $this->container->make(IntegrationManager::class),
+                    $luaDocService,
+                    $this->container->make(LuaToolInvoker::class),
+                ));
+
+                // Set lazy resolver for native tool bridge (app.tools.* in Lua)
+                // Must be deferred — $registry is still being built here
+                ExecuteLuaTool::setNativeBridgeResolver(fn () => new NativeToolBridge(fn () => $registry));
+            }
 
             return $registry;
         });

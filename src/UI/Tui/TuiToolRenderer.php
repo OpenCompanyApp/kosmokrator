@@ -7,6 +7,7 @@ namespace Kosmokrator\UI\Tui;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\Diff\DiffRenderer;
+use Kosmokrator\UI\Highlight\Lua\LuaLanguage;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\ToolRendererInterface;
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
@@ -111,6 +112,22 @@ final class TuiToolRenderer implements ToolRendererInterface
             return;
         }
 
+        // Lua tools: show full code with syntax highlighting
+        if ($name === 'execute_lua' && isset($args['code'])) {
+            $this->finalizeDiscoveryBatch();
+            $this->showLuaCodeCall($args['code']);
+
+            return;
+        }
+
+        // Lua doc tools: compact inline
+        if (in_array($name, ['lua_list_docs', 'lua_search_docs', 'lua_read_doc'], true)) {
+            $this->finalizeDiscoveryBatch();
+            $this->showLuaDocCall($name, $args);
+
+            return;
+        }
+
         if ($name === 'bash' && ! $this->isOmensTool($name, $args)) {
             $this->finalizeDiscoveryBatch();
             $this->beginBashCommand((string) ($args['command'] ?? ''));
@@ -206,6 +223,30 @@ final class TuiToolRenderer implements ToolRendererInterface
 
         if ($this->isOmensTool($name, $args)) {
             $this->completeDiscoveryToolResult($name, $output, $success);
+            $this->core->flushRender();
+
+            return;
+        }
+
+        // Lua execution result: show output collapsed by default
+        if ($name === 'execute_lua') {
+            $content = $this->highlightLuaOutput($output);
+            $lineCount = count(explode("\n", $output));
+            $widget = new CollapsibleWidget($header, $content, $lineCount);
+            $widget->addStyleClass('tool-result');
+            $this->core->addConversationWidget($widget);
+            $this->core->flushRender();
+
+            return;
+        }
+
+        // Lua doc tools: compact result
+        if (in_array($name, ['lua_list_docs', 'lua_search_docs', 'lua_read_doc'], true)) {
+            $content = implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $output)));
+            $lineCount = count(explode("\n", $output));
+            $widget = new CollapsibleWidget($header, $content, $lineCount);
+            $widget->addStyleClass('tool-result');
+            $this->core->addConversationWidget($widget);
             $this->core->flushRender();
 
             return;
@@ -645,5 +686,91 @@ final class TuiToolRenderer implements ToolRendererInterface
             explode("\n", $output),
             static fn (string $line): bool => trim($line) !== '',
         ));
+    }
+
+    /**
+     * Render an execute_lua tool call with full Lua code, syntax highlighted.
+     */
+    private function showLuaCodeCall(string $code): void
+    {
+        $icon = Theme::toolIcon('execute_lua');
+        $friendly = Theme::toolLabel('execute_lua');
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $gold = Theme::accent();
+
+        $lineCount = count(explode("\n", $code));
+
+        $header = "{$gold}{$icon} {$friendly}{$r}  {$dim}{$lineCount} lines{$r}";
+
+        // Highlight Lua code with line numbers
+        $highlighted = $this->highlightLuaCode($code);
+        $highlightedLines = explode("\n", $highlighted);
+        $padded = [];
+        $numWidth = strlen((string) $lineCount);
+        foreach ($highlightedLines as $i => $line) {
+            $num = str_pad((string) ($i + 1), $numWidth, ' ', STR_PAD_LEFT);
+            $padded[] = Theme::dim()."{$num}".Theme::reset()."\t{$line}";
+        }
+
+        $content = implode("\n", $padded);
+
+        $widget = new CollapsibleWidget($header, $content, $lineCount);
+        $widget->addStyleClass('tool-call');
+        $widget->setExpanded(true);
+        $this->core->addConversationWidget($widget);
+        $this->core->flushRender();
+    }
+
+    /**
+     * Render a Lua doc tool call (list/search/read) compactly.
+     */
+    private function showLuaDocCall(string $name, array $args): void
+    {
+        $icon = Theme::toolIcon($name);
+        $friendly = Theme::toolLabel($name);
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $gold = Theme::accent();
+
+        $parts = [];
+        foreach ($args as $key => $value) {
+            $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
+            $parts[] = "{$dim}{$key}:{$r} {$display}";
+        }
+
+        $label = "{$gold}{$icon} {$friendly}{$r}  ".implode("  {$dim}│{$r}  ", $parts);
+        $widget = new TextWidget($label);
+        $widget->addStyleClass('tool-call');
+        $this->core->addConversationWidget($widget);
+        $this->core->flushRender();
+    }
+
+    /**
+     * Format Lua code for display with syntax highlighting.
+     */
+    private function highlightLuaCode(string $code): string
+    {
+        try {
+            return $this->getHighlighter()->parse($code, new LuaLanguage);
+        } catch (\Throwable $e) {
+            error_log("[TuiToolRenderer] Lua highlight failed: {$e->getMessage()}");
+
+            $r = Theme::reset();
+            $text = Theme::text();
+
+            return implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $code)));
+        }
+    }
+
+    /**
+     * Format Lua execution output for display.
+     */
+    private function highlightLuaOutput(string $output): string
+    {
+        $r = Theme::reset();
+        $text = Theme::text();
+
+        return implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $output)));
     }
 }

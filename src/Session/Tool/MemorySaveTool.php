@@ -90,6 +90,14 @@ class MemorySaveTool extends AbstractTool
             return ToolResult::success("Updated memory #{$id}: {$title} ({$type}/{$memoryClass})");
         }
 
+        $duplicate = $this->session->findDuplicateMemory($content, $title);
+        if ($duplicate !== null) {
+            $dupId = $duplicate['id'];
+            $dupTitle = $duplicate['title'];
+
+            return ToolResult::error("A memory with this content already exists: #{$dupId} \"{$dupTitle}\". Use `id: \"{$dupId}\"` to update it instead of creating a duplicate.");
+        }
+
         $newId = $this->session->addMemory($type, $title, $content, $memoryClass, $pinned, $expiresAt);
 
         return ToolResult::success("Saved memory #{$newId}: {$title} ({$type}/{$memoryClass})");

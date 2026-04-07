@@ -17,6 +17,7 @@ class PermissionRule
         public readonly string $toolName,
         public readonly PermissionAction $action,
         public readonly array $denyPatterns = [],
+        public readonly ?string $denyReason = null,
     ) {}
 
     /**
@@ -42,7 +43,12 @@ class PermissionRule
             }
         }
 
-        return new PermissionResult($this->action);
+        $reason = $this->denyReason;
+        if ($reason === null && $this->action === PermissionAction::Deny) {
+            $reason = "Tool '{$toolName}' is denied by policy.";
+        }
+
+        return new PermissionResult($this->action, $reason ?? '');
     }
 
     /**

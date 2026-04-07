@@ -372,6 +372,16 @@ class SessionManager
     }
 
     /**
+     * Find an existing memory with identical content in the current project scope.
+     *
+     * @return array<string, mixed>|null The matching memory, or null if no duplicate
+     */
+    public function findDuplicateMemory(string $content, ?string $title = null): ?array
+    {
+        return $this->memoryManager->findDuplicate($content, $title);
+    }
+
+    /**
      * Select contextually relevant memories and mark them as surfaced.
      *
      * @param  string|null  $query  Query text for relevance scoring

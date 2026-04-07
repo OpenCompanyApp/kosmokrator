@@ -37,9 +37,24 @@ class PermissionConfigParser
         $safeCommands = $config->get('kosmokrator.tools.guardian_safe_commands', []);
         $defaultMode = $config->get('kosmokrator.tools.default_permission_mode', 'guardian');
         $safeTools = $config->get('kosmokrator.tools.safe_tools', self::DEFAULT_SAFE_TOOLS);
+        $deniedTools = $config->get('kosmokrator.tools.denied_tools', []);
 
-        // Allow rules for safe tools (must come before Ask rules so RuleCheck finds them first)
+        // Deny rules FIRST — these override everything including Prometheus
+        foreach ($deniedTools as $toolName) {
+            $rules[] = new PermissionRule(
+                toolName: $toolName,
+                action: PermissionAction::Deny,
+                denyReason: "Tool '{$toolName}' is disabled in project configuration (denied_tools).",
+            );
+        }
+
+        // Allow rules for safe tools
         foreach ($safeTools as $toolName) {
+            // Skip if already denied
+            if (in_array($toolName, $deniedTools, true)) {
+                continue;
+            }
+
             $rules[] = new PermissionRule(
                 toolName: $toolName,
                 action: PermissionAction::Allow,
@@ -48,6 +63,11 @@ class PermissionConfigParser
 
         // Ask rules for tools requiring approval
         foreach ($approvalRequired as $toolName) {
+            // Skip if already denied
+            if (in_array($toolName, $deniedTools, true)) {
+                continue;
+            }
+
             $denyPatterns = in_array($toolName, ['bash', 'shell_start', 'shell_write'], true) ? $blockedCommands : [];
 
             $rules[] = new PermissionRule(

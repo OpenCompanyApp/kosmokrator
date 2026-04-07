@@ -36,6 +36,8 @@ enum AgentMode: string
 
     private const MEMORY_WRITE_TOOLS = ['memory_save'];
 
+    private const LUA_TOOLS = ['lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'execute_lua'];
+
     /**
      * Tool names permitted in this mode. Used by AgentLoop::applyModeFilter().
      *
@@ -44,9 +46,9 @@ enum AgentMode: string
     public function allowedTools(): array
     {
         return match ($this) {
-            self::Edit => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::MEMORY_WRITE_TOOLS],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS],
-            self::Ask => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS],
+            self::Edit => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::MEMORY_WRITE_TOOLS, ...self::LUA_TOOLS],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::LUA_TOOLS],
+            self::Ask => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, 'lua_list_docs', 'lua_search_docs', 'lua_read_doc'],
         };
     }
 

@@ -42,10 +42,12 @@ enum AgentType: string
      */
     public function allowedTools(): array
     {
+        $luaTools = ['lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'execute_lua'];
+
         return match ($this) {
-            self::General => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'memory_save'],
-            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search'],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search'],
+            self::General => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'memory_save', ...$luaTools],
+            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', ...$luaTools],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', ...$luaTools],
         };
     }
 

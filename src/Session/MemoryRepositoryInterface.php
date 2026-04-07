@@ -122,4 +122,17 @@ interface MemoryRepositoryInterface
      * @return array<int, array<string, mixed>>
      */
     public function all(?string $project = null, int $limit = 50): array;
+
+    /**
+     * Check whether a memory with identical content already exists in the given scope.
+     *
+     * Compares content (and optionally title) against non-expired memories
+     * in the same project scope, including global memories.
+     *
+     * @param  string  $content  The memory content to check
+     * @param  string|null  $project  Project scope, or null for global-only
+     * @param  string|null  $title  Optional title to include in the match
+     * @return array<string, mixed>|null The matching memory row, or null if no duplicate
+     */
+    public function findDuplicate(string $content, ?string $project = null, ?string $title = null): ?array;
 }

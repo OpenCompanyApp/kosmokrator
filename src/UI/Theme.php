@@ -298,6 +298,10 @@ class Theme
             'file_write' => '☉',  // Sun — creation, bringing into being
             'file_edit' => '♅',   // Uranus — transformation, change
             'apply_patch' => '✎', // Inscription — deliberate multi-file change
+            'lua_list_docs' => '☽',  // Moon — documentation illumination
+            'lua_search_docs' => '⊛', // Search — finding docs
+            'lua_read_doc' => '☽',    // Moon — reading docs
+            'execute_lua' => '✦',     // Spark — executing a script
             'bash' => '⚡︎',      // Lightning — force text presentation to avoid wide emoji spacing
             'shell_start' => '◌', // Opening a live shell orbit
             'shell_write' => '↦', // Sending input into a session
@@ -328,6 +332,10 @@ class Theme
             'file_write' => 'Write',
             'file_edit' => 'Edit',
             'apply_patch' => 'Patch',
+            'lua_list_docs' => 'Lua Docs',
+            'lua_search_docs' => 'Lua Search',
+            'lua_read_doc' => 'Lua Docs',
+            'execute_lua' => 'Lua',
             'bash' => 'Bash',
             'shell_start' => 'Shell',
             'shell_write' => 'Shell',

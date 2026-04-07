@@ -28,6 +28,9 @@ final class ContextManager
     /** @var array<string, int|float|string|bool> */
     private array $lastBudgetSnapshot = [];
 
+    /** @var string|null Frozen memory block captured on first buildSystemPrompt() call for prompt cache stability */
+    private ?string $frozenMemoryBlock = null;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -204,6 +207,9 @@ final class ContextManager
                 }
                 // Merge duplicate or overlapping memories after extraction
                 $this->sessionManager->consolidateMemories();
+
+                // Invalidate the frozen snapshot since compaction changed the memory pool
+                $this->frozenMemoryBlock = null;
             }
 
             $this->consecutiveCompactionFailures = 0;
@@ -283,15 +289,25 @@ final class ContextManager
         $query = $history?->latestUserContext();
         $prompt = $this->baseSystemPrompt;
 
-        // Inject relevant memories and session recall when the feature is enabled
+        // Inject relevant memories and session recall when the feature is enabled.
+        // On the first call, the memory block is frozen for the entire session so
+        // the stable system prompt prefix stays byte-identical across turns — keeping
+        // Anthropic/Gemini prompt caches warm. Mid-session memory saves persist to
+        // disk immediately but only appear in the system prompt on the next session.
         if ($this->sessionManager !== null && ($this->sessionManager->getSetting('memories') ?? 'on') !== 'off') {
-            $memories = $this->sessionManager->selectRelevantMemories($query, $this->memoryInjectLimit, $markSurfacedMemories);
-            $prompt .= MemoryInjector::format($memories);
+            if ($this->frozenMemoryBlock === null) {
+                $memories = $this->sessionManager->selectRelevantMemories($query, $this->memoryInjectLimit, $markSurfacedMemories);
+                $block = MemoryInjector::format($memories);
 
-            if ($query !== '') {
-                $recall = $this->sessionManager->searchSessionHistory($query, $this->sessionRecallLimit);
-                $prompt .= MemoryInjector::formatSessionRecall($recall);
+                if ($query !== '') {
+                    $recall = $this->sessionManager->searchSessionHistory($query, $this->sessionRecallLimit);
+                    $block .= MemoryInjector::formatSessionRecall($recall);
+                }
+
+                $this->frozenMemoryBlock = $block;
             }
+
+            $prompt .= $this->frozenMemoryBlock;
         }
 
         $prompt .= $mode->systemPromptSuffix();

@@ -13,6 +13,7 @@ use Kosmokrator\Provider\ConfigServiceProvider;
 use Kosmokrator\Provider\CoreServiceProvider;
 use Kosmokrator\Provider\DatabaseServiceProvider;
 use Kosmokrator\Provider\EventServiceProvider;
+use Kosmokrator\Provider\IntegrationServiceProvider;
 use Kosmokrator\Provider\LlmServiceProvider;
 use Kosmokrator\Provider\LoggingServiceProvider;
 use Kosmokrator\Provider\SessionServiceProvider;
@@ -53,6 +54,7 @@ class Kernel
             new DatabaseServiceProvider($this->container),
             new CoreServiceProvider($this->container, $this->basePath),
             new LlmServiceProvider($this->container),
+            new IntegrationServiceProvider($this->container, $this->basePath),
             new ToolServiceProvider($this->container),
             new SessionServiceProvider($this->container),
             new EventServiceProvider($this->container),

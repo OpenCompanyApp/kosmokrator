@@ -866,7 +866,7 @@ HELP;
         return $next;
     }
 
-    private function bindInputHandlers(): void
+    public function bindInputHandlers(): void
     {
         $this->inputHandler = new TuiInputHandler(
             input: $this->input,

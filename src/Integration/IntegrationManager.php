@@ -1,0 +1,192 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\Integration;
+
+use Kosmokrator\Settings\SettingsManager;
+use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
+use OpenCompany\IntegrationCore\Contracts\ToolProvider;
+use OpenCompany\IntegrationCore\Support\ToolProviderRegistry;
+
+class IntegrationManager
+{
+    public function __construct(
+        private readonly ToolProviderRegistry $providers,
+        private readonly SettingsManager $settings,
+        private readonly CredentialResolver $credentials,
+    ) {}
+
+    /**
+     * Get all registered providers that can run in a CLI context (no OAuth).
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getLocallyRunnableProviders(): array
+    {
+        $result = [];
+        foreach ($this->providers->all() as $name => $provider) {
+            if ($this->isLocallyRunnable($provider)) {
+                $result[$name] = $provider;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get providers the user has configured and enabled.
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getActiveProviders(): array
+    {
+        $result = [];
+        foreach ($this->getLocallyRunnableProviders() as $name => $provider) {
+            if ($this->isEnabled($name) && $this->credentials->isConfigured($name)) {
+                $result[$name] = $provider;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check if a provider can run locally (no OAuth dependency).
+     */
+    public function isLocallyRunnable(ToolProvider $provider): bool
+    {
+        foreach ($provider->credentialFields() as $field) {
+            if (($field['type'] ?? '') === 'oauth_connect') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if an integration is enabled in settings (YAML).
+     */
+    public function isEnabled(string $integration): bool
+    {
+        $enabled = $this->settings->getRaw("integrations.{$integration}.enabled");
+
+        return $enabled === true || $enabled === 'on';
+    }
+
+    /**
+     * Get the effective permission for an integration + operation.
+     *
+     * Reads from YAML config. Returns 'allow', 'ask', or 'deny'.
+     */
+    public function getPermission(string $integration, string $operation): string
+    {
+        $permission = $this->settings->getRaw("integrations.{$integration}.permissions.{$operation}");
+
+        if (in_array($permission, ['allow', 'ask', 'deny'], true)) {
+            return $permission;
+        }
+
+        // Default: allow reads, ask for writes
+        return $operation === 'read' ? 'allow' : 'ask';
+    }
+
+    /**
+     * Set permission for an integration + operation in YAML.
+     */
+    public function setPermission(string $integration, string $operation, string $value, string $scope = 'global'): void
+    {
+        if (! in_array($value, ['allow', 'ask', 'deny'], true)) {
+            return;
+        }
+
+        $this->settings->setRaw(
+            "integrations.{$integration}.permissions.{$operation}",
+            $value,
+            $scope,
+        );
+    }
+
+    /**
+     * Enable or disable an integration in YAML.
+     */
+    public function setEnabled(string $integration, bool $enabled, string $scope = 'global'): void
+    {
+        $this->settings->setRaw(
+            "integrations.{$integration}.enabled",
+            $enabled,
+            $scope,
+        );
+    }
+
+    /**
+     * Set all integration permissions to a given value (bulk).
+     *
+     * @param  string  $value  'allow', 'ask', or 'deny'
+     * @param  string|null  $operation  'read', 'write', or null for both
+     */
+    public function setAllPermissions(string $value, ?string $operation = null, string $scope = 'global'): void
+    {
+        foreach ($this->getLocallyRunnableProviders() as $name => $provider) {
+            if (! $this->credentials->isConfigured($name)) {
+                continue;
+            }
+
+            if ($operation === null) {
+                $this->setPermission($name, 'read', $value, $scope);
+                $this->setPermission($name, 'write', $value, $scope);
+            } else {
+                $this->setPermission($name, $operation, $value, $scope);
+            }
+        }
+    }
+
+    /**
+     * Build a tool catalog suitable for LuaCatalogBuilder.
+     *
+     * @return list<array{name: string, description: string, tools: array, isIntegration: bool, accounts?: array<string, mixed>}>
+     */
+    public function getToolCatalog(): array
+    {
+        $catalog = [];
+
+        foreach ($this->getActiveProviders() as $name => $provider) {
+            $tools = [];
+            foreach ($provider->tools() as $slug => $meta) {
+                $tools[] = [
+                    'slug' => $slug,
+                    'name' => $slug,
+                    'description' => $meta['description'] ?? '',
+                ];
+            }
+
+            $entry = [
+                'name' => $name,
+                'description' => $provider->appMeta()['description'] ?? '',
+                'tools' => $tools,
+                'isIntegration' => true,
+            ];
+
+            // Inject account aliases from credential resolver
+            $accounts = $this->credentials->getAccounts($name);
+            if ($accounts !== []) {
+                $entry['accounts'] = $accounts;
+            }
+
+            $catalog[] = $entry;
+        }
+
+        return $catalog;
+    }
+
+    /**
+     * Get all installed providers (including OAuth-only ones).
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getAllProviders(): array
+    {
+        return $this->providers->all();
+    }
+}

@@ -180,9 +180,7 @@ class MemoryManager
     }
 
     /**
-     * Remove expired and excess compaction memories for the current project.
-     *
-     * @return int Number of memories removed
+     * Consolidation
      */
     public function consolidateMemories(): int
     {
@@ -190,5 +188,15 @@ class MemoryManager
         $removed += $this->memories->trimCompactionMemories($this->project, 10);
 
         return $removed;
+    }
+
+    /**
+     * Find an existing memory with identical content (and optionally title) in the current scope.
+     *
+     * @return array<string, mixed>|null The matching memory, or null if no duplicate
+     */
+    public function findDuplicate(string $content, ?string $title = null): ?array
+    {
+        return $this->memories->findDuplicate($content, $this->project, $title);
     }
 }

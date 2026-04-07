@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Amp\Cancellation;
+use Illuminate\Container\Container;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\RetryableLlmClient;
+use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Tool\Coding\SubagentTool;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
@@ -164,9 +166,34 @@ class SubagentFactory
             ? 'You can spawn sub-agents for parallel work using the `subagent` tool.'
             : 'You are at maximum depth and cannot spawn further sub-agents.';
 
+        $luaDocs = '';
+        if (class_exists(LuaDocService::class)) {
+            try {
+                // Use the root container instance to resolve Lua docs
+                $container = Container::getInstance();
+                if ($container->bound(LuaDocService::class)) {
+                    $luaDocService = $container->make(LuaDocService::class);
+                    $summary = $luaDocService->getNamespaceSummary();
+                    if ($summary !== '') {
+                        $luaDocs = "\n\n# Lua Integration Access\n\n"
+                            ."Use `execute_lua` for complex multi-step operations.\n\n"
+                            .'Native tools: `app.tools.file_read({path=...})`, `app.tools.glob({pattern=...})`, '
+                            ."`app.tools.grep({pattern=...})`, `app.tools.bash({command=...})`.\n\n"
+                            .$summary."\n\n"
+                            ."Use lua_list_docs, lua_search_docs, and lua_read_doc to discover available functions.\n\n"
+                            .'Permission notes: some integration write operations may require approval (ask mode). '
+                            .'If you get a permission error, ask the user to change the setting in /settings → Integrations.';
+                    }
+                }
+            } catch (\Throwable) {
+                // Skip gracefully
+            }
+        }
+
         return <<<PROMPT
 You are a KosmoKrator sub-agent operating autonomously. Your output goes back to a parent agent — not a human. Be thorough but concise.
 {$typeSuffix}
+{$luaDocs}
 
 # Tools
 

@@ -6,8 +6,10 @@ namespace Kosmokrator\UI\Ansi;
 
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Diff\DiffRenderer;
+use Kosmokrator\UI\Highlight\Lua\LuaLanguage;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\ToolRendererInterface;
+use Tempest\Highlight\Highlighter;
 
 /**
  * ANSI fallback implementation of tool call/result display and permission prompts.
@@ -15,6 +17,8 @@ use Kosmokrator\UI\ToolRendererInterface;
 final class AnsiToolRenderer implements ToolRendererInterface
 {
     private ?DiffRenderer $diffRenderer = null;
+
+    private ?Highlighter $highlighter = null;
 
     private array $lastToolArgs = [];
 
@@ -78,6 +82,39 @@ final class AnsiToolRenderer implements ToolRendererInterface
             return;
         }
 
+        // Lua execution: show full code block with syntax highlighting and line numbers
+        if ($name === 'execute_lua' && isset($args['code'])) {
+            $code = $args['code'];
+            $r = Theme::reset();
+            $text = Theme::text();
+            $dim = Theme::dim();
+
+            $highlighted = $this->highlightLuaCode($code);
+            $lines = explode("\n", $highlighted);
+            $lineCount = count($lines);
+            $numWidth = strlen((string) $lineCount);
+
+            echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}  {$dim}{$lineCount} lines{$r}\n";
+            foreach ($lines as $i => $line) {
+                $num = str_pad((string) ($i + 1), $numWidth, ' ', STR_PAD_LEFT);
+                echo "{$border}  ┃{$r} {$dim}{$num}{$r}  {$line}{$r}\n";
+            }
+
+            return;
+        }
+
+        // Lua doc tools: compact single-line
+        if (in_array($name, ['lua_list_docs', 'lua_search_docs', 'lua_read_doc'], true)) {
+            echo "\n{$border}  ┃ {$gold}{$icon} {$friendly}{$r}";
+            foreach ($args as $key => $value) {
+                $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
+                echo " {$dim}{$key}:{$r} {$display}";
+            }
+            echo "\n";
+
+            return;
+        }
+
         // Bash: compact inline header — icon + truncated command on one line
         if ($name === 'bash') {
             $command = $this->stripCwdPrefix(trim((string) ($args['command'] ?? '')));
@@ -137,6 +174,24 @@ final class AnsiToolRenderer implements ToolRendererInterface
 
         // Subagent: handled by showSubagentBatch — skip individual display
         if ($name === 'subagent') {
+            return;
+        }
+
+        // Lua execution: show full output
+        if ($name === 'execute_lua') {
+            echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r}\n";
+            foreach (explode("\n", $output) as $line) {
+                echo "{$border}  ┃{$r} {$text}{$line}{$r}\n";
+            }
+
+            return;
+        }
+
+        // Lua doc tools: compact result
+        if (in_array($name, ['lua_list_docs', 'lua_search_docs', 'lua_read_doc'], true)) {
+            $lineCount = count(explode("\n", $output));
+            echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r} {$dim}({$lineCount} lines){$r}\n";
+
             return;
         }
 
@@ -362,5 +417,25 @@ final class AnsiToolRenderer implements ToolRendererInterface
         }
 
         return $command;
+    }
+
+    /**
+     * Highlight Lua code using tempest/highlight with our Lua language definition.
+     */
+    private function highlightLuaCode(string $code): string
+    {
+        try {
+            return $this->getHighlighter()->parse($code, new LuaLanguage);
+        } catch (\Throwable $e) {
+            $r = Theme::reset();
+            $text = Theme::text();
+
+            return implode("\n", array_map(fn (string $l) => "{$text}{$l}{$r}", explode("\n", $code)));
+        }
+    }
+
+    private function getHighlighter(): Highlighter
+    {
+        return $this->highlighter ??= new Highlighter(new KosmokratorTerminalTheme);
     }
 }

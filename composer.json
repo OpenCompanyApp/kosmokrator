@@ -15,6 +15,7 @@
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
         "opencompany/prism-codex": "dev-main",
+        "opencompanyapp/integration-core": "@dev",
         "opencompanyapp/prism-relay": "dev-main",
         "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
@@ -35,6 +36,11 @@
         "phpunit/phpunit": "^12.0"
     },
     "repositories": [
+        {
+            "name": "integration-core",
+            "type": "path",
+            "url": "/Users/rutger/Sites/integrations/core"
+        },
         {
             "type": "vcs",
             "url": "https://github.com/OpenCompanyApp/symfony.git"

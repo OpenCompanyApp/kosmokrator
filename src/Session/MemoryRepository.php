@@ -318,4 +318,30 @@ class MemoryRepository implements MemoryRepositoryInterface
 
         return $stmt->fetchAll();
     }
+
+    public function findDuplicate(string $content, ?string $project = null, ?string $title = null): ?array
+    {
+        $sql = 'SELECT * FROM memories WHERE content = :content';
+        $params = ['content' => $content, 'now' => date('c')];
+
+        if ($project !== null) {
+            $sql .= ' AND (project = :project OR project IS NULL)';
+            $params['project'] = $project;
+        } else {
+            $sql .= ' AND project IS NULL';
+        }
+
+        if ($title !== null) {
+            $sql .= ' AND title = :title';
+            $params['title'] = $title;
+        }
+
+        $sql .= ' AND (expires_at IS NULL OR expires_at > :now) LIMIT 1';
+
+        $stmt = $this->db->connection()->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
 }

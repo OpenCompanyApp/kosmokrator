@@ -64,6 +64,23 @@ final class ShellStartTool extends AbstractTool
             waitMs: isset($args['wait_ms']) ? (int) $args['wait_ms'] : null,
         );
 
-        return ToolResult::success($result['output']);
+        $lines = ["Session ID: {$result['id']}"];
+        // Extract just the output portion (after the header line)
+        $output = $result['output'];
+        $header = "Session {$result['id']} started in";
+        if (str_starts_with($output, $header)) {
+            $afterHeader = substr($output, strlen($header));
+            // Skip the "in {cwd}" part and get actual output
+            $cwdEnd = strpos($afterHeader, "\n\n");
+            if ($cwdEnd !== false) {
+                $actualOutput = trim(substr($afterHeader, $cwdEnd + 2));
+                if ($actualOutput !== '' && $actualOutput !== '(no new output yet)') {
+                    $lines[] = '';
+                    $lines[] = $actualOutput;
+                }
+            }
+        }
+
+        return ToolResult::success(implode("\n", $lines));
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\UI\Tui;
 
 use Symfony\Component\Tui\Style\Border;
@@ -10,6 +12,11 @@ use Symfony\Component\Tui\Style\Padding;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\StyleSheet;
 use Symfony\Component\Tui\Style\TextAlign;
+use KosmoKrator\UI\Tui\Widget\GaugeWidget;
+use KosmoKrator\UI\Tui\Widget\ScrollbarWidget;
+use KosmoKrator\UI\Tui\Widget\SparklineWidget;
+use KosmoKrator\UI\Tui\Widget\TableWidget;
+use KosmoKrator\UI\Tui\Widget\TreeWidget;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
@@ -200,10 +207,10 @@ class KosmokratorStyleSheet
                 padding: new Padding(0, 2, 0, 2),
             ),
 
-            // Markdown widget — cap width for readability
+            // Markdown widget — responsive maxColumns; base = 100, breakpoints override.
             MarkdownWidget::class => new Style(
-                padding: new Padding(0, 2, 0, 2),
                 maxColumns: 100,
+                padding: new Padding(0, 2, 0, 2),
             ),
 
             // Permission prompt (tool approval)
@@ -248,6 +255,130 @@ class KosmokratorStyleSheet
             SettingsListWidget::class.'::hint' => new Style(
                 color: Color::hex('#606060'),
             ),
+
+            // Scrollbar widget
+            ScrollbarWidget::class => new Style(
+                color: Color::hex('#303030'),
+            ),
+
+            // Scrollbar track (background gutter)
+            ScrollbarWidget::class.'::track' => new Style(
+                color: Color::hex('#303030'),
+            ),
+
+            // Scrollbar thumb (current position indicator)
+            ScrollbarWidget::class.'::thumb' => new Style(
+                color: Color::hex('#606060'),
+            ),
+
+            // Scrollbar thumb while actively scrolling
+            ScrollbarWidget::class.'::thumb:scrolling' => new Style(
+                color: Color::hex('#ffc850'),
+            ),
+
+            // ── TableWidget ──────────────────────────────────────────────
+            TableWidget::class => new Style(
+                padding: new Padding(0, 1, 0, 1),
+            ),
+
+            TableWidget::class.'::header' => new Style(
+                bold: true,
+            ),
+
+            TableWidget::class.'::header-sorted' => new Style(
+                bold: true,
+                underline: true,
+            ),
+
+            TableWidget::class.'::row-selected' => new Style(
+                reverse: true,
+            ),
+
+            TableWidget::class.'::row-even' => new Style(),
+
+            TableWidget::class.'::row-odd' => new Style(),
+
+            TableWidget::class.'::separator' => new Style(
+                dim: true,
+            ),
+
+            TableWidget::class.'::hint' => new Style(
+                dim: true,
+            ),
+
+            TableWidget::class.'::cursor' => new Style(
+                color: Color::hex('#00bcd4'),
+            ),
+
+            // ── TreeWidget ───────────────────────────────────────────────
+            TreeWidget::class => new Style(),
+
+            TreeWidget::class.'::selected' => new Style(
+                background: Color::hex('#1a3a5c'),
+            ),
+
+            TreeWidget::class.'::connector' => new Style(
+                dim: true,
+            ),
+
+            TreeWidget::class.'::expand-ind' => new Style(
+                color: Color::hex('#ffc850'),
+            ),
+
+            // ── SparklineWidget ──────────────────────────────────────────
+            SparklineWidget::class => new Style(),
+
+            SparklineWidget::class.'::bar' => new Style(
+                color: Color::hex('#ffc850'),
+            ),
+
+            // ── GaugeWidget ──────────────────────────────────────────────
+            GaugeWidget::class => new Style(),
+
+            GaugeWidget::class.'::fill' => new Style(
+                color: Color::hex('#ffc850'),
+            ),
+
+            GaugeWidget::class.'::empty' => new Style(
+                dim: true,
+            ),
+
+            GaugeWidget::class.'::label' => new Style(
+                color: Color::hex('#ffffff'),
+            ),
+
+            GaugeWidget::class.'::bracket' => new Style(
+                dim: true,
+            ),
         ]);
+
+        // ── Responsive breakpoints ────────────────────────────────────────
+        // Markdown rendering: expand maxColumns on wider terminals
+        $sheet->addBreakpoint(80, MarkdownWidget::class, new Style(
+            maxColumns: 100,
+        ));
+        $sheet->addBreakpoint(120, MarkdownWidget::class, new Style(
+            maxColumns: 120,
+        ));
+        $sheet->addBreakpoint(160, MarkdownWidget::class, new Style(
+            maxColumns: 140,
+        ));
+
+        // Narrow terminals: tighter padding
+        $sheet->addBreakpoint(0, '.tool-call', new Style(
+            padding: new Padding(0, 1, 0, 1),
+        ));
+        $sheet->addBreakpoint(80, '.tool-call', new Style(
+            padding: new Padding(0, 2, 0, 2),
+        ));
+
+        $sheet->addBreakpoint(0, '.response', new Style(
+            padding: new Padding(0, 1, 0, 1),
+        ));
+        $sheet->addBreakpoint(80, '.response', new Style(
+            padding: new Padding(0, 2, 0, 2),
+        ));
+
+        return $sheet;
     }
 }

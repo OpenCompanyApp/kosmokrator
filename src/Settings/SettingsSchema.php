@@ -156,7 +156,7 @@ final class SettingsSchema
                 description: 'Terminal theme preset.',
                 category: 'general',
                 type: 'choice',
-                options: ['default'],
+                options: ['default', 'cosmic', 'minimal', 'high-contrast', 'daltonized'],
                 effect: 'next_session',
                 default: 'default',
             ),

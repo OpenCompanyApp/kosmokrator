@@ -2,18 +2,64 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI;
+namespace KosmoKrator\UI;
+
+use KosmoKrator\UI\Tui\Theme\ThemeManager;
 
 /**
  * Centralized ANSI color/theme definitions and terminal control sequences.
  *
  * Provides static helpers for colors, icons, formatting utilities, and
  * cursor/terminal control used across all renderers.
+ *
+ * ## Facade Pattern
+ *
+ * Color methods delegate to a lazily-initialized {@see ThemeManager} instance.
+ * The manager handles:
+ *   - Semantic token resolution with dark/light variants
+ *   - Terminal color capability detection and downsampling
+ *   - Theme registry and runtime switching
+ *
+ * Non-color methods (cursor control, formatting utilities) remain as-is.
+ *
+ * ## Migration Path
+ *
+ * Callers continue using the same static API unchanged:
+ *   Theme::primary(), Theme::success(), Theme::text(), etc.
+ *
+ * Internally, these now resolve through ThemeManager:
+ *   Theme::primary() → manager->ansi('primary') → downsampled escape sequence
  */
 class Theme
 {
-    /** ANSI escape prefix. */
-    private const ESC = "\033";
+    /** @var ThemeManager|null Injected or lazily-created manager */
+    private static ?ThemeManager $manager = null;
+
+    /**
+     * Set the global ThemeManager instance (called during bootstrap).
+     */
+    public static function setManager(ThemeManager $manager): void
+    {
+        self::$manager = $manager;
+    }
+
+    /**
+     * Get the global ThemeManager instance.
+     */
+    public static function getManager(): ThemeManager
+    {
+        return self::$manager ??= ThemeManager::create();
+    }
+
+    /**
+     * Internal shorthand for the manager.
+     */
+    private static function m(): ThemeManager
+    {
+        return self::$manager ??= ThemeManager::create();
+    }
+
+    // ── Legacy helpers (preserved for internal use by downsampler path) ──
 
     /**
      * Build a 24-bit foreground color escape sequence.
@@ -25,7 +71,7 @@ class Theme
      */
     public static function rgb(int $r, int $g, int $b): string
     {
-        return self::ESC."[38;2;{$r};{$g};{$b}m";
+        return "\033[38;2;{$r};{$g};{$b}m";
     }
 
     /**
@@ -38,7 +84,7 @@ class Theme
      */
     public static function bgRgb(int $r, int $g, int $b): string
     {
-        return self::ESC."[48;2;{$r};{$g};{$b}m";
+        return "\033[48;2;{$r};{$g};{$b}m";
     }
 
     /**
@@ -49,227 +95,231 @@ class Theme
      */
     public static function color256(int $code): string
     {
-        return self::ESC."[38;5;{$code}m";
+        return "\033[38;5;{$code}m";
     }
 
-    // Core palette
+    // ── Core palette (delegated to ThemeManager) ───────────────────────
+
     /** Primary brand color (fiery red-orange). */
     public static function primary(): string
     {
-        return self::rgb(255, 60, 40);
+        return self::m()->ansi('primary');
     }
 
     /** Dimmed primary for subtle accents. */
     public static function primaryDim(): string
     {
-        return self::rgb(160, 30, 30);
+        return self::m()->ansi('primary-dim');
     }
 
     /** Accent highlight (gold). */
     public static function accent(): string
     {
-        return self::rgb(255, 200, 80);
+        return self::m()->ansi('accent');
     }
 
     /** Success/positive indicator (green). */
     public static function success(): string
     {
-        return self::rgb(80, 220, 100);
+        return self::m()->ansi('success');
     }
 
     /** Warning indicator (amber). */
     public static function warning(): string
     {
-        return self::rgb(255, 200, 80);
+        return self::m()->ansi('warning');
     }
 
     /** Error/danger indicator (red). */
     public static function error(): string
     {
-        return self::rgb(255, 80, 60);
+        return self::m()->ansi('error');
     }
 
     /** Informational highlight (sky blue). */
     public static function info(): string
     {
-        return self::rgb(100, 200, 255);
+        return self::m()->ansi('info');
     }
 
     /** URL/link color (blue). */
     public static function link(): string
     {
-        return self::rgb(80, 140, 255);
+        return self::m()->ansi('link');
     }
 
     /** Inline code color (purple). */
     public static function code(): string
     {
-        return self::rgb(200, 120, 255);
+        return self::m()->ansi('code-fg');
     }
 
     /** Muted/secondary text color. */
     public static function dim(): string
     {
-        return self::color256(240);
+        return self::m()->ansi('text-dim');
     }
 
     /** Even more muted color for separators and backgrounds. */
     public static function dimmer(): string
     {
-        return self::color256(236);
+        return self::m()->ansi('text-dimmer');
     }
 
     /** Default body text color (light gray). */
     public static function text(): string
     {
-        return self::rgb(180, 180, 190);
+        return self::m()->ansi('text');
     }
 
     /** Bright white (bold). */
     public static function white(): string
     {
-        return self::rgb(240, 240, 245);
+        return self::m()->ansi('text-bright');
     }
 
     /** Bold intensity attribute. */
     public static function bold(): string
     {
-        return self::ESC.'[1m';
+        return "\033[1m";
     }
 
     /** Reset all attributes to terminal defaults. */
     public static function reset(): string
     {
-        return self::ESC.'[0m';
+        return "\033[0m";
     }
 
     /** Agent type: general (goldenrod). */
     public static function agentGeneral(): string
     {
-        return self::rgb(218, 165, 32);
+        return self::m()->ansi('agent-general');
     }
 
     /** Agent type: plan (purple). */
     public static function agentPlan(): string
     {
-        return self::rgb(160, 120, 255);
+        return self::m()->ansi('agent-plan');
     }
 
     /** Agent type: default/explore (cyan). */
     public static function agentDefault(): string
     {
-        return self::rgb(100, 200, 220);
+        return self::m()->ansi('agent-explore');
     }
 
     /** Dimmed white for subtle UI text. */
     public static function dimWhite(): string
     {
-        return self::rgb(140, 140, 150);
+        return self::m()->ansi('text-dim');
     }
 
     /** Waiting/queued status indicator (blue). */
     public static function waiting(): string
     {
-        return self::rgb(100, 149, 237);
+        return self::m()->ansi('agent-waiting');
     }
 
     /** Italic text attribute. */
     public static function italic(): string
     {
-        return self::ESC.'[3m';
+        return "\033[3m";
     }
 
     /** Strikethrough text attribute. */
     public static function strikethrough(): string
     {
-        return self::ESC.'[9m';
+        return "\033[9m";
     }
 
-    // Border colors — dimmed variants of mode/accent colors
+    // ── Border colors (delegated to ThemeManager) ──────────────────────
+
     /** Dimmed gold — for agent dialogs (ask_user, ask_choice, permissions). */
     public static function borderAccent(): string
     {
-        return self::rgb(180, 140, 50);
+        return self::m()->ansi('border-accent');
     }
 
     /** Dimmed purple — for plan mode dialogs. */
     public static function borderPlan(): string
     {
-        return self::rgb(120, 90, 200);
+        return self::m()->ansi('border-plan');
     }
 
     /** Warm brown — for task bar and collapsible results. */
     public static function borderTask(): string
     {
-        return self::rgb(128, 100, 40);
+        return self::m()->ansi('border-task');
     }
 
-    // Diff colors
+    // ── Diff colors (delegated to ThemeManager) ───────────────────────
+
     /** Diff added-line foreground (green). */
     public static function diffAdd(): string
     {
-        return self::rgb(60, 160, 80);
+        return self::m()->ansi('diff-add');
     }
 
     /** Diff removed-line foreground (red). */
     public static function diffRemove(): string
     {
-        return self::rgb(180, 60, 60);
+        return self::m()->ansi('diff-remove');
     }
 
     /** Diff added-line background (dark green). */
     public static function diffAddBg(): string
     {
-        return self::bgRgb(20, 45, 20);
+        return self::m()->ansiBg('diff-add-bg');
     }
 
     /** Diff removed-line background (dark red). */
     public static function diffRemoveBg(): string
     {
-        return self::bgRgb(55, 15, 15);
+        return self::m()->ansiBg('diff-remove-bg');
     }
 
     /** Diff strong added background for word-level highlights. */
     public static function diffAddBgStrong(): string
     {
-        return self::bgRgb(30, 70, 30);
+        return self::m()->ansiBg('diff-add-bg-strong');
     }
 
     /** Diff strong removed background for word-level highlights. */
     public static function diffRemoveBgStrong(): string
     {
-        return self::bgRgb(80, 20, 20);
+        return self::m()->ansiBg('diff-remove-bg-strong');
     }
 
     /** Diff context/unchanged line color (gray). */
     public static function diffContext(): string
     {
-        return self::color256(244);
+        return self::m()->ansi('diff-context');
     }
 
     /** Code block background. */
     public static function codeBg(): string
     {
-        return self::bgRgb(40, 40, 40);
+        return self::m()->ansiBg('code-bg');
     }
 
-    // Terminal control
+    // ── Terminal control (no color dependency) ────────────────────────
+
     /** Hide the terminal cursor. */
     public static function hideCursor(): string
     {
-        return self::ESC.'[?25l';
+        return "\033[?25l";
     }
 
     /** Show the terminal cursor. */
     public static function showCursor(): string
     {
-        return self::ESC.'[?25h';
+        return "\033[?25h";
     }
 
     /** Clear the entire screen and move cursor to home position. */
     public static function clearScreen(): string
     {
-        return self::ESC.'[2J'.self::ESC.'[H';
+        return "\033[2J\033[H";
     }
 
     /**
@@ -281,10 +331,11 @@ class Theme
      */
     public static function moveTo(int $row, int $col): string
     {
-        return self::ESC."[{$row};{$col}H";
+        return "\033[{$row};{$col}H";
     }
 
-    // Tool icons
+    // ── Tool icons and labels (no color dependency) ───────────────────
+
     /**
      * Return the Unicode icon for a given tool name.
      *
@@ -318,7 +369,6 @@ class Theme
         };
     }
 
-    // Friendly display names for tools
     /**
      * Return a human-readable label for a given tool name.
      *
@@ -351,6 +401,8 @@ class Theme
             default => $name,
         };
     }
+
+    // ── Composite helpers (delegated colors) ──────────────────────────
 
     /**
      * Return a color indicating context window usage (green → yellow → red).

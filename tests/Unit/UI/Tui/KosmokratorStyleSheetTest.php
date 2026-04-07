@@ -104,7 +104,7 @@ final class KosmokratorStyleSheetTest extends TestCase
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
-        $this->assertCount(40, $rules);
+        $this->assertCount(64, $rules);
     }
 
     public function test_all_rules_are_style_objects(): void

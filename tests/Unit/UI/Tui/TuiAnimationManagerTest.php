@@ -125,21 +125,21 @@ final class TuiAnimationManagerTest extends TestCase
         $this->assertNotNull($phrase);
 
         $expectedPhrases = [
-            '◈ Consulting the Oracle at Delphi...',
-            '♃ Aligning the celestial spheres...',
-            '⚡ Channeling Prometheus\' fire...',
-            '♄ Weaving the threads of Fate...',
-            '☽ Reading the astral charts...',
-            '♂ Invoking the nine Muses...',
-            '♆ Traversing the Aether...',
-            '♅ Deciphering cosmic glyphs...',
-            '⚡ Summoning Athena\'s wisdom...',
-            '☉ Attuning to the Music of the Spheres...',
-            '♃ Gazing into the cosmic void...',
-            '◈ Unraveling the Labyrinth...',
-            '♆ Communing with the Titans...',
-            '♄ Forging in Hephaestus\' workshop...',
-            '☽ Scrying the heavens...',
+            '◈ Reading files...',
+            '♃ Editing code...',
+            '⚡ Searching codebase...',
+            '♄ Analyzing patterns...',
+            '☽ Generating response...',
+            '♂ Running commands...',
+            '♆ Processing context...',
+            '♅ Writing files...',
+            '⚡ Applying edits...',
+            '☉ Resolving dependencies...',
+            '♃ Scanning project...',
+            '◈ Evaluating options...',
+            '♆ Building understanding...',
+            '♄ Computing changes...',
+            '☽ Synthesizing results...',
         ];
         $this->assertContains($phrase, $expectedPhrases);
     }

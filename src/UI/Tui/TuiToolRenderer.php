@@ -10,6 +10,7 @@ use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\Highlight\Lua\LuaLanguage;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\ToolRendererInterface;
+use Kosmokrator\UI\Tui\Layout\Breakpoint;
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\DiscoveryBatchWidget;
@@ -165,7 +166,8 @@ final class TuiToolRenderer implements ToolRendererInterface
             $label = "{$icon} {$friendly}  ".implode('  ', $parts);
         }
 
-        $maxToolCallWidth = 120;
+        $dimension = $this->core->getDimension();
+        $maxToolCallWidth = $dimension->toolCallWidth();
 
         if (mb_strlen($label) > $maxToolCallWidth) {
             $header = "{$icon} {$friendly}";
@@ -270,7 +272,7 @@ final class TuiToolRenderer implements ToolRendererInterface
 
         $widget = new CollapsibleWidget($header, $content, $lineCount);
         $widget->addStyleClass('tool-result');
-        if ($name === 'file_edit' && $success) {
+        if (! $success || $name === 'file_edit') {
             $widget->setExpanded(true);
         }
         $this->core->addConversationWidget($widget);
@@ -345,7 +347,8 @@ final class TuiToolRenderer implements ToolRendererInterface
             }
         }
         if ($last !== '') {
-            $this->toolExecutingPreview = mb_strlen($last) > 100 ? mb_substr($last, 0, 100).'…' : $last;
+            $previewLen = $this->core->getDimension()->previewLength();
+            $this->toolExecutingPreview = mb_strlen($last) > $previewLen ? mb_substr($last, 0, $previewLen).'…' : $last;
         }
     }
 
@@ -604,7 +607,8 @@ final class TuiToolRenderer implements ToolRendererInterface
             return 'shell probe';
         }
 
-        return mb_strlen($command) > 90 ? mb_substr($command, 0, 90).'…' : $command;
+        $maxLen = $this->core->getDimension()->discoveryLabelLength();
+        return mb_strlen($command) > $maxLen ? mb_substr($command, 0, $maxLen).'…' : $command;
     }
 
     private function formatDiscoveryMemoryLabel(array $args): string

@@ -384,7 +384,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
      */
     public function render(RenderContext $context): array
     {
-        $columns = max(90, $context->getColumns());
+        $columns = max(60, $context->getColumns());
         $rows = max(24, $context->getRows());
 
         $headerLines = $this->renderHeader($columns);

@@ -200,7 +200,8 @@ final class TuiConversationRenderer implements ConversationRendererInterface
                         $label = "{$icon} {$friendly}  ".implode('  ', $parts);
                     }
 
-                    $maxWidth = 120;
+                    $dimension = $this->core->getDimension();
+                    $maxWidth = $dimension->toolCallWidth();
                     if (mb_strlen($label) > $maxWidth) {
                         $header = "{$icon} {$friendly}";
                         $argsStr = mb_substr($label, mb_strlen($header) + 2);

@@ -7,6 +7,7 @@ namespace Kosmokrator\UI\Tui;
 use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -18,6 +19,8 @@ use Symfony\Component\Tui\Widget\ContainerWidget;
  * registration, and phase lifecycle (Thinking → Tools → Idle). TuiRenderer
  * delegates all phase transitions here and reads back animation state via
  * getters for display in the task bar and subagent tree.
+ *
+ * All mutable scalar state is stored reactively in TuiStateStore signals.
  */
 final class TuiAnimationManager
 {
@@ -25,21 +28,7 @@ final class TuiAnimationManager
 
     private ?CancellableLoaderWidget $compactingLoader = null;
 
-    private AgentPhase $currentPhase = AgentPhase::Idle;
-
-    private float $thinkingStartTime = 0.0;
-
-    private ?string $thinkingPhrase = null;
-
     private ?string $thinkingTimerId = null;
-
-    private int $breathTick = 0;
-
-    private ?string $breathColor = null;
-
-    private float $compactingStartTime = 0.0;
-
-    private int $compactingBreathTick = 0;
 
     private ?string $compactingTimerId = null;
 
@@ -47,8 +36,6 @@ final class TuiAnimationManager
     private array $activeSpinnerFrames = [];
 
     private bool $spinnersRegistered = false;
-
-    private int $spinnerIndex = 0;
 
     private const THINKING_PHRASES = [
         '◈ Consulting the Oracle at Delphi...',
@@ -93,20 +80,16 @@ final class TuiAnimationManager
     ];
 
     /**
+     * @param  TuiStateStore  $state  Centralized reactive state store
      * @param  ContainerWidget  $thinkingBar  Container for thinking/compacting loaders
-     * @param  \Closure(): bool  $hasTasksProvider  Returns whether the task store has tasks
-     * @param  \Closure(): bool  $hasSubagentActivityProvider  Returns whether subagents are actively running
-     * @param  \Closure(): void  $refreshTaskBarCallback  Triggers a task bar refresh
      * @param  \Closure(): void  $subagentTickCallback  Ticks the subagent tree refresh
      * @param  \Closure(): void  $subagentCleanupCallback  Cleans up subagent display state
      * @param  \Closure(): void  $renderCallback  Triggers a TUI render pass (flushRender)
      * @param  \Closure(): void  $forceRenderCallback  Triggers a forced TUI render pass
      */
     public function __construct(
+        private readonly TuiStateStore $state,
         private readonly ContainerWidget $thinkingBar,
-        private readonly \Closure $hasTasksProvider,
-        private readonly \Closure $hasSubagentActivityProvider,
-        private readonly \Closure $refreshTaskBarCallback,
         private readonly \Closure $subagentTickCallback,
         private readonly \Closure $subagentCleanupCallback,
         private readonly \Closure $renderCallback,
@@ -120,7 +103,7 @@ final class TuiAnimationManager
      */
     public function getBreathColor(): ?string
     {
-        return $this->breathColor;
+        return $this->state->getBreathColor();
     }
 
     /**
@@ -128,7 +111,7 @@ final class TuiAnimationManager
      */
     public function getCurrentPhase(): AgentPhase
     {
-        return $this->currentPhase;
+        return AgentPhase::from($this->state->getPhase());
     }
 
     /**
@@ -136,7 +119,7 @@ final class TuiAnimationManager
      */
     public function getThinkingPhrase(): ?string
     {
-        return $this->thinkingPhrase;
+        return $this->state->getThinkingPhrase();
     }
 
     /**
@@ -144,7 +127,7 @@ final class TuiAnimationManager
      */
     public function getThinkingStartTime(): float
     {
-        return $this->thinkingStartTime;
+        return $this->state->getThinkingStartTime();
     }
 
     /**
@@ -167,12 +150,12 @@ final class TuiAnimationManager
      */
     public function setPhase(AgentPhase $phase, ?DeferredCancellation $cancellation = null): void
     {
-        if ($phase === $this->currentPhase) {
+        if ($phase->value === $this->state->getPhase()) {
             return;
         }
 
-        $previous = $this->currentPhase;
-        $this->currentPhase = $phase;
+        $previous = $this->getCurrentPhase();
+        $this->state->setPhase($phase->value);
 
         match ($phase) {
             AgentPhase::Thinking => $this->enterThinking($cancellation),
@@ -190,9 +173,9 @@ final class TuiAnimationManager
 
         $this->ensureSpinnersRegistered();
 
+        $spinnerIdx = $this->state->allocateSpinner();
         $spinnerNames = array_keys(self::SPINNERS);
-        $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
-        $this->spinnerIndex++;
+        $spinnerName = $spinnerNames[$spinnerIdx % count($spinnerNames)];
 
         $this->compactingLoader = new CancellableLoaderWidget($phrase);
         $this->compactingLoader->setId('compacting-loader');
@@ -210,23 +193,23 @@ final class TuiAnimationManager
             return;
         }
 
-        $this->compactingStartTime = microtime(true);
-        $this->compactingBreathTick = 0;
+        $this->state->setCompactingStartTime(microtime(true));
+        $this->state->setCompactingBreathTick(0);
 
         // Breathing pulse at 30fps — red color modulation
         $this->compactingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
-            $this->compactingBreathTick++;
+            $this->state->tickCompactingBreath();
             $r = Theme::reset();
 
             // Slow sin wave (~3s full cycle) modulating red tones
-            $t = sin($this->compactingBreathTick * 0.07);
+            $t = sin($this->state->getCompactingBreathTick() * 0.07);
             $rr = (int) (208 + 40 * $t);
             $rg = (int) (48 + 16 * $t);
             $rb = (int) (48 + 16 * $t);
             $color = Theme::rgb($rr, $rg, $rb);
 
             if ($this->compactingLoader !== null) {
-                $elapsed = (int) (microtime(true) - $this->compactingStartTime);
+                $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
                 $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
                 $dim = "\033[38;5;245m";
                 $this->compactingLoader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
@@ -284,21 +267,21 @@ final class TuiAnimationManager
         $this->clearThinkingLoader();
 
         $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
-        $hasTasks = ($this->hasTasksProvider)();
+        $hasTasks = $this->state->getHasTasks();
 
-        $this->thinkingStartTime = microtime(true);
-        $this->breathTick = 0;
-        $this->thinkingPhrase = $phrase;
+        $this->state->setThinkingStartTime(microtime(true));
+        $this->state->setBreathTick(0);
+        $this->state->setThinkingPhrase($phrase);
 
         // Only show the standalone loader when there are no tasks —
         // when tasks exist, the breathing animation on in-progress tasks IS the indicator
         if (! $hasTasks) {
             $this->ensureSpinnersRegistered();
 
+            $spinnerIdx = $this->state->allocateSpinner();
             $spinnerNames = array_keys(self::SPINNERS);
-            $spinnerName = $spinnerNames[$this->spinnerIndex % count($spinnerNames)];
+            $spinnerName = $spinnerNames[$spinnerIdx % count($spinnerNames)];
             $this->activeSpinnerFrames = self::SPINNERS[$spinnerName];
-            $this->spinnerIndex++;
 
             $this->loader = new CancellableLoaderWidget($phrase);
             $this->loader->setId('loader');
@@ -337,7 +320,7 @@ final class TuiAnimationManager
             EventLoop::cancel($this->thinkingTimerId);
             $this->thinkingTimerId = null;
         }
-        $this->startBreathingAnimation($this->thinkingPhrase ?? '', 'amber');
+        $this->startBreathingAnimation($this->state->getThinkingPhrase() ?? '', 'amber');
 
         ($this->renderCallback)();
     }
@@ -361,9 +344,8 @@ final class TuiAnimationManager
             $this->clearThinkingLoader();
         }
 
-        $this->thinkingPhrase = null;
-        $this->breathColor = null;
-        ($this->refreshTaskBarCallback)();
+        $this->state->setThinkingPhrase(null);
+        $this->state->setBreathColor(null);
         ($this->subagentCleanupCallback)();
 
         ($this->forceRenderCallback)();
@@ -382,10 +364,10 @@ final class TuiAnimationManager
         }
 
         $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase, $palette) {
-            $this->breathTick++;
+            $this->state->tickBreath();
             $r = Theme::reset();
 
-            $t = sin($this->breathTick * 0.07);
+            $t = sin($this->state->getBreathTick() * 0.07);
 
             if ($palette === 'amber') {
                 // Warm amber tones for tool execution
@@ -398,14 +380,15 @@ final class TuiAnimationManager
                 $cg = (int) (160 + 40 * $t);
                 $cb = (int) (208 + 47 * $t);
             }
-            $this->breathColor = Theme::rgb($cr, $cg, $cb);
+            $breathColor = Theme::rgb($cr, $cg, $cb);
+            $this->state->setBreathColor($breathColor);
 
             if ($this->loader !== null && $phrase !== '') {
                 $dim = "\033[38;5;245m";
-                $message = "{$this->breathColor}{$phrase}{$r}";
+                $message = "{$breathColor}{$phrase}{$r}";
 
-                if (! ($this->hasSubagentActivityProvider)()) {
-                    $elapsed = (int) (microtime(true) - $this->thinkingStartTime);
+                if (! $this->state->getHasSubagentActivity()) {
+                    $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
                     $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
                     $message .= "{$dim} · {$formatted}{$r}";
                 }
@@ -413,12 +396,8 @@ final class TuiAnimationManager
                 $this->loader->setMessage($message);
             }
 
-            if (($this->hasTasksProvider)()) {
-                ($this->refreshTaskBarCallback)();
-            }
-
             // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
-            if ($this->breathTick % 15 === 0) {
+            if ($this->state->getBreathTick() % 15 === 0) {
                 ($this->subagentTickCallback)();
             }
 

@@ -10,6 +10,7 @@ use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\Highlight\Lua\LuaLanguage;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\ToolRendererInterface;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\DiscoveryBatchWidget;
@@ -30,8 +31,6 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     private ?Highlighter $highlighter = null;
 
-    private ?BashCommandWidget $activeBashWidget = null;
-
     private ?CancellableLoaderWidget $toolExecutingLoader = null;
 
     private ?string $toolExecutingTimerId = null;
@@ -40,19 +39,11 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     private int $toolExecutingBreathTick = 0;
 
-    private ?string $toolExecutingPreview = null;
-
-    private array $lastToolArgs = [];
-
-    private array $lastToolArgsByName = [];
-
     private ?DiscoveryBatchWidget $activeDiscoveryBatch = null;
-
-    /** @var list<array{name: string, label: string, detail: string, summary: string, status: 'pending'|'success'|'error'}> */
-    private array $activeDiscoveryItems = [];
 
     public function __construct(
         private readonly TuiCoreRenderer $core,
+        private readonly TuiStateStore $state,
     ) {}
 
     public function getLastToolArgs(): array
@@ -93,7 +84,6 @@ final class TuiToolRenderer implements ToolRendererInterface
         if ($this->isTaskTool($name)) {
             $this->finalizeDiscoveryBatch();
             $this->core->refreshTaskBar();
-            $this->core->flushRender();
 
             return;
         }
@@ -178,7 +168,6 @@ final class TuiToolRenderer implements ToolRendererInterface
         }
 
         $this->core->addConversationWidget($widget);
-        $this->core->flushRender();
     }
 
     public function showToolResult(string $name, string $output, bool $success): void
@@ -197,7 +186,6 @@ final class TuiToolRenderer implements ToolRendererInterface
         // Task tools: silent result
         if ($this->isTaskTool($name)) {
             $this->core->refreshTaskBar();
-            $this->core->flushRender();
 
             return;
         }
@@ -235,7 +223,6 @@ final class TuiToolRenderer implements ToolRendererInterface
             $widget = new CollapsibleWidget($header, $content, $lineCount);
             $widget->addStyleClass('tool-result');
             $this->core->addConversationWidget($widget);
-            $this->core->flushRender();
 
             return;
         }
@@ -247,7 +234,6 @@ final class TuiToolRenderer implements ToolRendererInterface
             $widget = new CollapsibleWidget($header, $content, $lineCount);
             $widget->addStyleClass('tool-result');
             $this->core->addConversationWidget($widget);
-            $this->core->flushRender();
 
             return;
         }
@@ -274,7 +260,6 @@ final class TuiToolRenderer implements ToolRendererInterface
             $widget->setExpanded(true);
         }
         $this->core->addConversationWidget($widget);
-        $this->core->flushRender();
     }
 
     public function askToolPermission(string $toolName, array $args): string
@@ -325,7 +310,7 @@ final class TuiToolRenderer implements ToolRendererInterface
             $elapsed = (int) (microtime(true) - $this->toolExecutingStartTime);
             $time = $elapsed > 0 ? " {$dim}({$elapsed}s){$r}" : '';
 
-            $preview = $this->toolExecutingPreview ?? 'running...';
+            $preview = $this->state->getToolExecutingPreview() ?? 'running...';
             $this->toolExecutingLoader->setMessage("{$color}{$preview}{$r}{$time}");
             $this->core->flushRender();
         });
@@ -345,7 +330,7 @@ final class TuiToolRenderer implements ToolRendererInterface
             }
         }
         if ($last !== '') {
-            $this->toolExecutingPreview = mb_strlen($last) > 100 ? mb_substr($last, 0, 100).'…' : $last;
+            $this->state->setToolExecutingPreview(mb_strlen($last) > 100 ? mb_substr($last, 0, 100).'…' : $last);
         }
     }
 
@@ -361,7 +346,7 @@ final class TuiToolRenderer implements ToolRendererInterface
             $this->core->getConversation()->remove($this->toolExecutingLoader);
             $this->toolExecutingLoader = null;
         }
-        $this->toolExecutingPreview = null;
+        $this->state->setToolExecutingPreview(null);
     }
 
     // ── Discovery batch methods (used by TuiConversationRenderer too) ───
@@ -369,7 +354,7 @@ final class TuiToolRenderer implements ToolRendererInterface
     public function finalizeDiscoveryBatch(): void
     {
         $this->activeDiscoveryBatch = null;
-        $this->activeDiscoveryItems = [];
+        $this->state->setActiveDiscoveryItems([]);
     }
 
     public function isOmensTool(string $name, array $args): bool
@@ -719,7 +704,6 @@ final class TuiToolRenderer implements ToolRendererInterface
         $widget->addStyleClass('tool-call');
         $widget->setExpanded(true);
         $this->core->addConversationWidget($widget);
-        $this->core->flushRender();
     }
 
     /**
@@ -743,7 +727,6 @@ final class TuiToolRenderer implements ToolRendererInterface
         $widget = new TextWidget($label);
         $widget->addStyleClass('tool-call');
         $this->core->addConversationWidget($widget);
-        $this->core->flushRender();
     }
 
     /**

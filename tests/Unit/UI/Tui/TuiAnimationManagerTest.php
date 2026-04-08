@@ -5,17 +5,16 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\Agent\AgentPhase;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\TuiAnimationManager;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 
 final class TuiAnimationManagerTest extends TestCase
 {
+    private TuiStateStore $state;
+
     private ContainerWidget $thinkingBar;
-
-    private bool $hasTasks;
-
-    private bool $hasSubagentActivity;
 
     private bool $refreshCalled;
 
@@ -27,21 +26,16 @@ final class TuiAnimationManagerTest extends TestCase
 
     private function createManager(): TuiAnimationManager
     {
+        $this->state = new TuiStateStore;
         $this->thinkingBar = new ContainerWidget;
-        $this->hasTasks = false;
-        $this->hasSubagentActivity = false;
         $this->refreshCalled = false;
         $this->forceRenderCalled = false;
         $this->subagentTickCalled = false;
         $this->subagentCleanupCalled = false;
 
         return new TuiAnimationManager(
+            state: $this->state,
             thinkingBar: $this->thinkingBar,
-            hasTasksProvider: fn (): bool => $this->hasTasks,
-            hasSubagentActivityProvider: fn (): bool => $this->hasSubagentActivity,
-            refreshTaskBarCallback: function (): void {
-                $this->refreshCalled = true;
-            },
             subagentTickCallback: function (): void {
                 $this->subagentTickCalled = true;
             },
@@ -159,7 +153,7 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_set_phase_to_thinking_with_tasks_creates_no_loader(): void
     {
         $manager = $this->createManager();
-        $this->hasTasks = true;
+        $this->state->setHasTasks(true);
         $manager->setPhase(AgentPhase::Thinking);
 
         // When hasTasks is true, no standalone loader is created
@@ -169,7 +163,7 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_set_phase_to_thinking_without_tasks_creates_loader(): void
     {
         $manager = $this->createManager();
-        $this->hasTasks = false;
+        $this->state->setHasTasks(false);
         $manager->setPhase(AgentPhase::Thinking);
 
         // When hasTasks is false, a loader is created
@@ -179,7 +173,7 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_set_phase_idle_after_thinking_clears_state(): void
     {
         $manager = $this->createManager();
-        $this->hasTasks = false;
+        $this->state->setHasTasks(false);
         $manager->setPhase(AgentPhase::Thinking);
 
         $this->assertNotNull($manager->getThinkingPhrase());
@@ -196,7 +190,7 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_set_phase_idle_triggers_subagent_cleanup(): void
     {
         $manager = $this->createManager();
-        $this->hasTasks = false;
+        $this->state->setHasTasks(false);
         // Transition away from Idle first, then back
         $manager->setPhase(AgentPhase::Thinking);
         $manager->setPhase(AgentPhase::Idle);
@@ -206,7 +200,7 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_set_phase_to_tools_preserves_thinking_phrase(): void
     {
         $manager = $this->createManager();
-        $this->hasTasks = false;
+        $this->state->setHasTasks(false);
         $manager->setPhase(AgentPhase::Thinking);
 
         $phrase = $manager->getThinkingPhrase();
@@ -222,10 +216,8 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_constructor_accepts_all_closures(): void
     {
         $manager = new TuiAnimationManager(
+            state: new TuiStateStore,
             thinkingBar: new ContainerWidget,
-            hasTasksProvider: fn (): bool => false,
-            hasSubagentActivityProvider: fn (): bool => false,
-            refreshTaskBarCallback: function (): void {},
             subagentTickCallback: function (): void {},
             subagentCleanupCallback: function (): void {},
             renderCallback: function (): void {},
@@ -238,7 +230,7 @@ final class TuiAnimationManagerTest extends TestCase
     public function test_full_phase_lifecycle_thinking_tools_idle(): void
     {
         $manager = $this->createManager();
-        $this->hasTasks = false;
+        $this->state->setHasTasks(false);
 
         $manager->setPhase(AgentPhase::Thinking);
         $this->assertSame(AgentPhase::Thinking, $manager->getCurrentPhase());

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui;
 
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\TuiModalManager;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop\Suspension;
@@ -22,6 +23,7 @@ final class TuiModalManagerTest extends TestCase
         $input = $this->createMock(EditorWidget::class);
 
         return new TuiModalManager(
+            state: new TuiStateStore,
             overlay: $overlay,
             sessionRoot: $sessionRoot,
             tui: $tui,

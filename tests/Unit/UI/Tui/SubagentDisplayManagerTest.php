@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui;
 
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\SubagentDisplayManager;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
@@ -33,6 +34,7 @@ final class SubagentDisplayManagerTest extends TestCase
         $this->spinnersEnsured = false;
 
         return new SubagentDisplayManager(
+            state: new TuiStateStore,
             conversation: $this->conversation,
             breathColorProvider: fn (): string => $this->breathColor,
             renderCallback: function (): void {

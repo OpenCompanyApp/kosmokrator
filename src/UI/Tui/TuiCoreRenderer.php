@@ -16,6 +16,10 @@ use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Phase\Phase;
+use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
+use Kosmokrator\UI\Tui\Signal\Effect;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
 use Kosmokrator\UI\Tui\Widget\HistoryStatusWidget;
@@ -37,6 +41,10 @@ use Symfony\Component\Tui\Widget\TextWidget;
  *
  * Manages the Tui instance, layout, streaming, status bar, phase transitions,
  * prompt/input, scroll history, thinking/compacting, and ANSI intro/animations.
+ *
+ * All mutable UI state lives in {@see TuiStateStore} as reactive signals.
+ * Effects auto-propagate changes to widgets. Phase transitions are validated
+ * through a {@see PhaseStateMachine}.
  */
 final class TuiCoreRenderer implements CoreRendererInterface
 {
@@ -64,34 +72,12 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private TuiModalManager $modalManager;
 
-    private ?string $pendingEditorRestore = null;
+    private readonly TuiStateStore $state;
 
-    private ?DeferredCancellation $requestCancellation = null;
+    private PhaseStateMachine $phaseMachine;
 
-    /** @var string[] */
-    private array $messageQueue = [];
-
-    private string $currentModeLabel = 'Edit';
-
-    private string $currentModeColor = "\033[38;2;80;200;120m";
-
-    private string $statusDetail = 'Ready';
-
-    private string $currentPermissionLabel = 'Guardian ◈';
-
-    private string $currentPermissionColor = "\033[38;2;180;180;200m";
-
-    private ?int $lastStatusTokensIn = null;
-
-    private ?int $lastStatusTokensOut = null;
-
-    private ?float $lastStatusCost = null;
-
-    private ?int $lastStatusMaxContext = null;
-
-    private MarkdownWidget|AnsiArtWidget|null $activeResponse = null;
-
-    private bool $activeResponseIsAnsi = false;
+    /** @var list<Effect> */
+    private array $effects = [];
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -102,12 +88,10 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?TaskStore $taskStore = null;
 
-    /** @var array<array{question: string, answer: string, answered: bool, recommended: bool}> */
-    private array $pendingQuestionRecap = [];
-
-    private int $scrollOffset = 0;
-
-    private bool $hasHiddenActivityBelow = false;
+    public function __construct()
+    {
+        $this->state = new TuiStateStore;
+    }
 
     // ── Public accessors for shared state ───────────────────────────────
 
@@ -153,12 +137,12 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     public function getRequestCancellation(): ?DeferredCancellation
     {
-        return $this->requestCancellation;
+        return $this->state->getRequestCancellation();
     }
 
     public function getCurrentModeLabel(): string
     {
-        return $this->currentModeLabel;
+        return $this->state->getModeLabel();
     }
 
     public function getLastToolArgs(): array
@@ -171,11 +155,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
         return $this->taskStore;
     }
 
-    // ��─ CoreRendererInterface ───────────────────────────────────���───────
+    public function getState(): TuiStateStore
+    {
+        return $this->state;
+    }
+
+    // ── CoreRendererInterface ───────────────────────────────────────────
 
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
+        $this->state->setHasTasks(! $store->isEmpty());
     }
 
     public function initialize(): void
@@ -200,7 +190,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->statusBar->setEmptyBarCharacter('─');
         $this->statusBar->setProgressCharacter('━');
         $this->statusBar->setBarWidth(20);
-        $this->refreshStatusBar();
+        $this->statusBar->setMessage($this->state->getStatusBarMessage());
         $this->statusBar->start(200_000, 0);
 
         $this->overlay = new ContainerWidget;
@@ -213,6 +203,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->thinkingBar->setId('thinking-bar');
 
         $this->subagentDisplay = new SubagentDisplayManager(
+            state: $this->state,
             conversation: $this->conversation,
             breathColorProvider: fn () => $this->animationManager->getBreathColor(),
             renderCallback: fn () => $this->flushRender(),
@@ -220,10 +211,8 @@ final class TuiCoreRenderer implements CoreRendererInterface
         );
 
         $this->animationManager = new TuiAnimationManager(
+            state: $this->state,
             thinkingBar: $this->thinkingBar,
-            hasTasksProvider: fn () => $this->taskStore !== null && ! $this->taskStore->isEmpty(),
-            hasSubagentActivityProvider: fn () => $this->subagentDisplay->hasRunningAgents(),
-            refreshTaskBarCallback: fn () => $this->refreshTaskBar(),
             subagentTickCallback: fn () => $this->subagentDisplay->tickTreeRefresh(),
             subagentCleanupCallback: fn () => $this->subagentDisplay->cleanup(),
             renderCallback: fn () => $this->flushRender(),
@@ -244,6 +233,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         ]));
 
         $this->modalManager = new TuiModalManager(
+            state: $this->state,
             overlay: $this->overlay,
             sessionRoot: $this->session,
             tui: $this->tui,
@@ -266,6 +256,55 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->tui->setFocus($this->input);
 
         $this->tui->start();
+
+        // ── Wire PhaseStateMachine ────────────────────────────────────
+        $this->phaseMachine = new PhaseStateMachine;
+
+        // Phase transitions drive the animation manager
+        $this->phaseMachine->onAny(function ($transition, Phase $from, Phase $to): void {
+            $agentPhase = $this->tuiPhaseToAgentPhase($to);
+            $this->animationManager->setPhase($agentPhase, $this->state->getRequestCancellation());
+        });
+
+        // ── Wire Effects ──────────────────────────────────────────────
+
+        // Status bar effect: auto-update when any status-bar signal changes
+        $this->effects[] = new Effect(function (): void {
+            $message = $this->state->getStatusBarMessage();
+            $this->statusBar->setMessage($message);
+        });
+
+        // History status effect: show/hide based on scroll state
+        $this->effects[] = new Effect(function (): void {
+            $scrollOffset = $this->state->getScrollOffset();
+            if ($scrollOffset <= 0) {
+                $this->historyStatus->hide();
+
+                return;
+            }
+
+            $hasHidden = $this->state->getHasHiddenActivityBelow();
+            $this->historyStatus->show($hasHidden);
+        });
+
+        // Task bar effect: auto-refresh when animation state changes
+        // (breathTick fires at ~30fps during thinking, keeping the task bar animated)
+        $this->effects[] = new Effect(function (): void {
+            $this->state->breathColorSignal()->get();
+            $this->state->thinkingPhraseSignal()->get();
+            $this->state->hasRunningAgentsSignal()->get();
+            $this->state->breathTickSignal()->get();
+            if ($this->taskStore !== null) {
+                $this->refreshTaskBar();
+                $this->flushRender();
+            }
+        });
+
+        // Render trigger effect: flush render when trigger counter changes
+        $this->effects[] = new Effect(function (): void {
+            $this->state->renderTriggerSignal()->get();
+            $this->flushRender();
+        });
     }
 
     public function renderIntro(bool $animated): void
@@ -345,17 +384,16 @@ HELP;
         $tutorialWidget = new TextWidget($tutorial);
         $tutorialWidget->addStyleClass('welcome');
         $this->addConversationWidget($tutorialWidget);
-
-        $this->flushRender();
     }
 
     public function prompt(): string
     {
         $this->flushPendingQuestionRecap();
 
-        if ($this->pendingEditorRestore !== null) {
-            $this->input->setText($this->pendingEditorRestore);
-            $this->pendingEditorRestore = null;
+        $pendingRestore = $this->state->getPendingEditorRestore();
+        if ($pendingRestore !== null) {
+            $this->input->setText($pendingRestore);
+            $this->state->setPendingEditorRestore(null);
         }
 
         $this->tui->setFocus($this->input);
@@ -379,27 +417,24 @@ HELP;
         $widget = new TextWidget("{$bg}{$white}{$content}".str_repeat(' ', $pad)."{$r}");
         $widget->addStyleClass('user-message');
         $this->addConversationWidget($widget);
-        $this->flushRender();
     }
 
     public function setPhase(AgentPhase $phase): void
     {
-        if ($phase === $this->animationManager->getCurrentPhase()) {
+        $tuiPhase = $this->agentPhaseToTuiPhase($phase);
+
+        if ($tuiPhase === $this->phaseMachine->current()) {
             return;
         }
 
-        if ($phase === AgentPhase::Thinking && $this->requestCancellation === null) {
-            $this->requestCancellation = new DeferredCancellation;
+        if ($phase === AgentPhase::Thinking && $this->state->getRequestCancellation() === null) {
+            $this->state->setRequestCancellation(new DeferredCancellation);
         }
 
-        $this->animationManager->setPhase($phase, $this->requestCancellation);
-
-        if ($phase !== AgentPhase::Idle) {
-            $this->refreshStatusBar();
-        }
+        $this->phaseMachine->transition($tuiPhase);
 
         if ($phase === AgentPhase::Idle) {
-            $this->requestCancellation = null;
+            $this->state->setRequestCancellation(null);
             TerminalNotification::notify();
         }
     }
@@ -426,7 +461,9 @@ HELP;
 
     public function getCancellation(): ?Cancellation
     {
-        return $this->requestCancellation?->getCancellation();
+        $cancellation = $this->state->getRequestCancellation();
+
+        return $cancellation?->getCancellation();
     }
 
     public function showReasoningContent(string $content): void
@@ -451,7 +488,6 @@ HELP;
         );
         $widget->addStyleClass('tool-result');
         $this->addConversationWidget($widget);
-        $this->flushRender();
     }
 
     public function streamChunk(string $text): void
@@ -459,40 +495,45 @@ HELP;
         $this->flushPendingQuestionRecap();
         $this->finalizeDiscoveryBatch();
 
-        if ($this->activeResponse === null) {
+        $activeResponse = $this->state->getActiveResponse();
+        $activeResponseIsAnsi = $this->state->getActiveResponseIsAnsi();
+
+        if ($activeResponse === null) {
             $this->clearThinking();
 
             if ($this->containsAnsiEscapes($text)) {
-                $this->activeResponse = new AnsiArtWidget('');
-                $this->activeResponse->addStyleClass('ansi-art');
-                $this->activeResponseIsAnsi = true;
+                $activeResponse = new AnsiArtWidget('');
+                $activeResponse->addStyleClass('ansi-art');
+                $this->state->setActiveResponseIsAnsi(true);
             } else {
-                $this->activeResponse = new MarkdownWidget('');
-                $this->activeResponse->addStyleClass('response');
-                $this->activeResponseIsAnsi = false;
+                $activeResponse = new MarkdownWidget('');
+                $activeResponse->addStyleClass('response');
+                $this->state->setActiveResponseIsAnsi(false);
             }
 
-            $this->addConversationWidget($this->activeResponse);
-        } elseif (! $this->activeResponseIsAnsi && $this->containsAnsiEscapes($text)) {
-            $accumulated = $this->activeResponse->getText();
-            $this->conversation->remove($this->activeResponse);
+            $this->state->setActiveResponse($activeResponse);
+            $this->addConversationWidget($activeResponse);
+        } elseif (! $activeResponseIsAnsi && $this->containsAnsiEscapes($text)) {
+            $accumulated = $activeResponse->getText();
+            $this->conversation->remove($activeResponse);
 
-            $this->activeResponse = new AnsiArtWidget($accumulated);
-            $this->activeResponse->addStyleClass('ansi-art');
-            $this->activeResponseIsAnsi = true;
-            $this->addConversationWidget($this->activeResponse);
+            $activeResponse = new AnsiArtWidget($accumulated);
+            $activeResponse->addStyleClass('ansi-art');
+            $this->state->setActiveResponseIsAnsi(true);
+            $this->state->setActiveResponse($activeResponse);
+            $this->addConversationWidget($activeResponse);
         }
 
-        $current = $this->activeResponse->getText();
-        $this->activeResponse->setText($current.$text);
+        $current = $activeResponse->getText();
+        $activeResponse->setText($current.$text);
         $this->markHiddenConversationActivity();
-        $this->flushRender();
+        $this->state->triggerRender();
     }
 
     public function streamComplete(): void
     {
-        $this->activeResponse = null;
-        $this->activeResponseIsAnsi = false;
+        $this->state->setActiveResponse(null);
+        $this->state->setActiveResponseIsAnsi(false);
         $this->finalizeDiscoveryBatch();
         $this->flushRender();
     }
@@ -509,28 +550,25 @@ HELP;
 
     public function showMode(string $label, string $color = ''): void
     {
-        $this->currentModeLabel = $label;
+        $this->state->setModeLabel($label);
         if ($color !== '') {
-            $this->currentModeColor = $color;
+            $this->state->setModeColor($color);
         }
-        $this->refreshStatusBar();
-        $this->flushRender();
     }
 
     public function setPermissionMode(string $label, string $color): void
     {
-        $this->currentPermissionLabel = $label;
-        $this->currentPermissionColor = $color;
-        $this->refreshStatusBar();
-        $this->flushRender();
+        $this->state->setPermissionLabel($label);
+        $this->state->setPermissionColor($color);
     }
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
     {
-        $this->lastStatusTokensIn = $tokensIn;
-        $this->lastStatusTokensOut = $tokensOut;
-        $this->lastStatusCost = $cost;
-        $this->lastStatusMaxContext = $maxContext;
+        $this->state->setTokensIn($tokensIn);
+        $this->state->setTokensOut($tokensOut);
+        $this->state->setCost($cost);
+        $this->state->setMaxContext($maxContext);
+        $this->state->setModel($model);
 
         if ($this->statusBar->getMaxSteps() !== $maxContext) {
             $this->statusBar->start($maxContext, $tokensIn);
@@ -545,14 +583,13 @@ HELP;
         $sep = Theme::dim()."·{$r}";
         $dimWhite = Theme::dimWhite();
         $ctxColor = Theme::contextColor($ratio);
-        $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}";
-        $this->refreshStatusBar();
-        $this->flushRender();
+        $this->state->setStatusDetail("{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}");
+        $this->state->triggerRender();
     }
 
     public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void
     {
-        $tokensIn = min($this->lastStatusTokensIn ?? 0, $maxContext);
+        $tokensIn = min($this->state->getTokensIn() ?? 0, $maxContext);
 
         if ($this->statusBar->getMaxSteps() !== $maxContext) {
             $this->statusBar->start($maxContext, $tokensIn);
@@ -564,28 +601,23 @@ HELP;
         $r = Theme::reset();
         $dimWhite = Theme::dimWhite();
 
-        if ($this->lastStatusMaxContext === null) {
-            $this->statusDetail = "{$dimWhite}{$label}{$r}";
+        if ($this->state->getMaxContext() === null) {
+            $this->state->setStatusDetail("{$dimWhite}{$label}{$r}");
         } else {
             $inLabel = Theme::formatTokenCount($tokensIn);
             $maxLabel = Theme::formatTokenCount($maxContext);
             $ratio = min(1.0, $tokensIn / max(1, $maxContext));
             $sep = Theme::dim()."·{$r}";
             $ctxColor = Theme::contextColor($ratio);
-            $this->statusDetail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}";
+            $this->state->setStatusDetail("{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}");
         }
 
-        $this->refreshStatusBar();
-        $this->flushRender();
+        $this->state->triggerRender();
     }
 
     public function consumeQueuedMessage(): ?string
     {
-        if ($this->messageQueue === []) {
-            return null;
-        }
-
-        return array_shift($this->messageQueue);
+        return $this->state->shiftMessage();
     }
 
     public function setImmediateCommandHandler(?\Closure $handler): void
@@ -595,6 +627,12 @@ HELP;
 
     public function teardown(): void
     {
+        // Dispose all effects
+        foreach ($this->effects as $effect) {
+            $effect->dispose();
+        }
+        $this->effects = [];
+
         if ($this->tui->isRunning()) {
             $this->tui->stop();
         }
@@ -641,9 +679,12 @@ HELP;
     {
         if ($this->taskStore === null || $this->taskStore->isEmpty()) {
             $this->taskBar->setText('');
+            $this->state->setHasTasks(false);
 
             return;
         }
+
+        $this->state->setHasTasks(true);
 
         $r = Theme::reset();
         $dim = Theme::dim();
@@ -677,7 +718,7 @@ HELP;
         $this->taskBar->setText($bar);
     }
 
-    // ���─ Public helpers for other sub-renderers ──────────────────────────
+    // ── Public helpers for other sub-renderers ──────────────────────────
 
     public function flushRender(): void
     {
@@ -694,43 +735,37 @@ HELP;
     public function addConversationWidget(AbstractWidget $widget): void
     {
         $this->conversation->add($widget);
-        $this->markHiddenConversationActivity();
+        $this->state->triggerRender();
     }
 
     public function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
     {
-        $this->pendingQuestionRecap[] = [
-            'question' => $question,
-            'answer' => $answer,
-            'answered' => $answered,
-            'recommended' => $answered && $recommended,
-        ];
+        $this->state->pushQuestionRecap($question, $answer, $answered, $recommended);
     }
 
     public function flushPendingQuestionRecap(): void
     {
-        if ($this->pendingQuestionRecap === []) {
+        $recap = $this->state->drainQuestionRecap();
+        if ($recap === []) {
             return;
         }
 
-        $this->addConversationWidget(new AnsweredQuestionsWidget($this->pendingQuestionRecap));
-        $this->pendingQuestionRecap = [];
-        $this->flushRender();
+        $this->addConversationWidget(new AnsweredQuestionsWidget($recap));
     }
 
     public function clearPendingQuestionRecap(): void
     {
-        $this->pendingQuestionRecap = [];
+        $this->state->setPendingQuestionRecap([]);
     }
 
     public function clearConversationState(): void
     {
         $this->conversation->clear();
-        $this->activeResponse = null;
-        $this->activeResponseIsAnsi = false;
-        $this->pendingQuestionRecap = [];
-        $this->scrollOffset = 0;
-        $this->hasHiddenActivityBelow = false;
+        $this->state->setActiveResponse(null);
+        $this->state->setActiveResponseIsAnsi(false);
+        $this->state->setPendingQuestionRecap([]);
+        $this->state->setScrollOffset(0);
+        $this->state->setHasHiddenActivityBelow(false);
         $this->historyStatus->hide();
         $this->tui->setScrollOffset(0);
 
@@ -764,22 +799,11 @@ HELP;
 
     public function queueMessage(string $message): void
     {
-        $this->messageQueue[] = $message;
+        $this->state->pushMessage($message);
         $this->showUserMessage($message);
     }
 
     // ── Private helpers ─────────────────────────────────────────────────
-
-    private function refreshStatusBar(): void
-    {
-        $r = Theme::reset();
-        $sep = Theme::dim()."·{$r}";
-        $this->statusBar->setMessage(
-            "{$this->currentModeColor}{$this->currentModeLabel}{$r} {$sep} "
-            ."{$this->currentPermissionColor}{$this->currentPermissionLabel}{$r} {$sep} "
-            .$this->statusDetail
-        );
-    }
 
     private function containsAnsiEscapes(string $text): bool
     {
@@ -792,21 +816,22 @@ HELP;
             return;
         }
 
-        $this->hasHiddenActivityBelow = true;
-        $this->refreshHistoryStatus();
+        $this->state->setHasHiddenActivityBelow(true);
     }
 
     private function scrollHistoryUp(): void
     {
-        $this->scrollOffset += $this->historyScrollStep();
+        $newOffset = $this->state->getScrollOffset() + $this->historyScrollStep();
+        $this->state->setScrollOffset($newOffset);
         $this->applyScrollOffset();
     }
 
     private function scrollHistoryDown(): void
     {
-        $this->scrollOffset = max(0, $this->scrollOffset - $this->historyScrollStep());
-        if ($this->scrollOffset === 0) {
-            $this->hasHiddenActivityBelow = false;
+        $newOffset = max(0, $this->state->getScrollOffset() - $this->historyScrollStep());
+        $this->state->setScrollOffset($newOffset);
+        if ($newOffset === 0) {
+            $this->state->setHasHiddenActivityBelow(false);
         }
 
         $this->applyScrollOffset();
@@ -814,32 +839,20 @@ HELP;
 
     private function jumpToLiveOutput(): void
     {
-        $this->scrollOffset = 0;
-        $this->hasHiddenActivityBelow = false;
+        $this->state->setScrollOffset(0);
+        $this->state->setHasHiddenActivityBelow(false);
         $this->applyScrollOffset();
     }
 
     private function applyScrollOffset(): void
     {
-        $this->tui->setScrollOffset($this->scrollOffset);
-        $this->refreshHistoryStatus();
+        $this->tui->setScrollOffset($this->state->getScrollOffset());
         $this->flushRender();
-    }
-
-    private function refreshHistoryStatus(): void
-    {
-        if (! $this->isBrowsingHistory()) {
-            $this->historyStatus->hide();
-
-            return;
-        }
-
-        $this->historyStatus->show($this->hasHiddenActivityBelow);
     }
 
     private function isBrowsingHistory(): bool
     {
-        return $this->scrollOffset > 0;
+        return $this->state->getScrollOffset() > 0;
     }
 
     private function historyScrollStep(): int
@@ -853,13 +866,12 @@ HELP;
         $widget = new TextWidget($text);
         $widget->addStyleClass($styleClass);
         $this->addConversationWidget($widget);
-        $this->flushRender();
     }
 
     private function cycleMode(): string
     {
         $modes = ['edit', 'plan', 'ask'];
-        $current = strtolower($this->currentModeLabel);
+        $current = strtolower($this->state->getModeLabel());
         $index = array_search($current, $modes, true);
         if ($index === false) {
             $index = -1;
@@ -869,8 +881,35 @@ HELP;
         return $next;
     }
 
+    /**
+     * Convert an AgentPhase to a TUI Phase for the state machine.
+     */
+    private function agentPhaseToTuiPhase(AgentPhase $phase): Phase
+    {
+        return match ($phase) {
+            AgentPhase::Thinking => Phase::Thinking,
+            AgentPhase::Tools => Phase::Tools,
+            AgentPhase::Idle => Phase::Idle,
+        };
+    }
+
+    /**
+     * Convert a TUI Phase back to an AgentPhase for the animation manager.
+     */
+    private function tuiPhaseToAgentPhase(Phase $phase): AgentPhase
+    {
+        return match ($phase) {
+            Phase::Thinking => AgentPhase::Thinking,
+            Phase::Tools => AgentPhase::Tools,
+            Phase::Idle => AgentPhase::Idle,
+            Phase::Compacting => AgentPhase::Idle,
+        };
+    }
+
     public function bindInputHandlers(): void
     {
+        $state = $this->state;
+
         $this->inputHandler = new TuiInputHandler(
             input: $this->input,
             conversation: $this->conversation,
@@ -885,13 +924,13 @@ HELP;
             cycleMode: $this->cycleMode(...),
             showMode: $this->showMode(...),
             queueMessage: fn (string $msg) => $this->queueMessage($msg),
-            queueMessageSilent: fn (string $msg) => $this->messageQueue[] = $msg,
+            queueMessageSilent: fn (string $msg) => $state->pushMessage($msg),
             getImmediateCommandHandler: fn () => $this->immediateCommandHandler,
             getPromptSuspension: fn () => $this->promptSuspension,
             clearPromptSuspension: fn () => $this->promptSuspension = null,
-            setPendingEditorRestore: fn (?string $v) => $this->pendingEditorRestore = $v,
-            getRequestCancellation: fn () => $this->requestCancellation,
-            clearRequestCancellation: fn () => $this->requestCancellation = null,
+            setPendingEditorRestore: fn (?string $v) => $state->setPendingEditorRestore($v),
+            getRequestCancellation: fn () => $state->getRequestCancellation(),
+            clearRequestCancellation: fn () => $state->setRequestCancellation(null),
         );
         $this->inputHandler->bind();
     }

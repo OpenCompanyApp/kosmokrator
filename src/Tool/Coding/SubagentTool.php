@@ -40,7 +40,8 @@ class SubagentTool extends AbstractTool
     {
         return 'Spawn a sub-agent to work on a task autonomously. '
             .'The sub-agent runs its own tool loop and returns a summary. '
-            .'Use for parallel research, exploration, or delegated work.';
+            .'Use for parallel research, exploration, or delegated work. '
+            .'Supports batch mode: pass `agents` array to spawn multiple agents concurrently.';
     }
 
     public function parameters(): array
@@ -76,9 +77,9 @@ class SubagentTool extends AbstractTool
             'agents' => [
                 'type' => 'array',
                 'description' => 'Batch mode: array of agent specs to run concurrently. Each spec: {task (required), type, id, depends_on, group}. '
-                    .'All agents run in parallel via the event loop; the call blocks until all complete. '
-                    .'When set, the `task`, `type`, `mode`, `id`, `depends_on`, `group` parameters are ignored.',
-                'items' => ['type' => 'string'],
+                    .'Use top-level `mode` to control await/background behavior for the entire batch. '
+                    .'When set, the `task`, `type`, `id`, `depends_on`, `group` parameters at top level are ignored.',
+                'items' => ['type' => 'object'],
             ],
         ];
     }
@@ -93,7 +94,7 @@ class SubagentTool extends AbstractTool
         // Batch mode: agents array provided
         $agents = $args['agents'] ?? null;
         if (is_array($agents) && $agents !== []) {
-            $mode = in_array(($args['mode'] ?? 'await'), ['await', 'background'], true) ? $args['mode'] : 'await';
+            $mode = ($args['mode'] ?? 'await') === 'background' ? 'background' : 'await';
 
             return $this->handleBatch($agents, $mode);
         }

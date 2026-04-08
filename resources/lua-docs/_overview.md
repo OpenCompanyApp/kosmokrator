@@ -35,9 +35,121 @@ local output = app.tools.bash({command = "git status --short"})
 print(output)
 ```
 
-Available native tools: `file_read`, `file_write`, `file_edit`, `apply_patch`, `glob`, `grep`, `bash`, `shell_start`, `shell_write`, `shell_read`, `shell_kill`, `memory_save`, `memory_search`.
+Available native tools: `file_read`, `file_write`, `file_edit`, `apply_patch`, `glob`, `grep`, `bash`, `shell_start`, `shell_write`, `shell_read`, `shell_kill`, `task_create`, `task_update`, `task_list`, `task_get`, `memory_save`, `memory_search`, `subagent`.
 
 **Note:** Write tools (`file_write`, `file_edit`, `apply_patch`, `bash`) are subject to the same permission rules as when called directly.
+
+## Subagent Tool
+
+The `subagent` tool spawns child agents that run their own autonomous tool loops. It supports two calling conventions:
+
+### Single Agent
+
+```lua
+-- Spawn one explore agent (blocks until complete)
+local result = app.tools.subagent({
+  task = "Find all files using the AgentContext class",
+  type = "explore",          -- "explore" (default), "plan", or "general"
+  id = "my_agent",           -- optional, for depends_on references
+})
+print(result)
+```
+
+### Batch — Parallel Agents
+
+Pass `agents` (array) instead of `task`. All agents run concurrently via the Amp event loop:
+
+```lua
+local result = app.tools.subagent({
+  agents = {
+    {task = "Explore the routing module", id = "router"},
+    {task = "Explore the auth module",    id = "auth"},
+    {task = "Explore the database layer", id = "db"},
+  }
+})
+print(result)  -- results for all agents, keyed by id
+```
+
+Each agent spec supports: `task` (required), `type`, `id`, `depends_on`, `group`.
+
+### Mode: await vs background
+
+The `mode` parameter controls when results are available:
+
+| Mode | Single | Batch |
+|------|--------|-------|
+| `"await"` (default) | Blocks until agent completes, returns result | Blocks until **all** agents complete, returns all results |
+| `"background"` | Returns immediately, result collected by main agent loop later | Returns immediately, **all** results collected by main agent loop later |
+
+```lua
+-- Background: fire-and-forget (results NOT available in Lua)
+app.tools.subagent({
+  mode = "background",
+  task = "Run the full test suite",
+  type = "general",
+})
+
+-- Background batch: spawn 3 agents, return immediately
+app.tools.subagent({
+  mode = "background",
+  agents = {
+    {task = "Run tests",  id = "t1", type = "general"},
+    {task = "Run linter", id = "t2", type = "general"},
+  }
+})
+```
+
+**Important:** Background results are collected by the main agent loop after the Lua script returns — they are never available to Lua code. Use `await` mode if you need results within the script.
+
+### Dependencies (depends_on)
+
+An agent can wait for other agents to finish before starting. Their results are injected into the waiting agent's task prompt:
+
+```lua
+app.tools.subagent({
+  agents = {
+    {task = "List all API endpoints",          id = "endpoints"},
+    {task = "Check auth coverage on endpoints", id = "coverage", depends_on = {"endpoints"}},
+  }
+})
+-- "coverage" waits for "endpoints" to finish, then receives its output
+```
+
+Works in both single (reference IDs from earlier calls in the same session) and batch modes.
+
+### Sequential Groups (group)
+
+Agents with the same `group` value run **one at a time** (sequentially within the group). Agents in different groups (or no group) run concurrently:
+
+```lua
+app.tools.subagent({
+  agents = {
+    -- These two run sequentially (same group)
+    {task = "Write tests for Auth", id = "t1", type = "general", group = "writer"},
+    {task = "Write tests for DB",   id = "t2", type = "general", group = "writer"},
+    -- These two run concurrently with each other and with the writer group
+    {task = "Explore API docs",     id = "r1", type = "explore"},
+    {task = "Explore config",       id = "r2", type = "explore"},
+  }
+})
+```
+
+### Resource Limits
+
+Batch agents can exceed the default Lua CPU limit (30s). Pass higher limits to `execute_lua`:
+
+```lua
+-- This Lua call allows up to 5 minutes CPU / 64 MB for the entire script
+-- (adjust based on how many agents and how complex their tasks are)
+```
+
+## Blocking Behavior
+
+Lua execution is **synchronous** — every `app.tools.*` call blocks until it completes:
+
+- `app.tools.subagent({task=...})` — blocks until agent finishes. A loop of these runs agents **sequentially**.
+- `app.tools.subagent({mode="background", task=...})` — returns immediately, but results are **not available to Lua**.
+- `app.tools.subagent({agents=...})` — spawns all concurrently, blocks until all finish, returns all results. This is the way to get **parallelism from Lua**.
 
 ## Quick Start
 

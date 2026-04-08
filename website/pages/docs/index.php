@@ -6,6 +6,7 @@ $topics = [
     'getting-started' => ['Getting Started', 'Five-minute quickstart: install, configure, and make your first AI-assisted code change.', '&#x1F680;'],
     'installation'    => ['Installation',     'Get up and running with static binaries, PHAR, or from source. First-run setup and CLI options.', '&#x1F4E5;'],
     'configuration' => ['Configuration',    'Config file layering, all settings categories, environment variables, and YAML examples.', '&#x2699;&#xFE0F;'],
+    'headless'      => ['Headless Mode',    'Non-interactive execution for CI/CD, scripts, and automated workflows with JSON and streaming output.', '&#x1F916;'],
     'tools'         => ['Tools',            'Complete reference for all built-in tools: file ops, search, bash, shell sessions, and more.', '&#x1F6E0;&#xFE0F;'],
     'providers'     => ['Providers',        '40+ LLM providers, authentication setup, custom endpoints, and per-depth model overrides.', '&#x1F50C;'],
     'agents'        => ['Agents',           'Agent types, subagent swarms, dependency DAGs, concurrency control, and stuck detection.', '&#x1F465;'],

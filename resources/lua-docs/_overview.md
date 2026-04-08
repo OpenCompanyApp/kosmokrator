@@ -9,35 +9,65 @@ app.integrations.{name}.*                    — Default account
 app.integrations.{name}.default.*            — Explicit default account
 app.integrations.{name}.{account}.*          — Named account
 app.tools.{tool_name}(args)                  — Native KosmoKrator tools
+json.decode(string) / json.encode(value)     — JSON parsing and serialization
+regex.match(s, p) / regex.match_all(s, p)   — PCRE regex matching
+regex.gsub(s, p, r)                          — PCRE regex substitution
 ```
 
 Available namespaces depend on which integrations you have configured. Use `lua_list_docs` to see what's available.
 
 ## Native Tools
 
-KosmoKrator's built-in tools are available in the `app.tools` namespace:
+KosmoKrator's built-in tools are available in the `app.tools` namespace. **All native tools return a structured table** with at least `output` (string) and `success` (bool). Some tools include additional fields:
 
 ```lua
--- Read a file
-local content = app.tools.file_read({path = "src/Kernel.php"})
-print(content)
+-- Read a file (returns {output, success})
+local result = app.tools.file_read({path = "src/Kernel.php"})
+print(result.output)
 
--- Search code
-local matches = app.tools.grep({pattern = "function boot", path = "src/"})
-print(matches)
+-- Search code (returns {output, success})
+local result = app.tools.grep({pattern = "function boot", path = "src/"})
+print(result.output)
 
--- List files
-local files = app.tools.glob({pattern = "src/**/*.php"})
-print(files)
+-- List files (returns {output, success})
+local result = app.tools.glob({pattern = "src/**/*.php"})
+print(result.output)
 
--- Run a shell command
-local output = app.tools.bash({command = "git status --short"})
-print(output)
+-- Run a shell command (returns {output, success, stdout, stderr, exit_code})
+local result = app.tools.bash({command = "git status --short"})
+print(result.exit_code)   -- 0 on success
+print(result.stdout)      -- raw stdout
+print(result.stderr)      -- raw stderr
+print(result.output)      -- combined stdout + stderr + "Exit code: N"
 ```
 
 Available native tools: `file_read`, `file_write`, `file_edit`, `apply_patch`, `glob`, `grep`, `bash`, `shell_start`, `shell_write`, `shell_read`, `shell_kill`, `task_create`, `task_update`, `task_list`, `task_get`, `memory_save`, `memory_search`, `subagent`.
 
 **Note:** Write tools (`file_write`, `file_edit`, `apply_patch`, `bash`) are subject to the same permission rules as when called directly.
+
+### Bash Structured Results
+
+`app.tools.bash()` returns the most detailed structure:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `output` | string | Full combined output (stdout + stderr + "Exit code: N") — same format as the LLM sees |
+| `success` | bool | `true` if exit code is 0 |
+| `stdout` | string | Raw stdout capture |
+| `stderr` | string | Raw stderr capture |
+| `exit_code` | number | Process exit code |
+
+This lets you access stdout/stderr separately and check the exit code programmatically, instead of parsing the combined string:
+
+```lua
+local r = app.tools.bash({command = "jq '.' package.json"})
+if r.success then
+    local data = json.decode(r.stdout)
+    print("Package: " .. data.name .. " v" .. data.version)
+else
+    print("Failed: " .. r.stderr)
+end
+```
 
 ## Subagent Tool
 
@@ -52,7 +82,7 @@ local result = app.tools.subagent({
   type = "explore",          -- "explore" (default), "plan", or "general"
   id = "my_agent",           -- optional, for depends_on references
 })
-print(result)
+print(result.output)
 ```
 
 ### Batch — Parallel Agents
@@ -67,7 +97,7 @@ local result = app.tools.subagent({
     {task = "Explore the database layer", id = "db"},
   }
 })
-print(result)  -- results for all agents, keyed by id
+print(result.output)  -- results for all agents
 ```
 
 Each agent spec supports: `task` (required), `type`, `id`, `depends_on`, `group`.
@@ -184,6 +214,9 @@ app.integrations.gmail.default.send_email({...})
 -- Named accounts
 app.integrations.gmail.work.send_email({...})
 app.integrations.gmail.personal.send_email({...})
+
+-- Named accounts
+app.integrations.gmail.personal.send_email({...})
 ```
 
 All functions are identical across accounts — only the credentials differ. Each account has its own API key, URL, etc. configured via `/settings` → Integrations.
@@ -247,9 +280,104 @@ local sites = dump(app.integrations.plausible.list_sites())
 -- prints the table contents, then continues with sites as a variable
 ```
 
+### `json.decode(string)`
+
+Parses a JSON string into a Lua table. Uses PHP's `json_decode` under the hood, so it handles all standard JSON types including nested objects and arrays.
+
+```lua
+-- Parse JSON from a bash command
+local r = app.tools.bash({command = "cat package.json"})
+local pkg = json.decode(r.stdout)
+print(pkg.name, pkg.version)
+
+-- Parse JSON from a string literal
+local data = json.decode('{"items": [1, 2, 3]}')
+print(data.items[1])  -- 1
+
+-- Decode array of objects (e.g. one JSON per line from a script)
+local lines = {}
+for line in r.stdout:gmatch("[^\r\n]+") do
+    if line ~= "" then
+        table.insert(lines, json.decode(line))
+    end
+end
+```
+
+Raises an error on invalid JSON. Use `pcall` for error handling:
+
+```lua
+local ok, data = pcall(json.decode, raw_string)
+if not ok then
+    print("Invalid JSON: " .. tostring(data))
+end
+```
+
+### `json.encode(value)`
+
+Serializes a Lua table (or any value) to a JSON string. Produces pretty-printed output with unescaped Unicode.
+
+```lua
+print(json.encode({name = "test", count = 42}))
+-- {
+--     "name": "test",
+--     "count": 42
+-- }
+```
+
+### `regex.match(subject, pattern [, flags])`
+
+Tests whether `subject` matches the PCRE `pattern`. Returns a table of captures on match, or `nil` on no match.
+
+```lua
+local m = regex.match("hello world 42", "(\\w+) (\\d+)")
+-- m = {"world 42", "world", "42"}  (full match, then captures)
+
+local m = regex.match("no digits here", "\\d+")
+-- m = nil
+```
+
+Supports all PCRE features (lookaheads, non-greedy quantifiers, Unicode properties, named groups, etc.) that Lua's built-in patterns lack:
+
+```lua
+-- Named capture groups
+local m = regex.match("price: $19.99", "(?P<currency>\\$)(?P<amount>[\\d.]+)")
+-- m = {"$19.99", "$", "19.99"}
+
+-- Lookahead
+local m = regex.match("foo bar", "\\w+(?= bar)")
+-- m = {"foo"}
+```
+
+### `regex.match_all(subject, pattern [, flags])`
+
+Returns all matches of `pattern` in `subject`. Default flag behavior (`PREG_PATTERN_ORDER`) returns captures grouped by group index.
+
+```lua
+local matches = regex.match_all("foo123bar456baz", "(\\d+)")
+-- matches = {{"123", "456"}, {"123", "456"}}
+-- matches[1] = all full matches, matches[2] = first capture group, etc.
+```
+
+### `regex.gsub(subject, pattern, replacement [, limit])`
+
+Replaces all occurrences of `pattern` in `subject` with `replacement`. Returns the resulting string.
+
+```lua
+local cleaned = regex.gsub("  hello   world  ", "\\s+", " ")
+-- cleaned = " hello world "
+
+-- With limit
+local s = regex.gsub("aaa", "a", "b", 2)
+-- s = "bba"
+```
+
+Supports PCRE backreferences in the replacement string (`$1`, `$2`, etc.).
+
 ## Return Values
 
-All `app.*` functions return Lua tables (objects/arrays) on success. On failure, they raise an error. Use `pcall` for error handling:
+### Integration calls (`app.integrations.*`)
+
+Return Lua tables on success. Raise an error on failure. Use `pcall` for error handling:
 
 ```lua
 local ok, result = pcall(function()
@@ -262,6 +390,19 @@ end)
 
 if not ok then
     print("Error: " .. tostring(result))
+end
+```
+
+### Native tool calls (`app.tools.*`)
+
+Always return a structured table `{output = string, success = bool, ...}`. Never throw — check `success` instead:
+
+```lua
+local result = app.tools.bash({command = "git status"})
+if result.success then
+    print("Output: " .. result.output)
+else
+    print("Failed: " .. result.output)
 end
 ```
 

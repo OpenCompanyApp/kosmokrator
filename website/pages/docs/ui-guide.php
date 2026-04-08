@@ -277,9 +277,9 @@ ob_start();
             <td>Fallback depends on remote <code>$TERM</code>. Use <code>-o "RequestTTY yes"</code> for better results.</td>
         </tr>
         <tr>
-            <td><strong>CI / headless</strong></td>
-            <td>Streaming (no renderer)</td>
-            <td>Agent output streams as plain text. Use <code>--renderer=ansi</code> for non-interactive CI.</td>
+            <td><strong><a href="/docs/headless">CI / headless</a></strong></td>
+            <td>HeadlessRenderer (stdout/stderr)</td>
+            <td>Agent output to stdout, progress to stderr. Use <code>-p</code> for headless mode.</td>
         </tr>
     </tbody>
 </table>
@@ -442,9 +442,9 @@ ob_start();
             <td>Yes</td>
         </tr>
         <tr>
-            <td>CI / headless</td>
+            <td><a href="/docs/headless">CI / headless</a></td>
             <td>No</td>
-            <td>No (streaming plain text)</td>
+            <td>text, JSON, or stream-json to stdout</td>
         </tr>
     </tbody>
 </table>

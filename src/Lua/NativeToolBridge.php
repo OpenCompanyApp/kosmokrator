@@ -31,7 +31,12 @@ class NativeToolBridge
     }
 
     /**
-     * Execute a native tool by name and return the raw result.
+     * Execute a native tool by name and return a structured result for Lua.
+     *
+     * Returns a PHP array that becomes a Lua table:
+     *   {output = "raw text", success = true, stdout = "...", stderr = "...", exit_code = 0}
+     *
+     * stdout/stderr/exit_code are only present when the tool provides metadata (e.g. bash).
      */
     public function call(string $toolName, array $args): mixed
     {
@@ -48,7 +53,18 @@ class NativeToolBridge
             throw new \RuntimeException($result->output);
         }
 
-        return $result->output;
+        $table = [
+            'output' => $result->output,
+            'success' => $result->success,
+        ];
+
+        if ($result->metadata !== null) {
+            foreach ($result->metadata as $key => $value) {
+                $table[$key] = $value;
+            }
+        }
+
+        return $table;
     }
 
     /**

@@ -12,6 +12,7 @@ $topics = [
     'getting-started' => ['Getting Started',   'Quick-start guide'],
     'installation'    => ['Installation',       'Get up and running'],
     'configuration' => ['Configuration',       'Settings and config files'],
+    'headless'      => ['Headless Mode',       'CI/CD and non-interactive execution'],
     'tools'         => ['Tools',               'Built-in tool reference'],
     'providers'     => ['Providers',           'LLM providers and models'],
     'agents'        => ['Agents',              'Subagent types and swarms'],

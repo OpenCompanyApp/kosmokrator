@@ -510,7 +510,7 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
     Subagents run autonomously without human oversight, which means they can
     get stuck in repetitive loops &mdash; calling the same tool with the same
     arguments over and over without making progress. KosmoKrator's stuck
-    detector monitors every headless subagent for this pattern and intervenes
+    detector monitors every <a href="/docs/headless">headless</a> subagent for this pattern and intervenes
     with a three-stage escalation process.
 </p>
 
@@ -557,7 +557,7 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
 
 <div class="tip">
     <p>
-        <strong>Tip:</strong> Stuck detection is only active for headless
+        <strong>Tip:</strong> Stuck detection is active for <a href="/docs/headless">headless</a>
         subagents. The main interactive agent is not subject to stuck
         detection because you, the user, can intervene manually at any time.
     </p>

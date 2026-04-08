@@ -13,25 +13,21 @@ ob_start();
 <h2 id="cicd-integration">CI/CD Integration</h2>
 
 <p>
-    KosmoKrator can be integrated into CI pipelines to automate code fixes,
-    test-driven development loops, and release preparation. Start an
-    interactive session with your prompt and let the agent work through the
-    task. This is best suited for workflows where a human can trigger the
-    run and review the results.
+    KosmoKrator's <a href="/docs/headless">headless mode</a> is designed for CI/CD pipelines.
+    Pass a prompt, get output, exit. No TTY required.
 </p>
 
 <h3>Basic CI invocation</h3>
 
-<pre><code># Run KosmoKrator with a prompt directly
-kosmokrator "Fix all failing tests"</code></pre>
+<pre><code># Headless mode with auto-approve
+kosmokrator -p --yolo "Fix all failing tests"</code></pre>
 
 <p>
-    Pass your task as a command-line argument. KosmoKrator starts an
-    interactive session with the given prompt. For CI pipelines, use the
-    <code>/prometheus</code> slash command inside the session to auto-approve
-    all tool calls so the agent can work unattended. Exit code <code>0</code>
+    The <code>-p</code> flag enables headless mode. <code>--yolo</code> auto-approves all tool
+    calls so the agent can work unattended. Exit code <code>0</code>
     means the task completed successfully; non-zero indicates an error or
-    that the agent could not finish within its turn budget.
+    that the agent hit a guardrail. See <a href="/docs/headless">Headless Mode</a> for
+    the full CLI reference including <code>--max-turns</code>, <code>--timeout</code>, and JSON output.
 </p>
 
 <h3>GitHub Actions workflow</h3>
@@ -60,7 +56,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          kosmokrator "Fix all failing tests"
+          kosmokrator -p --yolo --max-turns 20 "Fix all failing tests"
 
       - name: Commit and push fixes
         run: |

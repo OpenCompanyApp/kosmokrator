@@ -10,6 +10,8 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Kosmokrator\Agent\Event\ContextCompacted;
 use Kosmokrator\Agent\Event\LlmResponseReceived;
 use Kosmokrator\Agent\Event\MessagePersisted;
+use Kosmokrator\Agent\Exception\MaxTurnsExceededException;
+use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\MessageMapper;
 use Kosmokrator\LLM\ModelCatalog;
@@ -54,6 +56,10 @@ class AgentLoop
     private ?AgentContext $agentContext = null;
 
     private ?SubagentStats $stats = null;
+
+    private ?int $maxTurns = null;
+
+    private ?int $timeoutSeconds = null;
 
     private readonly StuckDetector $stuckDetector;
 
@@ -142,6 +148,24 @@ class AgentLoop
     public function setStats(?SubagentStats $stats): void
     {
         $this->stats = $stats;
+    }
+
+    /** Set maximum agentic turns (headless guardrail). */
+    public function setMaxTurns(int $maxTurns): void
+    {
+        if ($maxTurns < 1) {
+            throw new \ValueError('maxTurns must be >= 1, use null for unlimited');
+        }
+        $this->maxTurns = $maxTurns;
+    }
+
+    /** Set maximum runtime in seconds (headless guardrail). */
+    public function setTimeout(int $seconds): void
+    {
+        if ($seconds < 1) {
+            throw new \ValueError('timeout must be >= 1 second, use null for unlimited');
+        }
+        $this->timeoutSeconds = $seconds;
     }
 
     /**
@@ -378,11 +402,29 @@ class AgentLoop
 
         $round = 0;
         $trimAttempts = 0;
+        $startTime = time();
 
         try {
             while (true) {
                 $round++;
                 $this->stats?->touchActivity();
+
+                // Yield to the event loop so cancellation signals, background
+                // subagent results, and cancellation tokens are processed even
+                // during rapid tool-calling loops.
+                \Amp\delay(0);
+
+                // Guardrail: max turns exceeded
+                if ($this->maxTurns !== null && $round > $this->maxTurns) {
+                    $partialResult = $this->stuckDetector->extractLastAssistantText($this->history);
+                    throw new MaxTurnsExceededException($this->maxTurns, $partialResult);
+                }
+
+                // Guardrail: timeout exceeded
+                if ($this->timeoutSeconds !== null && (time() - $startTime) > $this->timeoutSeconds) {
+                    $partialResult = $this->stuckDetector->extractLastAssistantText($this->history);
+                    throw new TimeoutExceededException($this->timeoutSeconds, $partialResult);
+                }
 
                 $this->log->debug('Headless round start', [
                     'round' => $round,
@@ -456,6 +498,10 @@ class AgentLoop
                     return 'Error: '.$e->getMessage();
                 }
 
+                if ($fullText !== '') {
+                    SafeDisplay::call(fn () => $this->ui->streamComplete(), $this->log);
+                }
+
                 if (! empty($toolCalls) && $finishReason === FinishReason::ToolCalls) {
                     $this->history->addAssistant($fullText, $toolCalls);
 
@@ -512,6 +558,19 @@ class AgentLoop
                             'escalation' => $this->stuckDetector->getEscalation(),
                         ]);
                     }
+
+                    // Yield so cancellation signals and background results are processed
+                    // before the next (potentially blocking) LLM call.
+                    \Amp\delay(0);
+
+                    continue;
+                }
+
+                // Truncated response — max_tokens hit, continue to get more
+                if ($finishReason === FinishReason::Length) {
+                    $this->log->warning('Headless LLM response truncated (max_tokens)', ['round' => $round]);
+                    $this->history->addAssistant($fullText);
+                    $this->history->addUser('Continue from where you left off. Do not repeat what you already said.');
 
                     continue;
                 }

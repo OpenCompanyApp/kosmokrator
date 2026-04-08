@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Skill;
 
-use Kosmokrator\UI\UIManager;
+use Kosmokrator\UI\RendererInterface;
 
 class SkillDispatcher
 {
@@ -13,7 +13,7 @@ class SkillDispatcher
     public function __construct(
         private readonly SkillRegistry $registry,
         private readonly SkillLoader $loader,
-        private readonly UIManager $ui,
+        private readonly RendererInterface $ui,
     ) {}
 
     /**

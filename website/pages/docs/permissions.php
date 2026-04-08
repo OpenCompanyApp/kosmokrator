@@ -75,7 +75,7 @@ ob_start();
     <li>Maximum speed and autonomy</li>
     <li>Blocked paths and explicit deny rules still enforced</li>
     <li>Project boundary check is bypassed</li>
-    <li>Best for trusted CI/CD pipelines, headless operation, or known-safe tasks</li>
+    <li>Best for trusted CI/CD pipelines, <a href="/docs/headless">headless mode</a>, or known-safe tasks</li>
 </ul>
 
 <h3 id="mode-comparison">Mode Comparison</h3>
@@ -783,13 +783,13 @@ ob_start();
     <li>
         <strong>General subagents</strong> &mdash; Full tool access, subject
         to the same permission evaluation as the parent agent. In
-        Prometheus or headless mode, these run without prompts.
+        Prometheus or <a href="/docs/headless">headless mode</a>, these run without prompts.
     </li>
 </ul>
 
 <div class="tip">
     <p>
-        <strong>Tip:</strong> In headless mode (CI/CD pipelines), the
+        <strong>Tip:</strong> In <a href="/docs/headless">headless mode</a> (CI/CD pipelines), the
         permission mode is typically set to Prometheus so subagents can
         execute without blocking on approval prompts. Blocked paths and
         explicit denies still apply as a safety net.

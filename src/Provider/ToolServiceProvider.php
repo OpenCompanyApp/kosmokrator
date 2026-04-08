@@ -112,11 +112,11 @@ class ToolServiceProvider extends ServiceProvider
             return $evaluator;
         });
 
-        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot) {
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot, $allowedPaths) {
             $registry = new ToolRegistry;
-            $registry->register(new FileReadTool($projectRoot));
-            $registry->register(new FileWriteTool($projectRoot));
-            $registry->register(new FileEditTool($projectRoot));
+            $registry->register(new FileReadTool($projectRoot, $allowedPaths));
+            $registry->register(new FileWriteTool($projectRoot, $allowedPaths));
+            $registry->register(new FileEditTool($projectRoot, $allowedPaths));
             $registry->register(new ApplyPatchTool(
                 $this->container->make(PatchParser::class),
                 $this->container->make(PatchApplier::class),

@@ -16,8 +16,13 @@ use Throwable;
  */
 class FileWriteTool extends AbstractTool
 {
+    /**
+     * @param  string|null  $projectRoot  Absolute path to project root for boundary enforcement
+     * @param  string[]  $allowedPaths  Pre-resolved path prefixes allowed in addition to the project root
+     */
     public function __construct(
         private readonly ?string $projectRoot = null,
+        private readonly array $allowedPaths = [],
     ) {}
 
     public function name(): string
@@ -50,7 +55,7 @@ class FileWriteTool extends AbstractTool
         // Validate path stays within project root
         if ($this->projectRoot !== null) {
             try {
-                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot);
+                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot, $this->allowedPaths);
             } catch (Throwable $e) {
                 return ToolResult::error($e->getMessage());
             }

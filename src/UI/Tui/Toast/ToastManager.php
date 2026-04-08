@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Tui\Toast;
 
 use Kosmokrator\UI\TerminalNotification;
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\Signal;
 use Revolt\EventLoop;
 
 /**

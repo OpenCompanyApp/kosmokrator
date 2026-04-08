@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI\Tui\Signal;
+namespace OpenCompany\Signal;
 
 /**
  * Internal subscriber record. Shared by Signal and Computed.
@@ -14,12 +14,12 @@ final class Subscriber
     /** @var callable(mixed): void */
     public readonly mixed $callback;
 
-    public readonly Signal|Computed|Effect|null $dependent;
+    public readonly ReadableSignalInterface|Computed|Effect|null $dependent;
 
     /**
      * @param  callable(mixed): void  $callback
      */
-    public function __construct(callable $callback, Signal|Computed|Effect|null $dependent = null)
+    public function __construct(callable $callback, ReadableSignalInterface|Computed|Effect|null $dependent = null)
     {
         $this->callback = $callback;
         $this->dependent = $dependent;

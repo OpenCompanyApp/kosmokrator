@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui\Toast;
 
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\Signal;
 
 /**
  * A single toast notification instance with reactive animation state.

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
-use Kosmokrator\UI\Tui\Signal\BatchScope;
-use Kosmokrator\UI\Tui\Signal\Computed;
-use Kosmokrator\UI\Tui\Signal\Effect;
-use Kosmokrator\UI\Tui\Signal\EffectScope;
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\BatchScope;
+use OpenCompany\Signal\Computed;
+use OpenCompany\Signal\Effect;
+use OpenCompany\Signal\EffectScope;
+use OpenCompany\Signal\ReadableSignalInterface;
+use OpenCompany\Signal\Signal;
 use PHPUnit\Framework\TestCase;
 
 final class SignalTest extends TestCase
@@ -111,7 +112,7 @@ final class SignalTest extends TestCase
 
         // value() should read without tracking — verify by running inside an EffectScope
         $tracked = [];
-        $scope = new EffectScope(function (Signal|Computed $dep) use (&$tracked): void {
+        $scope = new EffectScope(function (ReadableSignalInterface|Computed $dep) use (&$tracked): void {
             $tracked[] = $dep;
         });
 

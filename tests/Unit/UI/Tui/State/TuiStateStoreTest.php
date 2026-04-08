@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\UI\Tui\State;
 
 use Amp\DeferredCancellation;
-use Kosmokrator\UI\Tui\Signal\BatchScope;
-use Kosmokrator\UI\Tui\Signal\Computed;
-use Kosmokrator\UI\Tui\Signal\Effect;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
+use OpenCompany\Signal\BatchScope;
+use OpenCompany\Signal\Computed;
+use OpenCompany\Signal\Effect;
 use PHPUnit\Framework\TestCase;
 
 final class TuiStateStoreTest extends TestCase

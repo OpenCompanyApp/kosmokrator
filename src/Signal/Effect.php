@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI\Tui\Signal;
+namespace OpenCompany\Signal;
 
 /**
  * Side-effect that auto-runs when its tracked dependencies change.
@@ -14,19 +14,26 @@ namespace Kosmokrator\UI\Tui\Signal;
  * Effects auto-track Signal/Computed reads that happen during execution
  * via the static {@see EffectScope} stack. Dependencies are re-tracked
  * on every execution, so conditional reads are handled correctly.
+ *
+ * Cycle detection: if an effect re-triggers itself (directly or indirectly)
+ * more than 100 times in a single synchronous chain, a LogicException is
+ * thrown. This prevents infinite loops from effects that write to signals
+ * they also read.
  */
 final class Effect
 {
     /** @var callable(callable(callable): void): void */
     private readonly mixed $fn;
 
-    /** @var list<Signal|Computed> */
+    /** @var list<ReadableSignalInterface|Computed> */
     private array $dependencies = [];
 
     /** @var list<callable(): void> */
     private array $cleanups = [];
 
     private bool $disposed = false;
+
+    private static int $executionDepth = 0;
 
     /**
      * @param  callable(callable(callable): void): void  $fn  Effect callback.
@@ -90,25 +97,42 @@ final class Effect
     /**
      * Called by EffectScope when a dependency is tracked during execution.
      */
-    public function onTracked(Signal|Computed $dep): void
+    public function onTracked(ReadableSignalInterface|Computed $dep): void
     {
         $this->dependencies[] = $dep;
-        $dep->subscribeEffect($this);
+
+        if ($dep instanceof Signal) {
+            $dep->subscribeEffect($this);
+        } elseif ($dep instanceof Computed) {
+            $dep->subscribeEffect($this);
+        }
     }
 
     private function execute(): void
     {
-        // Run previous cleanups before re-execution
-        $this->runCleanups();
-        $this->cleanupDependencies();
+        if (self::$executionDepth > 100) {
+            throw new \LogicException(
+                'Reactive: maximum effect execution depth exceeded (effect cycle detected — '
+                .'an effect may be writing to a signal it reads)'
+            );
+        }
 
-        $onCleanup = function (callable $cleanup): void {
-            $this->cleanups[] = $cleanup;
-        };
+        self::$executionDepth++;
+        try {
+            // Run previous cleanups before re-execution
+            $this->runCleanups();
+            $this->cleanupDependencies();
 
-        // Run the effect callback inside a tracking scope
-        $scope = new EffectScope($this->onTracked(...));
-        $scope->run($this->fn, $onCleanup);
+            $onCleanup = function (callable $cleanup): void {
+                $this->cleanups[] = $cleanup;
+            };
+
+            // Run the effect callback inside a tracking scope
+            $scope = new EffectScope($this->onTracked(...));
+            $scope->run($this->fn, $onCleanup);
+        } finally {
+            self::$executionDepth--;
+        }
     }
 
     private function runCleanups(): void
@@ -122,7 +146,11 @@ final class Effect
     private function cleanupDependencies(): void
     {
         foreach ($this->dependencies as $dep) {
-            $dep->unsubscribeEffect($this);
+            if ($dep instanceof Signal) {
+                $dep->unsubscribeEffect($this);
+            } elseif ($dep instanceof Computed) {
+                $dep->unsubscribeEffect($this);
+            }
         }
         $this->dependencies = [];
     }

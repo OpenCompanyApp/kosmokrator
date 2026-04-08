@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
-use Kosmokrator\UI\Tui\Signal\Computed;
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\Computed;
+use OpenCompany\Signal\Signal;
 use PHPUnit\Framework\TestCase;
 
 final class ComputedTest extends TestCase

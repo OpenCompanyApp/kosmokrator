@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
-use Kosmokrator\UI\Tui\Signal\BatchScope;
-use Kosmokrator\UI\Tui\Signal\Effect;
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\BatchScope;
+use OpenCompany\Signal\Effect;
+use OpenCompany\Signal\Signal;
 use PHPUnit\Framework\TestCase;
 
 final class EffectTest extends TestCase

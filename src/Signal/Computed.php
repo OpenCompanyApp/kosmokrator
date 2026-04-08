@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI\Tui\Signal;
+namespace OpenCompany\Signal;
 
 /**
  * Derived reactive value. Lazily evaluated and cached.
@@ -19,8 +19,8 @@ final class Computed
     /** @var callable(): T */
     private readonly mixed $fn;
 
-    /** @var T */
-    private mixed $value;
+    /** @var T|null */
+    private mixed $value = null;
 
     private int $version = 0;
 
@@ -28,7 +28,7 @@ final class Computed
 
     private bool $initialized = false;
 
-    /** @var list<Signal|self> */
+    /** @var list<ReadableSignalInterface|self> */
     private array $dependencies = [];
 
     /** @var list<Subscriber> */
@@ -99,11 +99,6 @@ final class Computed
     /**
      * Subscribe to computed value changes via a side-effect callback.
      *
-     * Unlike Signal::subscribe(), this uses the Effect system to re-run
-     * the callback whenever this computed's value changes. Computed values
-     * are lazily evaluated, so plain subscribe-style callbacks (which need
-     * the new value immediately) don't fit the model.
-     *
      * @param  callable(mixed): void  $callback
      * @return Effect The effect instance (call ->dispose() to unsubscribe)
      */
@@ -161,6 +156,8 @@ final class Computed
     /**
      * Force immediate re-evaluation. Called lazily by get() or explicitly for testing.
      *
+     * On exception: restores dirty=true so the next get() will retry, then rethrows.
+     *
      * @return T
      */
     public function recompute(): mixed
@@ -183,6 +180,10 @@ final class Computed
             $this->initialized = true;
 
             return $this->value;
+        } catch (\Throwable $e) {
+            // Restore dirty so the next get() will retry
+            $this->dirty = true;
+            throw $e;
         } finally {
             self::$recomputeDepth--;
         }
@@ -191,16 +192,25 @@ final class Computed
     /**
      * Called by EffectScope when a dependency is tracked during computation.
      */
-    private function onTracked(Signal|self $dep): void
+    private function onTracked(ReadableSignalInterface|self $dep): void
     {
         $this->dependencies[] = $dep;
-        $dep->subscribeComputed($this);
+
+        if ($dep instanceof Signal) {
+            $dep->subscribeComputed($this);
+        } elseif ($dep instanceof self) {
+            $dep->subscribeComputed($this);
+        }
     }
 
     private function cleanupDependencies(): void
     {
         foreach ($this->dependencies as $dep) {
-            $dep->unsubscribeComputed($this);
+            if ($dep instanceof Signal) {
+                $dep->unsubscribeComputed($this);
+            } elseif ($dep instanceof self) {
+                $dep->unsubscribeComputed($this);
+            }
         }
         $this->dependencies = [];
     }

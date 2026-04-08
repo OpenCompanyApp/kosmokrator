@@ -8,7 +8,7 @@ use Kosmokrator\UI\Tui\Phase\InvalidTransitionException;
 use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
 use Kosmokrator\UI\Tui\Phase\Transition;
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\Signal;
 use PHPUnit\Framework\TestCase;
 
 final class PhaseStateMachineTest extends TestCase

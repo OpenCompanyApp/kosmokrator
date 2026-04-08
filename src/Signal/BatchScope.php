@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI\Tui\Signal;
-
-use Revolt\EventLoop;
+namespace OpenCompany\Signal;
 
 /**
  * Batches multiple signal writes into a single update cycle.
@@ -22,12 +20,23 @@ use Revolt\EventLoop;
  *       // Effects fire once after this block completes
  *   });
  *
- * For async contexts, use BatchScope::deferred() to schedule the flush
- * on the next event loop tick via EventLoop::defer().
+ * Deferred batching:
+ *   BatchScope::setScheduler(fn ($fn) => EventLoop::defer($fn));
+ *   BatchScope::deferred(function () {
+ *       $sigA->set(1);
+ *       // Effects fire on the next event loop tick
+ *   });
+ *
+ * The scheduler is injectable: call {@see setScheduler()} once at boot
+ * with a callable that schedules work on your event loop. Without a
+ * scheduler, deferred() throws.
  */
 final class BatchScope
 {
     private static ?self $current = null;
+
+    /** @var (callable(callable): void)|null */
+    private static $scheduler = null;
 
     private int $depth = 0;
 
@@ -43,6 +52,26 @@ final class BatchScope
     public static function current(): ?self
     {
         return self::$current;
+    }
+
+    /**
+     * Set the scheduler callable for deferred batch execution.
+     *
+     * The scheduler receives a callable and must arrange for it to run
+     * asynchronously. For Revolt/Amp:
+     *   BatchScope::setScheduler(fn (callable $fn) => EventLoop::defer($fn));
+     *
+     * For ReactPHP:
+     *   BatchScope::setScheduler(fn (callable $fn) => $loop->futureTick($fn));
+     *
+     * For synchronous testing:
+     *   BatchScope::setScheduler(fn (callable $fn) => $fn());
+     *
+     * @param  (callable(callable): void)|null  $scheduler  Null to clear
+     */
+    public static function setScheduler(?callable $scheduler): void
+    {
+        self::$scheduler = $scheduler;
     }
 
     /**
@@ -70,13 +99,23 @@ final class BatchScope
     }
 
     /**
-     * Schedule a deferred batch via EventLoop::defer().
+     * Schedule a deferred batch via the configured scheduler.
+     *
      * Signal::set() calls inside $fn will queue notifications.
-     * The flush happens on the next event loop tick.
+     * The flush happens asynchronously when the scheduler invokes the callback.
+     *
+     * @throws \LogicException if no scheduler has been configured
      */
     public static function deferred(callable $fn): void
     {
-        EventLoop::defer(function () use ($fn): void {
+        if (self::$scheduler === null) {
+            throw new \LogicException(
+                'BatchScope::deferred() requires a scheduler. '
+                .'Call BatchScope::setScheduler() during application bootstrap.'
+            );
+        }
+
+        (self::$scheduler)(function () use ($fn): void {
             self::run($fn);
         });
     }

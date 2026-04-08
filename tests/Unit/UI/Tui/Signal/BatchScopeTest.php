@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
-use Kosmokrator\UI\Tui\Signal\BatchScope;
-use Kosmokrator\UI\Tui\Signal\Effect;
-use Kosmokrator\UI\Tui\Signal\Signal;
+use OpenCompany\Signal\BatchScope;
+use OpenCompany\Signal\Effect;
+use OpenCompany\Signal\Signal;
 use PHPUnit\Framework\TestCase;
 
 final class BatchScopeTest extends TestCase
@@ -65,7 +65,15 @@ final class BatchScopeTest extends TestCase
         }
     }
 
-    public function test_deferred(): void
+    public function test_deferred_requires_scheduler(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('BatchScope::deferred() requires a scheduler');
+
+        BatchScope::deferred(function (): void {});
+    }
+
+    public function test_deferred_with_scheduler(): void
     {
         $signal = new Signal(0);
         $flushed = false;
@@ -74,14 +82,44 @@ final class BatchScopeTest extends TestCase
             $flushed = true;
         });
 
-        // deferred() schedules via EventLoop::defer() — since we're not
-        // running an event loop in tests, we just verify the method exists
-        // and doesn't throw immediately.
+        // Use a synchronous scheduler for testing
+        BatchScope::setScheduler(function (callable $fn): void {
+            $fn();
+        });
+
         BatchScope::deferred(function () use ($signal): void {
             $signal->set(1);
         });
 
-        // The flush hasn't happened yet (deferred to next tick)
+        // With synchronous scheduler, flush happens immediately
+        $this->assertTrue($flushed);
+
+        // Clean up
+        BatchScope::setScheduler(null);
+    }
+
+    public function test_deferred_defers_with_async_scheduler(): void
+    {
+        $signal = new Signal(0);
+        $flushed = false;
+
+        $signal->subscribe(function () use (&$flushed): void {
+            $flushed = true;
+        });
+
+        // Simulate async scheduler that doesn't invoke immediately
+        BatchScope::setScheduler(function (callable $fn): void {
+            // Don't invoke — simulating deferred execution
+        });
+
+        BatchScope::deferred(function () use ($signal): void {
+            $signal->set(1);
+        });
+
+        // Flush hasn't happened because scheduler didn't invoke the callback
         $this->assertFalse($flushed);
+
+        // Clean up
+        BatchScope::setScheduler(null);
     }
 }

@@ -57,6 +57,7 @@
     "autoload": {
         "psr-4": {
             "Kosmokrator\\": "src/",
+        "OpenCompany\\": "src/",
             "Symfony\\Component\\Tui\\": "vendor/symfony/tui/src/Symfony/Component/Tui/"
         }
     },

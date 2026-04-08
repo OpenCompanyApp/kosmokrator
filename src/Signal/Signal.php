@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI\Tui\Signal;
+namespace OpenCompany\Signal;
 
 /**
  * Reactive value holder with version counter and subscriber list.
@@ -11,11 +11,18 @@ namespace Kosmokrator\UI\Tui\Signal;
  * a Computed or Effect callback) auto-tracks this signal as a dependency.
  *
  * Writing via {@see set()} only notifies subscribers when the new value
- * is strictly different from the current value (=== comparison).
+ * is strictly different from the current value.
+ *
+ * Identity semantics: set() uses strict === comparison. For scalars and
+ * null, this means same-value === same-identity. For arrays, rebuilding
+ * an array (e.g. [...$arr, $new]) always creates a new reference, so
+ * set() always notifies — even if the contents are logically identical.
+ * For objects, set($sameObject) is always a no-op (same reference).
+ * This is by design: any mutation operation should produce a new value.
  *
  * @template T
  */
-final class Signal
+final class Signal implements ReadableSignalInterface
 {
     /** @var T */
     private mixed $value;
@@ -71,6 +78,10 @@ final class Signal
     /**
      * Update the value using a transformer callback. Reads the current
      * value (without tracking), applies the callback, and sets the result.
+     *
+     * Note: for array signals, update() always creates a new array
+     * reference, so set() always notifies subscribers regardless of
+     * whether the contents changed.
      *
      * @param  callable(T): T  $callback
      */

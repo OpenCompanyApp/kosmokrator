@@ -8,6 +8,7 @@ use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
+use OpenCompany\Signal\BatchScope;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -198,22 +199,24 @@ final class TuiAnimationManager
 
         // Breathing pulse at 30fps — red color modulation
         $this->compactingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
-            $this->state->tickCompactingBreath();
-            $r = Theme::reset();
+            BatchScope::run(function () use ($phrase) {
+                $this->state->tickCompactingBreath();
+                $r = Theme::reset();
 
-            // Slow sin wave (~3s full cycle) modulating red tones
-            $t = sin($this->state->getCompactingBreathTick() * 0.07);
-            $rr = (int) (208 + 40 * $t);
-            $rg = (int) (48 + 16 * $t);
-            $rb = (int) (48 + 16 * $t);
-            $color = Theme::rgb($rr, $rg, $rb);
+                // Slow sin wave (~3s full cycle) modulating red tones
+                $t = sin($this->state->getCompactingBreathTick() * 0.07);
+                $rr = (int) (208 + 40 * $t);
+                $rg = (int) (48 + 16 * $t);
+                $rb = (int) (48 + 16 * $t);
+                $color = Theme::rgb($rr, $rg, $rb);
 
-            if ($this->compactingLoader !== null) {
-                $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
-                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                $dim = "\033[38;5;245m";
-                $this->compactingLoader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
-            }
+                if ($this->compactingLoader !== null) {
+                    $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
+                    $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                    $dim = "\033[38;5;245m";
+                    $this->compactingLoader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
+                }
+            });
 
             ($this->renderCallback)();
         });
@@ -364,42 +367,44 @@ final class TuiAnimationManager
         }
 
         $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase, $palette) {
-            $this->state->tickBreath();
-            $r = Theme::reset();
+            BatchScope::run(function () use ($phrase, $palette) {
+                $this->state->tickBreath();
+                $r = Theme::reset();
 
-            $t = sin($this->state->getBreathTick() * 0.07);
+                $t = sin($this->state->getBreathTick() * 0.07);
 
-            if ($palette === 'amber') {
-                // Warm amber tones for tool execution
-                $cr = (int) (200 + 40 * $t);
-                $cg = (int) (150 + 30 * $t);
-                $cb = (int) (60 + 20 * $t);
-            } else {
-                // Blue tones for thinking
-                $cr = (int) (112 + 40 * $t);
-                $cg = (int) (160 + 40 * $t);
-                $cb = (int) (208 + 47 * $t);
-            }
-            $breathColor = Theme::rgb($cr, $cg, $cb);
-            $this->state->setBreathColor($breathColor);
+                if ($palette === 'amber') {
+                    // Warm amber tones for tool execution
+                    $cr = (int) (200 + 40 * $t);
+                    $cg = (int) (150 + 30 * $t);
+                    $cb = (int) (60 + 20 * $t);
+                } else {
+                    // Blue tones for thinking
+                    $cr = (int) (112 + 40 * $t);
+                    $cg = (int) (160 + 40 * $t);
+                    $cb = (int) (208 + 47 * $t);
+                }
+                $breathColor = Theme::rgb($cr, $cg, $cb);
+                $this->state->setBreathColor($breathColor);
 
-            if ($this->loader !== null && $phrase !== '') {
-                $dim = "\033[38;5;245m";
-                $message = "{$breathColor}{$phrase}{$r}";
+                if ($this->loader !== null && $phrase !== '') {
+                    $dim = "\033[38;5;245m";
+                    $message = "{$breathColor}{$phrase}{$r}";
 
-                if (! $this->state->getHasSubagentActivity()) {
-                    $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
-                    $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                    $message .= "{$dim} · {$formatted}{$r}";
+                    if (! $this->state->getHasSubagentActivity()) {
+                        $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
+                        $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+                        $message .= "{$dim} · {$formatted}{$r}";
+                    }
+
+                    $this->loader->setMessage($message);
                 }
 
-                $this->loader->setMessage($message);
-            }
-
-            // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
-            if ($this->state->getBreathTick() % 15 === 0) {
-                ($this->subagentTickCallback)();
-            }
+                // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
+                if ($this->state->getBreathTick() % 15 === 0) {
+                    ($this->subagentTickCallback)();
+                }
+            });
 
             ($this->renderCallback)();
         });

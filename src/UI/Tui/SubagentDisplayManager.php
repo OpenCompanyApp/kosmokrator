@@ -9,6 +9,7 @@ use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
+use OpenCompany\Signal\BatchScope;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
@@ -205,46 +206,50 @@ final class SubagentDisplayManager
             if ($this->loader === null) {
                 return;
             }
-            $this->state->tickLoaderBreath();
-            $loaderBreathTick = $this->state->getLoaderBreathTick();
 
-            // Blue breathing color (same sine wave as thinking indicator)
-            $t = sin($loaderBreathTick * 0.07);
-            $cr = (int) (112 + 40 * $t);
-            $cg = (int) (160 + 40 * $t);
-            $cb = (int) (208 + 47 * $t);
-            $color = Theme::rgb($cr, $cg, $cb);
+            BatchScope::run(function () use ($dim, $r): void {
+                $this->state->tickLoaderBreath();
+                $loaderBreathTick = $this->state->getLoaderBreathTick();
 
-            // Escalate color for long-running agents
-            $elapsed = (int) (microtime(true) - $this->state->getStartTime());
-            if ($elapsed >= 120) {
-                $color = Theme::error();
-            } elseif ($elapsed >= 60) {
-                $color = Theme::warning();
-            }
+                // Blue breathing color (same sine wave as thinking indicator)
+                $t = sin($loaderBreathTick * 0.07);
+                $cr = (int) (112 + 40 * $t);
+                $cg = (int) (160 + 40 * $t);
+                $cb = (int) (208 + 47 * $t);
+                $color = Theme::rgb($cr, $cg, $cb);
 
-            // Update label from tree data every ~1s (every 30th tick at 33ms)
-            if ($loaderBreathTick % 30 === 0 && $this->treeProvider !== null) {
-                try {
-                    $tree = ($this->treeProvider)();
-                    if ($tree !== []) {
-                        $total = $this->formatter->countNodes($tree);
-                        $done = $this->formatter->countByStatus($tree, 'done');
-                        if ($done > 0) {
-                            $this->state->setCachedLoaderLabel($this->formatRunningSummary($total, $done));
-                        } else {
-                            $this->state->setCachedLoaderLabel($this->formatRunningSummary($total, 0));
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    $this->log?->warning('Tree provider error in loader timer', ['error' => $e->getMessage()]);
+                // Escalate color for long-running agents
+                $elapsed = (int) (microtime(true) - $this->state->getStartTime());
+                if ($elapsed >= 120) {
+                    $color = Theme::error();
+                } elseif ($elapsed >= 60) {
+                    $color = Theme::warning();
                 }
-            }
 
-            $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
-            $hint = "{$dim}ctrl+a for dashboard{$r}";
-            $meta = "{$dim} · {$time} · {$r}{$hint}";
-            $this->loader->setMessage("{$color}{$this->state->getCachedLoaderLabel()}{$r}{$meta}");
+                // Update label from tree data every ~1s (every 30th tick at 33ms)
+                if ($loaderBreathTick % 30 === 0 && $this->treeProvider !== null) {
+                    try {
+                        $tree = ($this->treeProvider)();
+                        if ($tree !== []) {
+                            $total = $this->formatter->countNodes($tree);
+                            $done = $this->formatter->countByStatus($tree, 'done');
+                            if ($done > 0) {
+                                $this->state->setCachedLoaderLabel($this->formatRunningSummary($total, $done));
+                            } else {
+                                $this->state->setCachedLoaderLabel($this->formatRunningSummary($total, 0));
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        $this->log?->warning('Tree provider error in loader timer', ['error' => $e->getMessage()]);
+                    }
+                }
+
+                $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
+                $hint = "{$dim}ctrl+a for dashboard{$r}";
+                $meta = "{$dim} · {$time} · {$r}{$hint}";
+                $this->loader->setMessage("{$color}{$this->state->getCachedLoaderLabel()}{$r}{$meta}");
+            });
+
             ($this->renderCallback)();
         });
 

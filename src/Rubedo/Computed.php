@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OpenCompany\Signal;
+namespace Rubedo;
 
 /**
  * Derived reactive value. Lazily evaluated and cached.

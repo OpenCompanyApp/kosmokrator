@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OpenCompany\Signal;
+namespace Rubedo;
 
 /**
  * Reactive value holder with version counter and subscriber list.

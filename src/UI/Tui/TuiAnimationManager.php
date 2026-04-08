@@ -8,8 +8,8 @@ use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use OpenCompany\Signal\BatchScope;
 use Revolt\EventLoop;
+use Rubedo\BatchScope;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
-use OpenCompany\Signal\BatchScope;
-use OpenCompany\Signal\Computed;
-use OpenCompany\Signal\Effect;
-use OpenCompany\Signal\EffectScope;
-use OpenCompany\Signal\ReadableSignalInterface;
-use OpenCompany\Signal\Signal;
 use PHPUnit\Framework\TestCase;
+use Rubedo\BatchScope;
+use Rubedo\Computed;
+use Rubedo\Effect;
+use Rubedo\EffectScope;
+use Rubedo\ReadableSignalInterface;
+use Rubedo\Signal;
 
 /**
  * Tests for all audit-fix features: exception safety, cycle detection,

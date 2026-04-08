@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui\Phase;
 
-use OpenCompany\Signal\Signal;
+use Rubedo\Signal;
 
 /**
  * Immutable transition definition.

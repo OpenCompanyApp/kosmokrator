@@ -9,10 +9,16 @@ use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
+use function Amp\Future\await;
+
 /**
  * Spawns child agents that run their own autonomous tool loops.
- * Use for parallel research (explore), read-only planning (plan), or delegated read-write work (general).
- * Supports await mode (blocks until the child finishes) and background mode (result injected later).
+ *
+ * Two modes of operation:
+ * - Single: pass `task` (string) — spawns one agent. The existing LLM-facing API.
+ * - Batch:  pass `agents` (array of specs) — spawns all concurrently, blocks until all complete.
+ *           Designed for Lua where the synchronous sandbox prevents parallel loops.
+ *
  * Each instance is bound to a parent AgentContext — not registered globally.
  */
 class SubagentTool extends AbstractTool
@@ -67,30 +73,52 @@ class SubagentTool extends AbstractTool
                 'type' => 'string',
                 'description' => 'Sequential execution group name. Agents in the same group run one at a time.',
             ],
+            'agents' => [
+                'type' => 'array',
+                'description' => 'Batch mode: array of agent specs to run concurrently. Each spec: {task (required), type, id, depends_on, group}. '
+                    .'All agents run in parallel via the event loop; the call blocks until all complete. '
+                    .'When set, the `task`, `type`, `mode`, `id`, `depends_on`, `group` parameters are ignored.',
+                'items' => ['type' => 'string'],
+            ],
         ];
     }
 
     public function requiredParameters(): array
     {
-        return ['task'];
+        return [];
+    }
+
+    protected function handle(array $args): ToolResult
+    {
+        // Batch mode: agents array provided
+        $agents = $args['agents'] ?? null;
+        if (is_array($agents) && $agents !== []) {
+            $mode = in_array(($args['mode'] ?? 'await'), ['await', 'background'], true) ? $args['mode'] : 'await';
+
+            return $this->handleBatch($agents, $mode);
+        }
+
+        // Single mode: task string provided
+        $task = trim((string) ($args['task'] ?? ''));
+        if ($task !== '') {
+            return $this->handleSingle($task, $args);
+        }
+
+        return ToolResult::error('Provide either `task` (string) or `agents` (array).');
     }
 
     /**
-     * @param  array{task: string, type?: string, mode?: string, id?: string, depends_on?: string[], group?: string}  $args
-     * @return ToolResult Child agent summary (await mode) or spawn confirmation (background mode)
+     * Single agent spawn — the original API.
+     *
+     * @param  array{type?: string, mode?: string, id?: string, depends_on?: string[], group?: string}  $args
      */
-    protected function handle(array $args): ToolResult
+    private function handleSingle(string $task, array $args): ToolResult
     {
-        $task = trim((string) ($args['task'] ?? ''));
         $typeStr = (string) ($args['type'] ?? 'explore');
         $mode = (string) ($args['mode'] ?? 'await');
         $id = isset($args['id']) && $args['id'] !== '' ? (string) $args['id'] : null;
         $dependsOn = $this->normalizeDependsOn($args['depends_on'] ?? []);
         $group = isset($args['group']) && $args['group'] !== '' ? (string) $args['group'] : null;
-
-        if ($task === '') {
-            return ToolResult::error('Task is required.');
-        }
 
         $childType = AgentType::tryFrom($typeStr);
         if ($childType === null) {
@@ -115,8 +143,6 @@ class SubagentTool extends AbstractTool
         }
 
         $orchestrator = $this->parentContext->orchestrator;
-
-        // If no ID provided, generate one before spawning so we can reference it
         $id ??= $orchestrator->generateId();
 
         $future = $orchestrator->spawnAgent(
@@ -131,8 +157,6 @@ class SubagentTool extends AbstractTool
         );
 
         if ($mode === 'await') {
-            // Yield parent's concurrency slot while waiting — prevents deadlock when
-            // all slots are held by parents waiting for children that can't start.
             $orchestrator->yieldSlot($this->parentContext->id);
             try {
                 $result = $future->await();
@@ -146,6 +170,121 @@ class SubagentTool extends AbstractTool
         return ToolResult::success(
             "Agent '{$id}' spawned in background ({$childType->value}). Results will be delivered when ready."
         );
+    }
+
+    /**
+     * Batch mode — spawn all agents concurrently.
+     *
+     * @param  array<int, array{task?: string, type?: string, id?: string, depends_on?: string[], group?: string}>  $agents
+     * @param  string  $mode  'await' (block until all complete) or 'background' (fire and forget)
+     */
+    private function handleBatch(array $agents, string $mode = 'await'): ToolResult
+    {
+        if (! $this->parentContext->canSpawn()) {
+            return ToolResult::error(
+                "Maximum agent depth reached ({$this->parentContext->maxDepth}). Cannot spawn deeper."
+            );
+        }
+
+        $orchestrator = $this->parentContext->orchestrator;
+        $allowedTypes = $this->parentContext->type->allowedChildTypes();
+
+        $errors = [];
+        $specs = [];
+
+        // Validate all specs upfront before spawning any
+        foreach ($agents as $i => $spec) {
+            $task = trim((string) ($spec['task'] ?? ''));
+            if ($task === '') {
+                $errors[] = "Agent at index {$i}: task is required.";
+
+                continue;
+            }
+
+            $typeStr = (string) ($spec['type'] ?? 'explore');
+            $childType = AgentType::tryFrom($typeStr);
+            if ($childType === null) {
+                $errors[] = "Agent at index {$i}: invalid type '{$typeStr}'. Valid: ".implode(', ', array_map(fn (AgentType $t) => $t->value, $allowedTypes));
+
+                continue;
+            }
+
+            if (! in_array($childType, $allowedTypes, true)) {
+                $errors[] = "Agent at index {$i}: type '{$childType->value}' not allowed from '{$this->parentContext->type->value}' agent.";
+
+                continue;
+            }
+
+            $id = isset($spec['id']) && $spec['id'] !== '' ? (string) $spec['id'] : $orchestrator->generateId();
+            $dependsOn = $this->normalizeDependsOn($spec['depends_on'] ?? []);
+            $group = isset($spec['group']) && $spec['group'] !== '' ? (string) $spec['group'] : null;
+
+            $specs[] = [
+                'task' => $task,
+                'type' => $childType,
+                'id' => $id,
+                'depends_on' => $dependsOn,
+                'group' => $group,
+            ];
+        }
+
+        if ($errors !== []) {
+            return ToolResult::error("Validation errors:\n".implode("\n", $errors));
+        }
+
+        // Spawn all agents and collect their futures
+        $futures = [];
+        foreach ($specs as $spec) {
+            $futures[$spec['id']] = $orchestrator->spawnAgent(
+                parentContext: $this->parentContext,
+                task: $spec['task'],
+                childType: $spec['type'],
+                mode: $mode,
+                id: $spec['id'],
+                dependsOn: $spec['depends_on'],
+                group: $spec['group'],
+                agentFactory: $this->agentFactory,
+            );
+        }
+
+        if ($mode === 'background') {
+            $ids = implode(', ', array_map(fn (array $s) => "'{$s['id']}' ({$s['type']->value})", $specs));
+
+            return ToolResult::success(
+                'Batch spawned '.count($specs).' agents in background: '.$ids.'. Results will be delivered when ready.'
+            );
+        }
+
+        // Await mode — block until all complete
+        $orchestrator->yieldSlot($this->parentContext->id);
+
+        try {
+            $results = await($futures);
+        } catch (\Throwable $e) {
+            return ToolResult::error('Batch execution failed: '.$e->getMessage());
+        } finally {
+            $orchestrator->reclaimSlot($this->parentContext->id);
+        }
+
+        $lines = [];
+        $lines[] = 'Batch complete: '.count($results).' agents finished.';
+        $lines[] = '';
+
+        foreach ($results as $agentId => $result) {
+            $spec = null;
+            foreach ($specs as $s) {
+                if ($s['id'] === $agentId) {
+                    $spec = $s;
+                    break;
+                }
+            }
+            $type = $spec !== null ? $spec['type']->value : 'unknown';
+            $lines[] = "--- Agent '{$agentId}' ({$type}) ---";
+            $lines[] = (string) $result;
+            $lines[] = '';
+        }
+
+        return ToolResult::success(implode("\n", $lines));
     }
 
     /**

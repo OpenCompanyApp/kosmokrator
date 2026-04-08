@@ -50,13 +50,20 @@ class LuaDocService
     }
 
     /**
-     * Search docs by keyword across all namespaces and static pages.
+     * Search docs by keyword across all namespaces, native tools, and static pages.
      */
     public function searchDocs(string $query, int $limit = 10): string
     {
+        $namespaces = $this->buildNamespaces();
+
+        // Include native tools as a virtual namespace so they appear in search results
+        if ($this->nativeToolBridge !== null) {
+            $namespaces['tools'] = $this->buildNativeToolsNamespace();
+        }
+
         return $this->docRenderer->search(
             $query,
-            $this->buildNamespaces(),
+            $namespaces,
             $this->getStaticPageContents(),
             $limit,
         );
@@ -227,6 +234,42 @@ class LuaDocService
     }
 
     /**
+     * Build a virtual namespace entry for native tools, matching the format
+     * expected by LuaDocRenderer::search() and other methods.
+     *
+     * @return array{description: string, functions: array<int, array{name: string, description: string, fullDescription: string, parameters: array<int, array<string, mixed>>, sourceToolSlug: string}>}
+     */
+    private function buildNativeToolsNamespace(): array
+    {
+        $functions = [];
+
+        foreach ($this->nativeToolBridge->listTools() as $name => $meta) {
+            $parameters = [];
+            foreach ($meta['parameters'] as $paramName => $paramDesc) {
+                $parameters[] = [
+                    'name' => $paramName,
+                    'type' => 'string',
+                    'required' => false,
+                    'description' => $paramDesc,
+                ];
+            }
+
+            $functions[] = [
+                'name' => $name,
+                'description' => $meta['description'],
+                'fullDescription' => $meta['description'],
+                'parameters' => $parameters,
+                'sourceToolSlug' => $name,
+            ];
+        }
+
+        return [
+            'description' => 'Native KosmoKrator tools',
+            'functions' => $functions,
+        ];
+    }
+
+    /**
      * Get supplementary Lua docs from a ToolProvider.
      */
     private function getProviderLuaDocs(string $namespace): ?string
@@ -353,6 +396,22 @@ class LuaDocService
         $lines[] = '-- Run a command';
         $lines[] = 'local output = app.tools.bash({command = "git status --short"})';
         $lines[] = 'print(output)';
+        $lines[] = '```';
+        $lines[] = '';
+        $lines[] = '## Parallel Subagents';
+        $lines[] = '';
+        $lines[] = 'Lua execution is synchronous. Calling `app.tools.subagent({task=...})` in a loop runs agents sequentially.';
+        $lines[] = 'Use the `agents` parameter to run multiple agents concurrently:';
+        $lines[] = '';
+        $lines[] = '```lua';
+        $lines[] = 'local result = app.tools.subagent({';
+        $lines[] = '  agents = {';
+        $lines[] = '    {task = "Explore the routing module", id = "router"},';
+        $lines[] = '    {task = "Explore the auth module", id = "auth"},';
+        $lines[] = '    {task = "Explore the database layer", id = "db"},';
+        $lines[] = '  }';
+        $lines[] = '})';
+        $lines[] = 'print(result)';
         $lines[] = '```';
 
         return implode("\n", $lines);

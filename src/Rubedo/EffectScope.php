@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OpenCompany\Signal;
+namespace Rubedo;
 
 /**
  * Static tracking context AND effect ownership container.

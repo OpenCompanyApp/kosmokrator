@@ -6,10 +6,10 @@ namespace Kosmokrator\Tests\Unit\UI\Tui\State;
 
 use Amp\DeferredCancellation;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use OpenCompany\Signal\BatchScope;
-use OpenCompany\Signal\Computed;
-use OpenCompany\Signal\Effect;
 use PHPUnit\Framework\TestCase;
+use Rubedo\BatchScope;
+use Rubedo\Computed;
+use Rubedo\Effect;
 
 final class TuiStateStoreTest extends TestCase
 {

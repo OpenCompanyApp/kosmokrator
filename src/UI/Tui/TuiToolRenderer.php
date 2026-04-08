@@ -41,6 +41,17 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     private ?DiscoveryBatchWidget $activeDiscoveryBatch = null;
 
+    private ?BashCommandWidget $activeBashWidget = null;
+
+    /** @var array<string, mixed> */
+    private array $lastToolArgs = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $lastToolArgsByName = [];
+
+    /** @var list<array{name: string, label: string, detail: string, summary: string, status: string}> */
+    private array $activeDiscoveryItems = [];
+
     public function __construct(
         private readonly TuiCoreRenderer $core,
         private readonly TuiStateStore $state,

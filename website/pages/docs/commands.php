@@ -5,15 +5,16 @@ ob_start();
 ?>
 
 <p class="lead">
-    KosmoKrator provides two command systems for controlling the agent: <strong>slash commands</strong>
-    typed at the input prompt with a <code>/</code> prefix, and <strong>power commands</strong>
-    prefixed with <code>:</code> that activate specialized agent behaviors. This page covers every
-    command available in the interactive session.
+    KosmoKrator provides three command systems for controlling the agent: <strong>slash commands</strong>
+    typed at the input prompt with a <code>/</code> prefix, <strong>power commands</strong>
+    prefixed with <code>:</code> that activate specialized agent behaviors, and <strong>skill
+    commands</strong> prefixed with <code>$</code> that invoke reusable skill templates. This page
+    covers every command available in the interactive session.
 </p>
 
 <div class="tip">
-    Both slash commands and power commands support Tab autocompletion in the input prompt.
-    Start typing <code>/</code> or <code>:</code> and press Tab to see matching options.
+    All command types support Tab autocompletion in the input prompt. Start typing <code>/</code>,
+    <code>:</code>, or <code>$</code> and press Tab to see matching options.
 </div>
 
 
@@ -34,9 +35,9 @@ ob_start();
 
 <h4 id="cmd-new"><code>/new</code></h4>
 <p>
-    Clear the current conversation and start a fresh session. The previous session is automatically
-    saved and can be resumed later with <code>/resume</code>. The agent's context window is reset,
-    and the system prompt is regenerated for the new session.
+    Clear the current conversation and start a fresh session. Cancels any running subagents, clears
+    conversation history, resets the session cost, resets permission grants, and sets the permission
+    mode back to <strong>Guardian</strong>. The system prompt is regenerated for the new session.
 </p>
 
 <h4 id="cmd-resume"><code>/resume</code></h4>
@@ -54,13 +55,13 @@ ob_start();
 
 <h4 id="cmd-rename"><code>/rename [name]</code></h4>
 <p>
-    Rename the current session for easier identification later. If no name is provided, you will
-    be prompted to enter one. Named sessions are easier to find when using <code>/resume</code>
-    or <code>/sessions</code>.
+    Rename the current session for easier identification later. If no name is provided, shows the
+    usage message. Named sessions are easier to find when using <code>/resume</code> or
+    <code>/sessions</code>.
 </p>
 <pre><code>/rename Refactor payment module</code></pre>
 
-<h4 id="cmd-quit"><code>/quit</code></h4>
+<h4 id="cmd-quit"><code>/quit</code> <small class="text-muted">(aliases: <code>/exit</code>, <code>/q</code>)</small></h4>
 <p>
     Save the current session and exit KosmoKrator. The session is persisted to SQLite and can
     be resumed in a future invocation. Equivalent to pressing <code>Ctrl+C</code> at an idle prompt.
@@ -158,18 +159,18 @@ ob_start();
 
 <h4 id="cmd-forget"><code>/forget &lt;id&gt;</code></h4>
 <p>
-    Delete a specific memory by its ID. Use <code>/memories</code> first to find the ID of the
+    Delete a specific memory by its numeric ID. Use <code>/memories</code> first to find the ID of the
     memory you want to remove. This is permanent &mdash; the memory will no longer be included
     in future sessions.
 </p>
-<pre><code>/forget mem_a3f9c2</code></pre>
+<pre><code>/forget 42</code></pre>
 
 
 <!-- ------------------------------------------------------------------ -->
 <h3 id="monitoring">Monitoring</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-agents"><code>/agents</code></h4>
+<h4 id="cmd-agents"><code>/agents</code> <small class="text-muted">(alias: <code>/swarm</code>)</small></h4>
 <p>
     Open the live swarm dashboard showing all active and completed subagents. Displays each
     agent's status, progress, resource usage, and task description. The dashboard updates in
@@ -202,29 +203,28 @@ ob_start();
     for Composer installations it runs the appropriate update command.
 </p>
 
-<h4 id="cmd-feedback"><code>/feedback &lt;text&gt;</code></h4>
+<h4 id="cmd-feedback"><code>/feedback &lt;text&gt;</code> <small class="text-muted">(aliases: <code>/bug</code>, <code>/issue</code>)</small></h4>
 <p>
-    Submit feedback as a GitHub issue. Requires the <code>gh</code> CLI to be installed and
-    authenticated. The feedback text is used as the issue body, and system information (version,
-    OS, PHP version) is automatically appended.
+    Submit feedback or a bug report. Injects a prompt into the LLM conversation instructing the
+    agent to create a GitHub issue on the KosmoKrator repository via <code>gh issue create</code>.
+    System information (version, OS, PHP version, provider/model) is automatically appended to the
+    issue body. Requires the <code>gh</code> CLI to be installed and authenticated.
 </p>
 <pre><code>/feedback The glob tool should support brace expansion for multi-pattern matching</code></pre>
 
-<h4 id="cmd-seed"><code>/seed &lt;text&gt;</code></h4>
+<h4 id="cmd-seed"><code>/seed</code></h4>
 <p>
-    Inject text into the conversation as context without sending it to the LLM. The seeded text
-    appears in the conversation history and will be visible to the agent on subsequent turns. Useful
-    for pasting error logs, requirements, or other reference material.
+    Development tool that plays a scripted mock session. Used for testing and debugging the
+    UI and agent interaction flow. Not intended for normal use.
 </p>
-<pre><code>/seed The API endpoint should return 200 for success and 422 for validation errors.</code></pre>
 
-<h4 id="cmd-tasks-clear"><code>/tasks clear</code></h4>
+<h4 id="cmd-tasks-clear"><code>/tasks-clear</code></h4>
 <p>
     Clear all tracked tasks from the current session. Removes every task regardless of status
     (pending, in progress, or completed). The task list in the context bar is emptied.
 </p>
 
-<h4 id="cmd-theogony"><code>/theogony</code></h4>
+<h4 id="cmd-theogony"><code>/theogony</code> <small class="text-muted">(alias: <code>/cosmogony</code>)</small></h4>
 <p>
     Replay the animated intro sequence. The theogony is the mythological creation narrative that
     plays when KosmoKrator first launches (unless started with <code>--no-animation</code>).
@@ -234,6 +234,8 @@ ob_start();
 <!-- ================================================================== -->
 <h2 id="slash-command-reference">Slash Command Reference</h2>
 <!-- ================================================================== -->
+
+<p><strong>Need a quick reminder?</strong> Use <code>/help</code> <small class="text-muted">(aliases: <code>/?</code>, <code>/commands</code>)</small> to list all available commands directly in the terminal.</p>
 
 <p>
     Complete reference table of all slash commands, their arguments, and descriptions.
@@ -248,6 +250,11 @@ ob_start();
         </tr>
     </thead>
     <tbody>
+        <tr>
+            <td><code>/help</code></td>
+            <td>None</td>
+            <td>List available commands. <small class="text-muted">(aliases: <code>/?</code>, <code>/commands</code>)</small></td>
+        </tr>
         <tr>
             <td><code>/new</code></td>
             <td>None</td>
@@ -271,7 +278,7 @@ ob_start();
         <tr>
             <td><code>/quit</code></td>
             <td>None</td>
-            <td>Save and exit KosmoKrator.</td>
+            <td>Save and exit KosmoKrator. <small class="text-muted">(aliases: <code>/exit</code>, <code>/q</code>)</small></td>
         </tr>
         <tr>
             <td><code>/edit</code></td>
@@ -316,12 +323,12 @@ ob_start();
         <tr>
             <td><code>/forget</code></td>
             <td><code>&lt;id&gt;</code></td>
-            <td>Delete a specific memory by ID.</td>
+            <td>Delete a specific memory by numeric ID.</td>
         </tr>
         <tr>
             <td><code>/agents</code></td>
             <td>None</td>
-            <td>Open the live swarm dashboard.</td>
+            <td>Open the live swarm dashboard. <small class="text-muted">(alias: <code>/swarm</code>)</small></td>
         </tr>
         <tr>
             <td><code>/settings</code></td>
@@ -341,22 +348,22 @@ ob_start();
         <tr>
             <td><code>/feedback</code></td>
             <td><code>&lt;text&gt;</code></td>
-            <td>Submit feedback as a GitHub issue.</td>
+            <td>Submit feedback or a bug report as a GitHub issue. <small class="text-muted">(aliases: <code>/bug</code>, <code>/issue</code>)</small></td>
         </tr>
         <tr>
             <td><code>/seed</code></td>
-            <td><code>&lt;text&gt;</code></td>
-            <td>Inject context text without sending to the LLM.</td>
+            <td>None</td>
+            <td>Play a scripted mock session (dev tool).</td>
         </tr>
         <tr>
-            <td><code>/tasks clear</code></td>
+            <td><code>/tasks-clear</code></td>
             <td>None</td>
             <td>Clear all tracked tasks.</td>
         </tr>
         <tr>
             <td><code>/theogony</code></td>
             <td>None</td>
-            <td>Replay the animated intro sequence.</td>
+            <td>Replay the animated intro sequence. <small class="text-muted">(alias: <code>/cosmogony</code>)</small></td>
         </tr>
     </tbody>
 </table>
@@ -386,43 +393,42 @@ ob_start();
 <h3 id="coding-power-commands">Coding</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-unleash"><code>:unleash</code></h4>
+<h4 id="cmd-unleash"><code>:unleash</code> <small class="text-muted">(aliases: <code>:swarm</code>, <code>:nuke</code>)</small></h4>
 <p>
     Aggressive autonomous coding mode. The agent works with maximum speed and output, making
     decisions independently without hand-holding. Best for well-defined tasks where you want
     the agent to just get it done. Minimizes clarification questions and maximizes throughput.
 </p>
 
-<h4 id="cmd-autopilot"><code>:autopilot</code></h4>
+<h4 id="cmd-autopilot"><code>:autopilot</code> <small class="text-muted">(aliases: <code>:pilot</code>, <code>:auto</code>)</small></h4>
 <p>
     Sustained autonomous work with periodic check-ins. The agent works independently for extended
     stretches but pauses at natural breakpoints to report progress and confirm direction. A good
     middle ground between <code>:unleash</code> and <code>:babysit</code>.
 </p>
 
-<h4 id="cmd-babysit"><code>:babysit</code></h4>
+<h4 id="cmd-babysit"><code>:babysit</code> <small class="text-muted">(aliases: <code>:watch</code>, <code>:shepherd</code>)</small></h4>
 <p>
-    Careful, step-by-step coding with explanations at each stage. The agent explains what it
-    plans to do before doing it, waits for your approval at key decision points, and describes
-    each change as it is made. Ideal for learning, sensitive code, or when you want full
-    visibility into the process.
+    Monitor a pull request until it is merged. The agent watches CI status, handles failing checks,
+    addresses review comments, and applies fixes as needed. Checks every few minutes for up to
+    60 minutes. Pass a PR number or URL as the argument.
 </p>
 
-<h4 id="cmd-review"><code>:review</code></h4>
+<h4 id="cmd-review"><code>:review</code> <small class="text-muted">(alias: <code>:cr</code>)</small></h4>
 <p>
     Deep code review mode. The agent reads through the specified code (or recent changes) and
     provides actionable feedback covering correctness, performance, security, readability, and
     best practices. Does not make changes unless explicitly asked.
 </p>
 
-<h4 id="cmd-deepdive"><code>:deepdive</code></h4>
+<h4 id="cmd-deepdive"><code>:deepdive</code> <small class="text-muted">(alias: <code>:dive</code>)</small></h4>
 <p>
     Thorough codebase investigation. The agent reads files extensively, traces code paths across
     modules, follows call chains, and builds a comprehensive understanding of how a feature or
     subsystem works. Results in a detailed written analysis.
 </p>
 
-<h4 id="cmd-deepinit"><code>:deepinit</code></h4>
+<h4 id="cmd-deepinit"><code>:deepinit</code> <small class="text-muted">(aliases: <code>:init</code>, <code>:map</code>)</small></h4>
 <p>
     Comprehensive project initialization and onboarding. The agent explores the entire project
     structure, reads configuration files, examines dependencies, understands the architecture,
@@ -430,7 +436,7 @@ ob_start();
     codebase.
 </p>
 
-<h4 id="cmd-research"><code>:research</code></h4>
+<h4 id="cmd-research"><code>:research</code> <small class="text-muted">(alias: <code>:sci</code>)</small></h4>
 <p>
     In-depth research mode. The agent gathers information from the codebase, documentation,
     and any available sources before acting. It reads broadly, cross-references findings, and
@@ -438,7 +444,7 @@ ob_start();
     understanding complex existing systems.
 </p>
 
-<h4 id="cmd-deslop"><code>:deslop</code></h4>
+<h4 id="cmd-deslop"><code>:deslop</code> <small class="text-muted">(alias: <code>:clean</code>)</small></h4>
 <p>
     Clean up sloppy code. The agent systematically identifies and fixes dead code, poor naming,
     unnecessary duplication, inconsistent formatting, overly complex logic, and other code
@@ -450,14 +456,14 @@ ob_start();
 <h3 id="quality-testing">Quality &amp; Testing</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-ultraqa"><code>:ultraqa</code></h4>
+<h4 id="cmd-ultraqa"><code>:ultraqa</code> <small class="text-muted">(alias: <code>:qa</code>)</small></h4>
 <p>
     Exhaustive quality assurance pass. The agent acts as a thorough QA engineer: it looks for bugs,
     edge cases, race conditions, missing error handling, inconsistencies between related components,
     and potential regressions. Produces a prioritized list of findings with suggested fixes.
 </p>
 
-<h4 id="cmd-doctor"><code>:doctor</code></h4>
+<h4 id="cmd-doctor"><code>:doctor</code> <small class="text-muted">(alias: <code>:diag</code>)</small></h4>
 <p>
     Diagnose and fix project issues. The agent checks configuration files, dependency versions,
     environment setup, common misconfigurations, and known problem patterns. Acts like a
@@ -470,7 +476,7 @@ ob_start();
 <h3 id="documentation">Documentation</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-docs"><code>:docs</code></h4>
+<h4 id="cmd-docs"><code>:docs</code> <small class="text-muted">(alias: <code>:doc</code>)</small></h4>
 <p>
     Generate or improve documentation. The agent reads the code and produces clear, accurate
     documentation &mdash; whether that is inline PHPDoc, README sections, API documentation,
@@ -482,7 +488,7 @@ ob_start();
 <h3 id="collaboration">Collaboration</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-interview"><code>:interview</code></h4>
+<h4 id="cmd-interview"><code>:interview</code> <small class="text-muted">(alias: <code>:socrates</code>)</small></h4>
 <p>
     Interactive Q&amp;A mode to understand requirements. The agent asks targeted questions to
     clarify what you need before writing any code. Useful for complex features where the
@@ -490,26 +496,27 @@ ob_start();
     a solid implementation plan.
 </p>
 
-<h4 id="cmd-learner"><code>:learner</code></h4>
+<h4 id="cmd-learner"><code>:learner</code> <small class="text-muted">(alias: <code>:learn</code>)</small></h4>
 <p>
-    Explain code and concepts for learning. The agent acts as a patient teacher, breaking down
-    complex code into understandable pieces, explaining design patterns, and connecting concepts
-    to broader programming principles. Great for onboarding or understanding unfamiliar patterns.
+    Extract a reusable pattern from the current conversation. The agent analyzes the conversation
+    for generalizable, non-obvious, actionable patterns with clear triggers, applies a quality
+    gate, and saves the result to persistent memory. If no pattern passes the quality gate, the
+    agent says so honestly.
 </p>
 
-<h4 id="cmd-trace"><code>:trace</code></h4>
+<h4 id="cmd-trace"><code>:trace</code> <small class="text-muted">(alias: <code>:debug</code>)</small></h4>
 <p>
     Trace execution paths and data flow through the code. The agent follows a request, event, or
     data structure from entry point to final output, documenting every transformation, method
     call, and branching decision along the way. Produces a step-by-step execution narrative.
 </p>
 
-<h4 id="cmd-ralph"><code>:ralph</code></h4>
+<h4 id="cmd-ralph"><code>:ralph</code> <small class="text-muted">(aliases: <code>:sisyphus</code>, <code>:persist</code>)</small></h4>
 <p>
-    Opinionated, direct feedback on code quality. The agent gives unfiltered, honest assessments
-    of the code &mdash; no sugar-coating. Points out what is genuinely good, what is mediocre,
-    and what needs to be rewritten. For developers who prefer blunt feedback over diplomatic
-    hedging.
+    Persistent retry loop &mdash; the boulder never stops. The agent attempts the task repeatedly
+    (up to 5 attempts), trying a different approach each time. Includes a mandatory self-review
+    after all checks pass. After 3 failures, it reconsiders the entire approach; after 5, it asks
+    for guidance.
 </p>
 
 
@@ -517,7 +524,7 @@ ob_start();
 <h3 id="release-ci">Release &amp; CI</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-release"><code>:release</code></h4>
+<h4 id="cmd-release"><code>:release</code> <small class="text-muted">(alias: <code>:ship</code>)</small></h4>
 <p>
     Prepare a release. The agent handles the full release workflow: version bump, changelog
     generation from recent commits, running the test suite, verifying CI status, and creating
@@ -529,14 +536,22 @@ ob_start();
 <h3 id="multi-agent">Multi-Agent</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-replay"><code>:replay</code></h4>
+<h4 id="cmd-legion"><code>:legion</code> <small class="text-muted">(alias: <code>:perspectives</code>)</small></h4>
+<p>
+    Five perspective agents deliberate, Moirai synthesizes the decree. Spawns five specialized
+    perspective agents &mdash; each evaluating from a different angle (correctness, simplicity,
+    performance, security, integration) &mdash; then a synthesis agent merges their findings into
+    a single coherent recommendation.
+</p>
+
+<h4 id="cmd-replay"><code>:replay</code> <small class="text-muted">(alias: <code>:redo</code>)</small></h4>
 <p>
     Re-run a failed or incomplete multi-agent task. The agent reviews what the previous subagent
     run accomplished, identifies where it went wrong, and re-attempts the failed portions. Useful
     for recovering from transient errors or picking up where a cancelled operation left off.
 </p>
 
-<h4 id="cmd-team"><code>:team</code></h4>
+<h4 id="cmd-team"><code>:team</code> <small class="text-muted">(alias: <code>:squad</code>)</small></h4>
 <p>
     Spawn a team of specialized subagents for a complex task. The agent breaks the task into
     subtasks, assigns each to an appropriate subagent type (general, explore, or plan), manages
@@ -544,7 +559,7 @@ ob_start();
     from parallel execution.
 </p>
 
-<h4 id="cmd-consensus"><code>:consensus</code></h4>
+<h4 id="cmd-consensus"><code>:consensus</code> <small class="text-muted">(alias: <code>:council</code>)</small></h4>
 <p>
     Run multiple agents on the same task and compare results. The agent spawns several independent
     subagents that each tackle the task separately, then evaluates and merges their outputs. Useful
@@ -557,10 +572,23 @@ ob_start();
 <h3 id="control">Control</h3>
 <!-- ------------------------------------------------------------------ -->
 
-<h4 id="cmd-cancel"><code>:cancel</code></h4>
+<h4 id="cmd-cancel"><code>:cancel</code> <small class="text-muted">(alias: <code>:stop</code>)</small></h4>
 <p>
     Cancel all running subagents immediately. Any background subagents are terminated and their
     partial results are discarded. The main agent remains active and ready for new instructions.
+</p>
+
+
+<!-- ------------------------------------------------------------------ -->
+<h3 id="knowledge">Knowledge</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<h4 id="cmd-wiki"><code>:wiki</code> <small class="text-muted">(alias: <code>:w</code>)</small></h4>
+<p>
+    Build and maintain a persistent, interlinked markdown knowledge base. Supports four subcommands:
+    <code>init</code> to create a new wiki with schema and structure, <code>ingest</code> to capture
+    a source and write wiki pages, <code>lint</code> to health-check for contradictions and orphans,
+    and <code>query</code> (default) to search the wiki and synthesize answers with citations.
 </p>
 
 
@@ -584,105 +612,183 @@ ob_start();
         <tr>
             <td><code>:unleash</code></td>
             <td>Coding</td>
-            <td>Aggressive autonomous coding with maximum output.</td>
+            <td>Aggressive autonomous coding with maximum output. <small class="text-muted">(aliases: <code>:swarm</code>, <code>:nuke</code>)</small></td>
         </tr>
         <tr>
             <td><code>:autopilot</code></td>
             <td>Coding</td>
-            <td>Sustained autonomous work with periodic check-ins.</td>
+            <td>Sustained autonomous work with periodic check-ins. <small class="text-muted">(aliases: <code>:pilot</code>, <code>:auto</code>)</small></td>
         </tr>
         <tr>
             <td><code>:babysit</code></td>
             <td>Coding</td>
-            <td>Step-by-step coding with explanations at each stage.</td>
+            <td>Monitor a PR until merged — handle CI, reviews, and fixes. <small class="text-muted">(aliases: <code>:watch</code>, <code>:shepherd</code>)</small></td>
         </tr>
         <tr>
             <td><code>:review</code></td>
             <td>Coding</td>
-            <td>Deep code review with actionable feedback.</td>
+            <td>Deep code review with actionable feedback. <small class="text-muted">(alias: <code>:cr</code>)</small></td>
         </tr>
         <tr>
             <td><code>:deepdive</code></td>
             <td>Coding</td>
-            <td>Thorough codebase investigation and analysis.</td>
+            <td>Thorough codebase investigation and analysis. <small class="text-muted">(alias: <code>:dive</code>)</small></td>
         </tr>
         <tr>
             <td><code>:deepinit</code></td>
             <td>Coding</td>
-            <td>Comprehensive project onboarding and exploration.</td>
+            <td>Comprehensive project onboarding and exploration. <small class="text-muted">(aliases: <code>:init</code>, <code>:map</code>)</small></td>
         </tr>
         <tr>
             <td><code>:research</code></td>
             <td>Coding</td>
-            <td>In-depth research before taking action.</td>
+            <td>In-depth research before taking action. <small class="text-muted">(alias: <code>:sci</code>)</small></td>
         </tr>
         <tr>
             <td><code>:deslop</code></td>
             <td>Coding</td>
-            <td>Clean up dead code, naming, and duplication.</td>
+            <td>Clean up dead code, naming, and duplication. <small class="text-muted">(alias: <code>:clean</code>)</small></td>
         </tr>
         <tr>
             <td><code>:ultraqa</code></td>
             <td>Quality</td>
-            <td>Exhaustive QA: bugs, edge cases, inconsistencies.</td>
+            <td>Exhaustive QA: bugs, edge cases, inconsistencies. <small class="text-muted">(alias: <code>:qa</code>)</small></td>
         </tr>
         <tr>
             <td><code>:doctor</code></td>
             <td>Quality</td>
-            <td>Diagnose and fix project configuration issues.</td>
+            <td>Diagnose and fix project configuration issues. <small class="text-muted">(alias: <code>:diag</code>)</small></td>
         </tr>
         <tr>
             <td><code>:docs</code></td>
             <td>Documentation</td>
-            <td>Generate or improve documentation.</td>
+            <td>Generate or improve documentation. <small class="text-muted">(alias: <code>:doc</code>)</small></td>
         </tr>
         <tr>
             <td><code>:interview</code></td>
             <td>Collaboration</td>
-            <td>Interactive Q&amp;A to clarify requirements.</td>
+            <td>Interactive Q&amp;A to clarify requirements. <small class="text-muted">(alias: <code>:socrates</code>)</small></td>
         </tr>
         <tr>
             <td><code>:learner</code></td>
             <td>Collaboration</td>
-            <td>Explain code and concepts for learning.</td>
+            <td>Extract reusable patterns from the conversation. <small class="text-muted">(alias: <code>:learn</code>)</small></td>
         </tr>
         <tr>
             <td><code>:trace</code></td>
             <td>Collaboration</td>
-            <td>Trace execution paths and data flow.</td>
+            <td>Trace execution paths and data flow. <small class="text-muted">(alias: <code>:debug</code>)</small></td>
         </tr>
         <tr>
             <td><code>:ralph</code></td>
             <td>Collaboration</td>
-            <td>Opinionated, direct code quality feedback.</td>
+            <td>Persistent retry loop — the boulder never stops. <small class="text-muted">(aliases: <code>:sisyphus</code>, <code>:persist</code>)</small></td>
         </tr>
         <tr>
             <td><code>:release</code></td>
             <td>Release</td>
-            <td>Version bump, changelog, tests, and tagging.</td>
+            <td>Version bump, changelog, tests, and tagging. <small class="text-muted">(alias: <code>:ship</code>)</small></td>
+        </tr>
+        <tr>
+            <td><code>:legion</code></td>
+            <td>Multi-Agent</td>
+            <td>Five perspective agents deliberate, Moirai synthesizes. <small class="text-muted">(alias: <code>:perspectives</code>)</small></td>
         </tr>
         <tr>
             <td><code>:replay</code></td>
             <td>Multi-Agent</td>
-            <td>Re-run a failed multi-agent task.</td>
+            <td>Re-run a failed multi-agent task. <small class="text-muted">(alias: <code>:redo</code>)</small></td>
         </tr>
         <tr>
             <td><code>:team</code></td>
             <td>Multi-Agent</td>
-            <td>Spawn a specialized subagent team.</td>
+            <td>Spawn a specialized subagent team. <small class="text-muted">(alias: <code>:squad</code>)</small></td>
         </tr>
         <tr>
             <td><code>:consensus</code></td>
             <td>Multi-Agent</td>
-            <td>Run multiple agents, compare results.</td>
+            <td>Run multiple agents, compare results. <small class="text-muted">(alias: <code>:council</code>)</small></td>
         </tr>
         <tr>
             <td><code>:cancel</code></td>
             <td>Control</td>
-            <td>Cancel all running subagents.</td>
+            <td>Cancel all running subagents. <small class="text-muted">(alias: <code>:stop</code>)</small></td>
+        </tr>
+        <tr>
+            <td><code>:wiki</code></td>
+            <td>Knowledge</td>
+            <td>Build and maintain a persistent markdown knowledge base. <small class="text-muted">(alias: <code>:w</code>)</small></td>
         </tr>
     </tbody>
 </table>
+
+
+<!-- ================================================================== -->
+<h2 id="skill-commands">Skill Commands</h2>
+<!-- ================================================================== -->
+
+<p>
+    Skill commands are prefixed with <code>$</code> and invoke reusable, customizable skill
+    templates. Skills are auto-discovered from several directories at runtime:
+</p>
+
+<ul>
+    <li><code>.kosmokrator/skills/</code> &mdash; project-level skills</li>
+    <li><code>.agents/skills/</code> &mdash; alternative project-level location</li>
+    <li><code>~/.kosmokrator/skills/</code> &mdash; user-level skills (available in all projects)</li>
+</ul>
+
+<p>
+    Each skill is a directory containing a <code>SKILL.md</code> file that defines the prompt
+    template and metadata. Invoking a skill injects its prompt into the LLM conversation with
+    your arguments filled in.
+</p>
+
+<h3 id="built-in-skills">Built-in Skill Management</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Command</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>$list</code> or <code>$skills</code></td>
+            <td>List all discovered skills with name, scope (project/user), and description.</td>
+        </tr>
+        <tr>
+            <td><code>$create &lt;name&gt;</code></td>
+            <td>Create a new skill template (SKILL.md) in the project skills directory. The agent helps you define the skill content.</td>
+        </tr>
+        <tr>
+            <td><code>$show &lt;name&gt;</code></td>
+            <td>Display a skill's content, scope, and file path.</td>
+        </tr>
+        <tr>
+            <td><code>$edit &lt;name&gt;</code></td>
+            <td>Inject a prompt for the agent to read and help modify the skill file.</td>
+        </tr>
+        <tr>
+            <td><code>$delete &lt;name&gt;</code></td>
+            <td>Remove a skill directory recursively.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3 id="invoking-skills">Invoking Skills</h3>
+
+<p>
+    To invoke a skill, type <code>$</code> followed by the skill name and any arguments:
+</p>
+
+<pre><code>$my-custom-skill Refactor the authentication module</code></pre>
+
+<div class="tip">
+    Skills are reloaded from disk on every invocation, so you can edit a skill's <code>SKILL.md</code>
+    file and immediately use the updated version without restarting.
+</div>
 
 
 <!-- ================================================================== -->
@@ -720,13 +826,33 @@ ob_start();
         </tr>
         <tr>
             <td><code>Tab</code></td>
-            <td>Autocomplete slash/power commands</td>
+            <td>Autocomplete slash/power/skill commands</td>
             <td>Input prompt</td>
+        </tr>
+        <tr>
+            <td><code>Shift+Tab</code></td>
+            <td>Cycle through modes (Edit → Plan → Ask)</td>
+            <td>Input prompt</td>
+        </tr>
+        <tr>
+            <td><code>Ctrl+L</code></td>
+            <td>Force refresh the TUI display</td>
+            <td>TUI mode</td>
         </tr>
         <tr>
             <td><code>Up</code> / <code>Down</code></td>
             <td>Navigate command history</td>
             <td>Input prompt</td>
+        </tr>
+        <tr>
+            <td><code>Page Up</code> / <code>Page Down</code></td>
+            <td>Scroll conversation history</td>
+            <td>When viewing conversation</td>
+        </tr>
+        <tr>
+            <td><code>End</code></td>
+            <td>Jump to live output (bottom of conversation)</td>
+            <td>When scrolled up in conversation</td>
         </tr>
         <tr>
             <td><code>Esc</code></td>
@@ -742,9 +868,8 @@ ob_start();
 </table>
 
 <div class="tip">
-    In ANSI mode, multi-line input is not available via keyboard shortcuts. Use the
-    <code>/seed</code> command to inject multi-line content, or switch to TUI mode for full
-    multi-line editing support via the EditorWidget.
+    In ANSI mode, multi-line input is not available via keyboard shortcuts. Switch to TUI mode for
+    full multi-line editing support via the EditorWidget.
 </div>
 
 
@@ -774,8 +899,8 @@ ob_start();
         the entire codebase without stopping for confirmations.
     </li>
     <li>
-        <code>:babysit :review</code> &mdash; Perform a code review while explaining each finding
-        step by step.
+        <code>:babysit :review</code> &mdash; Perform a code review while monitoring a PR
+        with step-by-step explanations.
     </li>
     <li>
         <code>:research :deepdive</code> &mdash; Combine broad research with thorough code tracing

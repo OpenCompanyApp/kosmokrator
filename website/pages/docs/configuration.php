@@ -12,7 +12,7 @@ ob_start();
 <h2 id="config-file-locations">Config File Locations</h2>
 
 <p>
-    Configuration is loaded from up to three YAML files, merged in order. Later files override earlier ones on a per-key basis.
+    Configuration is loaded from up to three YAML sources, merged in order. Later sources override earlier ones on a per-key basis.
 </p>
 
 <ol>
@@ -25,13 +25,12 @@ ob_start();
         Your personal overrides that apply to every project. This is the right place for API keys, preferred provider/model, theme choice, and permission mode.
     </li>
     <li>
-        <strong>Project-level config</strong> &mdash; <code>.kosmokrator.yaml</code> in the current working directory.
-        Per-project overrides. Use this to set a different model for a specific repo, enable plan mode by default, or adjust subagent concurrency for large monorepos.
+        <strong>Project-level config</strong> &mdash; discovered by walking up from the current working directory to the filesystem root. At each directory level, KosmoKrator checks for <code>.kosmokrator/config.yaml</code> (priority) and <code>.kosmokrator.yaml</code>. The first match found wins, giving you per-project overrides. Use this to set a different model for a specific repo, enable plan mode by default, or adjust subagent concurrency for large monorepos.
     </li>
 </ol>
 
 <div class="tip">
-    <p><strong>Tip:</strong> The priority chain is <strong>project &gt; global &gt; bundled</strong>. A setting in <code>.kosmokrator.yaml</code> always wins over the same key in <code>~/.kosmokrator/config.yaml</code>, which in turn overrides the bundled default.</p>
+    <p><strong>Tip:</strong> The priority chain is <strong>project &gt; global &gt; bundled</strong>. A setting in a project-level config always wins over the same key in <code>~/.kosmokrator/config.yaml</code>, which in turn overrides the bundled default.</p>
 </div>
 
 <h3 id="environment-variable-expansion">Environment Variable Expansion</h3>
@@ -52,7 +51,7 @@ audio:
   soundfont: ${HOME}/.kosmokrator/soundfonts/FluidR3_GM.sf2</code></pre>
 
 <p>
-    If a referenced variable is not set, the literal string <code>${VAR_NAME}</code> is preserved as-is, which typically causes a clear error when the value is used.
+    If a referenced variable is not set, it is replaced with an empty string. This means unset variables are silently removed rather than causing an error at load time.
 </p>
 
 <!-- ================================================================== -->
@@ -65,12 +64,12 @@ audio:
 <ul>
     <li>Navigate categories with arrow keys or tab.</li>
     <li>Toggle, choose, or type new values inline.</li>
-    <li>Changes are saved instantly to the SQLite database at <code>~/.kosmokrator/data/kosmokrator.db</code>.</li>
+    <li>Changes are saved instantly to the same YAML priority chain (user global config or project-level config) via <code>SettingsManager</code>.</li>
     <li>Some settings take effect immediately (<em>applies now</em>), others on the next turn (<em>next turn</em>), and others require a new session (<em>next session</em>).</li>
 </ul>
 
 <div class="tip">
-    <p><strong>Tip:</strong> Settings saved via <code>/settings</code> take the highest priority &mdash; they override both YAML files and bundled defaults. To revert a runtime setting, clear it in <code>/settings</code> and the YAML cascade takes over again.</p>
+    <p><strong>Tip:</strong> Settings saved via <code>/settings</code> are written to your YAML config files, using the same priority chain as manual edits. To revert a runtime setting, clear it in <code>/settings</code> and the bundled defaults take over again.</p>
 </div>
 
 <!-- ================================================================== -->
@@ -118,6 +117,13 @@ audio:
             <td><code>on</code></td>
             <td>Play the cosmic startup animation before opening the REPL. Disable with <code>off</code> or the <code>--no-animation</code> CLI flag for instant startup.</td>
             <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>ui.show_reasoning</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Display model reasoning/thinking content before each response. When on, the agent's chain-of-thought output is shown inline before the final answer.</td>
+            <td>applies now</td>
         </tr>
     </tbody>
 </table>
@@ -210,7 +216,7 @@ audio:
         <tr>
             <td><code>agent.reasoning_effort</code></td>
             <td>choice: <code>off</code>, <code>low</code>, <code>medium</code>, <code>high</code></td>
-            <td><code>off</code></td>
+            <td><code>high</code></td>
             <td>Controls extended thinking / chain-of-thought reasoning for models that support it (e.g., Claude with extended thinking, OpenAI o-series). <code>off</code> disables reasoning parameters entirely.</td>
             <td>applies now</td>
         </tr>
@@ -329,6 +335,69 @@ audio:
                 </ul>
             </td>
             <td>applies now</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ---------------------------------------- Integrations ---------------------------------------- -->
+<h3 id="integrations">Integrations</h3>
+
+<p>
+    KosmoKrator discovers integration packages (e.g. Plausible, CoinGecko, Celestial) from your <code>composer.lock</code>. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>integrations.permissions_default</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><code>ask</code></td>
+            <td>
+                Default permission policy for integration API operations not explicitly configured.
+                <ul>
+                    <li><strong>allow</strong> &mdash; auto-approve the operation.</li>
+                    <li><strong>ask</strong> &mdash; prompt the user before executing.</li>
+                    <li><strong>deny</strong> &mdash; block the operation outright.</li>
+                </ul>
+            </td>
+            <td>applies now</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ---------------------------------------- Codex ---------------------------------------- -->
+<h3 id="codex">Codex</h3>
+
+<p>
+    The Codex section configures the built-in OAuth server used for authenticating with cloud providers and services.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>codex.oauth_port</code></td>
+            <td>number</td>
+            <td><code>9876</code></td>
+            <td>The local port used by the OAuth callback server when authenticating with external providers. Change this if the default port conflicts with another service.</td>
+            <td>next session</td>
         </tr>
     </tbody>
 </table>
@@ -515,6 +584,7 @@ agent:
 ui:
   renderer: auto
   intro_animated: true
+  show_reasoning: false
 
 tools:
   default_permission_mode: guardian
@@ -716,7 +786,7 @@ session:
   temperature: 0.0            # Sampling temperature
   max_retries: 0              # 0 = unlimited
   mode: edit                  # edit | plan | ask
-  reasoning_effort: off       # off | low | medium | high
+  reasoning_effort: high      # off | low | medium | high
   subagent_provider: ...      # Depth-1 subagent provider
   subagent_model: ...         # Depth-1 subagent model
   subagent_depth2_provider: ... # Depth-2+ provider
@@ -734,6 +804,13 @@ ui:
   renderer: auto              # auto | tui | ansi
   intro_animated: true
   theme: default
+  show_reasoning: false       # Show model thinking before responses
+
+codex:
+  oauth_port: 9876            # OAuth callback server port
+
+integrations:
+  permissions_default: ask    # allow | ask | deny (default for integration ops)
 
 tools:
   approval_required:          # Tools requiring explicit approval
@@ -743,6 +820,26 @@ tools:
     - bash
     - shell_start
     - shell_write
+    - execute_lua
+  denied_tools: []            # Tools always blocked (overrides all modes)
+  safe_tools:                 # Tools auto-approved in Guardian mode
+    - file_read
+    - glob
+    - grep
+    - task_create
+    - task_update
+    - task_list
+    - task_get
+    - shell_read
+    - shell_kill
+    - memory_save
+    - memory_search
+    - ask_user
+    - ask_choice
+    - subagent
+    - lua_list_docs
+    - lua_search_docs
+    - lua_read_doc
   default_permission_mode: guardian
   bash:
     timeout: 120              # Bash command timeout (seconds)
@@ -755,10 +852,34 @@ tools:
     - "*.env"
     - ".git/*"
     - "*.pem"
+    - "*id_rsa*"
+    - "*id_ed25519*"
+    - "*.key"
+  allowed_paths:              # Paths exempt from blocked_paths
+    - "~/.kosmokrator"
+    - "/tmp"
   guardian_safe_commands:      # Commands auto-approved in Guardian mode
     - "git *"
     - "ls *"
+    - "pwd"
+    - "cat *"
+    - "head *"
+    - "tail *"
+    - "wc *"
+    - "find *"
+    - "which *"
+    - "echo *"
+    - "diff *"
     - "php vendor/bin/phpunit*"
+    - "php vendor/bin/pint*"
+    - "composer *"
+    - "npm *"
+    - "npx *"
+    - "node *"
+    - "python *"
+    - "cargo *"
+    - "go *"
+    - "make *"
 
 context:
   max_output_lines: 2000
@@ -777,7 +898,7 @@ session:
   history_dir: ~/.kosmokrator/sessions
 
 audio:
-  completion_sound: true
+  completion_sound: false
   soundfont: "~/.kosmokrator/soundfonts/FluidR3_GM.sf2"
   llm_timeout: 60
   max_duration: 8

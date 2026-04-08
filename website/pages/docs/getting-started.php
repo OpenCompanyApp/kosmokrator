@@ -109,9 +109,11 @@ composer install</code></pre>
         providers (Anthropic, OpenAI, Google, Mistral, local endpoints, and more).
     </li>
     <li>
-        <strong>Enter your API key</strong> &mdash; Keys are stored locally at
-        <code>~/.kosmokrator/config.yaml</code> and never sent anywhere except
-        the provider's own API.
+        <strong>Authenticate</strong> &mdash; Most providers accept an API key
+        entered directly. OAuth-based providers (like Codex) use a browser or
+        device flow instead &mdash; the wizard opens a link for you to authorize.
+        Credentials are stored locally at <code>~/.kosmokrator/config.yaml</code>
+        and never sent anywhere except the provider's own API.
     </li>
     <li>
         <strong>Pick a model</strong> &mdash; Select a default model. You can
@@ -191,12 +193,27 @@ kosmokrator</code></pre>
 
 <div class="tip">
     <p>
-        <strong>More power commands:</strong> Try <code>:commit</code> to
-        generate a conventional commit, <code>:debug</code> to investigate a
-        failing test, or <code>:refactor</code> to restructure code. See the
-        full list on the <a href="/docs/commands">Commands</a> page.
+        <strong>More power commands:</strong> Try <code>:release</code> to
+        generate a conventional commit, or <code>:trace</code> to investigate a
+        failing test. See the full list on the
+        <a href="/docs/commands">Commands</a> page.
     </p>
 </div>
+
+
+<h3>Dispatch a skill</h3>
+
+<p>
+    Use the <code>$</code> prefix to dispatch a named skill directly:
+</p>
+
+<pre><code>You &gt; $phpstan src/Controller/UserController.php</code></pre>
+
+<p>
+    This invokes the <strong>phpstan</strong> skill on the specified file.
+    Skills are specialized, reusable workflows you can define in your
+    project config. See <a href="/docs/commands">Commands</a> for details.
+</p>
 
 
 <!-- ================================================================== -->
@@ -240,6 +257,99 @@ kosmokrator</code></pre>
 <p>
     For the complete list of slash commands, power commands, and keyboard
     shortcuts, see the <a href="/docs/commands">Commands</a> reference.
+</p>
+
+<div class="tip">
+    <p>
+        <strong>Agent modes vs. permission modes:</strong> The table above
+        shows <em>agent modes</em>, which control what capabilities the
+        agent has (read, write, execute). Separately, <em>permission
+        modes</em> control how aggressively those capabilities are
+        auto-approved. Switch permission modes with
+        <code>/guardian</code> (review every action),
+        <code>/argus</code> (review writes and commands), or
+        <code>/prometheus</code> (auto-approve everything). See
+        <a href="/docs/permissions">Permissions</a> for details.
+    </p>
+</div>
+
+
+<!-- ================================================================== -->
+<h2 id="cli-essentials">CLI Essentials</h2>
+<!-- ================================================================== -->
+
+<h3>Subcommands</h3>
+
+<p>
+    Beyond the interactive session, KosmoKrator ships with several
+    subcommands:
+</p>
+
+<div class="table-wrap">
+<table>
+    <thead>
+        <tr>
+            <th>Command</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>kosmokrator setup</code></td>
+            <td>Run the setup wizard (providers, models, keys).</td>
+        </tr>
+        <tr>
+            <td><code>kosmokrator config</code></td>
+            <td>View and manage configuration values.</td>
+        </tr>
+        <tr>
+            <td><code>kosmokrator auth</code></td>
+            <td>Manage provider authentication (API keys, OAuth tokens).</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+
+<h3>Useful CLI options</h3>
+
+<div class="table-wrap">
+<table>
+    <thead>
+        <tr>
+            <th>Option</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>--no-animation</code></td>
+            <td>Disable all terminal animations. Useful in CI or screen readers.</td>
+        </tr>
+        <tr>
+            <td><code>--renderer &lt;type&gt;</code></td>
+            <td>Choose the output renderer (e.g. <code>stream</code>, <code>batch</code>).</td>
+        </tr>
+        <tr>
+            <td><code>--resume</code></td>
+            <td>Resume the most recent session.</td>
+        </tr>
+        <tr>
+            <td><code>--session &lt;id&gt;</code></td>
+            <td>Resume a specific session by ID.</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+
+<h3>Project-level config</h3>
+
+<p>
+    Global config lives at <code>~/.kosmokrator/config.yaml</code>. For
+    per-project settings, create <code>.kosmokrator/config.yaml</code> in
+    your project root. Project config overrides global values &mdash;
+    perfect for team-shared defaults, model preferences, or custom skills.
+    See <a href="/docs/configuration">Configuration</a> for the full
+    reference.
 </p>
 
 

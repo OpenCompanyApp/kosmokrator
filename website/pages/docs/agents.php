@@ -126,19 +126,19 @@ ob_start();
     <tbody>
         <tr>
             <td><strong>General</strong></td>
-            <td>Full: read, write, edit, bash, subagent</td>
+            <td>file_read, file_write, file_edit, apply_patch, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, memory_save, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
             <td>General, Explore, Plan</td>
             <td>Autonomous coding tasks</td>
         </tr>
         <tr>
             <td><strong>Explore</strong></td>
-            <td>Read-only: file_read, glob, grep, bash</td>
+            <td>file_read, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
             <td>Explore only</td>
             <td>Research and investigation</td>
         </tr>
         <tr>
             <td><strong>Plan</strong></td>
-            <td>Read-only: file_read, glob, grep, bash</td>
+            <td>file_read, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
             <td>Explore only</td>
             <td>Planning and architecture</td>
         </tr>
@@ -211,7 +211,7 @@ ob_start();
             <td>No</td>
             <td>
                 One of <code>general</code>, <code>explore</code>, or
-                <code>plan</code>. Defaults to <code>general</code>.
+                <code>plan</code>. Defaults to <code>explore</code>.
             </td>
         </tr>
         <tr>
@@ -249,6 +249,22 @@ ob_start();
             <td>
                 A sequential group name. Agents in the same group run one at
                 a time in the order they were spawned.
+            </td>
+        </tr>
+        <tr>
+            <td><code>agents</code></td>
+            <td>array</td>
+            <td>No</td>
+            <td>
+                Batch mode: an array of agent specs to spawn multiple agents
+                concurrently. Each spec is an object with: <code>task</code>
+                (required, string), <code>type</code> (string), <code>id</code>
+                (string), <code>depends_on</code> (array of strings), and
+                <code>group</code> (string). When set, the top-level
+                <code>task</code>, <code>type</code>, <code>id</code>,
+                <code>depends_on</code>, and <code>group</code> parameters are
+                ignored. The top-level <code>mode</code> controls await/background
+                behavior for the entire batch.
             </td>
         </tr>
     </tbody>
@@ -395,7 +411,7 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
 <p>
     A global semaphore limits the total number of concurrently running agents.
     The default limit is <strong>10</strong> concurrent agents, configurable
-    via the <code>max_concurrent</code> setting. When the limit is reached,
+    via the <code>subagent_concurrency</code> setting. When the limit is reached,
     newly spawned agents are queued and start as soon as a slot becomes
     available.
 </p>
@@ -423,7 +439,7 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
 <p>
     The agent hierarchy has a maximum depth of <strong>3 levels</strong> by
     default (main agent at depth 0, its children at depth 1, grandchildren at
-    depth 2). This limit is configurable via the <code>max_depth</code>
+    depth 2). This limit is configurable via the <code>subagent_max_depth</code>
     setting. Attempts to spawn subagents beyond the maximum depth are rejected
     with an error.
 </p>
@@ -438,17 +454,54 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
     </thead>
     <tbody>
         <tr>
-            <td><code>max_concurrent</code></td>
+            <td><code>subagent_concurrency</code></td>
             <td>10</td>
             <td>Maximum number of agents running at the same time</td>
         </tr>
         <tr>
-            <td><code>max_depth</code></td>
+            <td><code>subagent_max_depth</code></td>
             <td>3</td>
             <td>Maximum nesting depth of the agent hierarchy</td>
         </tr>
     </tbody>
 </table>
+
+<!-- ------------------------------------------------------------------ -->
+<h2 id="per-depth-model-overrides">Per-Depth Model Overrides</h2>
+
+<p>
+    By default, all subagents use the model configured by the
+    <code>subagent_provider</code> and <code>subagent_model</code> settings
+    (or the main session model if those are unset). You can override the model
+    used at specific depths in the agent tree, which is useful for running
+    cheaper or faster models for deeper agents that handle simpler tasks.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>subagent_depth2_provider</code></td>
+            <td>LLM provider for agents at depth 2 (grandchildren of the main agent)</td>
+        </tr>
+        <tr>
+            <td><code>subagent_depth2_model</code></td>
+            <td>LLM model name for agents at depth 2</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>
+    When a depth-specific override is set, agents at that depth use the
+    overridden provider and model instead of the default subagent model.
+    Depths without an explicit override fall back to the default
+    <code>subagent_provider</code> / <code>subagent_model</code> settings.
+</p>
 
 <!-- ------------------------------------------------------------------ -->
 <h2 id="stuck-detection">Stuck Detection</h2>
@@ -495,10 +548,11 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
 </ul>
 
 <p>
-    The escalation counter resets whenever the tool call pattern changes &mdash;
-    that is, when the subagent starts calling different tools or using different
-    arguments. This means a brief repetition followed by a change in approach
-    will not trigger escalation.
+    The escalation counter resets when the subagent produces <strong>2
+    consecutive diverse turns</strong> &mdash; that is, when the agent calls
+    different tools or uses different arguments for two turns in a row. A single
+    changed turn is not enough; the agent must demonstrate sustained diversity to
+    clear the escalation.
 </p>
 
 <div class="tip">
@@ -513,7 +567,7 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
 <h2 id="watchdog-timers">Watchdog Timers</h2>
 
 <p>
-    In addition to stuck detection, every agent has a configurable idle
+    In addition to stuck detection, every subagent has a configurable idle
     timeout that acts as a safety net against agents that stall entirely
     &mdash; for example, waiting indefinitely for an API response that will
     never come, or entering a state where no tool calls are made at all.
@@ -528,12 +582,8 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
     </thead>
     <tbody>
         <tr>
-            <td>Main (interactive) agent</td>
-            <td>900 seconds (15 minutes)</td>
-        </tr>
-        <tr>
             <td>Subagents</td>
-            <td>600 seconds (10 minutes)</td>
+            <td>900 seconds (15 minutes)</td>
         </tr>
     </tbody>
 </table>
@@ -561,7 +611,7 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
 <ul>
     <li>
         <strong>Max retries:</strong> Configurable, with a default of
-        <strong>3</strong> attempts. After the final retry fails, the error
+        <strong>2</strong> attempts. After the final retry fails, the error
         is returned to the parent agent.
     </li>
     <li>
@@ -663,8 +713,11 @@ subagent(task: "Update the changelog", type: "general", group: "docs", mode: "ba
             <td>
                 Current state: <strong>running</strong>,
                 <strong>done</strong>, <strong>queued</strong>,
-                <strong>failed</strong>, or <strong>waiting</strong>
-                (blocked on dependencies)
+                <strong>queued_global</strong> (waiting for a global
+                concurrency slot), <strong>waiting</strong>
+                (blocked on dependencies), <strong>retrying</strong>
+                (re-queued after a transient failure),
+                <strong>failed</strong>, or <strong>cancelled</strong>
             </td>
         </tr>
         <tr>

@@ -7,8 +7,8 @@ ob_start();
     KosmoKrator's permission system controls what the agent can do on your machine.
     Three permission modes balance safety and autonomy, while a configurable
     evaluation chain ensures every tool call is checked against blocked paths,
-    deny patterns, session grants, custom rules, and mode-specific heuristics
-    before it executes.
+    deny patterns, session grants, project boundaries, custom rules, and
+    mode-specific heuristics before it executes.
 </p>
 
 <!-- ------------------------------------------------------------------ -->
@@ -43,19 +43,20 @@ ob_start();
 <h3 id="argus">Argus</h3>
 
 <p>
-    Argus mode requires explicit user approval for every governed tool call,
-    with no exceptions. Every file read, write, edit, and bash command that
-    appears in the <code>approval_required</code> list triggers a prompt.
-    This provides a complete audit trail of every action the agent takes,
-    making it ideal for security-sensitive work, exploring unfamiliar
+    Argus mode requires explicit user approval for every tool call that has an
+    Ask rule (tools in the <code>approval_required</code> list). Tools in the
+    <code>safe_tools</code> list (such as <code>file_read</code>,
+    <code>glob</code>, and <code>grep</code>) are still auto-approved via their
+    Allow rules. This provides a detailed audit trail of every action the agent
+    takes, making it ideal for security-sensitive work, exploring unfamiliar
     codebases, or learning how the agent operates.
 </p>
 
 <ul>
     <li><strong>Symbol:</strong> <code>&#x25C9;</code> (target)</li>
-    <li>Every governed tool call requires explicit approval</li>
-    <li>Full visibility and audit trail</li>
-    <li>No heuristic bypass &mdash; no silent auto-approvals</li>
+    <li>Every Ask-ruled tool call requires explicit approval</li>
+    <li>Full visibility and audit trail for governed tools</li>
+    <li>Safe tools still bypass the chain via Allow rules</li>
     <li>Best for learning, exploring new codebases, or security-sensitive work</li>
 </ul>
 
@@ -73,6 +74,7 @@ ob_start();
     <li>Unrestricted execution, no approval prompts</li>
     <li>Maximum speed and autonomy</li>
     <li>Blocked paths and explicit deny rules still enforced</li>
+    <li>Project boundary check is bypassed</li>
     <li>Best for trusted CI/CD pipelines, headless operation, or known-safe tasks</li>
 </ul>
 
@@ -98,17 +100,17 @@ ob_start();
         </tr>
         <tr>
             <td>Argus</td>
+            <td>Yes (safe_tools)</td>
             <td>No (asks)</td>
             <td>No (asks)</td>
-            <td>No (asks)</td>
-            <td>Full audit</td>
+            <td>Full audit for Ask-ruled tools</td>
         </tr>
         <tr>
             <td>Prometheus</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
-            <td>No prompts</td>
+            <td>No prompts, boundary bypassed</td>
         </tr>
     </tbody>
 </table>
@@ -137,10 +139,10 @@ ob_start();
 <h2 id="evaluation-chain">Evaluation Chain</h2>
 
 <p>
-    Every tool call passes through a chain of five permission checks before
+    Every tool call passes through a chain of six permission checks before
     execution. The checks run in a fixed order, and the first check that
-    returns a definitive result halts the chain. If no check halts, the
-    call is allowed by default.
+    returns a definitive result halts the chain. If no check halts the chain,
+    the call is <strong>denied by default</strong> (fail-closed).
 </p>
 
 <h3 id="chain-overview">Chain Order</h3>
@@ -159,8 +161,9 @@ ob_start();
         <strong>Deny Pattern Check</strong> &mdash; Evaluates the tool call
         against explicit deny rules from the configuration. For bash and
         shell tools, this checks command arguments against blocked command
-        patterns (e.g., <code>rm -rf /</code>). A match produces an
-        unconditional deny.
+        patterns (e.g., <code>rm -rf /</code>). Also checks tools listed in
+        <code>denied_tools</code> (see below). A match produces an
+        unconditional deny that overrides even Prometheus mode.
     </li>
     <li>
         <strong>Session Grant Check</strong> &mdash; Checks whether the user
@@ -169,19 +172,33 @@ ob_start();
         (not per-path or per-command).
     </li>
     <li>
+        <strong>Project Boundary Check</strong> &mdash; For file tools
+        (<code>file_write</code>, <code>file_edit</code>, <code>file_read</code>,
+        <code>glob</code>, <code>grep</code>), checks whether the target path
+        is outside the project root. If the path is outside the project and
+        not in <code>allowed_paths</code>, the call triggers an Ask prompt.
+        Prometheus mode is exempt from boundary enforcement. This check applies
+        to both read and write tools &mdash; even <code>file_read</code>,
+        <code>glob</code>, and <code>grep</code> trigger a prompt when
+        accessing files outside the project root.
+    </li>
+    <li>
         <strong>Rule Check</strong> &mdash; Matches against the permission
-        rules defined in the configuration (the <code>approval_required</code>
-        list and any deny patterns attached to those rules). If a rule
-        matches with a Deny action, the call is denied. If a rule matches
-        with an Ask action, it is passed to the next stage.
+        rules defined in the configuration (<code>safe_tools</code>,
+        <code>approval_required</code>, and <code>denied_tools</code>).
+        If a rule matches with an Allow action, the call is allowed.
+        If a rule matches with a Deny action, the call is denied.
+        If a rule matches with an Ask action, the check returns
+        <code>null</code> and passes through to the remaining checks
+        in the chain.
     </li>
     <li>
         <strong>Mode Override Check</strong> &mdash; Applies the active
-        permission mode's logic to any Ask result from the rule check.
-        In Prometheus mode, the Ask is upgraded to Allow. In Guardian mode,
-        the Guardian heuristic evaluator decides whether to auto-approve
-        or ask the user. In Argus mode, the Ask stands and the user is
-        prompted.
+        permission mode's logic to any tool that has an Ask rule.
+        Only tools with Ask rules reach this stage. In Prometheus mode,
+        the Ask is upgraded to Allow. In Guardian mode, the Guardian
+        heuristic evaluator decides whether to auto-approve or ask the
+        user. In Argus mode, the Ask stands and the user is prompted.
     </li>
 </ol>
 
@@ -209,8 +226,8 @@ ob_start();
 <h2 id="guardian-heuristics">Guardian Heuristics</h2>
 
 <p>
-    When Guardian mode encounters a tool call that requires approval (an Ask
-    result from the rule check), it delegates to the
+    When Guardian mode encounters a tool call that has an Ask rule and reaches
+    the Mode Override Check, it delegates to the
     <code>GuardianEvaluator</code> for static heuristic analysis. The
     evaluator classifies the call as safe or risky without making any LLM
     calls. Safe calls are auto-approved silently; risky calls prompt the
@@ -231,6 +248,8 @@ ob_start();
     <li><code>task_create</code>, <code>task_update</code>, <code>task_list</code>, <code>task_get</code> &mdash; Task management</li>
     <li><code>shell_read</code>, <code>shell_kill</code> &mdash; Reading shell output and killing sessions</li>
     <li><code>memory_save</code>, <code>memory_search</code> &mdash; Persistent memory operations</li>
+    <li><code>lua_list_docs</code>, <code>lua_search_docs</code>, <code>lua_read_doc</code> &mdash; Lua API documentation</li>
+    <li><code>execute_lua</code> &mdash; Lua script execution (inner integration permissions enforce per-tool granularity)</li>
 </ul>
 
 <h3 id="file-operation-heuristics">File Operation Heuristics</h3>
@@ -253,7 +272,9 @@ ob_start();
 <p>
     Guardian mode evaluates bash commands in two stages: first it checks for
     shell metacharacters, then it matches against a configurable list of
-    safe command patterns.
+    safe command patterns. This same logic applies to <code>shell_start</code>
+    (the startup command) and <code>shell_write</code> (the input text sent
+    to an existing session).
 </p>
 
 <p>
@@ -395,8 +416,9 @@ ob_start();
     <p>
         <strong>Tip:</strong> Session grants sit at position 3 in the
         evaluation chain, after blocked paths and deny patterns but before
-        rule checks and mode overrides. This means blocked paths and explicit
-        denies always take precedence, even if you granted session approval.
+        project boundary checks, rule checks, and mode overrides. This means
+        blocked paths and explicit denies always take precedence, even if
+        you granted session approval.
     </p>
 </div>
 
@@ -518,12 +540,62 @@ ob_start();
 
 <p>
     Permission rules are defined in the configuration and control which tools
-    require approval. The primary mechanism is the
-    <code>approval_required</code> list, which creates Ask rules for the
-    specified tools.
+    are allowed, denied, or require approval. Three configuration options
+    define these rules:
 </p>
 
-<h3 id="default-rules">Default Configuration</h3>
+<h3 id="safe-tools">Safe Tools (<code>safe_tools</code>)</h3>
+
+<p>
+    The <code>safe_tools</code> list creates unconditional Allow rules for the
+    specified tools. These tools are auto-approved without any permission check
+    or user prompt, regardless of the active mode (including Argus). Tools in
+    this list skip the Mode Override Check entirely.
+</p>
+
+<pre><code>tools:
+  safe_tools:
+    - file_read
+    - glob
+    - grep
+    - task_create
+    - task_update
+    - task_list
+    - task_get
+    - shell_read
+    - shell_kill
+    - memory_save
+    - memory_search
+    - ask_user
+    - ask_choice
+    - subagent
+    - lua_list_docs
+    - lua_search_docs
+    - lua_read_doc</code></pre>
+
+<h3 id="denied-tools">Denied Tools (<code>denied_tools</code>)</h3>
+
+<p>
+    The <code>denied_tools</code> list creates unconditional Deny rules for the
+    specified tools. This is the strongest form of denial &mdash; it overrides
+    everything, including Prometheus mode and session grants. Use it to
+    hard-disable specific tools in a project or CI environment.
+</p>
+
+<pre><code>tools:
+  # Completely disable specific tools, overriding all modes
+  denied_tools:
+    - bash           # No shell access
+    - file_write     # Read-only project</code></pre>
+
+<h3 id="default-rules">Approval Required (<code>approval_required</code>)</h3>
+
+<p>
+    The <code>approval_required</code> list creates Ask rules for the specified
+    tools. These tools pass through the full evaluation chain, where the
+    outcome depends on the active permission mode, session grants, project
+    boundaries, and heuristics.
+</p>
 
 <pre><code>tools:
   approval_required:
@@ -532,13 +604,13 @@ ob_start();
     - apply_patch
     - bash
     - shell_start
-    - shell_write</code></pre>
+    - shell_write
+    - execute_lua</code></pre>
 
 <p>
-    Tools not in the <code>approval_required</code> list are allowed by
-    default without any permission check. Tools in the list pass through
-    the full evaluation chain, where the outcome depends on the active
-    permission mode, session grants, and heuristics.
+    Note: <code>execute_lua</code> is in the approval list, but Guardian mode
+    auto-approves it because the inner integration permissions enforce per-tool
+    granularity within Lua scripts.
 </p>
 
 <h3 id="blocked-commands">Blocked Commands</h3>
@@ -592,11 +664,49 @@ ob_start();
 <div class="tip">
     <p>
         <strong>Tip:</strong> Safe command patterns only apply in Guardian
-        mode. In Argus mode, every governed tool call asks regardless of
+        mode. In Argus mode, every Ask-ruled tool call asks regardless of
         the safe list. In Prometheus mode, everything is auto-approved
         regardless of the safe list.
     </p>
 </div>
+
+<!-- ------------------------------------------------------------------ -->
+<h2 id="project-boundary">Project Boundary</h2>
+
+<p>
+    The Project Boundary Check (stage 4 in the evaluation chain) enforces
+    that file tools operate within the project root. When a file tool targets
+    a path outside the project directory, an Ask prompt is triggered so the
+    user can approve or deny the access. This applies to both read and write
+    tools &mdash; even <code>file_read</code>, <code>glob</code>, and
+    <code>grep</code> trigger a prompt when accessing files outside the
+    project root.
+</p>
+
+<p>
+    Prometheus mode is exempt from boundary enforcement. Session grants (if
+    previously approved) also bypass this check since they sit earlier in
+    the chain.
+</p>
+
+<h3 id="allowed-paths">Allowed Paths</h3>
+
+<p>
+    The <code>allowed_paths</code> configuration defines additional path
+    prefixes that are treated as if they were inside the project root. Paths
+    matching these prefixes bypass the project boundary check entirely.
+</p>
+
+<pre><code>tools:
+  allowed_paths:
+    - "~/.kosmokrator"    # KosmoKrator config directory
+    - "/tmp"              # Temporary files</code></pre>
+
+<p>
+    Paths in <code>allowed_paths</code> are resolved at startup (including
+    <code>~</code> expansion and symlink resolution), so they work correctly
+    across different environments.
+</p>
 
 <!-- ------------------------------------------------------------------ -->
 <h2 id="agent-mode-interaction">Interaction with Agent Modes</h2>
@@ -625,7 +735,7 @@ ob_start();
         <tr>
             <td>Edit</td>
             <td>Argus</td>
-            <td>Full audit &mdash; every governed tool call prompts</td>
+            <td>Full audit &mdash; every Ask-ruled tool call prompts; safe tools still auto-approved</td>
         </tr>
         <tr>
             <td>Edit</td>
@@ -700,7 +810,31 @@ ob_start();
 </p>
 
 <pre><code>tools:
-  # Tools that require approval (creates Ask rules)
+  # Tools that are always denied, overriding all modes including Prometheus
+  denied_tools: []
+  # Example: denied_tools: [file_write, bash]
+
+  # Tools that are always allowed without prompting (Allow rules)
+  safe_tools:
+    - file_read
+    - glob
+    - grep
+    - task_create
+    - task_update
+    - task_list
+    - task_get
+    - shell_read
+    - shell_kill
+    - memory_save
+    - memory_search
+    - ask_user
+    - ask_choice
+    - subagent
+    - lua_list_docs
+    - lua_search_docs
+    - lua_read_doc
+
+  # Tools that require approval (Ask rules)
   approval_required:
     - file_write
     - file_edit
@@ -708,6 +842,7 @@ ob_start();
     - bash
     - shell_start
     - shell_write
+    - execute_lua
 
   # Default permission mode for new sessions
   default_permission_mode: guardian   # guardian | argus | prometheus
@@ -720,6 +855,11 @@ ob_start();
     - "*id_rsa*"
     - "*id_ed25519*"
     - "*.key"
+
+  # Paths that bypass the project boundary check
+  allowed_paths:
+    - "~/.kosmokrator"
+    - "/tmp"
 
   # Bash commands blocked unconditionally (glob patterns)
   bash:

@@ -58,7 +58,7 @@ final class TuiModalManager
     public function askToolPermission(string $toolName, array $args): string
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return 'deny';
         }
 
         $this->state->setActiveModal(true);
@@ -101,7 +101,7 @@ final class TuiModalManager
     public function approvePlan(string $currentPermissionMode): ?array
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return null;
         }
 
         $this->state->setActiveModal(true);
@@ -150,7 +150,7 @@ final class TuiModalManager
     public function askUser(string $question): string
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return '';
         }
 
         $this->state->setActiveModal(true);
@@ -191,7 +191,7 @@ final class TuiModalManager
     public function askChoice(string $question, array $choices): string
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return 'dismissed';
         }
 
         $this->state->setActiveModal(true);
@@ -286,7 +286,7 @@ final class TuiModalManager
     public function showSettings(array $currentSettings): array
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return [];
         }
 
         $this->state->setActiveModal(true);
@@ -330,7 +330,7 @@ final class TuiModalManager
     public function pickSession(array $items): ?string
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return null;
         }
 
         $this->state->setActiveModal(true);
@@ -381,7 +381,7 @@ final class TuiModalManager
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
     {
         if ($this->state->getActiveModal()) {
-            throw new \LogicException('A modal is already active');
+            return;
         }
 
         $this->state->setActiveModal(true);

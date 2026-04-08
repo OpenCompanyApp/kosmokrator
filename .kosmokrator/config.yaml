@@ -1,6 +1,6 @@
 kosmokrator:
   agent:
-    mode: edit
+    mode: plan
     default_provider: z
     default_model: glm-5.1
   tools:

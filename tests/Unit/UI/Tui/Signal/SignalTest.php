@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
+use Athanor\BatchScope;
+use Athanor\Computed;
+use Athanor\Effect;
+use Athanor\EffectScope;
+use Athanor\ReadableSignalInterface;
+use Athanor\Signal;
 use PHPUnit\Framework\TestCase;
-use Rubedo\BatchScope;
-use Rubedo\Computed;
-use Rubedo\Effect;
-use Rubedo\EffectScope;
-use Rubedo\ReadableSignalInterface;
-use Rubedo\Signal;
 
 final class SignalTest extends TestCase
 {

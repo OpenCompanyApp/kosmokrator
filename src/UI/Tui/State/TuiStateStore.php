@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Tui\State;
 
 use Amp\DeferredCancellation;
-use Rubedo\BatchScope;
-use Rubedo\Computed;
-use Rubedo\Signal;
+use Athanor\BatchScope;
+use Athanor\Computed;
+use Athanor\Signal;
 
 /**
  * Centralized reactive state store for the TUI.

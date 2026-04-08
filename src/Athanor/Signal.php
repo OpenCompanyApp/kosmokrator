@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Rubedo;
+namespace Athanor;
 
 /**
  * Reactive value holder with version counter and subscriber list.

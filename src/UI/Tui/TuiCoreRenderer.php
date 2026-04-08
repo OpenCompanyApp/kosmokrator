@@ -6,6 +6,7 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
+use Athanor\Effect;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiAnimation;
@@ -24,7 +25,6 @@ use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
 use Kosmokrator\UI\Tui\Widget\HistoryStatusWidget;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
-use Rubedo\Effect;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Input\Key;
 use Symfony\Component\Tui\Input\Keybindings;

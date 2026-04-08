@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Rubedo;
+namespace Athanor;
 
 /**
  * Side-effect that auto-runs when its tracked dependencies change.

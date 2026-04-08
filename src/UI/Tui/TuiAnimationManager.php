@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Tui;
 
 use Amp\DeferredCancellation;
+use Athanor\BatchScope;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Revolt\EventLoop;
-use Rubedo\BatchScope;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 

@@ -39,7 +39,7 @@ class SubagentToolTest extends TestCase
         $tool = $this->makeTool($this->makeContext());
         $result = $tool->execute(['task' => '']);
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('required', $result->output);
+        $this->assertStringContainsStringIgnoringCase('provide either', $result->output);
     }
 
     public function test_invalid_type_returns_error(): void

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui\Toast;
 
+use Athanor\Signal;
 use Kosmokrator\UI\TerminalNotification;
 use Revolt\EventLoop;
-use Rubedo\Signal;
 
 /**
  * Manages the lifecycle of toast notifications.

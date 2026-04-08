@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\UI\Tui\State;
 
 use Amp\DeferredCancellation;
+use Athanor\BatchScope;
+use Athanor\Computed;
+use Athanor\Effect;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use PHPUnit\Framework\TestCase;
-use Rubedo\BatchScope;
-use Rubedo\Computed;
-use Rubedo\Effect;
 
 final class TuiStateStoreTest extends TestCase
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Rubedo;
+namespace Athanor;
 
 /**
  * Read-only view of a reactive signal.

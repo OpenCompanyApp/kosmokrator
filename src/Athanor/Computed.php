@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Rubedo;
+namespace Athanor;
 
 /**
  * Derived reactive value. Lazily evaluated and cached.

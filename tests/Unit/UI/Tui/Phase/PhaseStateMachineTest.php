@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Phase;
 
+use Athanor\Signal;
 use Kosmokrator\UI\Tui\Phase\InvalidTransitionException;
 use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
 use Kosmokrator\UI\Tui\Phase\Transition;
 use PHPUnit\Framework\TestCase;
-use Rubedo\Signal;
 
 final class PhaseStateMachineTest extends TestCase
 {

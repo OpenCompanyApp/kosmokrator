@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Rubedo;
+namespace Athanor;
 
 /**
  * Internal subscriber record. Shared by Signal and Computed.

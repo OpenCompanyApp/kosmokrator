@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
+use Athanor\Computed;
+use Athanor\EffectScope;
+use Athanor\Signal;
 use PHPUnit\Framework\TestCase;
-use Rubedo\Computed;
-use Rubedo\EffectScope;
-use Rubedo\Signal;
 
 final class EffectScopeTest extends TestCase
 {

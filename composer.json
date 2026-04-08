@@ -57,7 +57,7 @@
     "autoload": {
         "psr-4": {
             "Kosmokrator\\": "src/",
-        "Rubedo\\": "src/Rubedo/",
+        "Athanor\\": "src/Athanor/",
             "Symfony\\Component\\Tui\\": "vendor/symfony/tui/src/Symfony/Component/Tui/"
         }
     },

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui;
 
+use Athanor\BatchScope;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\Theme;
@@ -11,7 +12,6 @@ use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
-use Rubedo\BatchScope;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;

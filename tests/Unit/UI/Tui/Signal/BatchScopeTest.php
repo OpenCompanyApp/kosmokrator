@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui\Signal;
 
+use Athanor\BatchScope;
+use Athanor\Effect;
+use Athanor\Signal;
 use PHPUnit\Framework\TestCase;
-use Rubedo\BatchScope;
-use Rubedo\Effect;
-use Rubedo\Signal;
 
 final class BatchScopeTest extends TestCase
 {

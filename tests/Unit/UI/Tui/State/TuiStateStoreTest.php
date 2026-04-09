@@ -684,6 +684,43 @@ final class TuiStateStoreTest extends TestCase
         $this->assertSame($items, $store->getActiveDiscoveryItems());
     }
 
+    // ── Tool execution animation ───────────────────────────────────────
+
+    public function test_tool_executing_breath_tick_increment(): void
+    {
+        $store = new TuiStateStore;
+        $this->assertSame(0, $store->getToolExecutingBreathTick());
+        $store->tickToolExecutingBreath();
+        $this->assertSame(1, $store->getToolExecutingBreathTick());
+        $store->tickToolExecutingBreath();
+        $this->assertSame(2, $store->getToolExecutingBreathTick());
+    }
+
+    public function test_tool_executing_start_time_round_trip(): void
+    {
+        $store = new TuiStateStore;
+        $this->assertSame(0.0, $store->getToolExecutingStartTime());
+        $now = microtime(true);
+        $store->setToolExecutingStartTime($now);
+        $this->assertSame($now, $store->getToolExecutingStartTime());
+    }
+
+    public function test_has_thinking_loader_round_trip(): void
+    {
+        $store = new TuiStateStore;
+        $this->assertFalse($store->getHasThinkingLoader());
+        $store->setHasThinkingLoader(true);
+        $this->assertTrue($store->getHasThinkingLoader());
+    }
+
+    public function test_has_compacting_loader_round_trip(): void
+    {
+        $store = new TuiStateStore;
+        $this->assertFalse($store->getHasCompactingLoader());
+        $store->setHasCompactingLoader(true);
+        $this->assertTrue($store->getHasCompactingLoader());
+    }
+
     // ── Start time ──────────────────────────────────────────────────────
 
     public function test_start_time_round_trip(): void

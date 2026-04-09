@@ -10,12 +10,11 @@ use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\Highlight\Lua\LuaLanguage;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\ToolRendererInterface;
+use Kosmokrator\UI\Tui\Builder\ToolExecutionCard;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\DiscoveryBatchWidget;
-use Revolt\EventLoop;
-use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 use Tempest\Highlight\Highlighter;
 
@@ -31,13 +30,7 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     private ?Highlighter $highlighter = null;
 
-    private ?CancellableLoaderWidget $toolExecutingLoader = null;
-
-    private ?string $toolExecutingTimerId = null;
-
-    private float $toolExecutingStartTime = 0.0;
-
-    private int $toolExecutingBreathTick = 0;
+    private ?ToolExecutionCard $toolExecutionCard = null;
 
     private ?DiscoveryBatchWidget $activeDiscoveryBatch = null;
 
@@ -56,6 +49,19 @@ final class TuiToolRenderer implements ToolRendererInterface
         private readonly TuiCoreRenderer $core,
         private readonly TuiStateStore $state,
     ) {}
+
+    private function toolExecutionCard(): ToolExecutionCard
+    {
+        if ($this->toolExecutionCard === null) {
+            $this->toolExecutionCard = new ToolExecutionCard(
+                state: $this->state,
+                conversation: $this->core->getConversation(),
+                addConversationWidget: fn ($w) => $this->core->addConversationWidget($w),
+            );
+        }
+
+        return $this->toolExecutionCard;
+    }
 
     public function getLastToolArgs(): array
     {
@@ -132,7 +138,6 @@ final class TuiToolRenderer implements ToolRendererInterface
         if ($name === 'bash' && ! $this->isOmensTool($name, $args)) {
             $this->finalizeDiscoveryBatch();
             $this->beginBashCommand((string) ($args['command'] ?? ''));
-            $this->core->flushRender();
 
             return;
         }
@@ -293,40 +298,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         }
 
         $this->core->getAnimationManager()->ensureSpinnersRegistered();
-
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $blue = Theme::rgb(112, 160, 208);
-
-        $this->toolExecutingLoader = new CancellableLoaderWidget("{$blue}running...{$r}");
-        $this->toolExecutingLoader->setId('tool-executing');
-        $this->toolExecutingLoader->addStyleClass('tool-result');
-        $this->toolExecutingLoader->setSpinner('cosmos', 120);
-        $this->toolExecutingStartTime = microtime(true);
-        $this->toolExecutingBreathTick = 0;
-
-        $this->core->addConversationWidget($this->toolExecutingLoader);
-
-        $this->toolExecutingTimerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {
-            if ($this->toolExecutingLoader === null) {
-                return;
-            }
-            $this->toolExecutingBreathTick++;
-            $t = sin($this->toolExecutingBreathTick * 0.07);
-            $cr = (int) (112 + 40 * $t);
-            $cg = (int) (160 + 40 * $t);
-            $cb = (int) (208 + 47 * $t);
-            $color = Theme::rgb($cr, $cg, $cb);
-
-            $elapsed = (int) (microtime(true) - $this->toolExecutingStartTime);
-            $time = $elapsed > 0 ? " {$dim}({$elapsed}s){$r}" : '';
-
-            $preview = $this->state->getToolExecutingPreview() ?? 'running...';
-            $this->toolExecutingLoader->setMessage("{$color}{$preview}{$r}{$time}");
-            $this->core->flushRender();
-        });
-
-        $this->core->flushRender();
+        $this->toolExecutionCard()->start();
     }
 
     public function updateToolExecuting(string $output): void
@@ -347,17 +319,7 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     public function clearToolExecuting(): void
     {
-        if ($this->toolExecutingTimerId !== null) {
-            EventLoop::cancel($this->toolExecutingTimerId);
-            $this->toolExecutingTimerId = null;
-        }
-        if ($this->toolExecutingLoader !== null) {
-            $this->toolExecutingLoader->setFinishedIndicator('');
-            $this->toolExecutingLoader->stop();
-            $this->core->getConversation()->remove($this->toolExecutingLoader);
-            $this->toolExecutingLoader = null;
-        }
-        $this->state->setToolExecutingPreview(null);
+        $this->toolExecutionCard()->stop();
     }
 
     // ── Discovery batch methods (used by TuiConversationRenderer too) ───

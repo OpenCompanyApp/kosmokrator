@@ -47,16 +47,12 @@ final class SubagentDisplayManager
     /**
      * @param  TuiStateStore  $state  Centralized reactive state store
      * @param  ContainerWidget  $conversation  The conversation container to add/remove widgets
-     * @param  \Closure(): ?string  $breathColorProvider  Returns current breath animation color
-     * @param  \Closure(): void  $renderCallback  Triggers a TUI render pass (flushRender)
      * @param  \Closure(): void  $ensureSpinners  Ensures custom spinners are registered
      * @param  ?LoggerInterface  $log  Logger for recording display failures
      */
     public function __construct(
         private readonly TuiStateStore $state,
         private readonly ContainerWidget $conversation,
-        private readonly \Closure $breathColorProvider,
-        private readonly \Closure $renderCallback,
         private readonly \Closure $ensureSpinners,
         private readonly ?LoggerInterface $log = null,
         private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
@@ -144,7 +140,7 @@ final class SubagentDisplayManager
             $this->treeWidget->setId('subagent-tree');
             $container->add($this->treeWidget);
         }
-        ($this->renderCallback)();
+        $this->state->triggerRender();
     }
 
     /**
@@ -250,10 +246,10 @@ final class SubagentDisplayManager
                 $this->loader->setMessage("{$color}{$this->state->getCachedLoaderLabel()}{$r}{$meta}");
             });
 
-            ($this->renderCallback)();
+            $this->state->triggerRender();
         });
 
-        ($this->renderCallback)();
+        $this->state->triggerRender();
     }
 
     private function formatRunningSummary(int $total, int $done): string
@@ -320,7 +316,7 @@ final class SubagentDisplayManager
             $widget = new CollapsibleWidget("{$icon} {$label}{$stats}", $e['result'], 1, 120);
             $widget->addStyleClass('tool-result');
             $container->add($widget);
-            ($this->renderCallback)();
+            $this->state->triggerRender();
 
             return;
         }
@@ -356,7 +352,7 @@ final class SubagentDisplayManager
         $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
         $expand->addStyleClass('tool-result');
         $container->add($expand);
-        ($this->renderCallback)();
+        $this->state->triggerRender();
     }
 
     /**
@@ -435,7 +431,7 @@ final class SubagentDisplayManager
         $dim = Theme::dim();
         $green = Theme::success();
         $red = Theme::error();
-        $amber = ($this->breathColorProvider)() ?? Theme::rgb(200, 150, 60);
+        $amber = $this->state->getBreathColor() ?? Theme::rgb(200, 150, 60);
         $gray = Theme::dim();
         $cyan = Theme::agentDefault();
 

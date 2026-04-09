@@ -20,26 +20,16 @@ final class SubagentDisplayManagerTest extends TestCase
 
     private ContainerWidget $conversation;
 
-    private string $breathColor;
-
-    private bool $renderCalled;
-
     private bool $spinnersEnsured;
 
     private function createManager(): SubagentDisplayManager
     {
         $this->conversation = new ContainerWidget;
-        $this->breathColor = "\033[38;2;112;160;208m";
-        $this->renderCalled = false;
         $this->spinnersEnsured = false;
 
         return new SubagentDisplayManager(
             state: new TuiStateStore,
             conversation: $this->conversation,
-            breathColorProvider: fn (): string => $this->breathColor,
-            renderCallback: function (): void {
-                $this->renderCalled = true;
-            },
             ensureSpinners: function (): void {
                 $this->spinnersEnsured = true;
             },
@@ -74,16 +64,14 @@ final class SubagentDisplayManagerTest extends TestCase
         $manager = $this->createManager();
         $manager->showSpawn([]);
         $this->assertFalse($manager->hasRunningAgents());
-        $this->assertFalse($this->renderCalled);
     }
 
-    public function test_show_spawn_with_entries_triggers_render(): void
+    public function test_show_spawn_with_entries_adds_widget(): void
     {
         $manager = $this->createManager();
         $manager->showSpawn([
             ['args' => ['type' => 'explore', 'task' => 'Search codebase'], 'id' => 'agent-1'],
         ]);
-        $this->assertTrue($this->renderCalled);
         $this->assertFalse($manager->hasRunningAgents()); // spawn doesn't create a loader
     }
 
@@ -92,7 +80,6 @@ final class SubagentDisplayManagerTest extends TestCase
         $manager = $this->createManager();
         $manager->showRunning([]);
         $this->assertFalse($manager->hasRunningAgents());
-        $this->assertFalse($this->renderCalled);
     }
 
     public function test_show_running_with_entries_sets_running(): void
@@ -103,7 +90,6 @@ final class SubagentDisplayManagerTest extends TestCase
         ]);
         $this->assertTrue($manager->hasRunningAgents());
         $this->assertTrue($this->spinnersEnsured);
-        $this->assertTrue($this->renderCalled);
     }
 
     public function test_show_running_multiple_agents_sets_running(): void
@@ -141,7 +127,6 @@ final class SubagentDisplayManagerTest extends TestCase
         $manager = $this->createManager();
         $manager->showBatch([]);
         $this->assertFalse($manager->hasRunningAgents());
-        $this->assertFalse($this->renderCalled);
     }
 
     public function test_show_batch_with_background_only_keeps_loader(): void
@@ -177,7 +162,6 @@ final class SubagentDisplayManagerTest extends TestCase
             ],
         ]);
         $this->assertFalse($manager->hasRunningAgents());
-        $this->assertTrue($this->renderCalled);
     }
 
     public function test_show_batch_with_single_failure_result(): void
@@ -191,7 +175,6 @@ final class SubagentDisplayManagerTest extends TestCase
             ],
         ]);
         $this->assertFalse($manager->hasRunningAgents());
-        $this->assertTrue($this->renderCalled);
     }
 
     public function test_show_batch_with_multiple_results(): void
@@ -215,7 +198,6 @@ final class SubagentDisplayManagerTest extends TestCase
             ],
         ]);
         $this->assertFalse($manager->hasRunningAgents());
-        $this->assertTrue($this->renderCalled);
     }
 
     public function test_show_batch_with_children(): void

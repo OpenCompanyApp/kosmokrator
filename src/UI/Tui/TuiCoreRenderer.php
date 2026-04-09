@@ -7,6 +7,7 @@ namespace Kosmokrator\UI\Tui;
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
 use Athanor\Effect;
+use Athanor\EffectScope;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiAnimation;
@@ -17,6 +18,8 @@ use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Builder\StatusBarBuilder;
+use Kosmokrator\UI\Tui\Builder\TaskBarBuilder;
 use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
@@ -33,7 +36,6 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
-use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -56,11 +58,11 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private HistoryStatusWidget $historyStatus;
 
-    private ProgressBarWidget $statusBar;
+    private StatusBarBuilder $statusBarBuilder;
 
     private ContainerWidget $overlay;
 
-    private TextWidget $taskBar;
+    private TaskBarBuilder $taskBarBuilder;
 
     private ContainerWidget $thinkingBar;
 
@@ -76,8 +78,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private PhaseStateMachine $phaseMachine;
 
-    /** @var list<Effect> */
-    private array $effects = [];
+    private readonly EffectScope $effectScope;
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -165,12 +166,14 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
+        $this->taskBarBuilder->setTaskStore($store);
         $this->state->setHasTasks(! $store->isEmpty());
     }
 
     public function initialize(): void
     {
         $this->tui = new Tui(KosmokratorStyleSheet::create());
+        $this->effectScope = new EffectScope;
 
         $this->session = new ContainerWidget;
         $this->session->setId('session');
@@ -184,20 +187,12 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->historyStatus = new HistoryStatusWidget;
         $this->historyStatus->setId('history-status');
 
-        $this->statusBar = new ProgressBarWidget(200_000, '%message%  %bar%');
-        $this->statusBar->setId('status-bar');
-        $this->statusBar->setBarCharacter('━');
-        $this->statusBar->setEmptyBarCharacter('─');
-        $this->statusBar->setProgressCharacter('━');
-        $this->statusBar->setBarWidth(20);
-        $this->statusBar->setMessage($this->state->getStatusBarMessage());
-        $this->statusBar->start(200_000, 0);
+        $this->statusBarBuilder = StatusBarBuilder::create($this->state);
 
         $this->overlay = new ContainerWidget;
         $this->overlay->setId('overlay');
 
-        $this->taskBar = new TextWidget('');
-        $this->taskBar->setId('task-bar');
+        $this->taskBarBuilder = TaskBarBuilder::create($this->state);
 
         $this->thinkingBar = new ContainerWidget;
         $this->thinkingBar->setId('thinking-bar');
@@ -205,8 +200,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->subagentDisplay = new SubagentDisplayManager(
             state: $this->state,
             conversation: $this->conversation,
-            breathColorProvider: fn () => $this->animationManager->getBreathColor(),
-            renderCallback: fn () => $this->flushRender(),
             ensureSpinners: fn () => $this->animationManager->ensureSpinnersRegistered(),
         );
 
@@ -247,10 +240,10 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->session->add($this->conversation);
         $this->session->add($this->historyStatus);
         $this->session->add($this->overlay);
-        $this->session->add($this->taskBar);
+        $this->session->add($this->taskBarBuilder->getWidget());
         $this->session->add($this->thinkingBar);
         $this->session->add($this->input);
-        $this->session->add($this->statusBar);
+        $this->session->add($this->statusBarBuilder->getWidget());
 
         $this->tui->add($this->session);
         $this->tui->setFocus($this->input);
@@ -269,13 +262,12 @@ final class TuiCoreRenderer implements CoreRendererInterface
         // ── Wire Effects ──────────────────────────────────────────────
 
         // Status bar effect: auto-update when any status-bar signal changes
-        $this->effects[] = new Effect(function (): void {
-            $message = $this->state->getStatusBarMessage();
-            $this->statusBar->setMessage($message);
+        $this->effectScope->effect(function (): void {
+            $this->statusBarBuilder->update();
         });
 
         // History status effect: show/hide based on scroll state
-        $this->effects[] = new Effect(function (): void {
+        $this->effectScope->effect(function (): void {
             $scrollOffset = $this->state->getScrollOffset();
             if ($scrollOffset <= 0) {
                 $this->historyStatus->hide();
@@ -289,19 +281,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
         // Task bar effect: auto-refresh when animation state changes
         // (breathTick fires at ~30fps during thinking, keeping the task bar animated)
-        $this->effects[] = new Effect(function (): void {
+        $this->effectScope->effect(function (): void {
             $this->state->breathColorSignal()->get();
             $this->state->thinkingPhraseSignal()->get();
+            $this->state->hasThinkingLoaderSignal()->get();
             $this->state->hasRunningAgentsSignal()->get();
             $this->state->breathTickSignal()->get();
-            if ($this->taskStore !== null) {
-                $this->refreshTaskBar();
-                $this->flushRender();
-            }
+            $this->taskBarBuilder->update();
         });
 
         // Render trigger effect: flush render when trigger counter changes
-        $this->effects[] = new Effect(function (): void {
+        $this->effectScope->effect(function (): void {
             $this->state->renderTriggerSignal()->get();
             $this->flushRender();
         });
@@ -570,20 +560,8 @@ HELP;
         $this->state->setMaxContext($maxContext);
         $this->state->setModel($model);
 
-        if ($this->statusBar->getMaxSteps() !== $maxContext) {
-            $this->statusBar->start($maxContext, $tokensIn);
-        } else {
-            $this->statusBar->setProgress($tokensIn);
-        }
-
-        $inLabel = Theme::formatTokenCount($tokensIn);
-        $maxLabel = Theme::formatTokenCount($maxContext);
-        $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-        $r = Theme::reset();
-        $sep = Theme::dim()."·{$r}";
-        $dimWhite = Theme::dimWhite();
-        $ctxColor = Theme::contextColor($ratio);
-        $this->state->setStatusDetail("{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}");
+        $this->statusBarBuilder->updateProgress($tokensIn, $maxContext);
+        $this->statusBarBuilder->formatTokenDetail($model, $tokensIn, $maxContext);
         $this->state->triggerRender();
     }
 
@@ -591,27 +569,8 @@ HELP;
     {
         $tokensIn = min($this->state->getTokensIn() ?? 0, $maxContext);
 
-        if ($this->statusBar->getMaxSteps() !== $maxContext) {
-            $this->statusBar->start($maxContext, $tokensIn);
-        } else {
-            $this->statusBar->setProgress($tokensIn);
-        }
-
-        $label = $provider.'/'.$model;
-        $r = Theme::reset();
-        $dimWhite = Theme::dimWhite();
-
-        if ($this->state->getMaxContext() === null) {
-            $this->state->setStatusDetail("{$dimWhite}{$label}{$r}");
-        } else {
-            $inLabel = Theme::formatTokenCount($tokensIn);
-            $maxLabel = Theme::formatTokenCount($maxContext);
-            $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-            $sep = Theme::dim()."·{$r}";
-            $ctxColor = Theme::contextColor($ratio);
-            $this->state->setStatusDetail("{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}");
-        }
-
+        $this->statusBarBuilder->updateProgress($tokensIn, $maxContext);
+        $this->statusBarBuilder->formatRuntimeDetail($provider, $model, $tokensIn, $maxContext);
         $this->state->triggerRender();
     }
 
@@ -627,11 +586,7 @@ HELP;
 
     public function teardown(): void
     {
-        // Dispose all effects
-        foreach ($this->effects as $effect) {
-            $effect->dispose();
-        }
-        $this->effects = [];
+        $this->effectScope->dispose();
 
         if ($this->tui->isRunning()) {
             $this->tui->stop();
@@ -677,45 +632,7 @@ HELP;
 
     public function refreshTaskBar(): void
     {
-        if ($this->taskStore === null || $this->taskStore->isEmpty()) {
-            $this->taskBar->setText('');
-            $this->state->setHasTasks(false);
-
-            return;
-        }
-
-        $this->state->setHasTasks(true);
-
-        $r = Theme::reset();
-        $dim = Theme::dim();
-        $border = Theme::borderTask();
-        $accent = Theme::accent();
-
-        $breathColor = $this->animationManager->getBreathColor();
-        $tree = $this->taskStore->renderAnsiTree($breathColor);
-        $lines = explode("\n", $tree);
-
-        $bar = "  {$border}┌ {$accent}Tasks{$r}";
-        foreach ($lines as $line) {
-            $bar .= "\n  {$border}│{$r} {$line}";
-        }
-
-        $thinkingPhrase = $this->animationManager->getThinkingPhrase();
-        if ($thinkingPhrase !== null && ! $this->taskStore->hasInProgress() && $this->animationManager->getLoader() === null) {
-            $color = $breathColor ?? Theme::rgb(112, 160, 208);
-            $bar .= "\n  {$border}│{$r}";
-            $bar .= "\n  {$border}│{$r} {$color}{$thinkingPhrase}{$r}";
-
-            if (! $this->subagentDisplay->hasRunningAgents()) {
-                $elapsed = (int) (microtime(true) - $this->animationManager->getThinkingStartTime());
-                $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                $bar .= "{$dim} · {$formatted}{$r}";
-            }
-        }
-
-        $bar .= "\n  {$border}└{$r}";
-
-        $this->taskBar->setText($bar);
+        $this->taskBarBuilder->update();
     }
 
     // ── Public helpers for other sub-renderers ──────────────────────────

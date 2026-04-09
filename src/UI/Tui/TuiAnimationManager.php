@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Tui;
 
 use Amp\DeferredCancellation;
-use Athanor\BatchScope;
 use Kosmokrator\Agent\AgentPhase;
-use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Builder\BreathingDriver;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 
@@ -29,9 +27,7 @@ final class TuiAnimationManager
 
     private ?CancellableLoaderWidget $compactingLoader = null;
 
-    private ?string $thinkingTimerId = null;
-
-    private ?string $compactingTimerId = null;
+    private readonly BreathingDriver $breathingDriver;
 
     /** @var string[] */
     private array $activeSpinnerFrames = [];
@@ -95,7 +91,11 @@ final class TuiAnimationManager
         private readonly \Closure $subagentCleanupCallback,
         private readonly \Closure $renderCallback,
         private readonly \Closure $forceRenderCallback,
-    ) {}
+    ) {
+        $this->breathingDriver = new BreathingDriver($state);
+        $this->breathingDriver->setSubagentTickCallback($subagentTickCallback);
+        $this->breathingDriver->setRenderCallback($renderCallback);
+    }
 
     /**
      * Get the current breathing animation color.
@@ -197,42 +197,21 @@ final class TuiAnimationManager
         $this->state->setCompactingStartTime(microtime(true));
         $this->state->setCompactingBreathTick(0);
 
-        // Breathing pulse at 30fps — red color modulation
-        $this->compactingTimerId = EventLoop::repeat(0.033, function () use ($phrase) {
-            BatchScope::run(function () use ($phrase) {
-                $this->state->tickCompactingBreath();
-                $r = Theme::reset();
-
-                // Slow sin wave (~3s full cycle) modulating red tones
-                $t = sin($this->state->getCompactingBreathTick() * 0.07);
-                $rr = (int) (208 + 40 * $t);
-                $rg = (int) (48 + 16 * $t);
-                $rb = (int) (48 + 16 * $t);
-                $color = Theme::rgb($rr, $rg, $rb);
-
-                if ($this->compactingLoader !== null) {
-                    $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
-                    $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                    $dim = "\033[38;5;245m";
-                    $this->compactingLoader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
-                }
-            });
-
-            ($this->renderCallback)();
-        });
+        // Start (or reuse) the breathing driver — it handles compacting ticks too
+        $this->breathingDriver->setCompactingLoader($this->compactingLoader);
+        $this->breathingDriver->start();
+        $this->state->setHasCompactingLoader(true);
 
         ($this->renderCallback)();
     }
 
     /**
-     * Stop the compacting loader and its breathing timer.
+     * Stop the compacting loader.
      */
     public function clearCompacting(): void
     {
-        if ($this->compactingTimerId !== null) {
-            EventLoop::cancel($this->compactingTimerId);
-            $this->compactingTimerId = null;
-        }
+        $this->breathingDriver->setCompactingLoader(null);
+        $this->state->setHasCompactingLoader(false);
 
         if ($this->compactingLoader !== null) {
             $this->compactingLoader->setFinishedIndicator('✓');
@@ -307,6 +286,10 @@ final class TuiAnimationManager
         // Breathing pulse at 30fps — animates loader text OR in-progress task color
         $this->startBreathingAnimation($phrase, 'blue');
 
+        // Pass the loader (or null if tasks exist) to the driver for message updates
+        $this->breathingDriver->setThinkingLoader($this->loader);
+        $this->state->setHasThinkingLoader($this->loader !== null);
+
         ($this->renderCallback)();
     }
 
@@ -318,29 +301,26 @@ final class TuiAnimationManager
      */
     private function enterTools(AgentPhase $previous): void
     {
-        // Switch breathing animation to amber palette (keep loader + phrase intact)
-        if ($this->thinkingTimerId !== null) {
-            EventLoop::cancel($this->thinkingTimerId);
-            $this->thinkingTimerId = null;
-        }
-        $this->startBreathingAnimation($this->state->getThinkingPhrase() ?? '', 'amber');
-
+        // The BreathingDriver reads the phase signal automatically — no restart needed.
+        // The palette shifts from blue to amber based on the current phase.
         ($this->renderCallback)();
     }
 
     /**
      * Enter idle phase: cancel all timers and clean up loaders.
      */
+    /**
+     * Enter idle state: stop breathing driver, clear loaders, reset signals.
+     */
     private function enterIdle(): void
     {
-        if ($this->thinkingTimerId !== null) {
-            EventLoop::cancel($this->thinkingTimerId);
-            $this->thinkingTimerId = null;
-        }
+        $this->breathingDriver->stop();
 
-        if ($this->compactingTimerId !== null) {
-            EventLoop::cancel($this->compactingTimerId);
-            $this->compactingTimerId = null;
+        if ($this->compactingLoader !== null) {
+            $this->compactingLoader->setFinishedIndicator('✓');
+            $this->compactingLoader->stop();
+            $this->thinkingBar->remove($this->compactingLoader);
+            $this->compactingLoader = null;
         }
 
         if ($this->loader !== null) {
@@ -355,59 +335,16 @@ final class TuiAnimationManager
     }
 
     /**
-     * Start a 30fps breathing animation timer with the given color palette.
+     * Start the breathing animation via the BreathingDriver.
      *
      * @param  string  $phrase  Loader message text (empty for tools phase)
      * @param  string  $palette  'blue' for thinking, 'amber' for tools
      */
     private function startBreathingAnimation(string $phrase, string $palette): void
     {
-        if ($this->thinkingTimerId !== null) {
-            EventLoop::cancel($this->thinkingTimerId);
-        }
-
-        $this->thinkingTimerId = EventLoop::repeat(0.033, function () use ($phrase, $palette) {
-            BatchScope::run(function () use ($phrase, $palette) {
-                $this->state->tickBreath();
-                $r = Theme::reset();
-
-                $t = sin($this->state->getBreathTick() * 0.07);
-
-                if ($palette === 'amber') {
-                    // Warm amber tones for tool execution
-                    $cr = (int) (200 + 40 * $t);
-                    $cg = (int) (150 + 30 * $t);
-                    $cb = (int) (60 + 20 * $t);
-                } else {
-                    // Blue tones for thinking
-                    $cr = (int) (112 + 40 * $t);
-                    $cg = (int) (160 + 40 * $t);
-                    $cb = (int) (208 + 47 * $t);
-                }
-                $breathColor = Theme::rgb($cr, $cg, $cb);
-                $this->state->setBreathColor($breathColor);
-
-                if ($this->loader !== null && $phrase !== '') {
-                    $dim = "\033[38;5;245m";
-                    $message = "{$breathColor}{$phrase}{$r}";
-
-                    if (! $this->state->getHasSubagentActivity()) {
-                        $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
-                        $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                        $message .= "{$dim} · {$formatted}{$r}";
-                    }
-
-                    $this->loader->setMessage($message);
-                }
-
-                // Live subagent tree — refresh every ~0.5s (delegated to SubagentDisplayManager)
-                if ($this->state->getBreathTick() % 15 === 0) {
-                    ($this->subagentTickCallback)();
-                }
-            });
-
-            ($this->renderCallback)();
-        });
+        $this->state->setThinkingPhrase($phrase);
+        $this->state->setThinkingStartTime(microtime(true));
+        $this->breathingDriver->start();
     }
 
     private function clearThinkingLoader(): void
@@ -420,5 +357,7 @@ final class TuiAnimationManager
         $this->loader->stop();
         $this->thinkingBar->remove($this->loader);
         $this->loader = null;
+        $this->breathingDriver->setThinkingLoader(null);
+        $this->state->setHasThinkingLoader(false);
     }
 }

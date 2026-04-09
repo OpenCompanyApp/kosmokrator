@@ -155,6 +155,18 @@ final class TuiStateStore
     /** @var Signal<list<array>> */
     private Signal $activeDiscoveryItems;
 
+    /** @var Signal<int> */
+    private Signal $toolExecutingBreathTick;
+
+    /** @var Signal<float> */
+    private Signal $toolExecutingStartTime;
+
+    /** @var Signal<bool> */
+    private Signal $hasThinkingLoader;
+
+    /** @var Signal<bool> */
+    private Signal $hasCompactingLoader;
+
     // ── Modal ──────────────────────────────────────────────────────────
 
     /** @var Signal<bool> */
@@ -240,6 +252,10 @@ final class TuiStateStore
         $this->activeBashWidget = self::nullable();
         $this->toolExecutingPreview = self::nullable();
         $this->activeDiscoveryItems = self::arrayOf();
+        $this->toolExecutingBreathTick = new Signal(0);
+        $this->toolExecutingStartTime = new Signal(0.0);
+        $this->hasThinkingLoader = new Signal(false);
+        $this->hasCompactingLoader = new Signal(false);
 
         // Modal
         $this->activeModal = new Signal(false);
@@ -936,6 +952,74 @@ final class TuiStateStore
     public function activeDiscoveryItemsSignal(): Signal
     {
         return $this->activeDiscoveryItems;
+    }
+
+    // ── Tool execution animation ───────────────────────────────────────
+
+    public function getToolExecutingBreathTick(): int
+    {
+        return $this->toolExecutingBreathTick->get();
+    }
+
+    public function setToolExecutingBreathTick(int $v): void
+    {
+        $this->toolExecutingBreathTick->set($v);
+    }
+
+    public function toolExecutingBreathTickSignal(): Signal
+    {
+        return $this->toolExecutingBreathTick;
+    }
+
+    /** Increment tool executing breath tick by 1. */
+    public function tickToolExecutingBreath(): void
+    {
+        $this->toolExecutingBreathTick->update(fn (int $t): int => $t + 1);
+    }
+
+    public function getToolExecutingStartTime(): float
+    {
+        return $this->toolExecutingStartTime->get();
+    }
+
+    public function setToolExecutingStartTime(float $v): void
+    {
+        $this->toolExecutingStartTime->set($v);
+    }
+
+    public function toolExecutingStartTimeSignal(): Signal
+    {
+        return $this->toolExecutingStartTime;
+    }
+
+    public function getHasThinkingLoader(): bool
+    {
+        return $this->hasThinkingLoader->get();
+    }
+
+    public function setHasThinkingLoader(bool $v): void
+    {
+        $this->hasThinkingLoader->set($v);
+    }
+
+    public function hasThinkingLoaderSignal(): Signal
+    {
+        return $this->hasThinkingLoader;
+    }
+
+    public function getHasCompactingLoader(): bool
+    {
+        return $this->hasCompactingLoader->get();
+    }
+
+    public function setHasCompactingLoader(bool $v): void
+    {
+        $this->hasCompactingLoader->set($v);
+    }
+
+    public function hasCompactingLoaderSignal(): Signal
+    {
+        return $this->hasCompactingLoader;
     }
 
     // ── Modal ──────────────────────────────────────────────────────────

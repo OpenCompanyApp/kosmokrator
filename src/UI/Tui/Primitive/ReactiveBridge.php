@@ -20,12 +20,7 @@ final class ReactiveBridge
 {
     private ?Effect $effect = null;
 
-    private readonly EffectScope $scope;
-
-    public function __construct()
-    {
-        $this->scope = new EffectScope;
-    }
+    private ?EffectScope $scope = null;
 
     /**
      * Start the reactive render loop.
@@ -37,6 +32,8 @@ final class ReactiveBridge
     public function start(Tui $tui, TuiStateStore $store): void
     {
         $this->stop();
+
+        $this->scope = new EffectScope;
 
         $this->effect = $this->scope->effect(function () use ($tui, $store): void {
             // Touch every display signal — auto-tracked as dependencies.

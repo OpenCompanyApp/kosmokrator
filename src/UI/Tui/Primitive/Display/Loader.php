@@ -115,7 +115,7 @@ final class Loader extends ReactiveWidget
         return $this->loader;
     }
 
-    protected function syncFromSignals(): bool
+    public function syncFromSignals(): bool
     {
         if ($this->loader === null) {
             return false;

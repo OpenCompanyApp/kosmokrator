@@ -188,7 +188,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
 
-        $this->historyStatus = new HistoryStatusWidget;
+        $this->historyStatus = HistoryStatusWidget::of($this->state);
         $this->historyStatus->setId('history-status');
 
         // Status bar — declarative composition
@@ -279,28 +279,10 @@ final class TuiCoreRenderer implements CoreRendererInterface
             StatusBar::sync($this->statusBarWidget, $this->state);
         });
 
-        // History status effect: show/hide based on scroll state
-        $this->effectScope->effect(function (): void {
-            $scrollOffset = $this->state->getScrollOffset();
-            if ($scrollOffset <= 0) {
-                $this->historyStatus->hide();
-
-                return;
-            }
-
-            $hasHidden = $this->state->getHasHiddenActivityBelow();
-            $this->historyStatus->show($hasHidden);
-        });
-
         // TaskTree is a ReactiveWidget — auto-syncs via beforeRender().
-
-        // Render trigger effect: no longer needed — ReactiveBridge handles it.
-        // The renderTrigger signal is still touched by ReactiveBridge for
-        // backwards compatibility during migration.
-        $this->effectScope->effect(function (): void {
-            $this->state->renderTriggerSignal()->get();
-            // flushRender is now handled by ReactiveBridge's requestRender()
-        });
+        // HistoryStatusWidget is a ReactiveWidget — auto-syncs via beforeRender().
+        // StatusBar sync is handled by its own Effect above.
+        // ReactiveBridge handles requestRender() for all signal changes.
     }
 
     public function renderIntro(bool $animated): void
@@ -699,7 +681,6 @@ HELP;
         $this->state->setPendingQuestionRecap([]);
         $this->state->setScrollOffset(0);
         $this->state->setHasHiddenActivityBelow(false);
-        $this->historyStatus->hide();
         $this->tui->setScrollOffset(0);
 
         if ($this->toolStateResetCallback !== null) {

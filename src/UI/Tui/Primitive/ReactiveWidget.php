@@ -35,7 +35,10 @@ abstract class ReactiveWidget extends AbstractWidget
     /**
      * Read signals and sync into widget state.
      *
+     * Called internally by {@see beforeRender()} every frame.
+     * Public for testability — tests call this directly.
+     *
      * @return bool True if the widget needs re-rendering (state changed)
      */
-    abstract protected function syncFromSignals(): bool;
+    abstract public function syncFromSignals(): bool;
 }

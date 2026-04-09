@@ -43,7 +43,7 @@ final class ContextMeter extends ReactiveWidget
         return $this;
     }
 
-    protected function syncFromSignals(): bool
+    public function syncFromSignals(): bool
     {
         $new = $this->percentComputed->get();
 

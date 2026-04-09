@@ -42,7 +42,7 @@ final class TaskTree extends ReactiveWidget
         $this->taskStore = $store;
     }
 
-    protected function syncFromSignals(): bool
+    public function syncFromSignals(): bool
     {
         if ($this->taskStore === null || $this->taskStore->isEmpty()) {
             $this->state->setHasTasks(false);

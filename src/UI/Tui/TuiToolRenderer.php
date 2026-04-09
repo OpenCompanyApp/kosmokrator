@@ -327,7 +327,7 @@ final class TuiToolRenderer implements ToolRendererInterface
     public function finalizeDiscoveryBatch(): void
     {
         $this->activeDiscoveryBatch = null;
-        $this->activeDiscoveryItems = [];
+        // Keep activeDiscoveryItems for potential batch resume
         $this->state->setActiveDiscoveryItems([]);
     }
 
@@ -458,9 +458,17 @@ final class TuiToolRenderer implements ToolRendererInterface
     private function appendDiscoveryToolCall(string $name, array $args): void
     {
         if ($this->activeDiscoveryBatch === null) {
-            $this->activeDiscoveryBatch = new DiscoveryBatchWidget;
-            $this->activeDiscoveryBatch->addStyleClass('tool-batch');
-            $this->core->addConversationWidget($this->activeDiscoveryBatch);
+            $lastWidget = $this->core->getLastConversationWidget();
+            if ($lastWidget instanceof DiscoveryBatchWidget) {
+                // Resume — no non-discovery widget was added since finalization
+                $this->activeDiscoveryBatch = $lastWidget;
+            } else {
+                // Genuinely new batch
+                $this->activeDiscoveryItems = [];
+                $this->activeDiscoveryBatch = new DiscoveryBatchWidget;
+                $this->activeDiscoveryBatch->addStyleClass('tool-batch');
+                $this->core->addConversationWidget($this->activeDiscoveryBatch);
+            }
         }
 
         $this->activeDiscoveryItems[] = $this->buildDiscoveryItem($name, $args);

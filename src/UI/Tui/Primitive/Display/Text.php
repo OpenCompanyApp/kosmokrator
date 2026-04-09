@@ -91,7 +91,7 @@ final class Text extends ReactiveWidget
         return $this;
     }
 
-    protected function syncFromSignals(): bool
+    public function syncFromSignals(): bool
     {
         $newText = $this->textSignal->get();
 

@@ -33,7 +33,7 @@ final class Markdown extends ReactiveWidget
         return new self($textSignal);
     }
 
-    protected function syncFromSignals(): bool
+    public function syncFromSignals(): bool
     {
         $new = $this->textSignal->get();
 

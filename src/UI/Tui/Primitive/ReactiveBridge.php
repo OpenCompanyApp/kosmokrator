@@ -56,6 +56,7 @@ final class ReactiveBridge
             $store->hasRunningAgentsSignal()->get();
 
             // Scroll / history
+            $store->scrollOffsetSignal()->get();
             $store->isBrowsingHistoryComputed()->get();
             $store->hasHiddenActivityBelowSignal()->get();
 

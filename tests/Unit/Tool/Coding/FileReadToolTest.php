@@ -123,7 +123,6 @@ class FileReadToolTest extends TestCase
         $this->assertTrue($result->success);
         $this->assertStringContainsString('line1', $result->output);
 
-        $this->tool->resetCache();
         $result2 = $this->tool->execute(['path' => $path, 'offset' => -5]);
         $this->assertTrue($result2->success);
         $this->assertStringContainsString('line1', $result2->output);
@@ -182,7 +181,7 @@ class FileReadToolTest extends TestCase
         $this->assertStringNotContainsString('more lines', $result->output);
     }
 
-    public function test_repeated_unchanged_reads_return_compact_stub(): void
+    public function test_repeated_reads_return_full_content(): void
     {
         $path = $this->createFile("line1\nline2\nline3");
 
@@ -192,48 +191,7 @@ class FileReadToolTest extends TestCase
         $this->assertTrue($first->success);
         $this->assertStringContainsString("1\tline1", $first->output);
         $this->assertTrue($second->success);
-        $this->assertStringContainsString('Unchanged since last file_read', $second->output);
-        $this->assertStringContainsString($path, $second->output);
-    }
-
-    public function test_cache_is_invalidated_when_file_changes(): void
-    {
-        $path = $this->createFile("line1\nline2");
-
-        $this->tool->execute(['path' => $path]);
-        sleep(1);
-        file_put_contents($path, "line1\nline2\nline3");
-
-        $result = $this->tool->execute(['path' => $path]);
-
-        $this->assertTrue($result->success);
-        $this->assertStringContainsString('line3', $result->output);
-        $this->assertStringNotContainsString('Unchanged since last file_read', $result->output);
-    }
-
-    public function test_cache_key_respects_offset_and_limit(): void
-    {
-        $path = $this->createFile(implode("\n", array_map(fn ($i) => "line{$i}", range(1, 10))));
-
-        $this->tool->execute(['path' => $path, 'offset' => 1, 'limit' => 2]);
-        $result = $this->tool->execute(['path' => $path, 'offset' => 3, 'limit' => 2]);
-
-        $this->assertTrue($result->success);
-        $this->assertStringContainsString('line3', $result->output);
-        $this->assertStringNotContainsString('Unchanged since last file_read', $result->output);
-    }
-
-    public function test_reset_cache_clears_unchanged_read_state(): void
-    {
-        $path = $this->createFile("line1\nline2");
-
-        $this->tool->execute(['path' => $path]);
-        $this->tool->resetCache();
-        $result = $this->tool->execute(['path' => $path]);
-
-        $this->assertTrue($result->success);
-        $this->assertStringContainsString('line1', $result->output);
-        $this->assertStringNotContainsString('Unchanged since last file_read', $result->output);
+        $this->assertStringContainsString("1\tline1", $second->output);
     }
 
     private function createFile(string $content, string $name = 'test.txt'): string

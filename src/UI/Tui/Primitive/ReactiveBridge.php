@@ -75,7 +75,8 @@ final class ReactiveBridge
      */
     public function stop(): void
     {
-        $this->scope->dispose();
+        $this->scope?->dispose();
+        $this->scope = null;
         $this->effect = null;
     }
 }

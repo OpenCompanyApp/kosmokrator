@@ -90,9 +90,15 @@ class RetryableLlmClient implements LlmClientInterface
                 }
 
                 $delay = $this->calculateDelay($e, $attempt);
-                $this->log->warning("LLM stream failed (attempt {$attempt}), retrying in {$delay}s", [
+                $totalWait = ($totalWait ?? 0.0) + $delay;
+                $category = $this->classifyError($e);
+                $level = $attempt >= 5 ? 'error' : 'warning';
+                $this->log->{$level}("LLM stream {$category} (attempt {$attempt}), retrying in {$delay}s", [
                     'error' => $e->getMessage(),
                     'exception' => get_class($e),
+                    'provider' => $this->inner->getProvider(),
+                    'model' => $this->inner->getModel(),
+                    'total_wait' => round($totalWait, 1),
                 ]);
 
                 if ($this->onRetry !== null) {
@@ -134,9 +140,15 @@ class RetryableLlmClient implements LlmClientInterface
                 }
 
                 $delay = $this->calculateDelay($e, $attempt);
-                $this->log->warning("LLM request failed (attempt {$attempt}), retrying in {$delay}s", [
+                $totalWait = ($totalWait ?? 0.0) + $delay;
+                $category = $this->classifyError($e);
+                $level = $attempt >= 5 ? 'error' : 'warning';
+                $this->log->{$level}("LLM request {$category} (attempt {$attempt}), retrying in {$delay}s", [
                     'error' => $e->getMessage(),
                     'exception' => get_class($e),
+                    'provider' => $this->inner->getProvider(),
+                    'model' => $this->inner->getModel(),
+                    'total_wait' => round($totalWait, 1),
                 ]);
 
                 if ($this->onRetry !== null) {
@@ -189,6 +201,28 @@ class RetryableLlmClient implements LlmClientInterface
         }
 
         return false;
+    }
+
+    /** Classify the error into a short human-readable category for log messages. */
+    private function classifyError(\Throwable $e): string
+    {
+        if ($e instanceof PrismRateLimitedException || ($e instanceof RetryableHttpException && $e->httpStatus === 429)) {
+            return 'rate-limited';
+        }
+        if ($e instanceof PrismProviderOverloadedException) {
+            return 'provider overloaded';
+        }
+        if ($e instanceof PrismServerException || ($e instanceof RetryableHttpException && $e->httpStatus >= 500)) {
+            return 'server error';
+        }
+        if ($e instanceof HttpException) {
+            return 'network error';
+        }
+        if ($e instanceof ProviderError) {
+            return $e->retryable ? 'provider error (retryable)' : 'provider error';
+        }
+
+        return 'failed';
     }
 
     /**

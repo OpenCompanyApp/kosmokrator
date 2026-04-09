@@ -327,6 +327,7 @@ final class TuiToolRenderer implements ToolRendererInterface
     public function finalizeDiscoveryBatch(): void
     {
         $this->activeDiscoveryBatch = null;
+        $this->activeDiscoveryItems = [];
         $this->state->setActiveDiscoveryItems([]);
     }
 

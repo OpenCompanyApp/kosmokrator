@@ -1,0 +1,84 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kosmokrator\UI\Tui\Primitive;
+
+use Athanor\Effect;
+use Athanor\EffectScope;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
+use Symfony\Component\Tui\Tui;
+
+/**
+ * Single Effect that replaces all manual flushRender() / triggerRender() calls.
+ *
+ * Touches every display signal inside an Effect callback. When any tracked
+ * signal changes, the Effect re-runs and calls requestRender() to schedule
+ * a new frame. One Effect replaces 17+ scattered render trigger sites.
+ */
+final class ReactiveBridge
+{
+    private ?Effect $effect = null;
+
+    private readonly EffectScope $scope;
+
+    public function __construct()
+    {
+        $this->scope = new EffectScope;
+    }
+
+    /**
+     * Start the reactive render loop.
+     *
+     * Reading each signal inside the Effect callback auto-tracks it.
+     * When any tracked signal changes, the Effect re-runs and calls
+     * requestRender() to schedule a new frame.
+     */
+    public function start(Tui $tui, TuiStateStore $store): void
+    {
+        $this->stop();
+
+        $this->effect = $this->scope->effect(function () use ($tui, $store): void {
+            // Touch every display signal — auto-tracked as dependencies.
+            // Any future set() on any of these re-runs this Effect.
+
+            // Status bar
+            $store->statusBarMessageComputed()->get();
+
+            // Animation / loaders
+            $store->breathColorSignal()->get();
+            $store->breathTickSignal()->get();
+            $store->hasThinkingLoaderSignal()->get();
+            $store->hasCompactingLoaderSignal()->get();
+            $store->thinkingPhraseSignal()->get();
+
+            // Tasks
+            $store->hasTasksSignal()->get();
+
+            // Subagents
+            $store->hasRunningAgentsSignal()->get();
+
+            // Scroll / history
+            $store->isBrowsingHistoryComputed()->get();
+            $store->hasHiddenActivityBelowSignal()->get();
+
+            // Modal
+            $store->activeModalSignal()->get();
+
+            // Tool execution
+            $store->toolExecutingPreviewSignal()->get();
+            $store->hasSubagentActivitySignal()->get();
+
+            $tui->requestRender();
+        });
+    }
+
+    /**
+     * Stop the reactive render loop.
+     */
+    public function stop(): void
+    {
+        $this->scope->dispose();
+        $this->effect = null;
+    }
+}

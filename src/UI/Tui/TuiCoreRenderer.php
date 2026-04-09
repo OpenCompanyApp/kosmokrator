@@ -20,8 +20,11 @@ use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Builder\StatusBarBuilder;
 use Kosmokrator\UI\Tui\Builder\TaskBarBuilder;
+use Kosmokrator\UI\Tui\Composition\StatusBar;
+use Kosmokrator\UI\Tui\Composition\TaskTree;
 use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
+use Kosmokrator\UI\Tui\Primitive\ReactiveBridge;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
@@ -36,6 +39,7 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
+use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -60,11 +64,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private StatusBarBuilder $statusBarBuilder;
 
+    private ProgressBarWidget $statusBarWidget;
+
     private ContainerWidget $overlay;
 
     private TaskBarBuilder $taskBarBuilder;
 
+    private ?TaskTree $taskTree = null;
+
     private ContainerWidget $thinkingBar;
+
+    private ?ReactiveBridge $reactiveBridge = null;
 
     private EditorWidget $input;
 
@@ -166,6 +176,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
+        $this->taskTree?->setTaskStore($store);
         $this->taskBarBuilder->setTaskStore($store);
         $this->state->setHasTasks(! $store->isEmpty());
     }
@@ -187,11 +198,19 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->historyStatus = new HistoryStatusWidget;
         $this->historyStatus->setId('history-status');
 
+        // Status bar — new composition (replaces StatusBarBuilder)
+        $this->statusBarWidget = StatusBar::createProgressBar($this->state);
+
+        // Legacy status bar builder — kept for parallel operation during migration
         $this->statusBarBuilder = StatusBarBuilder::create($this->state);
 
         $this->overlay = new ContainerWidget;
         $this->overlay->setId('overlay');
 
+        // Task tree — new composition (replaces TaskBarBuilder)
+        $this->taskTree = TaskTree::of($this->taskStore, $this->state);
+
+        // Legacy task bar builder — kept for parallel operation during migration
         $this->taskBarBuilder = TaskBarBuilder::create($this->state);
 
         $this->thinkingBar = new ContainerWidget;
@@ -237,13 +256,14 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
         $this->bindInputHandlers();
 
+        // ── Layout: use task tree widget instead of task bar builder ───
         $this->session->add($this->conversation);
         $this->session->add($this->historyStatus);
         $this->session->add($this->overlay);
-        $this->session->add($this->taskBarBuilder->getWidget());
+        $this->session->add($this->taskTree);
         $this->session->add($this->thinkingBar);
         $this->session->add($this->input);
-        $this->session->add($this->statusBarBuilder->getWidget());
+        $this->session->add($this->statusBarWidget);
 
         $this->tui->add($this->session);
         $this->tui->setFocus($this->input);
@@ -259,11 +279,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
             $this->animationManager->setPhase($agentPhase, $this->state->getRequestCancellation());
         });
 
-        // ── Wire Effects ──────────────────────────────────────────────
+        // ── Wire ReactiveBridge ───────────────────────────────────────
+        // Single Effect that replaces the 4 separate Effects below.
+        // Touches all display signals → auto-tracks → requestRender() on change.
+        $this->reactiveBridge = new ReactiveBridge;
+        $this->reactiveBridge->start($this->tui, $this->state);
 
-        // Status bar effect: auto-update when any status-bar signal changes
+        // ── Remaining Effects (will be removed after full migration) ──
+
+        // Status bar sync: updates the ProgressBarWidget when status signals change
         $this->effectScope->effect(function (): void {
-            $this->statusBarBuilder->update();
+            StatusBar::sync($this->statusBarWidget, $this->state);
         });
 
         // History status effect: show/hide based on scroll state
@@ -279,21 +305,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
             $this->historyStatus->show($hasHidden);
         });
 
-        // Task bar effect: auto-refresh when animation state changes
-        // (breathTick fires at ~30fps during thinking, keeping the task bar animated)
-        $this->effectScope->effect(function (): void {
-            $this->state->breathColorSignal()->get();
-            $this->state->thinkingPhraseSignal()->get();
-            $this->state->hasThinkingLoaderSignal()->get();
-            $this->state->hasRunningAgentsSignal()->get();
-            $this->state->breathTickSignal()->get();
-            $this->taskBarBuilder->update();
-        });
+        // Task tree sync: TaskTree is a ReactiveWidget — it self-syncs via
+        // beforeRender() → syncFromSignals(). But it still needs the render
+        // trigger to fire. The ReactiveBridge handles this now.
+        // Legacy: $this->taskBarBuilder->update() — no longer needed.
 
-        // Render trigger effect: flush render when trigger counter changes
+        // Render trigger effect: no longer needed — ReactiveBridge handles it.
+        // The renderTrigger signal is still touched by ReactiveBridge for
+        // backwards compatibility during migration.
         $this->effectScope->effect(function (): void {
             $this->state->renderTriggerSignal()->get();
-            $this->flushRender();
+            // flushRender is now handled by ReactiveBridge's requestRender()
         });
     }
 
@@ -560,8 +582,8 @@ HELP;
         $this->state->setMaxContext($maxContext);
         $this->state->setModel($model);
 
-        $this->statusBarBuilder->updateProgress($tokensIn, $maxContext);
-        $this->statusBarBuilder->formatTokenDetail($model, $tokensIn, $maxContext);
+        StatusBar::formatTokenDetail($this->state, $model, $tokensIn, $maxContext);
+        StatusBar::sync($this->statusBarWidget, $this->state);
         $this->state->triggerRender();
     }
 
@@ -569,8 +591,8 @@ HELP;
     {
         $tokensIn = min($this->state->getTokensIn() ?? 0, $maxContext);
 
-        $this->statusBarBuilder->updateProgress($tokensIn, $maxContext);
-        $this->statusBarBuilder->formatRuntimeDetail($provider, $model, $tokensIn, $maxContext);
+        StatusBar::formatRuntimeDetail($this->state, $provider, $model, $tokensIn, $maxContext);
+        StatusBar::sync($this->statusBarWidget, $this->state);
         $this->state->triggerRender();
     }
 
@@ -587,6 +609,7 @@ HELP;
     public function teardown(): void
     {
         $this->effectScope->dispose();
+        $this->reactiveBridge?->stop();
 
         if ($this->tui->isRunning()) {
             $this->tui->stop();
@@ -632,7 +655,9 @@ HELP;
 
     public function refreshTaskBar(): void
     {
-        $this->taskBarBuilder->update();
+        // TaskTree is a ReactiveWidget — it auto-syncs via beforeRender().
+        // Still refresh for immediate imperative callers during migration.
+        $this->taskTree?->invalidate();
     }
 
     // ── Public helpers for other sub-renderers ──────────────────────────
@@ -653,6 +678,13 @@ HELP;
     {
         $this->conversation->add($widget);
         $this->state->triggerRender();
+    }
+
+    public function getLastConversationWidget(): ?AbstractWidget
+    {
+        $children = $this->conversation->all();
+
+        return $children === [] ? null : $children[array_key_last($children)];
     }
 
     public function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void

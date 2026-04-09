@@ -6,8 +6,6 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
-use Athanor\Effect;
-use Athanor\EffectScope;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiAnimation;
@@ -18,6 +16,7 @@ use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Composition\ReactiveStatusBar;
 use Kosmokrator\UI\Tui\Composition\StatusBar;
 use Kosmokrator\UI\Tui\Composition\TaskTree;
 use Kosmokrator\UI\Tui\Phase\Phase;
@@ -37,7 +36,6 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
-use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -60,7 +58,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private HistoryStatusWidget $historyStatus;
 
-    private ProgressBarWidget $statusBarWidget;
+    private ReactiveStatusBar $statusBarWidget;
 
     private ContainerWidget $overlay;
 
@@ -81,8 +79,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
     private readonly TuiStateStore $state;
 
     private PhaseStateMachine $phaseMachine;
-
-    private readonly EffectScope $effectScope;
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -177,7 +173,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function initialize(): void
     {
         $this->tui = new Tui(KosmokratorStyleSheet::create());
-        $this->effectScope = new EffectScope;
 
         $this->session = new ContainerWidget;
         $this->session->setId('session');
@@ -191,8 +186,8 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->historyStatus = HistoryStatusWidget::of($this->state);
         $this->historyStatus->setId('history-status');
 
-        // Status bar — declarative composition
-        $this->statusBarWidget = StatusBar::createProgressBar($this->state);
+        // Status bar — ReactiveWidget that self-syncs via beforeRender()
+        $this->statusBarWidget = ReactiveStatusBar::create($this->state);
 
         $this->overlay = new ContainerWidget;
         $this->overlay->setId('overlay');
@@ -272,16 +267,10 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->reactiveBridge = new ReactiveBridge;
         $this->reactiveBridge->start($this->tui, $this->state);
 
-        // ── Remaining Effects (will be removed after full migration) ──
-
-        // Status bar sync: updates the ProgressBarWidget when status signals change
-        $this->effectScope->effect(function (): void {
-            StatusBar::sync($this->statusBarWidget, $this->state);
-        });
-
-        // TaskTree is a ReactiveWidget — auto-syncs via beforeRender().
-        // HistoryStatusWidget is a ReactiveWidget — auto-syncs via beforeRender().
-        // StatusBar sync is handled by its own Effect above.
+        // All reactive widgets self-sync via beforeRender():
+        // - TaskTree: breathColor + taskStore state
+        // - HistoryStatusWidget: scrollOffset + hasHiddenActivityBelow
+        // - ReactiveStatusBar: statusBarMessage + tokensIn + maxContext
         // ReactiveBridge handles requestRender() for all signal changes.
     }
 
@@ -505,7 +494,6 @@ HELP;
         $current = $activeResponse->getText();
         $activeResponse->setText($current.$text);
         $this->markHiddenConversationActivity();
-        $this->state->triggerRender();
     }
 
     public function streamComplete(): void
@@ -549,8 +537,6 @@ HELP;
         $this->state->setModel($model);
 
         StatusBar::formatTokenDetail($this->state, $model, $tokensIn, $maxContext);
-        StatusBar::sync($this->statusBarWidget, $this->state);
-        $this->state->triggerRender();
     }
 
     public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void
@@ -558,8 +544,6 @@ HELP;
         $tokensIn = min($this->state->getTokensIn() ?? 0, $maxContext);
 
         StatusBar::formatRuntimeDetail($this->state, $provider, $model, $tokensIn, $maxContext);
-        StatusBar::sync($this->statusBarWidget, $this->state);
-        $this->state->triggerRender();
     }
 
     public function consumeQueuedMessage(): ?string
@@ -574,7 +558,6 @@ HELP;
 
     public function teardown(): void
     {
-        $this->effectScope->dispose();
         $this->reactiveBridge?->stop();
 
         if ($this->tui->isRunning()) {

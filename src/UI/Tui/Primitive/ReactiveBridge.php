@@ -39,8 +39,10 @@ final class ReactiveBridge
             // Touch every display signal — auto-tracked as dependencies.
             // Any future set() on any of these re-runs this Effect.
 
-            // Status bar
+            // Status bar (message is computed from modeLabel + permissionLabel + statusDetail)
             $store->statusBarMessageComputed()->get();
+            $store->tokensInSignal()->get();
+            $store->maxContextSignal()->get();
 
             // Animation / loaders
             $store->breathColorSignal()->get();
@@ -66,6 +68,9 @@ final class ReactiveBridge
             // Tool execution
             $store->toolExecutingPreviewSignal()->get();
             $store->hasSubagentActivitySignal()->get();
+
+            // Manual render triggers (addConversationWidget, etc.)
+            $store->renderTriggerSignal()->get();
 
             $tui->requestRender();
         });

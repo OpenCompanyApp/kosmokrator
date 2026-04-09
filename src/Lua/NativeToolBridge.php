@@ -47,6 +47,11 @@ class NativeToolBridge
             throw new \RuntimeException("Unknown native tool: {$toolName}. Use lua_list_docs to discover available tools.");
         }
 
+        // Skip file_read cache when called from Lua — Lua scripts need fresh data
+        if ($toolName === 'file_read' && ! isset($args['fresh'])) {
+            $args['fresh'] = true;
+        }
+
         $result = $tool->execute($args);
 
         if (! $result->success) {
@@ -63,6 +68,8 @@ class NativeToolBridge
                 $table[$key] = $value;
             }
         }
+
+        // Debug: log the return type to verify PHP side is correct
 
         return $table;
     }

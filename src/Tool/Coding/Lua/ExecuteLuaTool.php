@@ -86,8 +86,6 @@ class ExecuteLuaTool extends AbstractTool
             );
         }
 
-        // Native tool bridge (app.tools.*) — lazy to avoid circular deps
-        $nativeBridge = null;
         if (self::$nativeBridgeResolver !== null) {
             $nativeBridge = (self::$nativeBridgeResolver)();
         }

@@ -48,6 +48,7 @@ class FileReadTool extends AbstractTool
             'path' => ['type' => 'string', 'description' => 'Absolute or relative path to the file to read'],
             'offset' => ['type' => 'integer', 'description' => 'Line number to start reading from (1-based). Optional.'],
             'limit' => ['type' => 'integer', 'description' => 'Maximum number of lines to read. Optional, defaults to 2000.'],
+            'fresh' => ['type' => 'boolean', 'description' => 'Skip the read cache and fetch fresh content. Use when content may have changed since last read.'],
         ];
     }
 
@@ -57,7 +58,7 @@ class FileReadTool extends AbstractTool
     }
 
     /**
-     * @param  array{path: string, offset?: int, limit?: int}  $args  File path and optional line range
+     * @param  array{path: string, offset?: int, limit?: int, fresh?: bool}  $args  File path and optional line range
      * @return ToolResult File contents with line numbers, or cached "unchanged" notice
      */
     protected function handle(array $args): ToolResult
@@ -65,6 +66,7 @@ class FileReadTool extends AbstractTool
         $path = $args['path'] ?? '';
         $offset = max(1, (int) ($args['offset'] ?? 1));
         $limit = min(5000, max(1, (int) ($args['limit'] ?? 2000)));
+        $fresh = (bool) ($args['fresh'] ?? false);
 
         // Validate path stays within project root
         if ($this->projectRoot !== null) {
@@ -88,7 +90,7 @@ class FileReadTool extends AbstractTool
         }
 
         $cacheKey = $this->buildCacheKey($path, $offset, $limit);
-        if (isset($this->readCache[$cacheKey])) {
+        if (! $fresh && isset($this->readCache[$cacheKey])) {
             return ToolResult::success($this->formatUnchangedResult($path, $offset, $limit));
         }
 

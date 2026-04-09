@@ -8,24 +8,19 @@ use Athanor\BatchScope;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Revolt\EventLoop;
-use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 
 /**
  * Single 33ms breathing animation driver.
  *
- * Consolidates thinking and compacting animation timers into one driver.
- * The driver ticks active breath counters, computes palette colors, updates
- * loader widgets, and triggers renders — all in a single timer callback.
+ * Signal-only: ticks breath counters and computes palette colors.
+ * The ThinkingLoaderWidget and CompactingLoaderWidget reactive widgets
+ * read these signals and update their CancellableLoaderWidget instances.
  *
- * Subagent and tool-executing timers remain independent (different cadences).
+ * No longer manages CancellableLoaderWidget instances directly.
  */
 final class BreathingDriver
 {
     private ?string $timerId = null;
-
-    private ?CancellableLoaderWidget $thinkingLoader = null;
-
-    private ?CancellableLoaderWidget $compactingLoader = null;
 
     /** @var \Closure(): void Called every ~0.5s for subagent tree refresh */
     private \Closure $subagentTickCallback;
@@ -51,16 +46,6 @@ final class BreathingDriver
     public function setRenderCallback(\Closure $callback): void
     {
         $this->renderCallback = $callback;
-    }
-
-    public function setThinkingLoader(?CancellableLoaderWidget $loader): void
-    {
-        $this->thinkingLoader = $loader;
-    }
-
-    public function setCompactingLoader(?CancellableLoaderWidget $loader): void
-    {
-        $this->compactingLoader = $loader;
     }
 
     /**
@@ -98,10 +83,8 @@ final class BreathingDriver
      *
      * Visible for testing.
      */
-    public function tick(
-        ?CancellableLoaderWidget $thinkingLoader = null,
-        ?CancellableLoaderWidget $compactingLoader = null,
-    ): void {
+    public function tick(): void
+    {
         $phase = $this->state->getPhase();
         $hasThinking = ($phase === 'thinking' || $phase === 'tools');
         $hasCompacting = $phase === 'compacting';
@@ -111,14 +94,12 @@ final class BreathingDriver
         }
 
         BatchScope::run(function () use ($hasThinking, $hasCompacting): void {
-            $r = Theme::reset();
-
             if ($hasThinking) {
-                $this->tickThinking($r, $this->thinkingLoader);
+                $this->tickThinking();
             }
 
             if ($hasCompacting) {
-                $this->tickCompacting($r, $this->compactingLoader);
+                $this->tickCompacting();
             }
         });
 
@@ -127,7 +108,7 @@ final class BreathingDriver
         }
     }
 
-    private function tickThinking(string $r, ?CancellableLoaderWidget $loader): void
+    private function tickThinking(): void
     {
         $this->state->tickBreath();
 
@@ -148,47 +129,14 @@ final class BreathingDriver
         $breathColor = Theme::rgb($cr, $cg, $cb);
         $this->state->setBreathColor($breathColor);
 
-        if ($loader !== null) {
-            $phrase = $this->state->getThinkingPhrase();
-            if ($phrase !== null) {
-                $dim = "\033[38;5;245m";
-                $message = "{$breathColor}{$phrase}{$r}";
-
-                if (! $this->state->getHasSubagentActivity()) {
-                    $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
-                    $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                    $message .= "{$dim} · {$formatted}{$r}";
-                }
-
-                $loader->setMessage($message);
-            }
-        }
-
         // Live subagent tree — refresh every ~0.5s
         if ($tick % 15 === 0 && isset($this->subagentTickCallback)) {
             ($this->subagentTickCallback)();
         }
     }
 
-    private function tickCompacting(string $r, ?CancellableLoaderWidget $loader): void
+    private function tickCompacting(): void
     {
         $this->state->tickCompactingBreath();
-
-        $tick = $this->state->getCompactingBreathTick();
-        $t = sin($tick * 0.07);
-        $cr = (int) (208 + 40 * $t);
-        $cg = (int) (48 + 16 * $t);
-        $cb = (int) (48 + 16 * $t);
-        $color = Theme::rgb($cr, $cg, $cb);
-
-        if ($loader !== null) {
-            $phrase = $this->state->getThinkingPhrase() ?? '';
-            if ($phrase !== '') {
-                $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
-                $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                $dim = "\033[38;5;245m";
-                $loader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
-            }
-        }
     }
 }

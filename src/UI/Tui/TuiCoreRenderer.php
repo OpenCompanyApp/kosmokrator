@@ -16,9 +16,11 @@ use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Composition\CompactingLoaderWidget;
 use Kosmokrator\UI\Tui\Composition\ReactiveStatusBar;
 use Kosmokrator\UI\Tui\Composition\StatusBar;
 use Kosmokrator\UI\Tui\Composition\TaskTree;
+use Kosmokrator\UI\Tui\Composition\ThinkingLoaderWidget;
 use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
 use Kosmokrator\UI\Tui\Primitive\ReactiveBridge;
@@ -64,7 +66,9 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?TaskTree $taskTree = null;
 
-    private ContainerWidget $thinkingBar;
+    private ThinkingLoaderWidget $thinkingLoader;
+
+    private CompactingLoaderWidget $compactingLoader;
 
     private ?ReactiveBridge $reactiveBridge = null;
 
@@ -195,18 +199,20 @@ final class TuiCoreRenderer implements CoreRendererInterface
         // Task tree — ReactiveWidget (self-syncs via beforeRender)
         $this->taskTree = TaskTree::of($this->taskStore, $this->state);
 
-        $this->thinkingBar = new ContainerWidget;
-        $this->thinkingBar->setId('thinking-bar');
+        // Loaders — ReactiveWidgets that show/hide based on signals
+        $this->thinkingLoader = new ThinkingLoaderWidget($this->state);
+        $this->compactingLoader = new CompactingLoaderWidget($this->state);
 
         $this->subagentDisplay = new SubagentDisplayManager(
             state: $this->state,
             conversation: $this->conversation,
-            ensureSpinners: fn () => $this->animationManager->ensureSpinnersRegistered(),
+            ensureSpinners: fn () => ThinkingLoaderWidget::registerSpinners(),
         );
 
+        // Animation manager — signal-only. Sets phase/breathColor/thinkingPhrase.
+        // No longer manages CancellableLoaderWidget instances directly.
         $this->animationManager = new TuiAnimationManager(
             state: $this->state,
-            thinkingBar: $this->thinkingBar,
             subagentTickCallback: fn () => $this->subagentDisplay->tickTreeRefresh(),
             subagentCleanupCallback: fn () => $this->subagentDisplay->cleanup(),
             renderCallback: fn () => $this->flushRender(),
@@ -243,7 +249,8 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->session->add($this->historyStatus);
         $this->session->add($this->overlay);
         $this->session->add($this->taskTree);
-        $this->session->add($this->thinkingBar);
+        $this->session->add($this->thinkingLoader);
+        $this->session->add($this->compactingLoader);
         $this->session->add($this->input);
         $this->session->add($this->statusBarWidget);
 

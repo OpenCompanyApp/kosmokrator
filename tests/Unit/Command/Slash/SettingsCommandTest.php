@@ -11,12 +11,15 @@ use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Command\Slash\SettingsCommand;
 use Kosmokrator\Command\SlashCommandContext;
+use Kosmokrator\Integration\IntegrationManager;
+use Kosmokrator\Integration\YamlCredentialResolver;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
@@ -24,6 +27,9 @@ use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\UI\UIManager;
+use OpenCompany\IntegrationCore\Contracts\Tool;
+use OpenCompany\IntegrationCore\Contracts\ToolProvider;
+use OpenCompany\IntegrationCore\Support\ToolProviderRegistry;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
@@ -88,7 +94,7 @@ final class SettingsCommandTest extends TestCase
             ],
         ]);
 
-        $settingsRepository = $this->createMock(SettingsRepository::class);
+        $settingsRepository = $this->createStub(SettingsRepository::class);
         $settingsRepository->method('get')->willReturnMap([
             ['global', 'provider.z.api_key', 'z-key'],
             ['global', 'provider.openai.api_key', 'openai-key'],
@@ -132,15 +138,15 @@ final class SettingsCommandTest extends TestCase
             ->method('refreshRuntimeSelection')
             ->with('openai', 'gpt-5.4', 400000);
 
-        $agentLoop = $this->createMock(AgentLoop::class);
+        $agentLoop = $this->createStub(AgentLoop::class);
         $agentLoop->method('getMode')->willReturn(AgentMode::Edit);
         $agentLoop->method('getCompactor')->willReturn(null);
         $agentLoop->method('getPruner')->willReturn(null);
 
-        $permissions = $this->createMock(PermissionEvaluator::class);
+        $permissions = $this->createStub(PermissionEvaluator::class);
         $permissions->method('getPermissionMode')->willReturn(PermissionMode::Guardian);
 
-        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager = $this->createStub(SessionManager::class);
         $sessionManager->method('getProject')->willReturn($this->projectDir);
 
         $llm = new class implements LlmClientInterface
@@ -245,6 +251,473 @@ final class SettingsCommandTest extends TestCase
         $this->assertFileExists($this->projectDir.'/.kosmokrator/config.yaml');
     }
 
+    public function test_settings_view_includes_integration_credentials_and_project_sources(): void
+    {
+        $config = new Repository([]);
+        $schema = new SettingsSchema;
+        $settingsManager = new SettingsManager(
+            config: $config,
+            schema: $schema,
+            store: new YamlConfigStore,
+            baseConfigPath: dirname(__DIR__, 4).'/config',
+        );
+        $settingsManager->setProjectRoot($this->projectDir);
+        $settingsManager->setRaw('integrations.github.enabled', true, 'project');
+        $settingsManager->setRaw('integrations.github.permissions.read', 'deny', 'project');
+
+        $settingsRepository = $this->memorySettingsRepository([
+            'global' => [
+                'integration.github.accounts.default.api_key' => 'ghp_secret_1234567890',
+            ],
+        ]);
+
+        $registry = new ToolProviderRegistry;
+        $registry->register($this->fakeIntegrationProvider());
+
+        $container = $this->baseSettingsContainer($schema, $settingsManager, $settingsRepository, $registry);
+        $providerCatalog = $this->providerCatalog($config, $settingsRepository);
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->once())
+            ->method('showSettings')
+            ->with($this->callback(function (array $view): bool {
+                $categories = $view['categories'] ?? [];
+                $integrations = null;
+                foreach ($categories as $category) {
+                    if (($category['id'] ?? '') === 'integrations') {
+                        $integrations = $category;
+                        break;
+                    }
+                }
+
+                $this->assertNotNull($integrations);
+                $fields = $integrations['fields'] ?? [];
+
+                $fieldById = [];
+                foreach ($fields as $field) {
+                    $fieldById[$field['id']] = $field;
+                }
+
+                $this->assertArrayHasKey('integration.github._summary', $fieldById);
+                $this->assertArrayHasKey('integration.github.enabled', $fieldById);
+                $this->assertArrayHasKey('integration.github.permissions.read', $fieldById);
+                $this->assertArrayHasKey('integration.github.credential.api_key', $fieldById);
+                $this->assertArrayHasKey('integration.github.credential_action', $fieldById);
+
+                $this->assertSame('project', $fieldById['integration.github.enabled']['source']);
+                $this->assertSame('project', $fieldById['integration.github.permissions.read']['source']);
+                $this->assertSame('ghp_…7890', $fieldById['integration.github.credential.api_key']['value']);
+
+                $integrationMeta = $view['integrations_by_id']['github'] ?? null;
+                $this->assertIsArray($integrationMeta);
+                $this->assertTrue($integrationMeta['configured']);
+                $this->assertSame('allow', $integrationMeta['write_permission']);
+
+                return true;
+            }))
+            ->willReturn([]);
+
+        $ctx = $this->baseContext(
+            ui: $ui,
+            config: $config,
+            settings: $settingsRepository,
+            providers: $providerCatalog,
+            models: $this->createStub(ModelCatalog::class),
+        );
+
+        $command = new SettingsCommand($container);
+        $command->execute('', $ctx);
+    }
+
+    public function test_execute_stores_and_clears_integration_credentials(): void
+    {
+        $config = new Repository([]);
+        $schema = new SettingsSchema;
+        $settingsManager = new SettingsManager(
+            config: $config,
+            schema: $schema,
+            store: new YamlConfigStore,
+            baseConfigPath: dirname(__DIR__, 4).'/config',
+        );
+        $settingsManager->setProjectRoot($this->projectDir);
+
+        $settingsRepository = $this->memorySettingsRepository([
+            'global' => [
+                'provider.z.api_key' => 'z-key',
+            ],
+        ]);
+
+        $registry = new ToolProviderRegistry;
+        $registry->register($this->fakeIntegrationProvider());
+
+        $container = $this->baseSettingsContainer($schema, $settingsManager, $settingsRepository, $registry);
+        $providerCatalog = $this->providerCatalog($config, $settingsRepository);
+
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->exactly(2))
+            ->method('showSettings')
+            ->willReturnOnConsecutiveCalls(
+                [
+                    'scope' => 'project',
+                    'changes' => [
+                        'integration.github.credential.api_key' => 'ghp_new_secret',
+                        'integration.github.credential.base_url' => 'https://api.github.example',
+                    ],
+                    'custom_provider' => null,
+                    'delete_custom_provider' => '',
+                ],
+                [
+                    'scope' => 'project',
+                    'changes' => [
+                        'integration.github.credential_action' => 'clear_saved',
+                    ],
+                    'custom_provider' => null,
+                    'delete_custom_provider' => '',
+                ],
+            );
+        $ui->expects($this->exactly(2))
+            ->method('showNotice');
+
+        $ctx = $this->baseContext(
+            ui: $ui,
+            config: $config,
+            settings: $settingsRepository,
+            providers: $providerCatalog,
+            models: $this->createStub(ModelCatalog::class),
+        );
+
+        $command = new SettingsCommand($container);
+        $command->execute('', $ctx);
+        $command->execute('', $ctx);
+
+        $this->assertSame(
+            [
+                ['scope' => 'global', 'key' => 'integration.github.accounts', 'value' => json_encode(['default' => true])],
+                ['scope' => 'global', 'key' => 'integration.github.accounts.default.api_key', 'value' => 'ghp_new_secret'],
+                ['scope' => 'global', 'key' => 'integration.github.accounts.default.base_url', 'value' => 'https://api.github.example'],
+            ],
+            $settingsRepository->setCalls,
+        );
+        $this->assertSame(
+            [
+                ['scope' => 'global', 'key' => 'integration.github.accounts.default.api_key'],
+                ['scope' => 'global', 'key' => 'integration.github.accounts.default.base_url'],
+                ['scope' => 'global', 'key' => 'integration.github.accounts'],
+            ],
+            $settingsRepository->deleteCalls,
+        );
+    }
+
+    public function test_settings_view_uses_human_name_when_provider_label_is_keyword_list(): void
+    {
+        $config = new Repository([]);
+        $schema = new SettingsSchema;
+        $settingsManager = new SettingsManager(
+            config: $config,
+            schema: $schema,
+            store: new YamlConfigStore,
+            baseConfigPath: dirname(__DIR__, 4).'/config',
+        );
+        $settingsManager->setProjectRoot($this->projectDir);
+
+        $settingsRepository = $this->memorySettingsRepository([
+            'global' => [
+                'provider.z.api_key' => 'z-key',
+            ],
+        ]);
+
+        $registry = new ToolProviderRegistry;
+        $registry->register(new ExchangeRateToolProvider);
+
+        $container = $this->baseSettingsContainer($schema, $settingsManager, $settingsRepository, $registry);
+        $providerCatalog = $this->providerCatalog($config, $settingsRepository);
+
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->once())
+            ->method('showSettings')
+            ->with($this->callback(function (array $view): bool {
+                $integration = $view['integrations_by_id']['exchangerate'] ?? null;
+                $this->assertIsArray($integration);
+                $this->assertSame('Exchange Rate', $integration['name']);
+                $this->assertSame('Exchange Rate', $integration['label']);
+                $this->assertSame('Currency exchange rates', $integration['description']);
+
+                return true;
+            }))
+            ->willReturn([]);
+
+        $ctx = $this->baseContext(
+            ui: $ui,
+            config: $config,
+            settings: $settingsRepository,
+            providers: $providerCatalog,
+            models: $this->createStub(ModelCatalog::class),
+        );
+
+        $command = new SettingsCommand($container);
+        $command->execute('', $ctx);
+    }
+
+    private function providerCatalog(Repository $config, SettingsRepositoryInterface $settingsRepository): ProviderCatalog
+    {
+        $registry = new RelayRegistry([
+            'z' => [
+                'label' => 'Z.AI',
+                'auth' => 'api_key',
+                'driver' => 'openai-compatible',
+                'url' => 'https://z.example/v1',
+                'default_model' => 'GLM-5.1',
+                'models' => [
+                    'GLM-5.1' => [
+                        'display_name' => 'GLM-5.1',
+                        'context' => 200000,
+                        'max_output' => 8192,
+                    ],
+                ],
+            ],
+        ]);
+
+        $codexTokens = $this->createStub(CodexTokenStore::class);
+        $codexTokens->method('current')->willReturn(null);
+
+        return new ProviderCatalog(
+            new ProviderMeta($registry),
+            $registry,
+            $config,
+            $settingsRepository,
+            $codexTokens,
+        );
+    }
+
+    private function baseSettingsContainer(
+        SettingsSchema $schema,
+        SettingsManager $settingsManager,
+        SettingsRepositoryInterface $settingsRepository,
+        ToolProviderRegistry $registry,
+    ): Container {
+        $container = new Container;
+        $container->instance(SettingsSchema::class, $schema);
+        $container->instance(SettingsManager::class, $settingsManager);
+        $container->instance(SettingsRepositoryInterface::class, $settingsRepository);
+        $container->instance(ToolProviderRegistry::class, $registry);
+        $container->instance(IntegrationManager::class, new IntegrationManager(
+            providers: $registry,
+            settings: $settingsManager,
+            credentials: new YamlCredentialResolver($settingsRepository),
+        ));
+        $container->instance(RelayRegistry::class, new RelayRegistry([
+            'z' => [
+                'label' => 'Z.AI',
+                'auth' => 'api_key',
+                'driver' => 'openai-compatible',
+                'url' => 'https://z.example/v1',
+                'default_model' => 'GLM-5.1',
+                'models' => [
+                    'GLM-5.1' => [
+                        'display_name' => 'GLM-5.1',
+                        'context' => 200000,
+                        'max_output' => 8192,
+                    ],
+                ],
+            ],
+        ]));
+
+        return $container;
+    }
+
+    private function baseContext(
+        UIManager $ui,
+        Repository $config,
+        SettingsRepositoryInterface $settings,
+        ProviderCatalog $providers,
+        ModelCatalog $models,
+    ): SlashCommandContext {
+        $agentLoop = $this->createStub(AgentLoop::class);
+        $agentLoop->method('getMode')->willReturn(AgentMode::Edit);
+        $agentLoop->method('getCompactor')->willReturn(null);
+        $agentLoop->method('getPruner')->willReturn(null);
+
+        $permissions = $this->createStub(PermissionEvaluator::class);
+        $permissions->method('getPermissionMode')->willReturn(PermissionMode::Guardian);
+
+        $sessionManager = $this->createStub(SessionManager::class);
+        $sessionManager->method('getProject')->willReturn($this->projectDir);
+
+        $llm = new class implements LlmClientInterface
+        {
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+            {
+                throw new \RuntimeException('not used');
+            }
+
+            public function setSystemPrompt(string $prompt): void {}
+
+            public function getProvider(): string
+            {
+                return 'z';
+            }
+
+            public function setProvider(string $provider): void {}
+
+            public function getModel(): string
+            {
+                return 'GLM-5.1';
+            }
+
+            public function setModel(string $model): void {}
+
+            public function getTemperature(): int|float|null
+            {
+                return 0.0;
+            }
+
+            public function setTemperature(int|float|null $temperature): void {}
+
+            public function getMaxTokens(): ?int
+            {
+                return null;
+            }
+
+            public function setMaxTokens(?int $maxTokens): void {}
+
+            public function getReasoningEffort(): string
+            {
+                return 'off';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                yield from [];
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+        };
+
+        return new SlashCommandContext(
+            ui: $ui,
+            agentLoop: $agentLoop,
+            permissions: $permissions,
+            sessionManager: $sessionManager,
+            llm: $llm,
+            taskStore: $this->createStub(TaskStore::class),
+            config: $config,
+            settings: $settings,
+            providers: $providers,
+            models: $models,
+        );
+    }
+
+    private function fakeIntegrationProvider(): ToolProvider
+    {
+        return new class implements ToolProvider
+        {
+            public function appName(): string
+            {
+                return 'github';
+            }
+
+            public function appMeta(): array
+            {
+                return [
+                    'label' => 'GitHub',
+                    'description' => 'GitHub repository and issue access',
+                    'icon' => 'ph:github-logo',
+                ];
+            }
+
+            public function tools(): array
+            {
+                return [];
+            }
+
+            public function isIntegration(): bool
+            {
+                return true;
+            }
+
+            public function createTool(string $class, array $context = []): Tool
+            {
+                throw new \RuntimeException('not used');
+            }
+
+            public function luaDocsPath(): ?string
+            {
+                return null;
+            }
+
+            public function credentialFields(): array
+            {
+                return [
+                    [
+                        'key' => 'api_key',
+                        'type' => 'secret',
+                        'label' => 'API Key',
+                        'required' => true,
+                        'placeholder' => 'ghp_...',
+                    ],
+                    [
+                        'key' => 'base_url',
+                        'type' => 'url',
+                        'label' => 'Base URL',
+                        'required' => false,
+                        'placeholder' => 'https://api.github.com',
+                    ],
+                ];
+            }
+        };
+    }
+
+    private function memorySettingsRepository(array $seed = []): SettingsRepositoryInterface
+    {
+        return new class($seed) implements SettingsRepositoryInterface
+        {
+            /** @var array<string, array<string, string>> */
+            public array $data;
+
+            /** @var list<array{scope: string, key: string, value: string}> */
+            public array $setCalls = [];
+
+            /** @var list<array{scope: string, key: string}> */
+            public array $deleteCalls = [];
+
+            public function __construct(array $seed)
+            {
+                $this->data = $seed;
+            }
+
+            public function get(string $scope, string $key): ?string
+            {
+                return $this->data[$scope][$key] ?? null;
+            }
+
+            public function set(string $scope, string $key, string $value): void
+            {
+                $this->setCalls[] = ['scope' => $scope, 'key' => $key, 'value' => $value];
+                $this->data[$scope][$key] = $value;
+            }
+
+            public function all(string $scope): array
+            {
+                return $this->data[$scope] ?? [];
+            }
+
+            public function delete(string $scope, string $key): void
+            {
+                $this->deleteCalls[] = ['scope' => $scope, 'key' => $key];
+                unset($this->data[$scope][$key]);
+            }
+
+            public function resolve(string $key, string $projectScope): ?string
+            {
+                return $this->data[$projectScope][$key] ?? $this->data['global'][$key] ?? null;
+            }
+        };
+    }
+
     private function removeDirectory(string $path): void
     {
         if (! is_dir($path)) {
@@ -270,5 +743,47 @@ final class SettingsCommandTest extends TestCase
         }
 
         @rmdir($path);
+    }
+}
+
+final class ExchangeRateToolProvider implements ToolProvider
+{
+    public function appName(): string
+    {
+        return 'exchangerate';
+    }
+
+    public function appMeta(): array
+    {
+        return [
+            'label' => 'currency, exchange rate, forex, conversion, USD, EUR, crypto',
+            'description' => 'Currency exchange rates',
+            'icon' => 'ph:currency-circle-dollar',
+        ];
+    }
+
+    public function tools(): array
+    {
+        return [];
+    }
+
+    public function isIntegration(): bool
+    {
+        return true;
+    }
+
+    public function createTool(string $class, array $context = []): Tool
+    {
+        throw new \RuntimeException('not used');
+    }
+
+    public function luaDocsPath(): ?string
+    {
+        return null;
+    }
+
+    public function credentialFields(): array
+    {
+        return [];
     }
 }

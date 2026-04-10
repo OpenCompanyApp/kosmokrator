@@ -86,6 +86,7 @@ class ExecuteLuaTool extends AbstractTool
             );
         }
 
+        $nativeBridge = null;
         if (self::$nativeBridgeResolver !== null) {
             $nativeBridge = (self::$nativeBridgeResolver)();
         }

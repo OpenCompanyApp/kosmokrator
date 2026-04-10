@@ -20,6 +20,10 @@ use Symfony\Component\Tui\Widget\WidgetContext;
  */
 final class CompactingLoaderWidget extends ReactiveWidget implements ParentInterface
 {
+    private const SPINNER_NAME = 'hourglass';
+
+    private const SPINNER_FRAMES = ['⧗', '⧖', '⧗', '⧖'];
+
     private ?CancellableLoaderWidget $loader = null;
 
     private bool $mounted = false;
@@ -93,6 +97,7 @@ final class CompactingLoaderWidget extends ReactiveWidget implements ParentInter
     private function mount(): void
     {
         $this->unmount();
+        $this->registerSpinner();
 
         $phrase = self::$phrases[array_rand(self::$phrases)];
         $this->state->setThinkingPhrase($phrase);
@@ -100,7 +105,7 @@ final class CompactingLoaderWidget extends ReactiveWidget implements ParentInter
         $this->loader = new CancellableLoaderWidget($phrase);
         $this->loader->setId('compacting-loader');
         $this->loader->addStyleClass('compacting');
-        $this->loader->setSpinner('hourglass');
+        $this->loader->setSpinner(self::SPINNER_NAME);
         $this->loader->setIntervalMs(120);
         $this->loader->start();
         $this->attachLoader();
@@ -183,5 +188,17 @@ final class CompactingLoaderWidget extends ReactiveWidget implements ParentInter
         }
 
         $this->loader->attach($this, $context);
+    }
+
+    private function registerSpinner(): void
+    {
+        static $registered = false;
+
+        if ($registered) {
+            return;
+        }
+
+        CancellableLoaderWidget::addSpinner(self::SPINNER_NAME, self::SPINNER_FRAMES);
+        $registered = true;
     }
 }

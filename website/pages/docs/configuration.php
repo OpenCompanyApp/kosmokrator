@@ -343,7 +343,7 @@ audio:
 <h3 id="integrations">Integrations</h3>
 
 <p>
-    KosmoKrator discovers integration packages (e.g. Plausible, CoinGecko, Celestial) from your <code>composer.lock</code>. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category.
+    KosmoKrator discovers installed OpenCompany integration packages from your <code>composer.lock</code>. Current packages may use either the newer <code>opencompanyapp/integration-*</code> prefix or the legacy <code>opencompanyapp/ai-tool-*</code> prefix. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category.
 </p>
 
 <table>
@@ -910,4 +910,4 @@ audio:
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

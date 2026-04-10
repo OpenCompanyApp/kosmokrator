@@ -170,7 +170,7 @@ class PrismService implements LlmClientInterface
                         }
                     } elseif ($event instanceof ToolCallEvent) {
                         $tc = $event->toolCall;
-                        yield LlmStreamingEvent::toolCall($tc->id, $tc->name, $tc->arguments());
+                        yield LlmStreamingEvent::toolCall($tc->id, $tc->name, ToolCallMapper::safeArguments($tc));
                     } elseif ($event instanceof StreamEndEvent) {
                         // Flush remaining reasoning
                         if ($reasoningBuffer !== '') {

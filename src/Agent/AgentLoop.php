@@ -823,7 +823,7 @@ class AgentLoop
         }
 
         return array_map(
-            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, $tc->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
+            fn (ToolCall $tc) => ToolCallMapper::toErrorResult($tc->id, $tc->name, ToolCallMapper::safeArguments($tc), 'Error: '.ErrorSanitizer::sanitize($e->getMessage())),
             $toolCalls,
         );
     }

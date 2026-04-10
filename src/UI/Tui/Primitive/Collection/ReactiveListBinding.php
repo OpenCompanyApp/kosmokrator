@@ -28,8 +28,8 @@ final class ReactiveListBinding
 
     /**
      * @param  Signal<list<mixed>>  $itemsSignal
-     * @param  callable(mixed): string  $keyFn
-     * @param  callable(mixed): AbstractWidget  $builderFn
+     * @param  \Closure(mixed): string  $keyFn
+     * @param  \Closure(mixed): AbstractWidget  $builderFn
      */
     public function __construct(
         private readonly Signal $itemsSignal,

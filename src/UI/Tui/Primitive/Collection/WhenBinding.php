@@ -26,7 +26,7 @@ final class WhenBinding
 
     /**
      * @param  Signal<bool>  $condition
-     * @param  callable(): AbstractWidget  $factory
+     * @param  \Closure(): AbstractWidget  $factory
      */
     public function __construct(
         private readonly Signal $condition,

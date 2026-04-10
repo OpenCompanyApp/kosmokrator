@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 
@@ -47,7 +48,7 @@ final class StuckDetector
     {
         // Build signatures and add to rolling window
         foreach ($toolCalls as $tc) {
-            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode($tc->arguments(), JSON_INVALID_UTF8_SUBSTITUTE));
+            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode(ToolCallMapper::safeArguments($tc), JSON_INVALID_UTF8_SUBSTITUTE));
         }
         $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
 

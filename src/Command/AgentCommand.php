@@ -142,10 +142,6 @@ class AgentCommand extends Command
             fwrite(STDERR, "Run kosmokrator setup to configure your provider and API key.\n");
 
             return 1;
-        } catch (\ValueError $e) {
-            fwrite(STDERR, "Invalid option: {$e->getMessage()}\n");
-
-            return 2;
         }
 
         /** @var HeadlessRenderer $renderer */

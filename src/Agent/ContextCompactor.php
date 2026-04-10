@@ -7,6 +7,7 @@ namespace Kosmokrator\Agent;
 use Amp\Cancellation;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ToolCallMapper;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -235,7 +236,7 @@ PROMPT;
             } elseif ($message instanceof AssistantMessage) {
                 if ($message->toolCalls !== []) {
                     foreach ($message->toolCalls as $tc) {
-                        $args = $tc->arguments();
+                        $args = ToolCallMapper::safeArguments($tc);
                         $argStr = $this->formatToolArgs($args);
                         $newLines[] = "[assistant → tool_call]: {$tc->name}({$argStr})";
                     }

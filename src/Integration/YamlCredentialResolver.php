@@ -99,9 +99,13 @@ class YamlCredentialResolver implements CredentialResolver
     public function removeAccount(string $integration, string $account): void
     {
         $prefix = "integration.{$integration}.accounts.{$account}.";
-        // The settings repo doesn't have a prefix-delete, so we delete known keys
-        foreach (['api_key', 'token', 'url', 'secret', 'webhook_url'] as $key) {
-            $this->settingsRepo->delete('global', $prefix.$key);
+
+        foreach (array_keys($this->settingsRepo->all('global')) as $key) {
+            if (! str_starts_with($key, $prefix)) {
+                continue;
+            }
+
+            $this->settingsRepo->delete('global', $key);
         }
     }
 

@@ -173,7 +173,7 @@ class SubagentFactory
                 $container = Container::getInstance();
                 if ($container->bound(LuaDocService::class)) {
                     $luaDocService = $container->make(LuaDocService::class);
-                    $summary = $luaDocService->getNamespaceSummary();
+                    $summary = $luaDocService->getPromptNamespaceSummary();
                     if ($summary !== '') {
                         $luaDocs = "\n\n# Lua Integration Access\n\n"
                             ."Use `execute_lua` for complex multi-step operations.\n\n"

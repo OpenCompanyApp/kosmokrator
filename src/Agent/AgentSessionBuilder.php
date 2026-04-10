@@ -293,7 +293,7 @@ final class AgentSessionBuilder
 
         try {
             $luaDocService = $this->container->make(LuaDocService::class);
-            $summary = $luaDocService->getNamespaceSummary();
+            $summary = $luaDocService->getPromptNamespaceSummary();
             if ($summary === '') {
                 return '';
             }

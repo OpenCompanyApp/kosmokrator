@@ -33,10 +33,9 @@ final class When
      * lifecycle inside the given parent container.
      *
      * @param  Signal<bool>  $condition  Signal that controls visibility
-     * @param  callable(): AbstractWidget  $factory  Creates the child widget when condition is true
-     * @return callable(AbstractWidget $widget): void Call with the actual parent container's child to bind to
+     * @param  \Closure(): AbstractWidget  $factory  Creates the child widget when condition is true
      */
-    public static function show(Signal $condition, callable $factory): WhenBinding
+    public static function show(Signal $condition, \Closure $factory): WhenBinding
     {
         return new WhenBinding($condition, $factory);
     }

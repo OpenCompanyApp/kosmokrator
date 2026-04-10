@@ -7,6 +7,7 @@ namespace Kosmokrator\UI\Tui;
 use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Tui\Builder\BreathingDriver;
+use Kosmokrator\UI\Tui\Composition\ThinkingLoaderWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 
 /**

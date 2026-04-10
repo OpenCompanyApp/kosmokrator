@@ -71,7 +71,7 @@ class HeadlessRenderer implements RendererInterface
     public function setPhase(AgentPhase $phase): void
     {
         if ($this->format === OutputFormat::Text) {
-            $label = $phase->label();
+            $label = ucfirst($phase->value);
             $this->writeStderr($this->dim("  [{$label}]"));
         } elseif ($this->format === OutputFormat::StreamJson) {
             $this->emitEvent('phase', ['phase' => $phase->value]);

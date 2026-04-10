@@ -22,7 +22,7 @@ class LuaSandboxTest extends TestCase
 
     public static function setUpBeforeClass(): void
     {
-        if (! class_exists(Sandbox::class)) {
+        if (! class_exists(Sandbox::class) || ! (new \ReflectionClass(Sandbox::class))->isInternal()) {
             self::markTestSkipped('lua-sandbox extension is not available.');
         }
     }

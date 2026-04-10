@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Integration\Lua;
 
 use Kosmokrator\Lua\LuaResult;
 use Kosmokrator\Lua\LuaSandboxService;
+use Lua\Sandbox;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -18,6 +19,13 @@ use PHPUnit\Framework\TestCase;
 class LuaSandboxTest extends TestCase
 {
     private LuaSandboxService $sandbox;
+
+    public static function setUpBeforeClass(): void
+    {
+        if (! class_exists(Sandbox::class)) {
+            self::markTestSkipped('lua-sandbox extension is not available.');
+        }
+    }
 
     protected function setUp(): void
     {

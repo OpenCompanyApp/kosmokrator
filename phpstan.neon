@@ -2,6 +2,8 @@ parameters:
     level: 5
     paths:
         - src
+    stubFiles:
+        - stubs/lua-sandbox.stub.php
     ignoreErrors:
         # Animation frame count guards in UI/Ansi/* — always true/false due to count() ranges
         - '#Comparison operation#'

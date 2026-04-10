@@ -30,7 +30,7 @@ class TuiRenderer implements RendererInterface
     public function __construct()
     {
         $this->core = new TuiCoreRenderer;
-        $this->tool = new TuiToolRenderer($this->core);
+        $this->tool = new TuiToolRenderer($this->core, $this->core->getState());
         $this->conversation = new TuiConversationRenderer($this->core, $this->tool);
 
         // Wire the discovery batch finalizer so core->streamChunk can finalize

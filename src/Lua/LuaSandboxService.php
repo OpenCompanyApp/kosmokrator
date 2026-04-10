@@ -41,6 +41,8 @@ class LuaSandboxService
             $sandbox->load("{$name} = ".$this->phpToLua($value))->call();
         }
 
+        $this->registerJsonGlobals($sandbox);
+
         $start = microtime(true);
 
         try {
@@ -221,5 +223,102 @@ class LuaSandboxService
         }
 
         return '"'.addcslashes((string) $value, "\"\\\n\r\t").'"';
+    }
+
+    /**
+     * Register `json.decode()`, `json.encode()`, and `regex.*` as Lua globals.
+     *
+     * JSON bridges PHP's json_decode/json_encode so Lua scripts can parse
+     * JSON output from bash commands and other string sources.
+     *
+     * Regex bridges PHP's PCRE so Lua scripts can use lookaheads, non-greedy
+     * quantifiers, Unicode properties, and other patterns that Lua's built-in
+     * string matching doesn't support.
+     */
+    private function registerJsonGlobals(Sandbox $sandbox): void
+    {
+        $sandbox->register('__json', [
+            'decode' => function (string $json): mixed {
+                return json_decode($json, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
+            },
+            'encode' => function (mixed $value): string {
+                return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+            },
+        ]);
+
+        $sandbox->register('__regex', [
+            'match' => function (string $subject, string $pattern, int $flags = 0): mixed {
+                $pregFlags = match ($flags) {
+                    0,
+                    PREG_OFFSET_CAPTURE,
+                    PREG_UNMATCHED_AS_NULL,
+                    PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL => $flags,
+                    default => 0,
+                };
+
+                if (preg_match($pattern, $subject, $matches, $pregFlags) === 1) {
+                    return $matches;
+                }
+
+                return null;
+            },
+            'match_all' => function (string $subject, string $pattern, int $flags = PREG_PATTERN_ORDER): array {
+                if (preg_match_all($pattern, $subject, $matches, $flags) > 0) {
+                    return $matches;
+                }
+
+                return [];
+            },
+            'gsub' => function (string $subject, string $pattern, string $replacement, int $limit = -1): string {
+                return preg_replace($pattern, $replacement, $subject, $limit) ?? $subject;
+            },
+        ]);
+
+        $sandbox->load('
+            json = {
+                decode = function(s)
+                    if type(s) ~= "string" then
+                        error("json.decode: expected string, got " .. type(s), 2)
+                    end
+                    return __json.decode(s)
+                end,
+                encode = function(v)
+                    return __json.encode(v)
+                end
+            }
+
+            regex = {
+                match = function(subject, pattern, flags)
+                    if type(subject) ~= "string" then
+                        error("regex.match: expected string subject, got " .. type(subject), 2)
+                    end
+                    if type(pattern) ~= "string" then
+                        error("regex.match: expected string pattern, got " .. type(pattern), 2)
+                    end
+                    return __regex.match(subject, pattern, flags or 0)
+                end,
+                match_all = function(subject, pattern, flags)
+                    if type(subject) ~= "string" then
+                        error("regex.match_all: expected string subject, got " .. type(subject), 2)
+                    end
+                    if type(pattern) ~= "string" then
+                        error("regex.match_all: expected string pattern, got " .. type(pattern), 2)
+                    end
+                    return __regex.match_all(subject, pattern, flags or 0)
+                end,
+                gsub = function(subject, pattern, replacement, limit)
+                    if type(subject) ~= "string" then
+                        error("regex.gsub: expected string subject, got " .. type(subject), 2)
+                    end
+                    if type(pattern) ~= "string" then
+                        error("regex.gsub: expected string pattern, got " .. type(pattern), 2)
+                    end
+                    if type(replacement) ~= "string" then
+                        error("regex.gsub: expected string replacement, got " .. type(replacement), 2)
+                    end
+                    return __regex.gsub(subject, pattern, replacement, limit or -1)
+                end,
+            }
+        ')->call();
     }
 }

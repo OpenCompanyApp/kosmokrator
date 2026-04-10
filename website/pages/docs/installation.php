@@ -82,7 +82,7 @@ ob_start();
 
 <ul>
     <li>PHP 8.4 or newer</li>
-    <li>Extensions: <code>pcntl</code>, <code>posix</code>, <code>mbstring</code></li>
+    <li>Extensions: <code>curl</code>, <code>mbstring</code>, <code>openssl</code>, <code>pdo_sqlite</code>, <code>pcntl</code>, <code>readline</code></li>
 </ul>
 
 <h3 id="phar-download">Download</h3>
@@ -102,8 +102,8 @@ ob_start();
 <div class="tip">
     <p>
         <strong>Tip:</strong> To check whether the required extensions are
-        installed, run <code>php -m | grep -E 'pcntl|posix|mbstring'</code>.
-        All three should appear in the output. On most systems they are
+        installed, run <code>php -m | grep -E 'curl|mbstring|openssl|pdo_sqlite|pcntl|readline'</code>.
+        All six should appear in the output. On most systems they are
         included with the default PHP build; if any are missing, install them
         via your system package manager (e.g., <code>apt install php8.4-mbstring</code>
         on Debian/Ubuntu).
@@ -124,7 +124,7 @@ ob_start();
 <ul>
     <li>PHP 8.4 or newer</li>
     <li>Composer (2.x recommended)</li>
-    <li>Extensions: <code>pcntl</code>, <code>posix</code>, <code>mbstring</code></li>
+    <li>Extensions: <code>curl</code>, <code>mbstring</code>, <code>openssl</code>, <code>pdo_sqlite</code>, <code>pcntl</code>, <code>readline</code></li>
 </ul>
 
 <h3 id="source-clone">Clone and install</h3>
@@ -169,20 +169,22 @@ composer install</code></pre>
 
 <ol>
     <li>
-        <strong>Provider selection</strong> &mdash; Choose from 40+ supported
+        <strong>Provider selection</strong> &mdash; Choose from 20+ supported
         LLM providers (Anthropic, OpenAI, Google, Mistral, local endpoints,
         and many more). You can configure multiple providers and switch between
         them later.
     </li>
     <li>
-        <strong>API key entry</strong> &mdash; Enter the API key for your
-        chosen provider. Keys are stored locally and never transmitted anywhere
-        other than the provider's own API endpoint.
-    </li>
-    <li>
         <strong>Model selection</strong> &mdash; Pick a default model from the
         provider's available options. You can override this per-session or
         per-depth later via the configuration file.
+    </li>
+    <li>
+        <strong>API key entry</strong> &mdash; Enter the API key for your
+        chosen provider. For OAuth-based providers (e.g., Codex), the wizard
+        will open a browser-based device flow instead of prompting for a key.
+        Keys are stored locally and never transmitted anywhere other than the
+        provider's own API endpoint.
     </li>
 </ol>
 
@@ -263,15 +265,6 @@ composer install</code></pre>
                 <code>/sessions</code> slash command.
             </td>
         </tr>
-        <tr>
-            <td><code>--headless</code></td>
-            <td>
-                Run without interactive input. Designed for CI pipelines,
-                automated scripts, and non-interactive environments.
-                KosmoKrator reads the prompt from stdin or the
-                <code>--prompt</code> flag and exits when the agent finishes.
-            </td>
-        </tr>
     </tbody>
 </table>
 
@@ -318,15 +311,20 @@ composer install</code></pre>
     If you are working from a source checkout and want to produce your own
     PHAR archive, use the <a href="https://github.com/box-project/box">Box</a>
     compiler. The repository includes a <code>box.json</code> configuration
-    file that defines the build.
+    file that defines the build. Box is not included in the project's
+    Composer dependencies &mdash; install it separately before compiling.
 </p>
 
-<pre><code>php vendor/bin/box compile</code></pre>
+<pre><code># Install Box globally
+composer global require humbug/box
+
+# Compile the PHAR
+box compile</code></pre>
 
 <p>
-    The compiled PHAR will be written to the project root. You can then copy
-    it to a location on your <code>$PATH</code> and use it exactly like the
-    release PHAR.
+    The compiled PHAR will be written to <code>builds/kosmokrator.phar</code>.
+    You can then copy it to a location on your <code>$PATH</code> and use it
+    exactly like the release PHAR.
 </p>
 
 <div class="tip">
@@ -369,19 +367,37 @@ composer install</code></pre>
             <td>2.x</td>
         </tr>
         <tr>
-            <td><code>pcntl</code> extension</td>
-            <td>Bundled</td>
-            <td>Required</td>
-            <td>Required</td>
-        </tr>
-        <tr>
-            <td><code>posix</code> extension</td>
+            <td><code>curl</code> extension</td>
             <td>Bundled</td>
             <td>Required</td>
             <td>Required</td>
         </tr>
         <tr>
             <td><code>mbstring</code> extension</td>
+            <td>Bundled</td>
+            <td>Required</td>
+            <td>Required</td>
+        </tr>
+        <tr>
+            <td><code>openssl</code> extension</td>
+            <td>Bundled</td>
+            <td>Required</td>
+            <td>Required</td>
+        </tr>
+        <tr>
+            <td><code>pdo_sqlite</code> extension</td>
+            <td>Bundled</td>
+            <td>Required</td>
+            <td>Required</td>
+        </tr>
+        <tr>
+            <td><code>pcntl</code> extension</td>
+            <td>Bundled</td>
+            <td>Required</td>
+            <td>Required</td>
+        </tr>
+        <tr>
+            <td><code>readline</code> extension</td>
             <td>Bundled</td>
             <td>Required</td>
             <td>Required</td>
@@ -403,231 +419,6 @@ composer install</code></pre>
         supports 256 colors or true color. KosmoKrator's TUI renderer takes
         advantage of the full color palette for syntax highlighting, diffs,
         and the interactive dashboard.
-    </p>
-</div>
-
-<!-- ------------------------------------------------------------------ -->
-<h2 id="docker">Running with Docker</h2>
-
-<p>
-    KosmoKrator is available as a Docker image for teams that prefer containerized
-    workflows or need reproducible CI environments. The image bundles the static
-    binary, so no PHP installation is required inside the container.
-</p>
-
-<h3 id="docker-pull">Pulling the Image</h3>
-
-<pre><code>docker pull ghcr.io/opencompanyapp/kosmokrator:latest</code></pre>
-
-<p>
-    Tagged images follow the same version scheme as GitHub Releases. Use a specific
-    tag for reproducible builds:
-</p>
-
-<pre><code>docker pull ghcr.io/opencompanyapp/kosmokrator:1.2.3</code></pre>
-
-<h3 id="docker-run">Running KosmoKrator in a Container</h3>
-
-<p>
-    Mount your project directory and pass your API key via an environment variable.
-    The container entrypoint is the <code>kosmokrator</code> binary itself, so
-    you can pass any CLI flags directly:
-</p>
-
-<pre><code>docker run --rm -it \
-  -v "$PWD":/project \
-  -w /project \
-  -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
-  ghcr.io/opencompanyapp/kosmokrator:latest \
-  --prompt "Refactor the UserService class to use dependency injection"</code></pre>
-
-<p>The key flags and options for Docker usage:</p>
-
-<table>
-    <thead>
-        <tr>
-            <th>Flag</th>
-            <th>Description</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><code>-v "$PWD":/project</code></td>
-            <td>Mount the current project directory into the container.</td>
-        </tr>
-        <tr>
-            <td><code>-w /project</code></td>
-            <td>Set the working directory so KosmoKrator operates on your project.</td>
-        </tr>
-        <tr>
-            <td><code>-e ANTHROPIC_API_KEY</code></td>
-            <td>Pass the API key. Replace with <code>OPENAI_API_KEY</code> if using OpenAI models.</td>
-        </tr>
-        <tr>
-            <td><code>--rm</code></td>
-            <td>Automatically remove the container when it exits.</td>
-        </tr>
-        <tr>
-            <td><code>-it</code></td>
-            <td>Allocate a TTY for interactive mode. Omit for headless/CI usage.</td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="tip">
-    <p>
-        <strong>Tip:</strong> For non-interactive CI runs, omit <code>-it</code> and
-        add <code>--headless</code> to the KosmoKrator flags. This disables the TUI
-        and writes all output to stdout/stderr, which is ideal for log collection.
-    </p>
-</div>
-
-<h3 id="docker-compose">Using Docker Compose</h3>
-
-<p>
-    For repeated local use, a <code>docker-compose.yml</code> avoids retyping flags:
-</p>
-
-<pre><code># docker-compose.yml
-services:
-  kosmokrator:
-    image: ghcr.io/opencompanyapp/kosmokrator:latest
-    volumes:
-      - .:/project
-    working_dir: /project
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}</code></pre>
-
-<p>Then run with:</p>
-
-<pre><code>docker compose run --rm kosmokrator --prompt "Add unit tests for the Calculator class"</code></pre>
-
-<!-- ------------------------------------------------------------------ -->
-<h2 id="cicd">CI/CD Integration</h2>
-
-<p>
-    KosmoKrator can operate in headless mode, making it suitable for automated
-    pipelines. In headless mode the TUI is disabled, all output goes to
-    stdout/stderr, and the process exits with a conventional exit code.
-</p>
-
-<h3 id="cicd-headless">Headless Mode</h3>
-
-<p>
-    The <code>--headless</code> flag enables non-interactive operation. Combine it
-    with either <code>--prompt</code> or pipe a prompt via stdin:
-</p>
-
-<pre><code># Pass the prompt as a flag
-kosmokrator --headless --prompt "Fix the failing tests in src/"
-
-# Pipe from stdin
-echo "Fix the failing tests in src/" | kosmokrator --headless</code></pre>
-
-<h3 id="cicd-exit-codes">Exit Codes</h3>
-
-<table>
-    <thead>
-        <tr>
-            <th>Code</th>
-            <th>Meaning</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><code>0</code></td>
-            <td>Success &mdash; the task completed and all tool calls finished without errors.</td>
-        </tr>
-        <tr>
-            <td><code>1</code></td>
-            <td>General error &mdash; an API error, configuration problem, or runtime failure occurred.</td>
-        </tr>
-        <tr>
-            <td><code>2</code></td>
-            <td>Permission denied &mdash; a tool call was blocked by the permission system and the agent could not continue.</td>
-        </tr>
-    </tbody>
-</table>
-
-<h3 id="cicd-github-actions">GitHub Actions</h3>
-
-<p>
-    The following workflow runs KosmoKrator on every pull request, asks it to
-    review and fix linting errors, and commits any changes back:
-</p>
-
-<pre><code># .github/workflows/kosmokrator.yml
-name: KosmoKrator Code Review
-
-on:
-  pull_request:
-    types: [opened, synchronize]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run KosmoKrator
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
-            -o /usr/local/bin/kosmokrator \
-            && sudo chmod +x /usr/local/bin/kosmokrator
-
-          kosmokrator --headless \
-            --prompt "Review this PR and fix any PHP coding standard violations. Run 'make lint' to verify."
-
-      - name: Commit changes
-        run: |
-          git config user.name "kosmokrator[bot]"
-          git config user.email "kosmokrator[bot]@users.noreply.github.com"
-          git diff --quiet || git commit -am "style: fix linting issues (KosmoKrator)"
-          git push</code></pre>
-
-<h3 id="cicd-gitlab">GitLab CI</h3>
-
-<p>
-    An equivalent GitLab CI pipeline using the Docker image:
-</p>
-
-<pre><code># .gitlab-ci.yml
-kosmokrator-review:
-  stage: test
-  image: ghcr.io/opencompanyapp/kosmokrator:latest
-  variables:
-    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
-  script:
-    - kosmokrator --headless --prompt "Fix any static analysis errors found by 'phpstan analyse'"
-  artifacts:
-    paths:
-      - changed-files/</code></pre>
-
-<h3 id="cicd-prometheus">Autonomous CI with Prometheus Mode</h3>
-
-<p>
-    For fully autonomous operation where KosmoKrator monitors a repository and
-    responds to issues or failed builds on its own, use <strong>Prometheus mode</strong>.
-    In this mode KosmoKrator runs as a long-lived process that watches for events
-    and acts on them:
-</p>
-
-<pre><code>kosmokrator --headless --prometheus \
-  --repository "org/repo" \
-  --watch-issues --watch-failed-builds</code></pre>
-
-<div class="tip">
-    <p>
-        <strong>Tip:</strong> Prometheus mode works best with a dedicated API key
-        that has repository write access. Store the key in your CI provider's
-        secret store &mdash; never commit it to the repository.
     </p>
 </div>
 
@@ -669,7 +460,7 @@ kosmokrator-review:
     system package manager. For example, on Debian or Ubuntu:
 </p>
 
-<pre><code>sudo apt install php8.4-pcntl php8.4-posix php8.4-mbstring</code></pre>
+<pre><code>sudo apt install php8.4-curl php8.4-mbstring php8.4-openssl php8.4-pdo-sqlite php8.4-pcntl php8.4-readline</code></pre>
 
 <p>
     On macOS with Homebrew, these extensions are typically included with the

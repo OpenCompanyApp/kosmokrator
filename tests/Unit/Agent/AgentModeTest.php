@@ -29,9 +29,10 @@ class AgentModeTest extends TestCase
         $this->assertContains('ask_user', $tools);
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertContains('session_search', $tools);
         $this->assertContains('memory_save', $tools);
         $this->assertContains('subagent', $tools);
-        $this->assertCount(24, $tools);
+        $this->assertCount(25, $tools);
     }
 
     public function test_plan_mode_has_read_only_tools(): void
@@ -53,6 +54,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('ask_user', $tools);
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertContains('session_search', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);
@@ -78,6 +80,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('ask_user', $tools);
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertContains('session_search', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);

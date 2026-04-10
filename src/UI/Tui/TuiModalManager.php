@@ -6,12 +6,15 @@ namespace Kosmokrator\UI\Tui;
 
 use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\BorderFooterWidget;
 use Kosmokrator\UI\Tui\Widget\PermissionPromptWidget;
 use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
 use Kosmokrator\UI\Tui\Widget\SettingsWorkspaceWidget;
 use Kosmokrator\UI\Tui\Widget\SwarmDashboardWidget;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Event\SelectEvent;
@@ -37,15 +40,15 @@ final class TuiModalManager
 {
     private ?Suspension $askSuspension = null;
 
-    private bool $activeModal = false;
-
     public function __construct(
+        private readonly TuiStateStore $state,
         private readonly ContainerWidget $overlay,
         private readonly AbstractWidget $sessionRoot,
         private readonly Tui $tui,
         private readonly EditorWidget $input,
         private readonly \Closure $renderCallback,
         private readonly \Closure $forceRenderCallback,
+        private readonly LoggerInterface $log = new NullLogger,
     ) {}
 
     /**
@@ -57,11 +60,11 @@ final class TuiModalManager
      */
     public function askToolPermission(string $toolName, array $args): string
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return 'deny';
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         $preview = (new PermissionPreviewBuilder)->build($toolName, $args);
         $widget = new PermissionPromptWidget($toolName, $preview);
         $widget->setId('permission-prompt');
@@ -83,7 +86,7 @@ final class TuiModalManager
         try {
             $decision = $suspension->suspend();
         } finally {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
 
         $this->overlay->remove($widget);
@@ -100,11 +103,11 @@ final class TuiModalManager
      */
     public function approvePlan(string $currentPermissionMode): ?array
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return null;
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         $widget = new PlanApprovalWidget($currentPermissionMode);
         $widget->setId('plan-approval');
 
@@ -128,7 +131,7 @@ final class TuiModalManager
         try {
             $result = $suspension->suspend();
         } finally {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
 
         $this->overlay->remove($widget);
@@ -149,11 +152,11 @@ final class TuiModalManager
      */
     public function askUser(string $question): string
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return '';
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         $r = Theme::reset();
         $accent = Theme::accent();
 
@@ -174,7 +177,7 @@ final class TuiModalManager
             return $answer;
         } finally {
             $this->askSuspension = null;
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
     }
 
@@ -190,11 +193,11 @@ final class TuiModalManager
      */
     public function askChoice(string $question, array $choices): string
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return 'dismissed';
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         $r = Theme::reset();
 
         $widgets = [];
@@ -263,7 +266,7 @@ final class TuiModalManager
         try {
             $result = $suspension->suspend();
         } finally {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
 
         // Clean up overlay
@@ -285,11 +288,11 @@ final class TuiModalManager
      */
     public function showSettings(array $currentSettings): array
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return [];
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         $widget = new SettingsWorkspaceWidget($currentSettings);
         $widget->setId('settings-workspace');
         $this->tui->remove($this->sessionRoot);
@@ -310,7 +313,7 @@ final class TuiModalManager
         try {
             $suspension->suspend();
         } finally {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
 
         $this->tui->remove($widget);
@@ -329,13 +332,13 @@ final class TuiModalManager
      */
     public function pickSession(array $items): ?string
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return null;
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         if ($items === []) {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
 
             return null;
         }
@@ -361,7 +364,7 @@ final class TuiModalManager
         try {
             $result = $suspension->suspend();
         } finally {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
 
         $this->overlay->remove($selectList);
@@ -380,11 +383,11 @@ final class TuiModalManager
      */
     public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
     {
-        if ($this->activeModal) {
-            throw new \LogicException('A modal is already active');
+        if ($this->state->getActiveModal()) {
+            return;
         }
 
-        $this->activeModal = true;
+        $this->state->setActiveModal(true);
         $widget = new SwarmDashboardWidget($summary, $allStats);
         $widget->setId('agents-dashboard');
 
@@ -405,7 +408,7 @@ final class TuiModalManager
                     $widget->setData($data['summary'], $data['stats']);
                     $this->forceRender();
                 } catch (\Throwable $e) {
-                    error_log("[TuiModalManager] Refresh error: {$e->getMessage()}");
+                    $this->log->warning('Dashboard refresh error', ['error' => $e->getMessage()]);
                 }
             });
         }
@@ -413,7 +416,7 @@ final class TuiModalManager
         try {
             $suspension->suspend();
         } finally {
-            $this->activeModal = false;
+            $this->state->setActiveModal(false);
         }
 
         if ($timerId !== null) {

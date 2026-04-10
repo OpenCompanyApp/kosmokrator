@@ -205,4 +205,43 @@ class MessageRepositoryTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertSame('JWT auth is enabled', $results[0]['content']);
     }
+
+    public function test_search_project_history_supports_phrase_and_path_queries(): void
+    {
+        $otherSession = (new SessionRepository($this->db))->create('/project', 'model-1');
+        $this->messages->append($otherSession, 'assistant', 'Updated src/Session/Database.php for JWT token refresh logic');
+
+        $phraseResults = $this->messages->searchProjectHistory('/project', '"JWT token refresh"', $this->sessionId, 5);
+        $pathResults = $this->messages->searchProjectHistory('/project', 'src/Session/Database.php', $this->sessionId, 5);
+
+        $this->assertCount(1, $phraseResults);
+        $this->assertCount(1, $pathResults);
+        $this->assertSame('Updated src/Session/Database.php for JWT token refresh logic', $pathResults[0]['content']);
+    }
+
+    public function test_search_project_history_supports_partial_path_queries_via_fallback(): void
+    {
+        $otherSession = (new SessionRepository($this->db))->create('/project', 'model-1');
+        $this->messages->append($otherSession, 'assistant', 'Updated src/Session/Database.php during auth refactor');
+
+        $basenameResults = $this->messages->searchProjectHistory('/project', 'Database.php', $this->sessionId, 5);
+        $directoryResults = $this->messages->searchProjectHistory('/project', 'src/Session', $this->sessionId, 5);
+        $segmentResults = $this->messages->searchProjectHistory('/project', 'Session', $this->sessionId, 5);
+
+        $this->assertCount(1, $basenameResults);
+        $this->assertCount(1, $directoryResults);
+        $this->assertCount(1, $segmentResults);
+        $this->assertSame('Updated src/Session/Database.php during auth refactor', $basenameResults[0]['content']);
+    }
+
+    public function test_search_project_history_excludes_compacted_messages(): void
+    {
+        $otherSession = (new SessionRepository($this->db))->create('/project', 'model-1');
+        $messageId = $this->messages->append($otherSession, 'assistant', 'Legacy migration note');
+        $this->messages->markCompactedIds([$messageId]);
+
+        $results = $this->messages->searchProjectHistory('/project', 'migration', $this->sessionId, 5);
+
+        $this->assertSame([], $results);
+    }
 }

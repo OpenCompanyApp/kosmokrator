@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\Security\PromptInjectionScanner;
+
 /**
  * Formats stored memories into a structured markdown block for injection into the system prompt.
  * Organises memories by class (priority, durable, working) and type (project, user, decision, compaction).
@@ -16,6 +18,8 @@ class MemoryInjector
      */
     public static function format(array $memories): string
     {
+        $memories = self::filterSafeEntries($memories, ['title', 'content']);
+
         if ($memories === []) {
             return '';
         }
@@ -113,6 +117,8 @@ class MemoryInjector
      */
     public static function formatSessionRecall(array $rows): string
     {
+        $rows = self::filterSafeEntries($rows, ['title', 'session_id', 'content']);
+
         if ($rows === []) {
             return '';
         }
@@ -137,5 +143,27 @@ class MemoryInjector
         }
 
         return mb_substr($text, 0, $limit).'...';
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $entries
+     * @param  string[]  $fields
+     * @return array<int, array<string, mixed>>
+     */
+    private static function filterSafeEntries(array $entries, array $fields): array
+    {
+        $scanner = new PromptInjectionScanner;
+
+        return array_values(array_filter($entries, function (array $entry) use ($fields, $scanner): bool {
+            $parts = [];
+            foreach ($fields as $field) {
+                $value = $entry[$field] ?? null;
+                if (is_string($value) && $value !== '') {
+                    $parts[] = $value;
+                }
+            }
+
+            return $parts === [] || $scanner->isSafe(implode("\n", $parts));
+        }));
     }
 }

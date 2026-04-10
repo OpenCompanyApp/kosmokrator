@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\UI\Tui;
 
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\TuiConversationRenderer;
 use Kosmokrator\UI\Tui\TuiCoreRenderer;
 use Kosmokrator\UI\Tui\TuiInputHandler;
@@ -545,36 +546,37 @@ final class TuiRendererTest extends TestCase
 
     public function test_update_tool_executing_extracts_last_non_empty_line(): void
     {
-        $tool = $this->createToolRenderer();
+        $state = new TuiStateStore;
+        $tool = new TuiToolRenderer(new TuiCoreRenderer, $state);
         $tool->updateToolExecuting("line1\nline2\nline3");
-        $preview = $this->getToolProperty($tool, 'toolExecutingPreview');
-        $this->assertSame('line3', $preview);
+        $this->assertSame('line3', $state->getToolExecutingPreview());
     }
 
     public function test_update_tool_executing_skips_trailing_blank_lines(): void
     {
-        $tool = $this->createToolRenderer();
+        $state = new TuiStateStore;
+        $tool = new TuiToolRenderer(new TuiCoreRenderer, $state);
         $tool->updateToolExecuting("line1\n  \n");
-        $preview = $this->getToolProperty($tool, 'toolExecutingPreview');
-        $this->assertSame('line1', $preview);
+        $this->assertSame('line1', $state->getToolExecutingPreview());
     }
 
     public function test_update_tool_executing_truncates_long_line(): void
     {
-        $tool = $this->createToolRenderer();
+        $state = new TuiStateStore;
+        $tool = new TuiToolRenderer(new TuiCoreRenderer, $state);
         $long = str_repeat('x', 120);
         $tool->updateToolExecuting($long);
-        $preview = $this->getToolProperty($tool, 'toolExecutingPreview');
+        $preview = $state->getToolExecutingPreview();
         $this->assertSame(101, mb_strlen($preview)); // 100 + '…'
         $this->assertStringEndsWith('…', $preview);
     }
 
     public function test_update_tool_executing_empty_output(): void
     {
-        $tool = $this->createToolRenderer();
+        $state = new TuiStateStore;
+        $tool = new TuiToolRenderer(new TuiCoreRenderer, $state);
         $tool->updateToolExecuting('');
-        $preview = $this->getToolProperty($tool, 'toolExecutingPreview');
-        $this->assertNull($preview);
+        $this->assertNull($state->getToolExecutingPreview());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -625,7 +627,7 @@ final class TuiRendererTest extends TestCase
     private function invokeConversation(string $method, mixed ...$args): mixed
     {
         $core = new TuiCoreRenderer;
-        $tool = new TuiToolRenderer($core);
+        $tool = new TuiToolRenderer($core, new TuiStateStore);
         $conv = new TuiConversationRenderer($core, $tool);
         $ref = new \ReflectionMethod($conv, $method);
 
@@ -637,7 +639,9 @@ final class TuiRendererTest extends TestCase
      */
     private function createToolRenderer(): TuiToolRenderer
     {
-        return new TuiToolRenderer(new TuiCoreRenderer);
+        $core = new TuiCoreRenderer;
+
+        return new TuiToolRenderer($core, new TuiStateStore);
     }
 
     /**
@@ -656,8 +660,7 @@ final class TuiRendererTest extends TestCase
     private function createCoreWithMode(string $label): TuiCoreRenderer
     {
         $core = new TuiCoreRenderer;
-        $prop = new \ReflectionProperty($core, 'currentModeLabel');
-        $prop->setValue($core, $label);
+        $core->getState()->setModeLabel($label);
 
         return $core;
     }

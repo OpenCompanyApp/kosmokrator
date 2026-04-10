@@ -153,6 +153,10 @@ class BashTool extends AbstractTool
 
         $result .= "\nExit code: {$exitCode}";
 
-        return new ToolResult($result, $exitCode === 0);
+        return new ToolResult($result, $exitCode === 0, [
+            'stdout' => $output,
+            'stderr' => $errorOutput,
+            'exit_code' => $exitCode,
+        ]);
     }
 }

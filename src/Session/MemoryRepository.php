@@ -192,9 +192,40 @@ class MemoryRepository implements MemoryRepositoryInterface
             $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query);
             $params['query'] = "%{$escaped}%";
             $params['query2'] = "%{$escaped}%";
+            $params['exact_query'] = $query;
+            $params['phrase_query'] = "%{$escaped}%";
         }
 
-        $sql .= ' ORDER BY pinned DESC, memory_class ASC, type, created_at DESC LIMIT :limit';
+        if ($query !== null && $query !== '') {
+            $sql .= "
+                ORDER BY pinned DESC,
+                         CASE
+                             WHEN lower(title) = lower(:exact_query) THEN 0
+                             WHEN lower(title) LIKE lower(:phrase_query) ESCAPE '\\' THEN 1
+                             WHEN lower(content) LIKE lower(:phrase_query) ESCAPE '\\' THEN 2
+                             ELSE 3
+                         END,
+                         CASE memory_class
+                             WHEN 'priority' THEN 0
+                             WHEN 'durable' THEN 1
+                             WHEN 'working' THEN 2
+                             ELSE 3
+                         END,
+                         CASE type
+                             WHEN 'decision' THEN 0
+                             WHEN 'project' THEN 1
+                             WHEN 'user' THEN 2
+                             WHEN 'compaction' THEN 3
+                             ELSE 4
+                         END,
+                         updated_at DESC,
+                         created_at DESC
+            ";
+        } else {
+            $sql .= ' ORDER BY pinned DESC, memory_class ASC, type, created_at DESC';
+        }
+
+        $sql .= ' LIMIT :limit';
         $params['limit'] = $limit;
 
         $stmt = $this->db->connection()->prepare($sql);

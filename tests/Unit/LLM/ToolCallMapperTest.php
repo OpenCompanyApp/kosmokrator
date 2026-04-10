@@ -66,6 +66,25 @@ class ToolCallMapperTest extends TestCase
         $this->assertSame(['command' => 'ls -la'], $extracted['args']);
     }
 
+    public function test_safe_arguments_returns_empty_array_for_malformed_json(): void
+    {
+        $call = new ToolCall(id: 'tc_bad', name: 'bash', arguments: '{"command":');
+
+        $this->assertSame([], ToolCallMapper::safeArguments($call));
+    }
+
+    public function test_try_extract_call_reports_decode_errors_without_throwing(): void
+    {
+        $call = new ToolCall(id: 'tc_bad', name: 'bash', arguments: '{"command":');
+
+        $extracted = ToolCallMapper::tryExtractCall($call);
+
+        $this->assertSame('bash', $extracted['name']);
+        $this->assertSame([], $extracted['args']);
+        $this->assertSame('tc_bad', $extracted['id']);
+        $this->assertSame('Syntax error', $extracted['argumentsError']);
+    }
+
     public function test_normalize_tool_output_string(): void
     {
         $this->assertSame('hello', ToolCallMapper::normalizeToolOutput('hello'));

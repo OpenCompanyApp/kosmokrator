@@ -7,6 +7,7 @@ namespace Kosmokrator\Agent;
 use Amp\Cancellation;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ToolCallMapper;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -18,17 +19,37 @@ use Psr\Log\LoggerInterface;
  * Summarizes old conversation turns via LLM to keep the context window within budget.
  *
  * Used by the agent loop (see Agent class) when needsCompaction() returns true.
- * Produces a CompactionPlan that replaces older messages with a structured summary,
- * and can extract durable knowledge into memories via extractMemories().
+ * Produces a CompactionPlan that replaces older messages with a structured summary
+ * and extracted memories from the same LLM response.
  */
 class ContextCompactor
 {
     private const DEFAULT_COMPACT_THRESHOLD_PERCENT = 60;
 
-    private const COMPACTION_SYSTEM_PROMPT = 'You are a conversation summarizer. Summarize the conversation below for a continuation agent. Do not respond to questions in the conversation — only output the summary.';
+    private const COMPACTION_SYSTEM_PROMPT = 'You are a conversation summarizer and memory extractor. Summarize the conversation below for a continuation agent. Do not respond to questions in the conversation. Return only valid JSON matching the requested schema.';
 
     private const COMPACTION_USER_PROMPT = <<<'PROMPT'
-Summarize this conversation segment. Use this structure:
+Summarize this conversation segment and extract useful cross-session memories in the same response.
+
+Return a JSON object with this exact shape:
+
+{
+  "summary": "markdown summary using the required structure",
+  "memories": [
+    {
+      "type": "project|user|decision",
+      "title": "short label",
+      "content": "memory text",
+      "memory_class": "durable|working|priority",
+      "pinned": false,
+      "expires_days": 14
+    }
+  ]
+}
+
+Rules:
+
+- The `summary` field must use this structure exactly:
 
 ## Goal
 [What the user is trying to accomplish]
@@ -45,22 +66,16 @@ Summarize this conversation segment. Use this structure:
 ## Relevant Files
 [Files read, edited, or created]
 
+- Only put cross-session-valuable items in `memories`.
+- Prefer `memory_class: durable`.
+- Use `working` only for unresolved task context worth keeping briefly.
+- Use `expires_days` only with `working` memories.
+- Skip anything obvious from reading the code.
+- If nothing is worth saving, return an empty `memories` array.
+
 <conversation>
 %s
 </conversation>
-PROMPT;
-
-    private const MEMORY_EXTRACTION_PROMPT = <<<'PROMPT'
-Given this session summary, extract any durable knowledge useful across future sessions.
-Categorize each as:
-- project: facts about the codebase, architecture, patterns
-- user: user preferences, workflow style, corrections they gave
-- decision: technical decisions made and why
-
-Only extract things NOT obvious from reading the code. Skip ephemeral task details.
-Return a JSON array (empty if nothing worth remembering):
-
-[{"type": "project", "title": "short label", "content": "the knowledge"}]
 PROMPT;
 
     public function __construct(
@@ -167,7 +182,8 @@ PROMPT;
             new UserMessage(sprintf(self::COMPACTION_USER_PROMPT, $formatted)),
         ], cancellation: $cancellation);
 
-        $summary = trim($response->text);
+        $parsed = $this->parseCompactionResponse($response->text);
+        $summary = $parsed['summary'];
         $recent = array_slice($messages, $keepFrom);
         // Rebuild message list: protected → summary → recent
         $replacement = [...$protectedMessages];
@@ -182,57 +198,16 @@ PROMPT;
             summary: $summary,
             replacementMessages: $replacement,
             protectedMessages: $protectedMessages,
+            extractedMemories: $parsed['memories'],
             tokensIn: $response->promptTokens,
             tokensOut: $response->completionTokens,
             stats: [
                 'old_messages' => count($oldMessages),
                 'kept_messages' => count($recent),
                 'protected_messages' => count($protectedMessages),
+                'extracted_memories' => count($parsed['memories']),
             ],
         );
-    }
-
-    /**
-     * Extract durable memories from a compaction summary.
-     *
-     * @param  string  $summary  The compaction summary produced by compact() or buildPlan()
-     * @return array{memories: array<array{type: string, title: string, content: string}>, tokens_in: int, tokens_out: int}
-     */
-    public function extractMemories(string $summary): array
-    {
-        try {
-            $response = $this->llm->chat([
-                new SystemMessage(self::MEMORY_EXTRACTION_PROMPT),
-                new UserMessage($summary),
-            ]);
-
-            $data = json_decode($response->text, true);
-            $memories = [];
-            if (is_array($data)) {
-                // Only keep well-formed items with a recognized type
-                $memories = array_values(array_filter($data, fn ($item) => isset($item['type'], $item['title'], $item['content'])
-                    && in_array($item['type'], ['project', 'user', 'decision'], true)
-                ));
-                // Apply defaults for optional fields
-                $memories = array_map(function (array $item): array {
-                    $item['memory_class'] = $item['memory_class'] ?? 'durable';
-                    $item['pinned'] = (bool) ($item['pinned'] ?? false);
-
-                    return $item;
-                }, $memories);
-            }
-
-            return [
-                'memories' => $memories,
-                'tokens_in' => $response->promptTokens,
-                'tokens_out' => $response->completionTokens,
-            ];
-        } catch (\Throwable $e) {
-            // Fail gracefully — memory extraction is best-effort, never fatal
-            $this->log->warning('Memory extraction failed', ['error' => $e->getMessage()]);
-
-            return ['memories' => [], 'tokens_in' => 0, 'tokens_out' => 0];
-        }
     }
 
     /**
@@ -261,7 +236,7 @@ PROMPT;
             } elseif ($message instanceof AssistantMessage) {
                 if ($message->toolCalls !== []) {
                     foreach ($message->toolCalls as $tc) {
-                        $args = $tc->arguments();
+                        $args = ToolCallMapper::safeArguments($tc);
                         $argStr = $this->formatToolArgs($args);
                         $newLines[] = "[assistant → tool_call]: {$tc->name}({$argStr})";
                     }
@@ -322,5 +297,108 @@ PROMPT;
         }
 
         return mb_substr($text, 0, $maxLength).' [truncated — '.mb_strlen($text).' chars]';
+    }
+
+    /**
+     * @return array{summary:string,memories:array<int, array{type:string,title:string,content:string,memory_class?:string,pinned?:bool,expires_days?:int}>}
+     */
+    private function parseCompactionResponse(string $text): array
+    {
+        $fallback = ['summary' => trim($text), 'memories' => []];
+        $data = json_decode($text, true);
+
+        if (! is_array($data)) {
+            return $fallback;
+        }
+
+        $summary = trim((string) ($data['summary'] ?? ''));
+        $memories = [];
+        $rawMemories = $data['memories'] ?? [];
+        if (is_array($rawMemories)) {
+            foreach ($rawMemories as $item) {
+                if (! is_array($item) || ! isset($item['type'], $item['title'], $item['content'])) {
+                    continue;
+                }
+
+                $type = (string) $item['type'];
+                if (! in_array($type, ['project', 'user', 'decision'], true)) {
+                    continue;
+                }
+
+                $memoryClass = (string) ($item['memory_class'] ?? 'durable');
+                if (! in_array($memoryClass, ['priority', 'working', 'durable'], true)) {
+                    $memoryClass = 'durable';
+                }
+
+                $title = trim((string) $item['title']);
+                $content = trim((string) $item['content']);
+                if ($title === '' || $content === '') {
+                    continue;
+                }
+
+                $memory = [
+                    'type' => $type,
+                    'title' => $title,
+                    'content' => $content,
+                    'memory_class' => $memoryClass,
+                    'pinned' => (bool) ($item['pinned'] ?? false),
+                ];
+
+                if ($memoryClass === 'working' && isset($item['expires_days']) && is_numeric((string) $item['expires_days'])) {
+                    $memory['expires_days'] = max(1, min(30, (int) $item['expires_days']));
+                }
+
+                $memories[] = $memory;
+            }
+        }
+
+        if ($summary === '') {
+            $summary = $this->fallbackSummaryFromParsedResponse($memories);
+        }
+
+        return [
+            'summary' => $summary,
+            'memories' => $memories,
+        ];
+    }
+
+    /**
+     * @param  array<int, array{type:string,title:string,content:string,memory_class?:string,pinned?:bool,expires_days?:int}>  $memories
+     */
+    private function fallbackSummaryFromParsedResponse(array $memories): string
+    {
+        $decisionTitles = array_values(array_map(
+            fn (array $memory): string => $memory['title'],
+            array_filter($memories, fn (array $memory): bool => $memory['type'] === 'decision')
+        ));
+
+        $projectTitles = array_values(array_map(
+            fn (array $memory): string => $memory['title'],
+            array_filter($memories, fn (array $memory): bool => $memory['type'] === 'project')
+        ));
+
+        $workingTitles = array_values(array_map(
+            fn (array $memory): string => $memory['title'],
+            array_filter($memories, fn (array $memory): bool => ($memory['memory_class'] ?? 'durable') === 'working')
+        ));
+
+        $lines = [
+            '## Goal',
+            '[Compaction summary unavailable]',
+            '',
+            '## Key Decisions',
+            $decisionTitles !== [] ? '- '.implode("\n- ", array_slice($decisionTitles, 0, 3)) : '[No decisions extracted]',
+            '',
+            '## Accomplished',
+            $projectTitles !== [] ? '- '.implode("\n- ", array_slice($projectTitles, 0, 3)) : '[Summary unavailable]',
+            '',
+            '## In Progress',
+            $workingTitles !== [] ? '- '.implode("\n- ", array_slice($workingTitles, 0, 3)) : '[No active work extracted]',
+            '',
+            '## Relevant Files',
+            '[Unknown]',
+        ];
+
+        return implode("\n", $lines);
     }
 }

@@ -95,16 +95,51 @@ final class ToolCallMapper
     }
 
     /**
+     * Decode tool call arguments, tolerating malformed JSON payloads from providers.
+     *
+     * @return array<string, mixed>
+     */
+    public static function safeArguments(ToolCall $call): array
+    {
+        return self::tryExtractCall($call)['args'];
+    }
+
+    /**
+     * Extract a ToolCall while preserving decode errors for callers that want to report them.
+     *
+     * @return array{name: string, args: array<string, mixed>, id: string, argumentsError: ?string}
+     */
+    public static function tryExtractCall(ToolCall $call): array
+    {
+        try {
+            $args = $call->arguments();
+            $argumentsError = null;
+        } catch (\JsonException $e) {
+            $args = [];
+            $argumentsError = $e->getMessage();
+        }
+
+        return [
+            'name' => $call->name,
+            'args' => $args,
+            'id' => $call->id,
+            'argumentsError' => $argumentsError,
+        ];
+    }
+
+    /**
      * Extract the tool name and decoded arguments from a Prism ToolCall.
      *
      * @return array{name: string, args: array<string, mixed>, id: string}
      */
     public static function extractCall(ToolCall $call): array
     {
+        $decoded = self::tryExtractCall($call);
+
         return [
-            'name' => $call->name,
-            'args' => $call->arguments(),
-            'id' => $call->id,
+            'name' => $decoded['name'],
+            'args' => $decoded['args'],
+            'id' => $decoded['id'],
         ];
     }
 

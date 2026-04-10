@@ -15,11 +15,11 @@ ob_start();
 <!-- ================================================================== -->
 
 <p>
-    At startup KosmoKrator probes your terminal's capabilities. If it detects support for the
-    features the TUI needs (true-color, Unicode, alternate screen buffer), it launches in
-    <strong>TUI mode</strong>. If any of those checks fail — for example inside a basic SSH session
-    or a minimal terminal — it falls back to <strong>ANSI mode</strong>, which uses only standard
-    ANSI escape codes and <code>readline</code> for input.
+    At startup KosmoKrator checks whether the <strong>Symfony TUI</strong> library is available
+    (<code>class_exists(Tui::class)</code>). If the library is installed, it launches in
+    <strong>TUI mode</strong>. If the library is not present — for example in a minimal installation
+    or inside a basic SSH session — it falls back to <strong>ANSI mode</strong>, which uses only
+    standard ANSI escape codes and <code>readline</code> for input.
 </p>
 
 <p>
@@ -36,7 +36,7 @@ ob_start();
     <tbody>
         <tr>
             <td><code>--renderer=tui</code></td>
-            <td>Force TUI mode. Exits with an error if the terminal is unsupported.</td>
+            <td>Force TUI mode. Silently falls back to ANSI if the Symfony TUI library is not available.</td>
         </tr>
         <tr>
             <td><code>--renderer=ansi</code></td>
@@ -45,6 +45,10 @@ ob_start();
         <tr>
             <td><em>(omit)</em></td>
             <td>Auto-detect. TUI when possible, ANSI otherwise.</td>
+        </tr>
+        <tr>
+            <td><code>--no-animation</code></td>
+            <td>Disable breathing animation and other visual effects in TUI mode. Useful over slow connections.</td>
         </tr>
     </tbody>
 </table>
@@ -79,7 +83,7 @@ ob_start();
 
 <p>
     Interactive prompts — permission requests, settings panels, the session picker — appear as
-    overlay dialogs that slide in on top of the conversation. They can be dismissed with
+    overlay dialogs added on top of the conversation. They can be dismissed with
     <kbd>Escape</kbd> and navigated with arrow keys.
 </p>
 
@@ -90,6 +94,12 @@ ob_start();
     spinning indicator. Subagent activity is reflected in real time via the
     <code>SubagentDisplayManager</code>, which refreshes the agent tree overlay as children spawn
     and complete.
+</p>
+
+<p>
+    <strong>Toast notifications</strong> appear briefly for transient events — tool completions,
+    errors, or status changes — and fade away automatically. They provide feedback without
+    interrupting the conversation flow.
 </p>
 
 <h3 id="tui-swarm-dashboard">Swarm Dashboard</h3>
@@ -177,9 +187,12 @@ ob_start();
     <tbody>
         <tr>
             <td><code>Theme.php</code></td>
-            <td>Shared color palette and tool icons. Tool icons use planetary symbols:
-                <code>♄</code> for file operations, <code>♃</code> for search,
-                <code>☿</code> for shell, <code>♂</code> for memory, and so on.</td>
+            <td>Shared color palette and tool icons. Icons are celestial/planetary symbols:
+                <code>☽</code> (Moon) for file reads, <code>☉</code> (Sun) for file writes,
+                <code>♅</code> (Uranus) for edits/patches, <code>✧</code> for glob,
+                <code>⊛</code> for grep, <code>⚡︎</code> for bash, <code>♃</code> (Jupiter) for
+                subagents, <code>♄</code> (Saturn) for memory, <code>☿</code> (Mercury) for Lua,
+                and more.</td>
         </tr>
         <tr>
             <td><code>AgentDisplayFormatter</code></td>
@@ -264,18 +277,18 @@ ob_start();
             <td>Fallback depends on remote <code>$TERM</code>. Use <code>-o "RequestTTY yes"</code> for better results.</td>
         </tr>
         <tr>
-            <td><strong>CI / headless</strong></td>
-            <td>Streaming (no renderer)</td>
-            <td>Agent output streams as plain text. Set <code>--no-interaction</code> for non-interactive CI.</td>
+            <td><strong><a href="/docs/headless">CI / headless</a></strong></td>
+            <td>HeadlessRenderer (stdout/stderr)</td>
+            <td>Agent output to stdout, progress to stderr. Use <code>-p</code> for headless mode.</td>
         </tr>
     </tbody>
 </table>
 
 <div class="tip">
     <p>
-        <strong>Tip:</strong> Not sure which mode you are running? The status line at the top of the
-        TUI shows the renderer name. In ANSI mode, the startup banner includes
-        <code>[ansi mode]</code>.
+        <strong>Tip:</strong> The status line at the top of the TUI shows the current
+        <strong>mode label</strong> (e.g. "Code", "Plan"), the <strong>permission label</strong>,
+        and <strong>token/model details</strong> — so you always know the active configuration at a glance.
     </p>
 </div>
 
@@ -300,17 +313,17 @@ ob_start();
     <tbody>
         <tr>
             <td><strong>Green</strong></td>
-            <td>0–70%</td>
+            <td>0–50%</td>
             <td>Plenty of headroom.</td>
         </tr>
         <tr>
             <td><strong>Yellow</strong></td>
-            <td>70–90%</td>
+            <td>50–75%</td>
             <td>Warning. Compaction may be triggered soon.</td>
         </tr>
         <tr>
             <td><strong>Red</strong></td>
-            <td>90%+</td>
+            <td>75%+</td>
             <td>Critical. Auto-compaction or pruning will activate.</td>
         </tr>
     </tbody>
@@ -343,8 +356,8 @@ ob_start();
 <ul>
     <li><strong>Inline widgets</strong> — Tool results appear as collapsible blocks inside the
         conversation. Press <kbd>Ctrl+O</kbd> to toggle collapse/expand.</li>
-    <li><strong>Diff highlighting</strong> — File edits are rendered as side-by-side or unified
-        diffs with word-level color highlighting via <code>UI/Diff/</code>.</li>
+    <li><strong>Diff highlighting</strong> — File edits are rendered as unified diffs with
+        word-level color highlighting via <code>UI/Diff/</code>.</li>
     <li><strong>Code with syntax highlighting</strong> — Code blocks use
         <code>KosmokratorTerminalTheme</code> for consistent colors across all supported languages.</li>
     <li><strong>Markdown</strong> — Agent prose is rendered with headers, bold, italic, links,
@@ -355,7 +368,7 @@ ob_start();
 
 <ul>
     <li><strong>Colored blocks with tool icons</strong> — Each tool call is prefixed with its
-        planetary symbol icon from <code>Theme.php</code> and colored to indicate success/failure.</li>
+        celestial symbol icon from <code>Theme.php</code> and colored to indicate success/failure.</li>
     <li><strong>Truncated to terminal width</strong> — All output respects <code>$COLUMNS</code>.
         Long lines are wrapped or truncated to prevent horizontal scroll.</li>
     <li><strong>Line-by-line streaming</strong> — Agent responses stream as they are generated,
@@ -419,17 +432,76 @@ ob_start();
             <td>No</td>
         </tr>
         <tr>
+            <td>Toast notifications</td>
+            <td>Yes</td>
+            <td>No</td>
+        </tr>
+        <tr>
             <td>SSH / basic terminals</td>
             <td>No</td>
             <td>Yes</td>
         </tr>
         <tr>
-            <td>CI / headless</td>
+            <td><a href="/docs/headless">CI / headless</a></td>
             <td>No</td>
-            <td>No (streaming plain text)</td>
+            <td>text, JSON, or stream-json to stdout</td>
         </tr>
     </tbody>
 </table>
+
+<!-- ================================================================== -->
+<h2 id="keyboard-shortcuts">Keyboard Shortcuts</h2>
+<!-- ================================================================== -->
+
+<p>
+    The TUI mode supports the following keyboard shortcuts for efficient navigation:
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Shortcut</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><kbd>Shift+Tab</kbd></td>
+            <td>Cycle through agent modes (e.g. Code → Plan → Explore).</td>
+        </tr>
+        <tr>
+            <td><kbd>Ctrl+L</kbd></td>
+            <td>Force a full screen refresh.</td>
+        </tr>
+        <tr>
+            <td><kbd>Page Up</kbd> / <kbd>Page Down</kbd></td>
+            <td>Scroll through the conversation history.</td>
+        </tr>
+        <tr>
+            <td><kbd>End</kbd></td>
+            <td>Jump to the live (bottom) position in the conversation.</td>
+        </tr>
+        <tr>
+            <td><kbd>Escape</kbd></td>
+            <td>Cancel an in-progress completion or dismiss an overlay.</td>
+        </tr>
+        <tr>
+            <td><kbd>Tab</kbd></td>
+            <td>Accept the current autocomplete suggestion.</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ================================================================== -->
+<h2 id="subagent-rendering">Subagent Rendering</h2>
+<!-- ================================================================== -->
+
+<p>
+    Subagents spawned by the orchestrator use a <strong>NullRenderer</strong> by default — they
+    produce no terminal output of their own. Results are forwarded to the parent agent and displayed
+    through the parent's renderer. Active subagents appear in the TUI's swarm dashboard
+    (<kbd>Ctrl+A</kbd>) or the ANSI agent tree display.
+</p>
 
 <?php
 $docContent = ob_get_clean();

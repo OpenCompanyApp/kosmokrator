@@ -40,6 +40,7 @@ class AgentTypeTest extends TestCase
         $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertContains('session_search', $tools);
         $this->assertContains('memory_save', $tools);
     }
 
@@ -56,6 +57,7 @@ class AgentTypeTest extends TestCase
         $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertContains('session_search', $tools);
         $this->assertNotContains('apply_patch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
@@ -74,6 +76,7 @@ class AgentTypeTest extends TestCase
         $this->assertContains('shell_kill', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
+        $this->assertContains('session_search', $tools);
         $this->assertNotContains('memory_save', $tools);
     }
 

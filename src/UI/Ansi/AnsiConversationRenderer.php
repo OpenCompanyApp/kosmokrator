@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Ansi;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\UI\ConversationRendererInterface;
 use Kosmokrator\UI\Theme;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
@@ -92,7 +93,7 @@ final class AnsiConversationRenderer implements ConversationRendererInterface
 
                 foreach ($msg->toolCalls as $toolCall) {
                     $name = $toolCall->name;
-                    $args = $toolCall->arguments();
+                    $args = ToolCallMapper::safeArguments($toolCall);
                     $toolResult = $resultsByCallId[$toolCall->id] ?? null;
 
                     if ($name === 'ask_user') {

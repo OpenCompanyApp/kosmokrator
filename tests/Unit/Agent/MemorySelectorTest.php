@@ -168,4 +168,67 @@ class MemorySelectorTest extends TestCase
 
         $this->assertSame('database', $result[0]['title']);
     }
+
+    public function test_exact_phrase_match_beats_broader_content_match(): void
+    {
+        $broad = ['title' => 'Auth notes', 'content' => 'We discussed jwt auth setup and follow-up items', 'memory_class' => 'durable', 'type' => 'project'];
+        $exact = ['title' => 'jwt auth setup', 'content' => 'Implementation details', 'memory_class' => 'durable', 'type' => 'project'];
+
+        $result = $this->selector->select([$broad, $exact], 'jwt auth setup');
+
+        $this->assertSame('jwt auth setup', $result[0]['title']);
+    }
+
+    public function test_identifier_like_terms_boost_path_matches(): void
+    {
+        $pathMatch = ['title' => 'src/Session/Database.php', 'content' => 'touches the sqlite session store', 'memory_class' => 'durable', 'type' => 'project'];
+        $generic = ['title' => 'database notes', 'content' => 'sqlite store details', 'memory_class' => 'durable', 'type' => 'project'];
+
+        $result = $this->selector->select([$generic, $pathMatch], 'src/Session/Database.php');
+
+        $this->assertSame('src/Session/Database.php', $result[0]['title']);
+    }
+
+    public function test_recent_decision_beats_old_decision(): void
+    {
+        $older = [
+            'title' => 'Old decision',
+            'content' => 'Prefer sqlite',
+            'memory_class' => 'durable',
+            'type' => 'decision',
+            'updated_at' => date('c', time() - 200 * 86400),
+        ];
+        $recent = [
+            'title' => 'Recent decision',
+            'content' => 'Prefer sqlite',
+            'memory_class' => 'durable',
+            'type' => 'decision',
+            'updated_at' => date('c', time() - 2 * 86400),
+        ];
+
+        $result = $this->selector->select([$older, $recent], 'sqlite');
+
+        $this->assertSame('Recent decision', $result[0]['title']);
+    }
+
+    public function test_stale_working_memory_is_penalized_against_durable_match(): void
+    {
+        $staleWorking = [
+            'title' => 'Temporary auth note',
+            'content' => 'jwt auth details',
+            'memory_class' => 'working',
+            'type' => 'project',
+            'last_surfaced_at' => date('c', time() - 90 * 86400),
+        ];
+        $durable = [
+            'title' => 'Durable auth note',
+            'content' => 'jwt auth details',
+            'memory_class' => 'durable',
+            'type' => 'project',
+        ];
+
+        $result = $this->selector->select([$staleWorking, $durable], 'jwt auth');
+
+        $this->assertSame('Durable auth note', $result[0]['title']);
+    }
 }

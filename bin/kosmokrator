@@ -3,39 +3,51 @@
 
 declare(strict_types=1);
 
+use Kosmokrator\Command\AgentCommand;
+use Kosmokrator\Command\AuthCommand;
+use Kosmokrator\Command\CodexLoginCommand;
+use Kosmokrator\Command\CodexLogoutCommand;
+use Kosmokrator\Command\CodexStatusCommand;
+use Kosmokrator\Command\ConfigCommand;
+use Kosmokrator\Command\SetupCommand;
+use Kosmokrator\Kernel;
+use NunoMaduro\Collision\Provider;
+
 define('KOSMOKRATOR_START', microtime(true));
 
 // Autoloader
-$autoloader = require file_exists(__DIR__ . '/../vendor/autoload.php')
-    ? __DIR__ . '/../vendor/autoload.php'
-    : __DIR__ . '/../../../autoload.php';
+$autoloader = require file_exists(__DIR__.'/../vendor/autoload.php')
+    ? __DIR__.'/../vendor/autoload.php'
+    : __DIR__.'/../../../autoload.php';
 
 // Pretty error rendering (dev)
-if (class_exists(\NunoMaduro\Collision\Provider::class)) {
-    (new \NunoMaduro\Collision\Provider())->register();
+if (class_exists(Provider::class)) {
+    (new Provider)->register();
 }
 
 // Boot the kernel
-$kernel = new Kosmokrator\Kernel(dirname(__DIR__));
+$kernel = new Kernel(dirname(__DIR__));
 $kernel->boot();
 
 // Register commands
 $console = $kernel->getConsole();
-$console->addCommand(new Kosmokrator\Command\AgentCommand($kernel->getContainer()));
-$console->addCommand(new Kosmokrator\Command\CodexLoginCommand($kernel->getContainer()));
-$console->addCommand(new Kosmokrator\Command\CodexStatusCommand($kernel->getContainer()));
-$console->addCommand(new Kosmokrator\Command\CodexLogoutCommand($kernel->getContainer()));
-$console->addCommand(new Kosmokrator\Command\SetupCommand($kernel->getContainer()));
-$console->addCommand(new Kosmokrator\Command\ConfigCommand($kernel->getContainer()));
-$console->addCommand(new Kosmokrator\Command\AuthCommand($kernel->getContainer()));
+$console->addCommand(new AgentCommand($kernel->getContainer()));
+$console->addCommand(new CodexLoginCommand($kernel->getContainer()));
+$console->addCommand(new CodexStatusCommand($kernel->getContainer()));
+$console->addCommand(new CodexLogoutCommand($kernel->getContainer()));
+$console->addCommand(new SetupCommand($kernel->getContainer()));
+$console->addCommand(new ConfigCommand($kernel->getContainer()));
+$console->addCommand(new AuthCommand($kernel->getContainer()));
 
-// Run setup if explicitly requested, otherwise default to agent (single-command style)
+// Default to agent in single-command mode unless another explicit command is requested.
+// 'agent' is removed from the explicit list so that `kosmokrator agent "prompt"`
+// enters single-command mode correctly (positional prompt binds to the command).
 $args = $_SERVER['argv'] ?? [];
-$explicitCommands = ['agent', 'setup', 'config', 'auth', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
+$explicitCommands = ['setup', 'config', 'auth', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
 $requestedCommand = $args[1] ?? null;
-$isExplicitCommand = is_string($requestedCommand) && in_array($requestedCommand, $explicitCommands, true);
+$isExplicitCommand = is_string($requestedCommand) && ! str_starts_with($requestedCommand, '-') && in_array($requestedCommand, $explicitCommands, true);
 
-if ($requestedCommand === null || str_starts_with($requestedCommand, '-') || ! $isExplicitCommand) {
+if (! $isExplicitCommand) {
     $console->setDefaultCommand('agent', true);
 }
 

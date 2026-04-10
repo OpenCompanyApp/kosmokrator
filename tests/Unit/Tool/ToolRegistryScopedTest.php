@@ -12,6 +12,7 @@ use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
+use Kosmokrator\Session\Tool\SessionSearchTool;
 use Kosmokrator\Tool\Coding\ApplyPatchTool;
 use Kosmokrator\Tool\Coding\BashTool;
 use Kosmokrator\Tool\Coding\FileEditTool;
@@ -61,6 +62,7 @@ class ToolRegistryScopedTest extends TestCase
         );
         $this->registry->register(new MemorySaveTool($sessionManager));
         $this->registry->register(new MemorySearchTool($sessionManager));
+        $this->registry->register(new SessionSearchTool($sessionManager));
         // Simulate root SubagentTool in registry
         $this->orchestrator = new SubagentOrchestrator(new NullLogger, 3);
         $rootCtx = new AgentContext(AgentType::General, 0, 3, $this->orchestrator, 'root', '');
@@ -88,6 +90,7 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('shell_kill', $names);
         $this->assertContains('memory_save', $names);
         $this->assertContains('memory_search', $names);
+        $this->assertContains('session_search', $names);
         // subagent is excluded by scoped(), added externally
         $this->assertNotContains('subagent', $names);
     }
@@ -106,6 +109,7 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('shell_read', $names);
         $this->assertContains('shell_kill', $names);
         $this->assertContains('memory_search', $names);
+        $this->assertContains('session_search', $names);
         $this->assertNotContains('apply_patch', $names);
         $this->assertNotContains('file_write', $names);
         $this->assertNotContains('file_edit', $names);
@@ -126,6 +130,7 @@ class ToolRegistryScopedTest extends TestCase
         $this->assertContains('shell_read', $names);
         $this->assertContains('shell_kill', $names);
         $this->assertContains('memory_search', $names);
+        $this->assertContains('session_search', $names);
         $this->assertNotContains('memory_save', $names);
     }
 

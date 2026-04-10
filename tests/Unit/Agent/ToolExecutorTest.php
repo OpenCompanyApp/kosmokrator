@@ -133,6 +133,28 @@ class ToolExecutorTest extends TestCase
         $this->assertSame(1, $stats->toolCalls);
     }
 
+    public function test_malformed_tool_call_arguments_return_error_result_without_crashing(): void
+    {
+        $tool = $this->makeTool('bash', 'should not be called');
+        $toolCall = new ToolCall(id: 'tc_bad', name: 'bash', arguments: '{"command":');
+
+        $executor = $this->createExecutor();
+
+        $results = $executor->executeToolCalls(
+            toolCalls: [$toolCall],
+            tools: [$tool],
+            allTools: [$tool],
+            mode: AgentMode::Edit,
+            agentContext: null,
+            stats: null,
+        );
+
+        $this->assertCount(1, $results);
+        $this->assertSame('tc_bad', $results[0]->toolCallId);
+        $this->assertSame([], $results[0]->args);
+        $this->assertStringContainsString('Invalid tool call arguments (malformed JSON): Syntax error.', (string) $results[0]->result);
+    }
+
     // ── 3. Denied tool (PermissionEvaluator returns Deny) ───────────────
 
     public function test_denied_tool_returns_error_result(): void

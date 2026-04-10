@@ -77,8 +77,8 @@ class ShellLifecycleTest extends IntegrationTestCase
 
         $this->assertTrue($startResult->success);
 
-        // Extract session ID — format: "Session sh_1 started in ..."
-        preg_match('/Session (sh_\d+)/', $startResult->output, $matches);
+        // Extract session ID from either the legacy or current output format.
+        preg_match('/Session(?: ID:)? (sh_\d+)/', $startResult->output, $matches);
         $sessionId = $matches[1] ?? null;
         $this->assertNotNull($sessionId, 'Could not extract session ID from: '.$startResult->output);
 

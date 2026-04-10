@@ -28,11 +28,23 @@ class LuaDocService
      */
     public function listDocs(?string $namespace = null): string
     {
-        $output = $this->docRenderer->generateNamespaceIndex(
-            $this->buildNamespaces(),
-            $this->getStaticPageContents(),
-            $namespace,
-        );
+        $namespaces = $namespace !== null && str_ends_with($namespace, '.default')
+            ? $this->buildNamespaces()
+            : $this->buildVisibleNamespaces();
+
+        if ($namespaces === [] && $namespace === null) {
+            $availableProviders = array_keys($this->integrationManager->getLocallyRunnableProviders());
+            sort($availableProviders);
+
+            $output = "No active Lua integration namespaces are available in this session.\n\n"
+                .$this->summarizeInactiveIntegrations($availableProviders);
+        } else {
+            $output = $this->docRenderer->generateNamespaceIndex(
+                $namespaces,
+                $this->getStaticPageContents(),
+                $namespace,
+            );
+        }
 
         // Append native tools section
         if ($this->nativeToolBridge !== null) {
@@ -50,13 +62,20 @@ class LuaDocService
     }
 
     /**
-     * Search docs by keyword across all namespaces and static pages.
+     * Search docs by keyword across all namespaces, native tools, and static pages.
      */
     public function searchDocs(string $query, int $limit = 10): string
     {
+        $namespaces = $this->buildVisibleNamespaces();
+
+        // Include native tools as a virtual namespace so they appear in search results
+        if ($this->nativeToolBridge !== null) {
+            $namespaces['tools'] = $this->buildNativeToolsNamespace();
+        }
+
         return $this->docRenderer->search(
             $query,
-            $this->buildNamespaces(),
+            $namespaces,
             $this->getStaticPageContents(),
             $limit,
         );
@@ -98,11 +117,21 @@ class LuaDocService
             }
             // Handle namespace-only: "integrations.gmail"
             elseif (in_array($ns, ['integrations', 'mcp'])) {
+                $inactive = $this->inactiveNamespaceMessage($ns.'.'.$function);
+                if ($inactive !== null) {
+                    return $inactive;
+                }
+
                 return $this->docRenderer->generateNamespaceDocs(
                     $ns.'.'.$function,
                     $this->buildNamespaces(),
                     fn (string $n) => $this->getProviderLuaDocs($n),
                 );
+            }
+
+            $inactive = $this->inactiveNamespaceMessage($ns);
+            if ($inactive !== null) {
+                return $inactive;
             }
 
             return $this->docRenderer->generateFunctionDocs(
@@ -113,6 +142,11 @@ class LuaDocService
         }
 
         // Try as namespace
+        $inactive = $this->inactiveNamespaceMessage($page);
+        if ($inactive !== null) {
+            return $inactive;
+        }
+
         $namespaceDocs = $this->docRenderer->generateNamespaceDocs(
             $page,
             $this->buildNamespaces(),
@@ -172,16 +206,54 @@ class LuaDocService
      */
     public function getNamespaceSummary(): string
     {
-        $namespaces = $this->buildNamespaces();
+        $parts = [];
+        $activeProviders = array_keys($this->integrationManager->getActiveProviders());
+        $availableProviders = array_keys($this->integrationManager->getLocallyRunnableProviders());
+        sort($activeProviders);
+        sort($availableProviders);
+
+        if ($availableProviders !== []) {
+            $inactiveProviders = array_values(array_diff($availableProviders, $activeProviders));
+            $lines = [
+                'app.integrations.* — Installed integration namespaces exposed to Lua.',
+                '  Active now:',
+                '    '.$this->summarizeNamespaces($activeProviders),
+            ];
+
+            if ($inactiveProviders !== []) {
+                $lines[] = '  Available but inactive:';
+                $lines[] = '    '.$this->summarizeNamespaces($inactiveProviders);
+            }
+
+            $lines[] = '  Multi-credential namespaces: configured integrations can also expose `app.integrations.{name}.default` and `app.integrations.{name}.{account}` aliases.';
+            $lines[] = '  Use lua_list_docs or lua_read_doc to inspect a namespace before writing Lua code.';
+            $lines[] = '  If an integration is inactive, enable/configure it in /settings → Integrations.';
+            $parts[] = implode("\n", $lines);
+        }
+
+        $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
+
+        return implode("\n\n", $parts);
+    }
+
+    public function getPromptNamespaceSummary(): string
+    {
+        $activeProviders = array_keys($this->integrationManager->getActiveProviders());
+        sort($activeProviders);
 
         $parts = [];
 
-        // Integration namespaces
-        if ($namespaces !== []) {
-            $parts[] = $this->docRenderer->getNamespaceSummary($namespaces);
+        if ($activeProviders !== []) {
+            $lines = [
+                'app.integrations.* — Active integration namespaces exposed to Lua in this session.',
+                '  Active now:',
+                '    '.$this->summarizeNamespaces($activeProviders),
+                '  Multi-credential namespaces can also expose `app.integrations.{name}.default` and `app.integrations.{name}.{account}` aliases.',
+                '  Use lua_list_docs or lua_read_doc to inspect a namespace before writing Lua code.',
+            ];
+            $parts[] = implode("\n", $lines);
         }
 
-        // Native tools namespace
         $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
 
         return implode("\n\n", $parts);
@@ -195,7 +267,7 @@ class LuaDocService
     public function getAvailablePages(): array
     {
         $pages = $this->docRenderer->getAvailablePages(
-            $this->buildNamespaces(),
+            $this->buildVisibleNamespaces(),
             $this->getStaticPageContents(),
         );
 
@@ -205,6 +277,79 @@ class LuaDocService
         }
 
         return $pages;
+    }
+
+    /**
+     * @param  list<string>  $providers
+     */
+    private function summarizeNamespaces(array $providers): string
+    {
+        if ($providers === []) {
+            return 'none';
+        }
+
+        $namespaces = array_map(
+            static fn (string $name): string => "app.integrations.{$name}",
+            $providers,
+        );
+
+        $chunks = array_chunk($namespaces, 12);
+        $lines = array_map(
+            static fn (array $chunk): string => implode(', ', $chunk),
+            $chunks,
+        );
+
+        return implode("\n    ", $lines);
+    }
+
+    private function inactiveNamespaceMessage(string $page): ?string
+    {
+        if (! str_starts_with($page, 'integrations.')) {
+            return null;
+        }
+
+        $parts = explode('.', $page);
+        $provider = $parts[1] ?? '';
+        if ($provider === '') {
+            return null;
+        }
+
+        if (array_key_exists($provider, $this->integrationManager->getActiveProviders())) {
+            return null;
+        }
+
+        if (! array_key_exists($provider, $this->integrationManager->getLocallyRunnableProviders())) {
+            return null;
+        }
+
+        return "Namespace '{$page}' is installed but not active in this session.\n\n"
+            ."Enable and configure '{$provider}' in /settings → Integrations, then start a new turn or session.\n\n"
+            .$this->getNamespaceSummary();
+    }
+
+    /**
+     * @param  list<string>  $providers
+     */
+    private function summarizeInactiveIntegrations(array $providers): string
+    {
+        if ($providers === []) {
+            return 'No installed CLI-compatible integrations were found. Configure integrations via /settings → Integrations.';
+        }
+
+        $examples = array_slice($providers, 0, 12);
+        $line = implode(', ', array_map(
+            static fn (string $name): string => "app.integrations.{$name}",
+            $examples,
+        ));
+
+        $suffix = count($providers) > count($examples)
+            ? "\nExamples: {$line}, ... +".(count($providers) - count($examples)).' more'
+            : "\nExamples: {$line}";
+
+        return 'Installed but inactive integrations: '.count($providers).".\n"
+            .'Enable/configure one in /settings → Integrations to expose its Lua namespace.'
+            .$suffix
+            ."\nUse lua_read_doc(page: \"integrations.NAME\") after enabling one.";
     }
 
     /**
@@ -224,6 +369,66 @@ class LuaDocService
         );
 
         return $this->cachedNamespaces;
+    }
+
+    /**
+     * Collapse redundant `.default` aliases from discovery surfaces while
+     * keeping them callable for direct docs lookups and runtime execution.
+     *
+     * @return array<string, array{description: string, functions: array}>
+     */
+    private function buildVisibleNamespaces(): array
+    {
+        $namespaces = $this->buildNamespaces();
+
+        foreach (array_keys($namespaces) as $namespace) {
+            if (! str_ends_with($namespace, '.default')) {
+                continue;
+            }
+
+            $base = substr($namespace, 0, -strlen('.default'));
+            if ($base !== '' && array_key_exists($base, $namespaces)) {
+                unset($namespaces[$namespace]);
+            }
+        }
+
+        return $namespaces;
+    }
+
+    /**
+     * Build a virtual namespace entry for native tools, matching the format
+     * expected by LuaDocRenderer::search() and other methods.
+     *
+     * @return array{description: string, functions: array<int, array{name: string, description: string, fullDescription: string, parameters: array<int, array<string, mixed>>, sourceToolSlug: string}>}
+     */
+    private function buildNativeToolsNamespace(): array
+    {
+        $functions = [];
+
+        foreach ($this->nativeToolBridge->listTools() as $name => $meta) {
+            $parameters = [];
+            foreach ($meta['parameters'] as $paramName => $paramDesc) {
+                $parameters[] = [
+                    'name' => $paramName,
+                    'type' => 'string',
+                    'required' => false,
+                    'description' => $paramDesc,
+                ];
+            }
+
+            $functions[] = [
+                'name' => $name,
+                'description' => $meta['description'],
+                'fullDescription' => $meta['description'],
+                'parameters' => $parameters,
+                'sourceToolSlug' => $name,
+            ];
+        }
+
+        return [
+            'description' => 'Native KosmoKrator tools',
+            'functions' => $functions,
+        ];
     }
 
     /**
@@ -354,6 +559,52 @@ class LuaDocService
         $lines[] = 'local output = app.tools.bash({command = "git status --short"})';
         $lines[] = 'print(output)';
         $lines[] = '```';
+        $lines[] = '';
+        $lines[] = '## Subagent';
+        $lines[] = '';
+        $lines[] = 'The `subagent` tool supports two calling conventions:';
+        $lines[] = '- **Single:** pass `task` (string) — spawns one agent, blocks until done.';
+        $lines[] = '- **Batch:** pass `agents` (array of specs) — spawns all concurrently, blocks until all done.';
+        $lines[] = '';
+        $lines[] = '### Single Agent';
+        $lines[] = '';
+        $lines[] = '```lua';
+        $lines[] = 'local result = app.tools.subagent({';
+        $lines[] = '  task = "Find all files using the AgentContext class",';
+        $lines[] = '  type = "explore",';
+        $lines[] = '})';
+        $lines[] = 'print(result)';
+        $lines[] = '```';
+        $lines[] = '';
+        $lines[] = '### Batch — Parallel Agents';
+        $lines[] = '';
+        $lines[] = '```lua';
+        $lines[] = 'local result = app.tools.subagent({';
+        $lines[] = '  agents = {';
+        $lines[] = '    {task = "Explore routing", id = "r1"},';
+        $lines[] = '    {task = "Explore auth",    id = "r2"},';
+        $lines[] = '    {task = "Explore DB",      id = "r3"},';
+        $lines[] = '  }';
+        $lines[] = '})';
+        $lines[] = 'print(result)  -- all results keyed by id';
+        $lines[] = '```';
+        $lines[] = '';
+        $lines[] = '### mode: await vs background';
+        $lines[] = '';
+        $lines[] = '`mode` applies to both single and batch. Default is "await".';
+        $lines[] = '- `"await"`: blocks until agent(s) complete. Results returned directly.';
+        $lines[] = '- `"background"`: returns immediately. Results collected by main agent loop after Lua returns.';
+        $lines[] = '';
+        $lines[] = '### Per-agent options in batch';
+        $lines[] = '';
+        $lines[] = 'Each spec in `agents` supports:';
+        $lines[] = '- `task` (required) — what the agent should do';
+        $lines[] = '- `type` — "explore" (default), "plan", or "general"';
+        $lines[] = '- `id` — name for depends_on references';
+        $lines[] = '- `depends_on` — array of agent IDs that must finish first (results injected into task)';
+        $lines[] = '- `group` — agents with the same group run sequentially; different groups run concurrently';
+        $lines[] = '';
+        $lines[] = 'See the overview page for detailed examples of dependencies, groups, and background mode.';
 
         return implode("\n", $lines);
     }

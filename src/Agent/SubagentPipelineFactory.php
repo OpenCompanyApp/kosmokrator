@@ -10,7 +10,7 @@ use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
-use Kosmokrator\UI\UIManager;
+use Kosmokrator\UI\RendererInterface;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
@@ -37,7 +37,7 @@ final class SubagentPipelineFactory
      * @param  LlmClientInterface  $llm  Root LLM client (for model/token defaults)
      * @param  ToolRegistry  $toolRegistry  Root tool registry (inherited by subagents)
      * @param  PermissionEvaluator  $permissions  Permission policy
-     * @param  UIManager  $ui  UI manager (for cancellation token)
+     * @param  RendererInterface  $ui  Renderer (for cancellation token)
      * @param  ContextPipeline  $contextPipeline  Context components shared with subagents
      * @param  string  $rendererType  Active renderer type ('tui' or 'ansi')
      */
@@ -45,7 +45,7 @@ final class SubagentPipelineFactory
         LlmClientInterface $llm,
         ToolRegistry $toolRegistry,
         PermissionEvaluator $permissions,
-        UIManager $ui,
+        RendererInterface $ui,
         ContextPipeline $contextPipeline,
         string $rendererType,
     ): SubagentPipeline {

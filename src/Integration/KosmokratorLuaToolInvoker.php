@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Integration;
 
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
+use Kosmokrator\Tool\Permission\PermissionMode;
 use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
 use OpenCompany\IntegrationCore\Contracts\LuaToolInvoker;
-use OpenCompany\IntegrationCore\Contracts\Tool;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
 use OpenCompany\IntegrationCore\Support\ToolProviderRegistry;
 
@@ -16,6 +17,7 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
         private readonly ToolProviderRegistry $providers,
         private readonly CredentialResolver $credentials,
         private readonly IntegrationManager $integrationManager,
+        private readonly PermissionEvaluator $permissions,
     ) {}
 
     public function invoke(string $toolSlug, array $args, ?string $account = null): mixed
@@ -43,7 +45,7 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
             throw new \RuntimeException("Integration '{$appName}' {$operation} access denied. Enable it in /settings → Integrations");
         }
 
-        if ($permission === 'ask') {
+        if ($permission === 'ask' && $this->permissions->getPermissionMode() !== PermissionMode::Prometheus) {
             throw new \RuntimeException("Integration '{$appName}' {$operation} requires approval. Ask the user to change the permission in /settings → Integrations");
         }
 

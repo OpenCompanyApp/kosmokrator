@@ -15,12 +15,19 @@ class ToolResult
     public function __construct(
         public readonly string $output,
         public readonly bool $success = true,
+        public readonly ?array $metadata = null,
     ) {}
 
     /** Create a successful result with the given output text. */
     public static function success(string $output): self
     {
         return new self($output, true);
+    }
+
+    /** Create a successful result with structured metadata for programmatic consumers (Lua, etc.). */
+    public static function successWithMetadata(string $output, array $metadata): self
+    {
+        return new self($output, true, $metadata);
     }
 
     /** Create an error result with the given message. */

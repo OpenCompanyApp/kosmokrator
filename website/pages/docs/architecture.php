@@ -131,6 +131,80 @@ ob_start();
                 across agent turns
             </td>
         </tr>
+        <tr>
+            <td><code>src/Settings/</code></td>
+            <td>
+                Settings management: <code>SettingsManager</code>,
+                <code>SettingsPaths</code>, <code>YamlConfigStore</code>,
+                <code>SettingsSchema</code>
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Provider/</code></td>
+            <td>
+                Service providers for the DI container &mdash; 11 providers
+                (Core, Config, Database, LLM, Tool, Session, Agent, Event,
+                Integration, Logging, UI) each with <code>register()</code>
+                and <code>boot()</code> phases
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Athanor/</code></td>
+            <td>
+                Reactive signal/subscriber system: <code>Signal</code>,
+                <code>Effect</code>, <code>Computed</code>,
+                <code>Subscriber</code> for fine-grained reactivity
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Skill/</code></td>
+            <td>
+                Skill system: <code>Skill</code>, <code>SkillRegistry</code>,
+                <code>SkillLoader</code>, <code>SkillDispatcher</code>,
+                <code>SkillScope</code> for extensible agent capabilities
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Lua/</code></td>
+            <td>
+                Lua sandbox and scripting: <code>LuaSandboxService</code>,
+                <code>LuaDocService</code>, <code>NativeToolBridge</code>,
+                <code>LuaResult</code>
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Integration/</code></td>
+            <td>
+                External integration management: <code>IntegrationManager</code>,
+                <code>KosmokratorFileStorage</code>,
+                <code>KosmokratorLuaToolInvoker</code>
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Audio/</code></td>
+            <td>
+                Sound effects via <code>CompletionSound</code>
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/Update/</code></td>
+            <td>
+                Self-updater: <code>UpdateChecker</code>,
+                <code>SelfUpdater</code>
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/UI/Diff/</code></td>
+            <td>
+                Diff rendering via <code>DiffRenderer</code>
+            </td>
+        </tr>
+        <tr>
+            <td><code>src/UI/Highlight/</code></td>
+            <td>
+                Lua syntax highlighting for inline code display
+            </td>
+        </tr>
     </tbody>
 </table>
 
@@ -152,7 +226,11 @@ ob_start();
     The UI is built around a composite <code>RendererInterface</code> that
     combines five focused sub-interfaces. Each sub-interface covers one aspect
     of the terminal output, and the composite is implemented by two concrete
-    renderers plus a null renderer for testing.
+    renderers plus a null renderer for testing. The <strong>Revolt event
+    loop</strong> is fundamental to KosmoKrator's async architecture &mdash;
+    it drives not just the TUI widget rendering but also concurrent LLM
+    streaming, parallel tool execution, and non-blocking I/O throughout the
+    application.
 </p>
 
 <h3 id="renderer-interfaces">Sub-Interfaces</h3>
@@ -179,7 +257,8 @@ ob_start();
         </tr>
         <tr>
             <td><code>ConversationRendererInterface</code></td>
-            <td>Message rendering: user input, assistant text, streaming output</td>
+            <td>Conversation history replay and session resumption: re-rendering
+                the prior message history when a session is resumed</td>
         </tr>
         <tr>
             <td><code>SubagentRendererInterface</code></td>
@@ -212,6 +291,15 @@ ob_start();
 </ul>
 
 <p>
+    A <strong>UIManager</strong> facade sits in front of the concrete
+    renderers. It implements <code>RendererInterface</code> and delegates to
+    either <code>TuiRenderer</code> or <code>AnsiRenderer</code> based on the
+    active configuration. This is the actual object wired into
+    <code>AgentSession</code> &mdash; the rest of the codebase never references
+    the concrete renderer classes directly.
+</p>
+
+<p>
     Both implementations share the <code>Theme</code> class for color palette
     management and <code>KosmokratorTerminalTheme</code> for syntax
     highlighting of code blocks. When <code>ui.renderer</code> is set to
@@ -237,6 +325,14 @@ ob_start();
     heavy work to specialized components. Its job is to coordinate the flow
     between user input, LLM calls, and tool execution, not to implement
     any of those concerns itself.
+</p>
+
+<p>
+    The conversation state is held in a <code>ConversationHistory</code>
+    object &mdash; the central message list data structure that tracks all
+    user messages, assistant responses, tool calls, and tool results across
+    the session. It is passed through the context pipeline before each LLM
+    call.
 </p>
 
 <h3 id="repl-flow">REPL Flow</h3>
@@ -317,9 +413,14 @@ ob_start();
         conversation + tool schemas).
     </li>
     <li>
-        <strong>Context pipeline</strong> &mdash; Progressive reduction
-        through truncation, deduplication, pruning, LLM-based compaction,
-        and emergency oldest-turn trimming. See
+        <strong>Context pipeline</strong> &mdash; Wired together by
+        <code>ContextPipeline</code> and <code>ContextPipelineFactory</code>,
+        which compose the budget, compactor, pruner,
+        <code>ToolResultDeduplicator</code> (removes superseded tool results
+        between turns), truncator, and protected context builder into a
+        single pass. Progressive reduction runs through deduplication,
+        pruning, LLM-based compaction, truncation, and emergency oldest-turn
+        trimming. See
         <a href="/docs/context#context-pipeline">Context &amp; Memory</a>
         for full details.
     </li>
@@ -341,6 +442,40 @@ ob_start();
     relies on human oversight. See
     <a href="/docs/agents#stuck-detection">Agents &rarr; Stuck Detection</a>
     for the full escalation process.
+</p>
+
+<h3 id="event-system">Event System</h3>
+
+<p>
+    KosmoKrator uses a lightweight event system in
+    <code>src/Agent/Event/</code> to decouple cross-cutting concerns from the
+    core agent loop. Events are dispatched at key points during the REPL
+    cycle and consumed by listeners:
+</p>
+
+<ul>
+    <li><strong>StreamChunkEvent</strong> &mdash; fired for each streamed
+        token chunk from the LLM</li>
+    <li><strong>ThinkingEvent</strong> &mdash; fired when the model emits
+        extended thinking content</li>
+    <li><strong>ToolCallEvent</strong> &mdash; fired before a tool is
+        executed</li>
+    <li><strong>ToolResultEvent</strong> &mdash; fired after a tool returns
+        its result</li>
+    <li><strong>LlmResponseReceived</strong> &mdash; fired when a complete
+        LLM response arrives</li>
+    <li><strong>MessagePersisted</strong> &mdash; fired after a message is
+        saved to the session database</li>
+    <li><strong>ResponseCompleteEvent</strong> &mdash; fired when the full
+        response cycle (including all tool calls) finishes</li>
+    <li><strong>ContextCompacted</strong> &mdash; fired after the context
+        pipeline runs compaction</li>
+</ul>
+
+<p>
+    The primary built-in listener is
+    <code>TokenTrackingListener</code>, which aggregates token usage from
+    LLM responses for cost tracking and budget enforcement.
 </p>
 
 <!-- ------------------------------------------------------------------ -->
@@ -430,7 +565,10 @@ ob_start();
 <p>
     Environment variables can be referenced in any YAML file using the
     <code>${VAR_NAME}</code> syntax. This is the recommended way to provide
-    API keys and other secrets.
+    API keys and other secrets. Additionally, a <code>.env</code> file in
+    the project root is loaded automatically by the Kernel via
+    <code>Dotenv</code> during bootstrap (<code>Kernel.php:94-96</code>),
+    making those variables available throughout the application.
 </p>
 
 <p>
@@ -442,21 +580,55 @@ ob_start();
 <h2 id="dependency-injection">Dependency Injection</h2>
 
 <p>
-    KosmoKrator does not use a full DI container framework. Instead,
-    the <code>AgentSessionBuilder</code> acts as an explicit composition root:
-    it reads the merged configuration, instantiates every component with its
-    required dependencies, and returns an immutable <code>AgentSession</code>
-    value object (a PHP 8.4 <code>readonly class</code>).
+    KosmoKrator uses the <strong>Illuminate Container</strong> with a service
+    provider pattern. The <code>Kernel</code> (see
+    <code>src/Kernel.php</code>) bootstraps the container in two phases:
+</p>
+
+<ol>
+    <li>
+        <strong>register()</strong> &mdash; Each provider registers bindings
+        (interfaces &rarr; concretes, singletons, factory closures) into the
+        container without resolving anything.
+    </li>
+    <li>
+        <strong>boot()</strong> &mdash; After all providers have registered,
+        each is booted. This is where providers can resolve dependencies from
+        the container and perform initialization that requires other services.
+    </li>
+</ol>
+
+<p>
+    There are 11 service providers in <code>src/Provider/</code>:
+    <code>CoreServiceProvider</code>, <code>ConfigServiceProvider</code>,
+    <code>DatabaseServiceProvider</code>, <code>LlmServiceProvider</code>,
+    <code>ToolServiceProvider</code>, <code>SessionServiceProvider</code>,
+    <code>AgentServiceProvider</code>, <code>EventServiceProvider</code>,
+    <code>IntegrationServiceProvider</code>,
+    <code>LoggingServiceProvider</code>, and
+    <code>UiServiceProvider</code>.
+    The Kernel also loads <code>.env</code> variables via
+    <code>Dotenv</code> before booting providers
+    (<code>Kernel.php:94-96</code>).
 </p>
 
 <p>
-    The design avoids circular dependencies by ensuring that extracted classes
-    communicate through return values and closures rather than holding mutual
-    references. The flow is strictly unidirectional:
+    The <code>AgentSessionBuilder</code> then acts as the composition root
+    for each agent session: it reads the merged configuration, resolves
+    components from the container, and returns an immutable
+    <code>AgentSession</code> value object (a PHP 8.4
+    <code>readonly class</code>). The design avoids circular dependencies
+    by ensuring that classes communicate through return values and closures
+    rather than holding mutual references.
 </p>
 
-<pre><code>AgentSessionBuilder
-  &rarr; creates LlmClient, ToolExecutor, ContextManager, Renderer, Database
+<pre><code>Kernel.php
+  &rarr; loads .env via Dotenv
+  &rarr; register() on all providers (Illuminate Container bindings)
+  &rarr; boot() on all providers (resolve &amp; initialize)
+
+AgentSessionBuilder
+  &rarr; resolves LlmClient, ToolExecutor, ContextManager, Renderer, Database from container
   &rarr; wires them into AgentSession
   &rarr; AgentLoop receives AgentSession and orchestrates the REPL</code></pre>
 

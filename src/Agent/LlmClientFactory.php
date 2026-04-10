@@ -12,7 +12,7 @@ use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\RetryableLlmClient;
-use Kosmokrator\UI\UIManager;
+use Kosmokrator\UI\RendererInterface;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
@@ -32,12 +32,12 @@ final class LlmClientFactory
      * Create a configured LLM client appropriate for the given renderer.
      *
      * @param  string  $rendererType  Active renderer type ('tui' or 'ansi')
-     * @param  UIManager  $ui  UI manager for retry notifications
+     * @param  RendererInterface  $ui  Renderer for retry notifications
      * @return LlmClientInterface Configured client (possibly wrapped in RetryableLlmClient)
      *
      * @throws AuthenticationException|ConfigurationException
      */
-    public function create(string $rendererType, UIManager $ui): LlmClientInterface
+    public function create(string $rendererType, RendererInterface $ui): LlmClientInterface
     {
         $config = $this->container->make('config');
         $provider = $config->get('kosmokrator.agent.default_provider', 'z');

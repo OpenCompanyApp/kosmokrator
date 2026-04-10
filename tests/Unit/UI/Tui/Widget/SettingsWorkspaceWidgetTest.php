@@ -722,6 +722,52 @@ final class SettingsWorkspaceWidgetTest extends TestCase
         $this->assertStringContainsString('Settings', $joined);
     }
 
+    public function test_render_integration_details_shows_edit_buffer_for_text_credentials(): void
+    {
+        $widget = $this->createWidget([
+            'categories' => [
+                ['id' => 'integrations', 'label' => 'Integrations', 'fields' => [
+                    ['id' => 'integration.exchangerate.enabled', 'label' => '  Enabled', 'type' => 'toggle', 'value' => 'on', 'options' => ['on', 'off'], 'description' => 'Enable integration.'],
+                    ['id' => 'integration.exchangerate.permissions.read', 'label' => '  Read access', 'type' => 'choice', 'value' => 'allow', 'options' => ['allow', 'ask', 'deny'], 'description' => 'Read permission.'],
+                    ['id' => 'integration.exchangerate.permissions.write', 'label' => '  Write access', 'type' => 'choice', 'value' => 'allow', 'options' => ['allow', 'ask', 'deny'], 'description' => 'Write permission.'],
+                    ['id' => 'integration.exchangerate._accounts', 'label' => '  Accounts', 'type' => 'readonly', 'value' => 'default', 'description' => 'Account aliases.'],
+                    ['id' => 'integration.exchangerate.credential.api_key', 'label' => '  API Key', 'type' => 'text', 'value' => '', 'description' => 'Secret API key.'],
+                ]],
+            ],
+            'integrations_by_id' => [
+                'exchangerate' => [
+                    'id' => 'exchangerate',
+                    'name' => 'Exchange Rate',
+                    'label' => 'Exchange Rate',
+                    'description' => 'Currency exchange rates',
+                    'locally_runnable' => true,
+                    'configured' => false,
+                    'enabled' => true,
+                    'read_permission' => 'allow',
+                    'write_permission' => 'allow',
+                    'accounts' => [],
+                    'credential_fields' => [
+                        ['key' => 'api_key', 'label' => 'API Key', 'configured' => false, 'required' => false],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->setProperty($widget, 'categoryIndex', 0);
+        $this->setProperty($widget, 'selectedIntegrationId', 'exchangerate');
+        $this->setProperty($widget, 'integrationEditing', true);
+        $this->setProperty($widget, 'fieldIndex', 4);
+        $this->setProperty($widget, 'editing', true);
+        $this->setProperty($widget, 'editBuffer', 'test-key-123');
+
+        $lines = $this->invoke($widget, 'renderIntegrationDetails', 80, 14);
+        $joined = implode("\n", $lines);
+
+        $this->assertStringContainsString('Editing:   API Key', $joined);
+        $this->assertStringContainsString('Enter saves', $joined);
+        $this->assertStringContainsString('test-key-123', $joined);
+    }
+
     // ── handleFieldSideEffects ───────────────────────────────────────────
 
     public function test_handle_field_side_effects_resets_model_on_provider_change(): void

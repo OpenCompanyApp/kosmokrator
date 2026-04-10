@@ -9,7 +9,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 class AgentCommandTest extends TestCase
 {
-    public function test_agent_command_boots_and_exits(): void
+    public function test_agent_command_requires_prompt_in_headless_mode(): void
     {
         $kernel = new Kernel(dirname(__DIR__, 2));
         $kernel->boot();
@@ -17,10 +17,8 @@ class AgentCommandTest extends TestCase
         $command = new AgentCommand($kernel->getContainer());
         $tester = new CommandTester($command);
 
-        // Provide /quit as stdin so the REPL exits immediately
-        $tester->setInputs(['/quit']);
         $tester->execute(['--no-animation' => true, '--renderer' => 'ansi']);
 
-        $this->assertSame(0, $tester->getStatusCode());
+        $this->assertSame(1, $tester->getStatusCode());
     }
 }

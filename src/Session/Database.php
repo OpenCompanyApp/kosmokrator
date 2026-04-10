@@ -12,7 +12,7 @@ class Database
 {
     private \PDO $pdo;
 
-    private const SCHEMA_VERSION = 4;
+    private const SCHEMA_VERSION = 5;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -137,6 +137,7 @@ class Database
 
         // Index for fetching a session's messages, optionally filtered by compaction status
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, compacted)');
+        $this->createMessagesFtsSchema();
 
         $this->pdo->exec('
             CREATE TABLE IF NOT EXISTS memories (
@@ -191,6 +192,12 @@ class Database
             $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
             $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
         }
+
+        if ($from < 5) {
+            // v5: add FTS5-backed session history search
+            $this->createMessagesFtsSchema();
+            $this->rebuildMessagesFtsIndex();
+        }
     }
 
     /** Adds a column to a table only if it does not already exist. */
@@ -206,5 +213,49 @@ class Database
         }
 
         $this->pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+    }
+
+    private function createMessagesFtsSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+                content,
+                content = 'messages',
+                content_rowid = 'id',
+                tokenize = "unicode61 tokenchars '/._-'"
+            )
+            SQL
+        );
+
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN
+                INSERT INTO messages_fts(rowid, content) VALUES (new.id, COALESCE(new.content, ''));
+            END
+            SQL
+        );
+
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, COALESCE(old.content, ''));
+            END
+            SQL
+        );
+
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, COALESCE(old.content, ''));
+                INSERT INTO messages_fts(rowid, content) VALUES (new.id, COALESCE(new.content, ''));
+            END
+            SQL
+        );
+    }
+
+    private function rebuildMessagesFtsIndex(): void
+    {
+        $this->pdo->exec("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')");
     }
 }

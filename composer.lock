@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "edaf746ca7b16d40bf61370ddeb6b6f9",
+    "content-hash": "29325e9db1f3ad9d3cf00b57ab63120f",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3627,8 +3627,108 @@
             "time": "2026-04-03T11:52:31+00:00"
         },
         {
+            "name": "opencompanyapp/integration-clickup",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "/Users/rutger/Sites/integrations/packages/clickup",
+                "reference": "8590ff9f0e5692bfa39707b144aa4b97d5260208"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-clickup": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\ClickUp\\ClickUpServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\ClickUp\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "ClickUp integration for OpenCompany — tasks, docs, time tracking, chat, and workspace management.",
+            "keywords": [
+                "clickup",
+                "opencompany",
+                "project-management",
+                "tasks",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": false
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-coingecko",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "/Users/rutger/Sites/integrations/packages/coingecko",
+                "reference": "46b78f0d8ddc7250b50d8b8043abf362bd862d82"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-coingecko": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\CoinGecko\\CoinGeckoServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\CoinGecko\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "CoinGecko cryptocurrency integration for Laravel — search coins, prices, market data, trending, historical charts.",
+            "keywords": [
+                "bitcoin",
+                "coingecko",
+                "crypto",
+                "opencompany",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": false
+            }
+        },
+        {
             "name": "opencompanyapp/integration-core",
-            "version": "dev-feat/new-integrations",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "/Users/rutger/Sites/integrations/core",
@@ -3668,6 +3768,105 @@
                 "tools"
             ],
             "transport-options": {
+                "relative": false
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-plane",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "/Users/rutger/Sites/integrations/packages/plane",
+                "reference": "4ab2cdf6c4eebc5379dce73359f6ba80f8b09f2c"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-plane": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\Plane\\PlaneServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\Plane\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "Plane.so integration for Laravel — manage projects, issues, cycles, modules, and team members.",
+            "keywords": [
+                "issues",
+                "opencompany",
+                "plane",
+                "project-management",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": false
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-plausible",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "/Users/rutger/Sites/integrations/packages/plausible",
+                "reference": "0d6b7a49fda1b9a91db40feb330c73e0bc77c891"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-plausible": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\Plausible\\PlausibleServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\Plausible\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "Plausible Analytics integration for Laravel — query stats, realtime visitors, manage sites and goals.",
+            "keywords": [
+                "analytics",
+                "opencompany",
+                "plausible",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
                 "relative": false
             }
         },
@@ -9394,7 +9593,11 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "opencompany/prism-codex": 20,
+        "opencompanyapp/integration-clickup": 20,
+        "opencompanyapp/integration-coingecko": 20,
         "opencompanyapp/integration-core": 20,
+        "opencompanyapp/integration-plane": 20,
+        "opencompanyapp/integration-plausible": 20,
         "opencompanyapp/prism-relay": 20,
         "symfony/tui": 20
     },

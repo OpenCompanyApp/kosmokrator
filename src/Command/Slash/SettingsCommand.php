@@ -21,6 +21,8 @@ use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Tool\Permission\PermissionMode;
+use OpenCompany\IntegrationCore\Contracts\ConfigurableIntegration;
+use OpenCompany\IntegrationCore\Contracts\ToolProvider;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 /**
@@ -197,6 +199,7 @@ final class SettingsCommand implements SlashCommand
             : [];
         $providerStatuses = $catalog->authStatuses();
         $setupProvider = $currentProvider;
+        $integrationView = $this->buildIntegrationView($settings);
 
         $categories = [];
         foreach ($schema->categoryLabels() as $categoryId => $label) {
@@ -484,7 +487,7 @@ final class SettingsCommand implements SlashCommand
             }
 
             if ($categoryId === 'integrations') {
-                $fields = array_merge($fields, $this->buildIntegrationFields($settings));
+                $fields = array_merge($fields, $integrationView['fields']);
             }
 
             $categories[] = [
@@ -512,6 +515,8 @@ final class SettingsCommand implements SlashCommand
             'providers_by_id' => $this->providersById($catalog),
             'custom_provider_definitions' => $settings->customProviders(),
             'auth_action_options_by_provider' => $this->authActionOptionsByProvider($catalog),
+            'integrations_by_id' => $integrationView['providers'],
+            'integration_empty_state' => $integrationView['empty_state'],
         ];
     }
 
@@ -899,92 +904,69 @@ final class SettingsCommand implements SlashCommand
      *
      * @return array<int, array{id: string, label: string, value: string, source: string, effect: string, type: string, options: list<string>, description: string}>
      */
-    private function buildIntegrationFields(SettingsManager $settings): array
+    private function buildIntegrationFields(SettingsManager $settings, IntegrationManager $manager, YamlCredentialResolver $resolver): array
     {
         $fields = [];
-
-        if (! $this->container->bound(IntegrationManager::class)) {
-            $fields[] = [
-                'id' => 'integrations._unavailable',
-                'label' => 'Integration system not available',
-                'value' => 'No integration packages installed.',
-                'source' => 'runtime',
-                'effect' => 'applies_now',
-                'type' => 'readonly',
-                'options' => [],
-                'description' => 'Install opencompanyapp/integration-* packages to enable integrations.',
-            ];
-
-            return $fields;
-        }
-
-        $manager = $this->container->make(IntegrationManager::class);
         $providers = $manager->getLocallyRunnableProviders();
-
-        if ($providers === []) {
-            $fields[] = [
-                'id' => 'integrations._none',
-                'label' => 'No integrations available',
-                'value' => 'No CLI-compatible integration packages found.',
-                'source' => 'runtime',
-                'effect' => 'applies_now',
-                'type' => 'readonly',
-                'options' => [],
-                'description' => 'Install opencompanyapp/integration-* packages to enable integrations.',
-            ];
-
-            return $fields;
-        }
+        $enabled = [];
+        $available = [];
 
         foreach ($providers as $name => $provider) {
-            $meta = $provider->appMeta();
-            $description = $meta['description'] ?? $name;
-            $isConfigured = $this->container->make(YamlCredentialResolver::class)->isConfigured($name);
-
-            // Enabled toggle
-            $enabled = $settings->getRaw("integrations.{$name}.enabled");
-            $fields[] = [
-                'id' => "integration.{$name}.enabled",
-                'label' => $description.($isConfigured ? '' : ' (not configured)'),
-                'value' => ($enabled === true || $enabled === 'on') ? 'on' : 'off',
-                'source' => $enabled !== null ? 'global' : 'default',
-                'effect' => 'next_session',
-                'type' => 'toggle',
-                'options' => ['on', 'off'],
-                'description' => "Enable or disable the {$name} integration.",
-            ];
-
-            // Read permission
-            $readPerm = $settings->getRaw("integrations.{$name}.permissions.read") ?? 'allow';
-            $fields[] = [
-                'id' => "integration.{$name}.permissions.read",
-                'label' => '  Read access',
-                'value' => $readPerm,
-                'source' => $settings->getRaw("integrations.{$name}.permissions.read") !== null ? 'global' : 'default',
-                'effect' => 'applies_now',
-                'type' => 'choice',
-                'options' => ['allow', 'ask', 'deny'],
-                'description' => "Read access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
-            ];
-
-            // Write permission
-            $writePerm = $settings->getRaw("integrations.{$name}.permissions.write") ?? 'ask';
-            $fields[] = [
-                'id' => "integration.{$name}.permissions.write",
-                'label' => '  Write access',
-                'value' => $writePerm,
-                'source' => $settings->getRaw("integrations.{$name}.permissions.write") !== null ? 'global' : 'default',
-                'effect' => 'applies_now',
-                'type' => 'choice',
-                'options' => ['allow', 'ask', 'deny'],
-                'description' => "Write access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
-            ];
+            $integration = $this->buildIntegrationProviderView($settings, $resolver, $name, $provider, true);
+            if ($integration['enabled']) {
+                $enabled[$name] = $integration;
+            } else {
+                $available[$name] = $integration;
+            }
         }
+
+        uasort($enabled, static fn (array $a, array $b): int => strcasecmp((string) $a['name'], (string) $b['name']));
+        uasort($available, static fn (array $a, array $b): int => strcasecmp((string) $a['name'], (string) $b['name']));
+
+        if ($enabled !== []) {
+            $fields[] = $this->integrationSectionField(
+                'integration._section.enabled',
+                'Enabled Integrations',
+                count($enabled).' active',
+                'Integrations that are currently enabled for agent use.',
+            );
+            foreach ($enabled as $name => $integration) {
+                $fields = array_merge($fields, $this->integrationFieldsForProvider($settings, $integration));
+            }
+        }
+
+        if ($available !== []) {
+            $fields[] = $this->integrationSectionField(
+                'integration._section.available',
+                'Available Integrations',
+                count($available).' available',
+                'Installed CLI-compatible integrations that are available to configure and enable.',
+            );
+            foreach ($available as $name => $integration) {
+                $fields = array_merge($fields, $this->integrationFieldsForProvider($settings, $integration));
+            }
+        }
+
+        if ($fields === []) {
+            $fields[] = $this->integrationSectionField(
+                'integration._section.empty',
+                'Available Integrations',
+                '0 available',
+                'No CLI-compatible integrations are currently available.',
+            );
+        }
+
+        $fields[] = $this->integrationSectionField(
+            'integration._section.actions',
+            'Bulk Actions',
+            '',
+            'Apply permission defaults across configured integrations.',
+        );
 
         // Bulk operations
         $fields[] = [
             'id' => 'integration._bulk_allow',
-            'label' => 'Allow all integrations (read + write)',
+            'label' => '  Allow all integrations (read + write)',
             'value' => '',
             'source' => 'runtime',
             'effect' => 'applies_now',
@@ -994,7 +976,7 @@ final class SettingsCommand implements SlashCommand
         ];
         $fields[] = [
             'id' => 'integration._bulk_ask_writes',
-            'label' => 'Require approval for all writes',
+            'label' => '  Require approval for all writes',
             'value' => '',
             'source' => 'runtime',
             'effect' => 'applies_now',
@@ -1006,8 +988,136 @@ final class SettingsCommand implements SlashCommand
         return $fields;
     }
 
+    /**
+     * @param  array<string, mixed>  $integration
+     * @return array<int, array{id: string, label: string, value: string, source: string, effect: string, type: string, options: list<string>, description: string}>
+     */
+    private function integrationFieldsForProvider(SettingsManager $settings, array $integration): array
+    {
+        $name = (string) $integration['id'];
+        $fields = [];
+        $description = $integration['description'];
+        $isConfigured = $integration['configured'];
+        $summary = [];
+        $summary[] = $isConfigured ? 'Configured' : 'Not configured';
+        $summary[] = $integration['enabled'] ? 'Enabled' : 'Disabled';
+
+        if ($integration['credential_fields'] !== []) {
+            $summary[] = count($integration['credential_fields']).' credential fields';
+        }
+
+        $fields[] = [
+            'id' => "integration.{$name}._summary",
+            'label' => (string) ($integration['name'] ?? $integration['label']),
+            'value' => implode(' · ', $summary),
+            'source' => 'runtime',
+            'effect' => 'applies_now',
+            'type' => 'readonly',
+            'options' => [],
+            'description' => $description,
+        ];
+
+        // Enabled toggle
+        $enabled = $settings->getRaw("integrations.{$name}.enabled");
+        $fields[] = [
+            'id' => "integration.{$name}.enabled",
+            'label' => '  Enabled',
+            'value' => ($enabled === true || $enabled === 'on') ? 'on' : 'off',
+            'source' => $settings->rawSource("integrations.{$name}.enabled") ?? 'default',
+            'effect' => 'next_session',
+            'type' => 'toggle',
+            'options' => ['on', 'off'],
+            'description' => "Enable or disable the {$name} integration.",
+        ];
+
+        $readPerm = $settings->getRaw("integrations.{$name}.permissions.read") ?? 'allow';
+        $fields[] = [
+            'id' => "integration.{$name}.permissions.read",
+            'label' => '  Read access',
+            'value' => $readPerm,
+            'source' => $settings->rawSource("integrations.{$name}.permissions.read") ?? 'default',
+            'effect' => 'applies_now',
+            'type' => 'choice',
+            'options' => ['allow', 'ask', 'deny'],
+            'description' => "Read access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
+        ];
+
+        $writePerm = $settings->getRaw("integrations.{$name}.permissions.write") ?? 'allow';
+        $fields[] = [
+            'id' => "integration.{$name}.permissions.write",
+            'label' => '  Write access',
+            'value' => $writePerm,
+            'source' => $settings->rawSource("integrations.{$name}.permissions.write") ?? 'default',
+            'effect' => 'applies_now',
+            'type' => 'choice',
+            'options' => ['allow', 'ask', 'deny'],
+            'description' => "Write access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
+        ];
+
+        $accountValue = $integration['accounts'] === [] ? 'default account only' : 'default + '.implode(', ', $integration['accounts']);
+        $fields[] = [
+            'id' => "integration.{$name}._accounts",
+            'label' => '  Accounts',
+            'value' => $accountValue,
+            'source' => 'secret_store',
+            'effect' => 'applies_now',
+            'type' => 'readonly',
+            'options' => [],
+            'description' => 'Integration credentials are stored globally. Additional aliases are listed here; the settings workspace currently edits the default account.',
+        ];
+
+        foreach ($integration['credential_fields'] as $credential) {
+            $fields[] = [
+                'id' => "integration.{$name}.credential.{$credential['key']}",
+                'label' => '  '.$credential['label'],
+                'value' => $credential['display_value'],
+                'source' => 'secret_store',
+                'effect' => 'applies_now',
+                'type' => $credential['input_type'],
+                'options' => $credential['options'],
+                'description' => $credential['description'],
+            ];
+        }
+
+        if ($integration['credential_fields'] !== [] || $isConfigured) {
+            $fields[] = [
+                'id' => "integration.{$name}.credential_action",
+                'label' => '  Credential action',
+                'value' => '',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'type' => 'choice',
+                'options' => ['', 'clear_saved'],
+                'description' => 'Clear all saved credentials for the default account of this integration.',
+            ];
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @return array{id: string, label: string, value: string, source: string, effect: string, type: string, options: list<string>, description: string}
+     */
+    private function integrationSectionField(string $id, string $label, string $value, string $description): array
+    {
+        return [
+            'id' => $id,
+            'label' => $label,
+            'value' => $value,
+            'source' => 'runtime',
+            'effect' => 'applies_now',
+            'type' => 'readonly',
+            'options' => [],
+            'description' => $description,
+        ];
+    }
+
     private function applyIntegrationSetting(SettingsManager $settings, string $id, string $value, string $scope): void
     {
+        if (preg_match('/^integration\.([^.]+)\._/', $id)) {
+            return;
+        }
+
         // Handle bulk operations
         if ($id === 'integration._bulk_allow' && $value === 'yes') {
             if ($this->container->bound(IntegrationManager::class)) {
@@ -1023,6 +1133,35 @@ final class SettingsCommand implements SlashCommand
                 $manager = $this->container->make(IntegrationManager::class);
                 $manager->setAllPermissions('ask', 'write', $scope);
             }
+
+            return;
+        }
+
+        if (preg_match('/^integration\.([^.]+)\.credential_action$/', $id, $m)) {
+            if ($value === 'clear_saved') {
+                $this->container->make(YamlCredentialResolver::class)->removeIntegration($m[1]);
+            }
+
+            return;
+        }
+
+        if (preg_match('/^integration\.([^.]+)\.credential\.([^.]+)$/', $id, $m)) {
+            if ($value === '') {
+                return;
+            }
+
+            $integration = $m[1];
+            $key = $m[2];
+            $resolver = $this->container->make(YamlCredentialResolver::class);
+            $current = (string) $resolver->get($integration, $key, '');
+            $field = $this->integrationConfigFieldMap($integration)[$key] ?? null;
+
+            if (($field['type'] ?? 'text') === 'secret' && $current !== '' && $value === $this->maskSecret($current)) {
+                return;
+            }
+
+            $resolver->registerAccount($integration);
+            $resolver->set($integration, $key, $value);
 
             return;
         }
@@ -1045,5 +1184,336 @@ final class SettingsCommand implements SlashCommand
 
         // Fallback: store as-is
         $settings->setRaw($id, $value, $scope);
+    }
+
+    /**
+     * @return array{fields: array<int, array<string, mixed>>, providers: array<string, array<string, mixed>>, empty_state: array<string, mixed>|null}
+     */
+    private function buildIntegrationView(SettingsManager $settings): array
+    {
+        if (! $this->container->bound(IntegrationManager::class)) {
+            return [
+                'fields' => [[
+                    'id' => 'integrations._unavailable',
+                    'label' => 'Integration system unavailable',
+                    'value' => 'No integration runtime is bound.',
+                    'source' => 'runtime',
+                    'effect' => 'applies_now',
+                    'type' => 'readonly',
+                    'options' => [],
+                    'description' => 'The integration service provider is not registered in this runtime.',
+                ]],
+                'providers' => [],
+                'empty_state' => [
+                    'title' => 'Integrations unavailable',
+                    'message' => 'The integration runtime is not available in this session.',
+                    'details' => ['Register the integration service provider before opening settings.'],
+                ],
+            ];
+        }
+
+        $manager = $this->container->make(IntegrationManager::class);
+        $resolver = $this->container->make(YamlCredentialResolver::class);
+        $allProviders = $manager->getAllProviders();
+        $runnableProviders = $manager->getLocallyRunnableProviders();
+        $providerViews = [];
+
+        foreach ($allProviders as $name => $provider) {
+            $providerViews[$name] = $this->buildIntegrationProviderView(
+                $settings,
+                $resolver,
+                $name,
+                $provider,
+                isset($runnableProviders[$name]),
+            );
+        }
+
+        if ($allProviders === []) {
+            return [
+                'fields' => [[
+                    'id' => 'integrations._none',
+                    'label' => 'No integrations installed',
+                    'value' => '0 installed packages',
+                    'source' => 'runtime',
+                    'effect' => 'applies_now',
+                    'type' => 'readonly',
+                    'options' => [],
+                    'description' => 'Install OpenCompany integration packages to enable integrations in the CLI.',
+                ]],
+                'providers' => [],
+                'empty_state' => [
+                    'title' => 'No integrations installed',
+                    'message' => 'No OpenCompany integration packages were found in this install.',
+                    'details' => [
+                        'Install `opencompanyapp/integration-*` packages, or the current `opencompanyapp/ai-tool-*` packages, and reopen settings to manage them here.',
+                    ],
+                ],
+            ];
+        }
+
+        if ($runnableProviders === []) {
+            $labels = array_map(
+                static fn (array $provider): string => $provider['label'],
+                array_values($providerViews),
+            );
+
+            return [
+                'fields' => [[
+                    'id' => 'integrations._oauth_only',
+                    'label' => 'No CLI-compatible integrations',
+                    'value' => count($allProviders).' installed packages',
+                    'source' => 'runtime',
+                    'effect' => 'applies_now',
+                    'type' => 'readonly',
+                    'options' => [],
+                    'description' => 'Installed integrations currently require browser/OAuth flows or a non-CLI host: '.implode(', ', $labels).'.',
+                ]],
+                'providers' => $providerViews,
+                'empty_state' => [
+                    'title' => 'No CLI-compatible integrations',
+                    'message' => 'Installed integrations are not locally runnable in the terminal.',
+                    'details' => ['Installed: '.implode(', ', $labels)],
+                ],
+            ];
+        }
+
+        return [
+            'fields' => $this->buildIntegrationFields($settings, $manager, $resolver),
+            'providers' => $providerViews,
+            'empty_state' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildIntegrationProviderView(
+        SettingsManager $settings,
+        YamlCredentialResolver $resolver,
+        string $name,
+        ToolProvider $provider,
+        bool $locallyRunnable,
+    ): array {
+        $meta = $provider->appMeta();
+        $integrationMeta = $provider instanceof ConfigurableIntegration ? $provider->integrationMeta() : [];
+        $fields = $this->integrationConfigFields($provider);
+        $accounts = $resolver->getAccounts($name);
+        $credentialViews = [];
+
+        foreach ($fields as $field) {
+            $value = $resolver->get($name, $field['key'], $field['default'] ?? null);
+            $stringValue = is_scalar($value) || $value === null ? (string) ($value ?? '') : '';
+            $credentialViews[] = [
+                'key' => $field['key'],
+                'label' => $field['label'],
+                'type' => $field['type'],
+                'required' => (bool) ($field['required'] ?? false),
+                'input_type' => in_array($field['type'], ['choice', 'toggle', 'dynamic_choice'], true) ? $field['type'] : (($field['type'] ?? 'text') === 'select' ? 'choice' : 'text'),
+                'options' => $field['options'] ?? [],
+                'description' => $this->integrationFieldDescription($field),
+                'display_value' => ($field['type'] ?? 'text') === 'secret'
+                    ? ($stringValue !== '' ? $this->maskSecret($stringValue) : '')
+                    : $stringValue,
+                'configured' => $stringValue !== '',
+            ];
+        }
+
+        $requiredCredentialViews = array_values(array_filter(
+            $credentialViews,
+            static fn (array $field): bool => (bool) ($field['required'] ?? false),
+        ));
+        $configured = $requiredCredentialViews === [] || array_all(
+            $requiredCredentialViews,
+            static fn (array $field): bool => $field['configured'] === true,
+        );
+
+        $enabled = $settings->getRaw("integrations.{$name}.enabled");
+        $rawLabel = trim((string) ($meta['label'] ?? ''));
+        $displayName = $this->integrationDisplayName($name, $provider, $meta, $integrationMeta);
+        $label = $this->integrationDisplayLabel($rawLabel, $displayName);
+
+        return [
+            'id' => $name,
+            'name' => $displayName,
+            'label' => $label,
+            'description' => (string) ($integrationMeta['description'] ?? $meta['description'] ?? $displayName),
+            'icon' => (string) ($meta['icon'] ?? ''),
+            'logo' => (string) ($integrationMeta['logo'] ?? $meta['logo'] ?? ''),
+            'category' => (string) ($integrationMeta['category'] ?? ''),
+            'badge' => (string) ($integrationMeta['badge'] ?? ''),
+            'docs_url' => (string) ($integrationMeta['docs_url'] ?? ''),
+            'locally_runnable' => $locallyRunnable,
+            'configured' => $configured,
+            'enabled' => $enabled === true || $enabled === 'on',
+            'accounts' => $accounts,
+            'credential_fields' => $credentialViews,
+            'read_permission' => (string) ($settings->getRaw("integrations.{$name}.permissions.read") ?? 'allow'),
+            'write_permission' => (string) ($settings->getRaw("integrations.{$name}.permissions.write") ?? 'allow'),
+            'tool_count' => count($provider->tools()),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>  $integrationMeta
+     */
+    private function integrationDisplayName(string $appName, ToolProvider $provider, array $meta, array $integrationMeta): string
+    {
+        $integrationName = trim((string) ($integrationMeta['name'] ?? ''));
+        if ($integrationName !== '') {
+            return $integrationName;
+        }
+
+        $label = trim((string) ($meta['label'] ?? ''));
+        if ($this->isHumanFacingIntegrationLabel($label)) {
+            return $label;
+        }
+
+        $className = $provider::class;
+        $shortName = strrpos($className, '\\') !== false
+            ? substr($className, (int) strrpos($className, '\\') + 1)
+            : $className;
+        $shortName = preg_replace('/ToolProvider$/', '', $shortName) ?? $shortName;
+        if ($shortName !== '' && $shortName !== 'class@anonymous') {
+            return $this->humanizeIntegrationIdentifier($shortName);
+        }
+
+        return $this->humanizeIntegrationIdentifier($appName);
+    }
+
+    private function integrationDisplayLabel(string $rawLabel, string $displayName): string
+    {
+        if ($this->isHumanFacingIntegrationLabel($rawLabel)) {
+            return $rawLabel;
+        }
+
+        return $displayName;
+    }
+
+    private function isHumanFacingIntegrationLabel(string $label): bool
+    {
+        if ($label === '') {
+            return false;
+        }
+
+        return ! str_contains($label, ',');
+    }
+
+    private function humanizeIntegrationIdentifier(string $identifier): string
+    {
+        $normalized = str_replace(['-', '_'], ' ', $identifier);
+        $normalized = preg_replace('/(?<!^)([A-Z])/', ' $1', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+        $normalized = trim($normalized);
+
+        if ($normalized === strtolower($normalized)) {
+            return ucwords($normalized);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return list<array{key: string, type: string, label: string, required?: bool, default?: mixed, placeholder?: string, options?: list<string>, hint?: string}>
+     */
+    private function integrationConfigFields(ToolProvider $provider): array
+    {
+        if ($provider instanceof ConfigurableIntegration) {
+            $fields = [];
+            foreach ($provider->configSchema() as $field) {
+                $type = (string) ($field['type'] ?? 'text');
+                if ($type === 'oauth_connect') {
+                    continue;
+                }
+
+                $options = [];
+                $rawOptions = $field['options'] ?? [];
+                if ($type === 'select' && is_array($rawOptions)) {
+                    $options = array_map('strval', array_keys($rawOptions));
+                }
+
+                $fields[] = [
+                    'key' => (string) ($field['key'] ?? ''),
+                    'type' => $type,
+                    'label' => (string) ($field['label'] ?? ($field['key'] ?? 'Credential')),
+                    'required' => (bool) ($field['required'] ?? false),
+                    'default' => $field['default'] ?? null,
+                    'placeholder' => (string) ($field['placeholder'] ?? ''),
+                    'options' => $options,
+                    'hint' => (string) ($field['hint'] ?? ''),
+                ];
+            }
+
+            return array_values(array_filter($fields, static fn (array $field): bool => $field['key'] !== ''));
+        }
+
+        return array_values(array_map(
+            static fn (array $field): array => [
+                'key' => (string) ($field['key'] ?? ''),
+                'type' => match ((string) ($field['type'] ?? 'text')) {
+                    'string' => 'text',
+                    default => (string) ($field['type'] ?? 'text'),
+                },
+                'label' => (string) ($field['label'] ?? ($field['key'] ?? 'Credential')),
+                'required' => (bool) ($field['required'] ?? true),
+                'default' => $field['default'] ?? null,
+                'placeholder' => (string) ($field['placeholder'] ?? ''),
+                'options' => [],
+                'hint' => '',
+            ],
+            $provider->credentialFields(),
+        ));
+    }
+
+    /**
+     * @return array<string, array{key: string, type: string, label: string, required?: bool, default?: mixed, placeholder?: string, options?: list<string>, hint?: string}>
+     */
+    private function integrationConfigFieldMap(string $integration): array
+    {
+        if (! $this->container->bound(IntegrationManager::class)) {
+            return [];
+        }
+
+        $provider = $this->container->make(IntegrationManager::class)->getAllProviders()[$integration] ?? null;
+        if (! $provider instanceof ToolProvider) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($this->integrationConfigFields($provider) as $field) {
+            $map[$field['key']] = $field;
+        }
+
+        return $map;
+    }
+
+    private function integrationFieldDescription(array $field): string
+    {
+        $parts = [];
+
+        if (($field['hint'] ?? '') !== '') {
+            $parts[] = trim((string) $field['hint']);
+        }
+
+        if (($field['placeholder'] ?? '') !== '') {
+            $parts[] = 'Placeholder: '.trim((string) $field['placeholder']);
+        }
+
+        $parts[] = ($field['required'] ?? false) ? 'Required for configuration.' : 'Optional.';
+
+        return implode(' ', array_filter($parts));
+    }
+
+    private function maskSecret(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        if (mb_strlen($value) <= 8) {
+            return str_repeat('*', mb_strlen($value));
+        }
+
+        return mb_substr($value, 0, 4).'…'.mb_substr($value, -4);
     }
 }

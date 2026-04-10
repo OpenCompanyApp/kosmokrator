@@ -192,7 +192,14 @@ ob_start();
     <li><code>XAI_API_KEY</code> &mdash; xAI</li>
     <li><code>OPENROUTER_API_KEY</code> &mdash; OpenRouter</li>
     <li><code>PERPLEXITY_API_KEY</code> &mdash; Perplexity</li>
-    <li><code>GOOGLE_API_KEY</code> &mdash; Google Gemini</li>
+    <li><code>GEMINI_API_KEY</code> &mdash; Google Gemini</li>
+    <li><code>KIMI_API_KEY</code> &mdash; Kimi / Kimi Coding</li>
+    <li><code>MIMO_API_KEY</code> &mdash; MiMo (token plan)</li>
+    <li><code>MIMO_PAYG_API_KEY</code> &mdash; MiMo (pay-as-you-go API)</li>
+    <li><code>MINIMAX_API_KEY</code> &mdash; MiniMax</li>
+    <li><code>MINIMAX_CN_API_KEY</code> &mdash; MiniMax CN (China region)</li>
+    <li><code>STEPFUN_API_KEY</code> &mdash; StepFun / StepFun Plan</li>
+    <li><code>ZAI_API_KEY</code> &mdash; Z.AI / Z.AI API</li>
 </ul>
 
 <div class="tip">
@@ -291,11 +298,11 @@ ob_start();
 
 <pre><code># Main agent — most capable model
 default_provider: anthropic
-default_model: claude-opus-4-5-20250415
+default_model: claude-opus-4-5-20250929
 
 # Subagents — fast and affordable
 subagent_provider: anthropic
-subagent_model: claude-haiku-4-5-20250415
+subagent_model: claude-haiku-4-5-20251001
 
 # Sub-subagents — inherit from subagent settings
 # (leave subagent_depth2_provider and subagent_depth2_model empty)</code></pre>
@@ -393,7 +400,47 @@ subagent_model: claude-haiku-4-5-20250415
             <td>Not configurable</td>
         </tr>
         <tr>
-            <td><code>stepfun-plan</code></td>
+            <td><code>stepfun</code>, <code>stepfun-plan</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>kimi</code>, <code>kimi-coding</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>groq</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>mistral</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>perplexity</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>openrouter</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>z</code>, <code>z-api</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>minimax</code>, <code>minimax-cn</code></td>
+            <td>Always-on reasoning</td>
+            <td>Not configurable</td>
+        </tr>
+        <tr>
+            <td><code>mimo</code>, <code>mimo-api</code></td>
             <td>Always-on reasoning</td>
             <td>Not configurable</td>
         </tr>
@@ -404,6 +451,12 @@ subagent_model: claude-haiku-4-5-20250415
         </tr>
     </tbody>
 </table>
+
+<div class="note">
+    <strong>Anthropic</strong> supports extended thinking (chain-of-thought) via Prism's native driver,
+    but this is not controlled through the <code>reasoning_effort</code> parameter. It is handled
+    internally by the driver when supported models are used.
+</div>
 
 <p>
     The available effort levels are <code>off</code>, <code>low</code>, <code>medium</code>, and
@@ -434,7 +487,7 @@ subagent_model: claude-haiku-4-5-20250415
 
 <ul>
     <li>OpenAI, DeepSeek, Groq, Mistral, xAI, OpenRouter, Perplexity</li>
-    <li>Ollama, Kimi, Kimi Coding, MiMo, MiniMax, Z.AI, StepFun</li>
+    <li>Ollama, Kimi, Kimi Coding, MiMo, MiMo API, Z.AI, Z.AI API, StepFun, StepFun Plan</li>
     <li>All custom providers (OpenAI-compatible endpoints)</li>
 </ul>
 
@@ -448,6 +501,7 @@ subagent_model: claude-haiku-4-5-20250415
 <ul>
     <li>Anthropic (Claude) &mdash; uses Prism's native Anthropic driver with prompt caching</li>
     <li>Google Gemini &mdash; uses Prism's native Gemini driver</li>
+    <li>MiniMax, MiniMax CN &mdash; uses Prism's Anthropic-compatible driver (Anthropic-format endpoints)</li>
 </ul>
 
 <h3>RetryableLlmClient</h3>

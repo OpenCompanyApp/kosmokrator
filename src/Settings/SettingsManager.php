@@ -183,18 +183,38 @@ final class SettingsManager
      */
     public function getRaw(string $path): mixed
     {
+        return $this->resolveRaw($path)['value'] ?? null;
+    }
+
+    /**
+     * Resolve a raw config value and the layer it came from.
+     *
+     * @return array{value: mixed, source: 'project'|'global'|'default'}|null
+     */
+    public function resolveRaw(string $path): ?array
+    {
         $paths = new SettingsPaths($this->projectRoot);
         $projectValue = $this->store->get($this->store->load($paths->projectReadPath()), $path);
         if ($projectValue !== null) {
-            return $projectValue;
+            return ['value' => $projectValue, 'source' => 'project'];
         }
 
         $globalValue = $this->store->get($this->store->load($paths->globalReadPath()), $path);
         if ($globalValue !== null) {
-            return $globalValue;
+            return ['value' => $globalValue, 'source' => 'global'];
         }
 
-        return $this->config->get($path);
+        $configValue = $this->config->get($path);
+        if ($configValue !== null) {
+            return ['value' => $configValue, 'source' => 'default'];
+        }
+
+        return null;
+    }
+
+    public function rawSource(string $path): ?string
+    {
+        return $this->resolveRaw($path)['source'] ?? null;
     }
 
     /**

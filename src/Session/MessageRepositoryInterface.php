@@ -96,10 +96,10 @@ interface MessageRepositoryInterface
     public function sumTokens(string $sessionId): array;
 
     /**
-     * Search messages across all sessions for a project using a LIKE query.
+     * Search messages across all sessions for a project using FTS5.
      *
      * @param  string  $project  Project path to scope the search
-     * @param  string  $query  Search term (LIKE pattern, auto-escaped)
+     * @param  string  $query  User query text converted to an FTS expression internally
      * @param  string|null  $excludeSessionId  Optional session to exclude from results
      * @param  int  $limit  Maximum number of rows to return
      * @return array<int, array<string, mixed>> Matching message rows with session metadata

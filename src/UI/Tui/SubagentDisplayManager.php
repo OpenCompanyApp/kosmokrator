@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui;
 
+use Athanor\BatchScope;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
@@ -34,34 +36,23 @@ final class SubagentDisplayManager
     /** Wrapper container added once to conversation; all subagent widgets live inside it. */
     private ?ContainerWidget $container = null;
 
-    /** Prevents tickTreeRefresh from recreating the tree after batch results are shown. */
-    private bool $batchDisplayed = false;
-
     private ?CancellableLoaderWidget $loader = null;
 
     private ?TextWidget $treeWidget = null;
 
     private ?string $elapsedTimerId = null;
 
-    private float $startTime = 0.0;
-
-    private int $loaderBreathTick = 0;
-
-    private string $cachedLoaderLabel = 'Agents running...';
-
     private ?\Closure $treeProvider = null;
 
     /**
+     * @param  TuiStateStore  $state  Centralized reactive state store
      * @param  ContainerWidget  $conversation  The conversation container to add/remove widgets
-     * @param  \Closure(): ?string  $breathColorProvider  Returns current breath animation color
-     * @param  \Closure(): void  $renderCallback  Triggers a TUI render pass (flushRender)
      * @param  \Closure(): void  $ensureSpinners  Ensures custom spinners are registered
      * @param  ?LoggerInterface  $log  Logger for recording display failures
      */
     public function __construct(
+        private readonly TuiStateStore $state,
         private readonly ContainerWidget $conversation,
-        private readonly \Closure $breathColorProvider,
-        private readonly \Closure $renderCallback,
         private readonly \Closure $ensureSpinners,
         private readonly ?LoggerInterface $log = null,
         private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
@@ -80,7 +71,7 @@ final class SubagentDisplayManager
 
     public function hasRunningAgents(): bool
     {
-        return $this->loader !== null;
+        return $this->state->getHasRunningAgents();
     }
 
     /**
@@ -123,7 +114,7 @@ final class SubagentDisplayManager
         }
 
         // Reuse existing container if agents are already running — avoids duplicate trees
-        if ($this->container === null || $this->batchDisplayed) {
+        if ($this->container === null || $this->state->getBatchDisplayed()) {
             $this->container = new ContainerWidget;
             $this->container->setId('subagent-container');
             try {
@@ -136,7 +127,7 @@ final class SubagentDisplayManager
             }
             $this->treeWidget = null;
         }
-        $this->batchDisplayed = false;
+        $this->state->setBatchDisplayed(false);
 
         $container = $this->container;
 
@@ -149,7 +140,7 @@ final class SubagentDisplayManager
             $this->treeWidget->setId('subagent-tree');
             $container->add($this->treeWidget);
         }
-        ($this->renderCallback)();
+        $this->state->triggerRender();
     }
 
     /**
@@ -168,7 +159,7 @@ final class SubagentDisplayManager
         }
 
         $this->stopLoader();
-        $this->batchDisplayed = false;
+        $this->state->setBatchDisplayed(false);
 
         ($this->ensureSpinners)();
 
@@ -188,9 +179,10 @@ final class SubagentDisplayManager
         $this->loader->addStyleClass('subagent-loader');
         $this->loader->setSpinner('cosmos');
         $this->loader->setIntervalMs(50);
-        $this->startTime = microtime(true);
-        $this->loaderBreathTick = 0;
-        $this->cachedLoaderLabel = $label;
+        $this->state->setStartTime(microtime(true));
+        $this->state->setLoaderBreathTick(0);
+        $this->state->setCachedLoaderLabel($label);
+        $this->state->setHasRunningAgents(true);
 
         $container->add($this->loader);
 
@@ -210,49 +202,54 @@ final class SubagentDisplayManager
             if ($this->loader === null) {
                 return;
             }
-            $this->loaderBreathTick++;
 
-            // Blue breathing color (same sine wave as thinking indicator)
-            $t = sin($this->loaderBreathTick * 0.07);
-            $cr = (int) (112 + 40 * $t);
-            $cg = (int) (160 + 40 * $t);
-            $cb = (int) (208 + 47 * $t);
-            $color = Theme::rgb($cr, $cg, $cb);
+            BatchScope::run(function () use ($dim, $r): void {
+                $this->state->tickLoaderBreath();
+                $loaderBreathTick = $this->state->getLoaderBreathTick();
 
-            // Escalate color for long-running agents
-            $elapsed = (int) (microtime(true) - $this->startTime);
-            if ($elapsed >= 120) {
-                $color = Theme::error();
-            } elseif ($elapsed >= 60) {
-                $color = Theme::warning();
-            }
+                // Blue breathing color (same sine wave as thinking indicator)
+                $t = sin($loaderBreathTick * 0.07);
+                $cr = (int) (112 + 40 * $t);
+                $cg = (int) (160 + 40 * $t);
+                $cb = (int) (208 + 47 * $t);
+                $color = Theme::rgb($cr, $cg, $cb);
 
-            // Update label from tree data every ~1s (every 30th tick at 33ms)
-            if ($this->loaderBreathTick % 30 === 0 && $this->treeProvider !== null) {
-                try {
-                    $tree = ($this->treeProvider)();
-                    if ($tree !== []) {
-                        $total = $this->formatter->countNodes($tree);
-                        $done = $this->formatter->countByStatus($tree, 'done');
-                        if ($done > 0) {
-                            $this->cachedLoaderLabel = $this->formatRunningSummary($total, $done);
-                        } else {
-                            $this->cachedLoaderLabel = $this->formatRunningSummary($total, 0);
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    $this->log?->warning('Tree provider error in loader timer', ['error' => $e->getMessage()]);
+                // Escalate color for long-running agents
+                $elapsed = (int) (microtime(true) - $this->state->getStartTime());
+                if ($elapsed >= 120) {
+                    $color = Theme::error();
+                } elseif ($elapsed >= 60) {
+                    $color = Theme::warning();
                 }
-            }
 
-            $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
-            $hint = "{$dim}ctrl+a for dashboard{$r}";
-            $meta = "{$dim} · {$time} · {$r}{$hint}";
-            $this->loader->setMessage("{$color}{$this->cachedLoaderLabel}{$r}{$meta}");
-            ($this->renderCallback)();
+                // Update label from tree data every ~1s (every 30th tick at 33ms)
+                if ($loaderBreathTick % 30 === 0 && $this->treeProvider !== null) {
+                    try {
+                        $tree = ($this->treeProvider)();
+                        if ($tree !== []) {
+                            $total = $this->formatter->countNodes($tree);
+                            $done = $this->formatter->countByStatus($tree, 'done');
+                            if ($done > 0) {
+                                $this->state->setCachedLoaderLabel($this->formatRunningSummary($total, $done));
+                            } else {
+                                $this->state->setCachedLoaderLabel($this->formatRunningSummary($total, 0));
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        $this->log?->warning('Tree provider error in loader timer', ['error' => $e->getMessage()]);
+                    }
+                }
+
+                $time = sprintf('%d:%02d', (int) ($elapsed / 60), $elapsed % 60);
+                $hint = "{$dim}ctrl+a for dashboard{$r}";
+                $meta = "{$dim} · {$time} · {$r}{$hint}";
+                $this->loader->setMessage("{$color}{$this->state->getCachedLoaderLabel()}{$r}{$meta}");
+            });
+
+            $this->state->triggerRender();
         });
 
-        ($this->renderCallback)();
+        $this->state->triggerRender();
     }
 
     private function formatRunningSummary(int $total, int $done): string
@@ -288,7 +285,7 @@ final class SubagentDisplayManager
         // Actual results to display — clean up running indicators
         $this->stopLoader();
         $this->removeTree();
-        $this->batchDisplayed = true;
+        $this->state->setBatchDisplayed(true);
 
         $r = Theme::reset();
         $dim = Theme::dim();
@@ -319,7 +316,7 @@ final class SubagentDisplayManager
             $widget = new CollapsibleWidget("{$icon} {$label}{$stats}", $e['result'], 1, 120);
             $widget->addStyleClass('tool-result');
             $container->add($widget);
-            ($this->renderCallback)();
+            $this->state->triggerRender();
 
             return;
         }
@@ -355,7 +352,7 @@ final class SubagentDisplayManager
         $expand = new CollapsibleWidget("{$dim}Full output{$r}", $details, 1, 120);
         $expand->addStyleClass('tool-result');
         $container->add($expand);
-        ($this->renderCallback)();
+        $this->state->triggerRender();
     }
 
     /**
@@ -397,7 +394,7 @@ final class SubagentDisplayManager
      */
     public function tickTreeRefresh(): void
     {
-        if ($this->treeProvider === null || $this->batchDisplayed) {
+        if ($this->treeProvider === null || $this->state->getBatchDisplayed()) {
             return;
         }
 
@@ -434,7 +431,7 @@ final class SubagentDisplayManager
         $dim = Theme::dim();
         $green = Theme::success();
         $red = Theme::error();
-        $amber = ($this->breathColorProvider)() ?? Theme::rgb(200, 150, 60);
+        $amber = $this->state->getBreathColor() ?? Theme::rgb(200, 150, 60);
         $gray = Theme::dim();
         $cyan = Theme::agentDefault();
 
@@ -525,6 +522,7 @@ final class SubagentDisplayManager
             $this->loader->stop();
             $this->container->remove($this->loader);
             $this->loader = null;
+            $this->state->setHasRunningAgents(false);
         }
     }
 

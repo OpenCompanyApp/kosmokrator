@@ -36,7 +36,11 @@ class SeedCommand implements SlashCommand
 
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
-        $ctx->ui->seedMockSession();
+        if (method_exists($ctx->ui, 'seedMockSession')) {
+            $ctx->ui->seedMockSession();
+        } else {
+            $ctx->ui->showNotice('Mock session seeding is not available in this renderer.');
+        }
 
         return SlashCommandResult::continue();
     }

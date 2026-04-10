@@ -19,26 +19,29 @@ ob_start();
     runs a pre-flight check. If the estimated token count exceeds a warning
     threshold, the pipeline activates. Each stage runs in order; earlier stages
     handle cheap, fast reductions while later stages are progressively more
-    aggressive.
+    aggressive. Note that output truncation and deduplication run outside the
+    pre-flight check &mdash; truncation happens during tool execution and
+    deduplication runs on session load. Only pruning, compaction, and trimming
+    run during the pre-flight.
 </p>
 
 <div class="pipeline-flow">
     <div class="pipeline-stage">
         <h4>Output Truncation</h4>
         <p>2,000 lines / 50KB cap on tool results</p>
-        <span class="stage-tag">Immediate</span>
+        <span class="stage-tag">During tool execution</span>
     </div>
     <div class="pipeline-arrow">&rarr;</div>
     <div class="pipeline-stage">
         <h4>Deduplication</h4>
         <p>Exact dupes, stale reads, subsumed grep results</p>
-        <span class="stage-tag">Per turn</span>
+        <span class="stage-tag">On session load</span>
     </div>
     <div class="pipeline-arrow">&rarr;</div>
     <div class="pipeline-stage">
         <h4>Pruning</h4>
         <p>Score-based placeholder replacement of low-value messages</p>
-        <span class="stage-tag">Per turn</span>
+        <span class="stage-tag">Pre-flight</span>
     </div>
     <div class="pipeline-arrow">&rarr;</div>
     <div class="pipeline-stage">
@@ -49,7 +52,7 @@ ob_start();
     <div class="pipeline-arrow">&rarr;</div>
     <div class="pipeline-stage">
         <h4>Oldest-Turn Trimming</h4>
-        <p>Drop oldest message; repeat until within budget</p>
+        <p>Drop oldest message to reclaim token budget</p>
         <span class="stage-tag">Emergency</span>
     </div>
 </div>
@@ -365,9 +368,11 @@ ob_start();
 
 <p>
     Certain messages are always preserved before the summary and never
-    summarized away. This includes the base system prompt context and any
-    mode-specific instructions. The <strong>ProtectedContextBuilder</strong>
-    assembles these based on the current agent mode and subagent context.
+    summarized away. The <strong>ProtectedContextBuilder</strong>
+    assembles runtime environment facts that the LLM must always see:
+    the current agent mode, working directory, git branch, and agent
+    type/depth (for sub-agents). This is injected as a system message
+    that cannot be overridden.
 </p>
 
 <h3 id="compaction-circuit-breaker">Circuit Breaker</h3>
@@ -397,7 +402,7 @@ ob_start();
             <td>Toggle automatic compaction on or off</td>
         </tr>
         <tr>
-            <td><code>auto_compact_threshold</code></td>
+            <td><code>compact_threshold</code></td>
             <td>60% of context window</td>
             <td>
                 Percentage of the context window at which compaction triggers.
@@ -428,7 +433,7 @@ ob_start();
 
 <ul>
     <li>Drops the single oldest message from the conversation history</li>
-    <li>Repeats until the token count is within the blocking budget</li>
+    <li>Runs exactly once per agent loop iteration</li>
     <li>No LLM call required &mdash; purely mechanical</li>
     <li>Context quality degrades because there is no summarization</li>
 </ul>
@@ -461,7 +466,7 @@ ob_start();
     <tbody>
         <tr>
             <td><code>reserve_output_tokens</code></td>
-            <td>16,384</td>
+            <td>16,000</td>
             <td>
                 Headroom reserved for the LLM's response. Subtracted from the
                 raw context window to produce the <em>effective context window</em>
@@ -470,7 +475,7 @@ ob_start();
         </tr>
         <tr>
             <td><code>warning_buffer_tokens</code></td>
-            <td>24,576</td>
+            <td>24,000</td>
             <td>
                 When remaining input tokens drop below this buffer, warning-level
                 interventions begin (pruning, deduplication).
@@ -478,7 +483,7 @@ ob_start();
         </tr>
         <tr>
             <td><code>auto_compact_buffer_tokens</code></td>
-            <td>12,288</td>
+            <td>12,000</td>
             <td>
                 When remaining input tokens drop below this buffer, automatic
                 LLM-based compaction is triggered.
@@ -486,7 +491,7 @@ ob_start();
         </tr>
         <tr>
             <td><code>blocking_buffer_tokens</code></td>
-            <td>3,072</td>
+            <td>3,000</td>
             <td>
                 Hard stop. When remaining input tokens drop below this buffer,
                 oldest-turn trimming activates immediately. This is the
@@ -511,7 +516,7 @@ ob_start();
 
 <p>
     Token counts are estimated using the <strong>TokenEstimator</strong>,
-    which uses a fast character-based heuristic (roughly 1 token per 4
+    which uses a fast character-based heuristic (roughly 1 token per 3.2
     characters) rather than a full tokenizer. This is accurate enough for
     budget decisions while being orders of magnitude faster.
 </p>
@@ -523,14 +528,14 @@ ob_start();
 <div class="budget-bar">
     <div class="budget-bar-header">Example: 200K context window</div>
     <div class="budget-bar-track">
-        <div class="budget-segment" style="width:79.5%;background:rgba(0,255,136,0.25);" title="Available context: 159,040 tokens">Available (159K)</div>
-        <div class="budget-segment" style="width:6.1%;background:rgba(210,153,34,0.4);" title="Warning buffer: 12,288 tokens">Warn</div>
-        <div class="budget-segment" style="width:4.6%;background:rgba(220,20,60,0.4);" title="Auto-compact buffer: 9,216 tokens">Compact</div>
-        <div class="budget-segment" style="width:1.6%;background:rgba(248,81,73,0.5);" title="Blocking buffer: 3,072 tokens">&#x26A0;</div>
-        <div class="budget-segment" style="width:8.2%;background:rgba(100,100,120,0.3);" title="Reserved for output: 16,384 tokens">Output (16K)</div>
+        <div class="budget-segment" style="width:80.0%;background:rgba(0,255,136,0.25);" title="Available context: 160,000 tokens">Available (160K)</div>
+        <div class="budget-segment" style="width:6.0%;background:rgba(210,153,34,0.4);" title="Warning buffer: 12,000 tokens">Warn</div>
+        <div class="budget-segment" style="width:4.5%;background:rgba(220,20,60,0.4);" title="Auto-compact buffer: 9,000 tokens">Compact</div>
+        <div class="budget-segment" style="width:1.5%;background:rgba(248,81,73,0.5);" title="Blocking buffer: 3,000 tokens">&#x26A0;</div>
+        <div class="budget-segment" style="width:8.0%;background:rgba(100,100,120,0.3);" title="Reserved for output: 16,000 tokens">Output (16K)</div>
     </div>
     <div class="budget-legend">
-        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(0,255,136,0.4);"></span> Usable context (159K)</div>
+        <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(0,255,136,0.4);"></span> Usable context (160K)</div>
         <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(210,153,34,0.5);"></span> Warning: pruning begins</div>
         <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(220,20,60,0.5);"></span> Auto-compact: LLM summarization</div>
         <div class="budget-legend-item"><span class="budget-legend-dot" style="background:rgba(248,81,73,0.6);"></span> Blocking: force trim oldest</div>
@@ -627,8 +632,9 @@ ob_start();
 
 <p>
     After extraction, the session manager runs
-    <strong>memory consolidation</strong> to merge duplicate or overlapping
-    memories, preventing the memory store from growing unboundedly.
+    <strong>memory consolidation</strong> to prune expired memories and
+    trim old compaction memories to the 10 most recent, preventing the
+    memory store from growing unboundedly.
 </p>
 
 <h3 id="memory-retention">Memory Retention Classes</h3>
@@ -661,13 +667,15 @@ ob_start();
             <td>May be garbage-collected after a period of disuse (typically 14 days for compaction summaries)</td>
             <td>Session continuity summaries, temporary context</td>
         </tr>
-        <tr>
-            <td><strong>pinned</strong></td>
-            <td>Never automatically removed, even during consolidation</td>
-            <td>Critical knowledge the user has explicitly marked as permanent</td>
-        </tr>
     </tbody>
 </table>
+
+<p>
+    Additionally, any memory can be <strong>pinned</strong> by setting its
+    <code>pinned</code> boolean flag. A pinned memory is never automatically
+    removed during consolidation, regardless of its retention class. A memory
+    can be both <code>durable</code> <em>and</em> pinned simultaneously.
+</p>
 
 <h3 id="memory-injection">Memory Injection into System Prompt</h3>
 
@@ -808,9 +816,8 @@ ob_start();
 <h2 id="system-prompt-assembly">System Prompt Assembly</h2>
 
 <p>
-    The system prompt is rebuilt on each turn to incorporate the latest
-    context. The <strong>ContextManager</strong> assembles it from multiple
-    layers, each adding domain-specific information:
+    The system prompt is assembled by the <strong>ContextManager</strong>
+    from multiple layers, each adding domain-specific information:
 </p>
 
 <ol>
@@ -824,6 +831,8 @@ ob_start();
         recent messages. The MemoryInjector formats up to 6 memories into
         structured sections (priority context, project knowledge, user
         preferences, key decisions, working memory, previous sessions).
+        This memory block is built once on the first turn and then frozen
+        for cache stability &mdash; it is not rebuilt on subsequent turns.
     </li>
     <li>
         <strong>Session history recall</strong> &mdash; Relevant fragments
@@ -852,8 +861,9 @@ ob_start();
 </ol>
 
 <p>
-    The prompt is rebuilt every turn rather than cached because memories,
-    tasks, and mode can all change between turns. The token cost of the
+    While most of the prompt is rebuilt every turn (mode, tasks, and other
+    layers can change between turns), the memory and session recall block
+    is built once and then frozen for cache stability. The token cost of the
     system prompt is included in the ContextBudget calculations.
 </p>
 

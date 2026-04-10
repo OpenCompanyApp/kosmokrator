@@ -12,6 +12,7 @@ use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
+use Kosmokrator\Session\Tool\SessionSearchTool;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
@@ -112,11 +113,11 @@ class ToolServiceProvider extends ServiceProvider
             return $evaluator;
         });
 
-        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot) {
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot, $allowedPaths) {
             $registry = new ToolRegistry;
-            $registry->register(new FileReadTool($projectRoot));
-            $registry->register(new FileWriteTool($projectRoot));
-            $registry->register(new FileEditTool($projectRoot));
+            $registry->register(new FileReadTool($projectRoot, $allowedPaths));
+            $registry->register(new FileWriteTool($projectRoot, $allowedPaths));
+            $registry->register(new FileEditTool($projectRoot, $allowedPaths));
             $registry->register(new ApplyPatchTool(
                 $this->container->make(PatchParser::class),
                 $this->container->make(PatchApplier::class),
@@ -147,6 +148,7 @@ class ToolServiceProvider extends ServiceProvider
             $sessionManager = $this->container->make(SessionManager::class);
             $registry->register(new MemorySaveTool($sessionManager));
             $registry->register(new MemorySearchTool($sessionManager));
+            $registry->register(new SessionSearchTool($sessionManager));
 
             // Lua integration tools — only if Lua extension is available
             if (class_exists(Sandbox::class) && $this->container->bound(LuaDocService::class)) {

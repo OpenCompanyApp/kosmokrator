@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
@@ -87,7 +88,7 @@ class TokenEstimator
     {
         $total = 0;
         foreach ($toolCalls as $tc) {
-            $total += self::estimate($tc->name.json_encode($tc->arguments(), JSON_INVALID_UTF8_SUBSTITUTE));
+            $total += self::estimate($tc->name.json_encode(ToolCallMapper::safeArguments($tc), JSON_INVALID_UTF8_SUBSTITUTE));
         }
 
         return $total;

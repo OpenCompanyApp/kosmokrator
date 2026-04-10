@@ -189,6 +189,44 @@ final class SettingsManagerTest extends TestCase
         $this->assertNull($this->manager->getRaw('no.such.path'));
     }
 
+    public function test_raw_source_prefers_project_then_global_then_default(): void
+    {
+        $tmpDir = sys_get_temp_dir().'/kk-settings-source-'.uniqid();
+        $projectDir = $tmpDir.'/project';
+        mkdir($projectDir.'/.kosmokrator', 0777, true);
+        mkdir($tmpDir.'/.kosmokrator', 0777, true);
+
+        $origHome = getenv('HOME');
+        putenv("HOME={$tmpDir}");
+
+        try {
+            $manager = new SettingsManager(
+                $this->config,
+                $this->schema,
+                $this->store,
+                $this->projectConfigDir,
+            );
+            $manager->setProjectRoot($projectDir);
+
+            $this->assertSame('default', $manager->rawSource('kosmokrator.agent.default_provider'));
+
+            $manager->setRaw('kosmokrator.agent.default_provider', 'openai', 'global');
+            $this->assertSame('global', $manager->rawSource('kosmokrator.agent.default_provider'));
+
+            $manager->setRaw('kosmokrator.agent.default_provider', 'codex', 'project');
+            $this->assertSame('project', $manager->rawSource('kosmokrator.agent.default_provider'));
+        } finally {
+            putenv("HOME={$origHome}");
+            @unlink($projectDir.'/.kosmokrator/config.yaml');
+            @rmdir($projectDir.'/.kosmokrator');
+            @rmdir($projectDir);
+            @unlink($tmpDir.'/.kosmokrator/config.yaml');
+            @rmdir($tmpDir.'/.kosmokrator');
+            @rmdir($tmpDir.'/.config');
+            @rmdir($tmpDir);
+        }
+    }
+
     // ── setRaw() / getRaw() round-trip ─────────────────────────────────
 
     public function test_set_raw_and_get_raw_round_trip_with_temp_files(): void

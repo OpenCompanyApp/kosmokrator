@@ -13,22 +13,21 @@ ob_start();
 <h2 id="cicd-integration">CI/CD Integration</h2>
 
 <p>
-    KosmoKrator's <strong>headless mode</strong> lets you run it inside CI
-    pipelines without a terminal UI. Pipe a prompt in, capture the output,
-    and act on the exit code. This is ideal for automated code fixes,
-    test-driven development loops, and release preparation.
+    KosmoKrator's <a href="/docs/headless">headless mode</a> is designed for CI/CD pipelines.
+    Pass a prompt, get output, exit. No TTY required.
 </p>
 
-<h3>Basic headless invocation</h3>
+<h3>Basic CI invocation</h3>
 
-<pre><code>echo "Fix all failing tests" | kosmokrator --headless --renderer=ansi</code></pre>
+<pre><code># Headless mode with auto-approve
+kosmokrator -p --yolo "Fix all failing tests"</code></pre>
 
 <p>
-    The <code>--headless</code> flag disables the TUI and runs KosmoKrator as
-    a non-interactive process. The <code>--renderer=ansi</code> flag produces
-    plain-text output suitable for CI logs. Exit code <code>0</code> means the
-    task completed successfully; non-zero indicates an error or that the agent
-    could not finish within its turn budget.
+    The <code>-p</code> flag enables headless mode. <code>--yolo</code> auto-approves all tool
+    calls so the agent can work unattended. Exit code <code>0</code>
+    means the task completed successfully; non-zero indicates an error or
+    that the agent hit a guardrail. See <a href="/docs/headless">Headless Mode</a> for
+    the full CLI reference including <code>--max-turns</code>, <code>--timeout</code>, and JSON output.
 </p>
 
 <h3>GitHub Actions workflow</h3>
@@ -57,9 +56,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          echo "Fix all failing tests" | \
-            kosmokrator --headless --renderer=ansi \
-                        --permission-mode=prometheus
+          kosmokrator -p --yolo --max-turns 20 "Fix all failing tests"
 
       - name: Commit and push fixes
         run: |
@@ -69,10 +66,11 @@ jobs:
 
 <div class="tip">
     <p>
-        <strong>Tip:</strong> Always set <code>--permission-mode=prometheus</code>
-        in headless CI runs. This skips all approval prompts so the agent can
-        work unattended. See <a href="/docs/permissions">Permissions</a> for
-        details on each mode.
+        <strong>Tip:</strong> For CI runs, use the <code>/prometheus</code>
+        slash command at the start of the session to auto-approve all tool
+        calls so the agent can work unattended. This is the equivalent of a
+        fully permissive permission mode. See
+        <a href="/docs/permissions">Permissions</a> for details.
     </p>
 </div>
 
@@ -216,8 +214,9 @@ subagent_depth2_model: gpt-4.1-mini</code></pre>
     </li>
     <li>
         <strong>Fan out exploration</strong> &mdash; Use <code>:team</code> to
-        spawn multiple Explore-type subagents in parallel, each investigating a
-        different subsystem or module.
+        run a 5-stage sequential pipeline (Planner, Architect, Executor,
+        Verifier, Fixer) for structured, thorough investigation of each
+        subsystem.
     </li>
     <li>
         <strong>Analyze without changes</strong> &mdash; Switch to
@@ -226,15 +225,15 @@ subagent_depth2_model: gpt-4.1-mini</code></pre>
     </li>
     <li>
         <strong>Reduce concurrency</strong> &mdash; For very large repos,
-        lower the <code>subagent_max_concurrency</code> setting to avoid
+        lower the <code>subagent_concurrency</code> setting to avoid
         overwhelming system resources.
     </li>
 </ol>
 
 <pre><code># .kosmokrator.yaml — tuned for a large monorepo
 
-subagent_max_concurrency: 3
-default_mode: plan          # start in plan mode for safety
+subagent_concurrency: 3
+mode: plan          # start in plan mode for safety
 
 # Use a fast model for exploration agents
 subagent_provider: anthropic
@@ -245,7 +244,7 @@ subagent_model: claude-haiku-4-5-20250415</code></pre>
 # 1. Build the project map
 :deepinit
 
-# 2. Fan out exploration to understand each module
+# 2. Run a structured pipeline to understand each module
 :team Explore the authentication module and summarize its public API
 :team Explore the database layer and document all migration files
 
@@ -254,10 +253,11 @@ subagent_model: claude-haiku-4-5-20250415</code></pre>
 
 <div class="tip">
     <p>
-        <strong>Tip:</strong> Combine <code>:deepinit</code> with
-        <a href="/docs/context">persistent memory</a> so the project summary
-        is available across sessions. The <code>:deepinit</code> output is
-        automatically saved to memory.
+        <strong>Tip:</strong> The <code>:deepinit</code> command writes its
+        output to an <code>AGENTS.md</code> file in your project root. This
+        file is automatically loaded in future sessions, giving the agent a
+        persistent project map. You can also commit it to version control to
+        share with your team.
     </p>
 </div>
 
@@ -288,13 +288,13 @@ subagent_model: claude-haiku-4-5-20250415</code></pre>
         </tr>
         <tr>
             <td><code>:unleash :review</code></td>
-            <td>Aggressive review with automatic fixes</td>
-            <td>Technical debt cleanup, lint-heavy PRs</td>
+            <td>Chained: unleash swarm + review prompts combined</td>
+            <td>Deep multi-angle review with maximum coverage</td>
         </tr>
         <tr>
             <td><code>:team :review</code></td>
-            <td>Parallel review of multiple files</td>
-            <td>Large PRs spanning many modules</td>
+            <td>Chained: team pipeline + review prompts combined</td>
+            <td>Structured pipeline review with verification</td>
         </tr>
     </tbody>
 </table>

@@ -6,6 +6,8 @@ use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
+use Kosmokrator\Agent\Exception\MaxTurnsExceededException;
+use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
@@ -16,16 +18,23 @@ use Kosmokrator\Skill\SkillRegistry;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Permission\PermissionMode;
+use Kosmokrator\UI\HeadlessRenderer;
+use Kosmokrator\UI\OutputFormat;
 use Kosmokrator\Update\UpdateChecker;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Main entry point — launches the interactive KosmoKrator coding agent REPL.
+ * Main entry point — launches the KosmoKrator coding agent.
+ *
+ * Interactive mode: runs a REPL loop with TUI/ANSI renderer.
+ * Headless mode (-p / --print or positional prompt): executes a single task and exits.
  */
 #[AsCommand(name: 'agent', description: 'Launch the KosmoKrator coding agent')]
 class AgentCommand extends Command
@@ -37,17 +46,181 @@ class AgentCommand extends Command
     }
 
     /**
-     * Registers CLI options for renderer selection, animation toggle, and session resumption.
+     * Registers CLI options for interactive and headless modes.
      */
     protected function configure(): void
     {
-        $this->addOption('no-animation', null, InputOption::VALUE_NONE, 'Skip the intro animation');
-        $this->addOption('renderer', null, InputOption::VALUE_REQUIRED, 'Force renderer (tui or ansi)', 'auto');
-        $this->addOption('resume', null, InputOption::VALUE_NONE, 'Resume last session for this project');
-        $this->addOption('session', null, InputOption::VALUE_REQUIRED, 'Resume a specific session by ID');
+        $this
+            ->addArgument('prompt', InputArgument::OPTIONAL, 'Task prompt (enables headless mode)')
+            ->addOption('no-animation', null, InputOption::VALUE_NONE, 'Skip the intro animation')
+            ->addOption('renderer', null, InputOption::VALUE_REQUIRED, 'Force renderer (tui or ansi)', 'auto')
+            ->addOption('resume', null, InputOption::VALUE_NONE, 'Resume last session for this project')
+            ->addOption('session', null, InputOption::VALUE_REQUIRED, 'Resume a specific session by ID')
+            // Headless options
+            ->addOption('print', 'p', InputOption::VALUE_NONE, 'Print response and exit (headless mode)')
+            ->addOption('output-format', 'o', InputOption::VALUE_REQUIRED, 'Output format: text, json, stream-json', 'text')
+            ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Override model')
+            ->addOption('mode', null, InputOption::VALUE_REQUIRED, 'Agent mode: edit, plan, ask')
+            ->addOption('yolo', null, InputOption::VALUE_NONE, 'Skip all permission checks (alias for --permission-mode prometheus)')
+            ->addOption('permission-mode', null, InputOption::VALUE_REQUIRED, 'Permission mode: guardian, argus, prometheus')
+            ->addOption('max-turns', 't', InputOption::VALUE_REQUIRED, 'Maximum agentic turns')
+            ->addOption('timeout', null, InputOption::VALUE_REQUIRED, 'Maximum runtime in seconds')
+            ->addOption('continue', 'c', InputOption::VALUE_NONE, 'Continue most recent session')
+            ->addOption('append-system-prompt', null, InputOption::VALUE_REQUIRED, 'Append to system prompt')
+            ->addOption('system-prompt', null, InputOption::VALUE_REQUIRED, 'Replace system prompt entirely')
+            ->addOption('no-session', null, InputOption::VALUE_NONE, 'Don\'t persist session');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        // Detect headless mode: -p flag, positional prompt, or piped stdin
+        $positionalPrompt = $input->getArgument('prompt');
+        $isHeadless = $positionalPrompt !== null
+            || $input->getOption('print')
+            || (function_exists('posix_isatty') && ! posix_isatty(STDIN));
+
+        if ($isHeadless) {
+            return $this->runHeadless($input, $output);
+        }
+
+        return $this->runInteractive($input, $output);
+    }
+
+    /**
+     * Run in headless (non-interactive) mode: execute a single task and exit.
+     */
+    private function runHeadless(InputInterface $input, OutputInterface $output): int
+    {
+        // 1. Resolve prompt: positional arg + optional stdin
+        $prompt = $input->getArgument('prompt') ?? '';
+
+        // Combine stdin with positional prompt (stdin appended after prompt)
+        $stdinAvail = function_exists('posix_isatty') && ! posix_isatty(STDIN);
+        if ($stdinAvail) {
+            $stdin = stream_get_contents(STDIN);
+            if ($stdin !== false && $stdin !== '') {
+                $prompt = $prompt !== '' ? "{$prompt}\n\n{$stdin}" : $stdin;
+            }
+        }
+
+        if (trim($prompt) === '') {
+            fwrite(STDERR, "Error: No prompt provided. Pass a positional argument, use -p, or pipe stdin.\n");
+
+            return 1;
+        }
+
+        // 2. Parse output format
+        try {
+            $format = OutputFormat::from($input->getOption('output-format'));
+        } catch (\ValueError) {
+            fwrite(STDERR, "Error: Invalid output format. Use: text, json, stream-json\n");
+
+            return 1;
+        }
+
+        // 3. Resolve permission mode (--yolo takes precedence)
+        $permissionMode = $input->getOption('permission-mode');
+        if ($input->getOption('yolo')) {
+            $permissionMode = 'prometheus';
+        }
+
+        // 4. Build headless session
+        $builder = new AgentSessionBuilder($this->container);
+        try {
+            $session = $builder->buildHeadless($format, [
+                'model' => $input->getOption('model'),
+                'permission_mode' => $permissionMode,
+                'agent_mode' => $input->getOption('mode'),
+                'persist_session' => ! $input->getOption('no-session'),
+                'system_prompt' => $input->getOption('system-prompt'),
+                'append_system_prompt' => $input->getOption('append-system-prompt'),
+                'max_turns' => $input->getOption('max-turns'),
+                'timeout' => $input->getOption('timeout'),
+            ]);
+        } catch (\RuntimeException $e) {
+            fwrite(STDERR, "Error: {$e->getMessage()}\n");
+            fwrite(STDERR, "Run kosmokrator setup to configure your provider and API key.\n");
+
+            return 1;
+        }
+
+        /** @var HeadlessRenderer $renderer */
+        $renderer = $session->ui;
+
+        // 5. Session resume for headless (--continue or --session)
+        $resumeId = $input->getOption('session');
+        if ($resumeId === null && ($input->getOption('continue') || $input->getOption('resume'))) {
+            $resumeId = $session->sessionManager->latestSession();
+        }
+
+        if ($resumeId !== null) {
+            $session->sessionManager->setCurrentSession($resumeId);
+            $history = $session->sessionManager->loadHistory($resumeId);
+            if ($history->count() > 0) {
+                $session->agentLoop->setHistory($history);
+            }
+        } elseif (! $input->getOption('no-session')) {
+            $modelName = $session->llm->getProvider().'/'.$session->llm->getModel();
+            $session->sessionManager->createSession($modelName);
+        }
+
+        // 6. Install SIGINT handler for graceful cancellation
+        if (function_exists('pcntl_async_signals')) {
+            pcntl_async_signals(true);
+            pcntl_signal(SIGINT, function () use ($session) {
+                $session->orchestrator?->cancelAll();
+                $this->container->make(ShellSessionManager::class)->killAll();
+                exit(130);
+            });
+            pcntl_signal(SIGTERM, function () use ($session) {
+                $session->orchestrator?->cancelAll();
+                $this->container->make(ShellSessionManager::class)->killAll();
+                exit(143);
+            });
+        }
+
+        // 7. Run the agent
+        $renderer->showUserMessage($prompt);
+        try {
+            $result = $session->agentLoop->runHeadless($prompt);
+        } catch (MaxTurnsExceededException $e) {
+            $renderer->emitError("Agent exceeded maximum of {$e->maxTurns} turns.");
+            if ($e->partialResult !== '') {
+                $renderer->emitResult($e->partialResult, (int) $input->getOption('max-turns'), 0, 0);
+            }
+
+            return 2;
+        } catch (TimeoutExceededException $e) {
+            $renderer->emitError("Agent timed out after {$e->timeoutSeconds} seconds.");
+            if ($e->partialResult !== '') {
+                $renderer->emitResult($e->partialResult, 0, 0, 0);
+            }
+
+            return 2;
+        } catch (\Throwable $e) {
+            $renderer->emitError($e->getMessage());
+
+            return 1;
+        }
+
+        // 8. Output the result
+        // runHeadless() returns "Error: ..." on recoverable errors — treat as failure
+        $isError = str_starts_with($result, 'Error: ');
+        $tokensIn = $session->agentLoop->getSessionTokensIn();
+        $tokensOut = $session->agentLoop->getSessionTokensOut();
+        $renderer->emitResult($result, 0, $tokensIn, $tokensOut);
+
+        // 9. Cleanup
+        $session->orchestrator?->cancelAll();
+        $this->container->make(ShellSessionManager::class)->killAll();
+
+        return $isError ? 1 : 0;
+    }
+
+    /**
+     * Run in interactive (REPL) mode.
+     */
+    private function runInteractive(InputInterface $input, OutputInterface $output): int
     {
         // Build the agent session (UI + LLM + permissions) from container bindings.
         // Falls back to a friendly error when the provider is not yet configured.
@@ -73,7 +246,7 @@ class AgentCommand extends Command
 
         // Resume an existing session by ID or pick the latest one for this project.
         $resumeId = $input->getOption('session');
-        if ($resumeId === null && $input->getOption('resume')) {
+        if ($resumeId === null && ($input->getOption('continue') || $input->getOption('resume'))) {
             $resumeId = $session->sessionManager->latestSession();
         }
 
@@ -279,7 +452,8 @@ class AgentCommand extends Command
                 }
             } catch (\Throwable $e) {
                 // Never let the sound system break the REPL — but log it
-                error_log('[CompletionSound] Hook failed: '.$e->getMessage());
+                $this->container->make(LoggerInterface::class)
+                    ->warning('Completion sound hook failed', ['error' => $e->getMessage()]);
             }
 
             // Plan mode: show approval dialog after run completes

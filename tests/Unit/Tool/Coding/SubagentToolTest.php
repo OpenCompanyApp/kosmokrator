@@ -39,7 +39,7 @@ class SubagentToolTest extends TestCase
         $tool = $this->makeTool($this->makeContext());
         $result = $tool->execute(['task' => '']);
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('required', $result->output);
+        $this->assertStringContainsStringIgnoringCase('provide either', $result->output);
     }
 
     public function test_invalid_type_returns_error(): void
@@ -128,8 +128,10 @@ class SubagentToolTest extends TestCase
         $this->assertArrayHasKey('id', $params);
         $this->assertArrayHasKey('depends_on', $params);
         $this->assertArrayHasKey('group', $params);
+        $this->assertArrayHasKey('agents', $params);
         $this->assertSame('enum', $params['type']['type']);
         $this->assertSame('array', $params['depends_on']['type']);
+        $this->assertSame('array', $params['agents']['type']);
     }
 
     public function test_explore_type_options_only_explore(): void
@@ -146,5 +148,100 @@ class SubagentToolTest extends TestCase
         $this->assertContains('general', $params['type']['options']);
         $this->assertContains('explore', $params['type']['options']);
         $this->assertContains('plan', $params['type']['options']);
+    }
+
+    public function test_batch_requires_agents_array(): void
+    {
+        $tool = $this->makeTool($this->makeContext());
+        $result = $tool->execute(['agents' => []]);
+        $this->assertFalse($result->success);
+        $this->assertStringContainsStringIgnoringCase('provide either', $result->output);
+    }
+
+    public function test_batch_validates_missing_task_in_spec(): void
+    {
+        $tool = $this->makeTool($this->makeContext());
+        $result = $tool->execute(['agents' => [
+            ['task' => 'valid task'],
+            ['id' => 'no_task'],
+        ]]);
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('task is required', $result->output);
+    }
+
+    public function test_batch_validates_invalid_type_in_spec(): void
+    {
+        $tool = $this->makeTool($this->makeContext());
+        $result = $tool->execute(['agents' => [
+            ['task' => 'test', 'type' => 'invalid_type'],
+        ]]);
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('invalid type', $result->output);
+    }
+
+    public function test_batch_validates_type_not_allowed(): void
+    {
+        $tool = $this->makeTool($this->makeContext(AgentType::Explore));
+        $result = $tool->execute(['agents' => [
+            ['task' => 'test', 'type' => 'general'],
+        ]]);
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('not allowed', $result->output);
+    }
+
+    public function test_batch_await_returns_all_results(): void
+    {
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute(['agents' => [
+                ['task' => 'task A', 'id' => 'a'],
+                ['task' => 'task B', 'id' => 'b'],
+            ]]);
+        })->await();
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('Batch complete: 2 agents finished', $result->output);
+        $this->assertStringContainsString("Agent 'a'", $result->output);
+        $this->assertStringContainsString("Agent 'b'", $result->output);
+        $this->assertStringContainsString('executed: task A', $result->output);
+        $this->assertStringContainsString('executed: task B', $result->output);
+    }
+
+    public function test_batch_background_returns_immediately(): void
+    {
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute([
+                'mode' => 'background',
+                'agents' => [
+                    ['task' => 'task A', 'id' => 'a'],
+                    ['task' => 'task B', 'id' => 'b'],
+                ],
+            ]);
+        })->await();
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString('Batch spawned 2 agents in background', $result->output);
+        $this->assertStringContainsString("'a' (explore)", $result->output);
+        $this->assertStringContainsString("'b' (explore)", $result->output);
+    }
+
+    public function test_batch_rejects_spawn_at_max_depth(): void
+    {
+        $ctx = $this->makeContext(AgentType::General, 2); // depth 2, maxDepth 3 → canSpawn = false
+        $tool = $this->makeTool($ctx);
+        $result = $tool->execute(['agents' => [
+            ['task' => 'test'],
+        ]]);
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('Maximum agent depth', $result->output);
+    }
+
+    public function test_required_parameters_is_empty(): void
+    {
+        $tool = $this->makeTool($this->makeContext());
+        $this->assertSame([], $tool->requiredParameters());
     }
 }

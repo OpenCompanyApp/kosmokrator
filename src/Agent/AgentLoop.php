@@ -281,7 +281,7 @@ class AgentLoop
                         continue;
                     }
 
-                    $this->log->error('LLM request failed', ['error' => $e->getMessage(), 'round' => $round]);
+                    $this->log->error('LLM request failed', ['error' => $e->getMessage(), ...$this->logContext($round)]);
                     SafeDisplay::call(fn () => $this->ui->showError($e->getMessage()), $this->log);
                     $this->history->addAssistant('Error: '.ErrorSanitizer::sanitize($e->getMessage()));
 
@@ -290,7 +290,7 @@ class AgentLoop
                     $this->log->error('LLM request failed with unexpected exception', [
                         'exception' => get_class($e),
                         'error' => $e->getMessage(),
-                        'round' => $round,
+                        ...$this->logContext($round),
                     ]);
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
                     SafeDisplay::call(fn () => $this->ui->showError('An unexpected error occurred.'), $this->log);
@@ -352,7 +352,7 @@ class AgentLoop
 
                 // Truncated response — max_tokens hit, continue to get more
                 if ($finishReason === FinishReason::Length) {
-                    $this->log->warning('LLM response truncated (max_tokens)', ['round' => $round]);
+                    $this->log->warning('LLM response truncated (max_tokens)', $this->logContext($round));
                     $this->history->addAssistant($fullText);
                     $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
 
@@ -475,6 +475,7 @@ class AgentLoop
                         $this->log->warning('Headless agent cancelled by watchdog', [
                             'round' => $round,
                             'reason' => $watchdogReason,
+                            ...$this->logContext($round),
                         ]);
                         if ($this->stats !== null) {
                             $this->stats->error = $watchdogReason;
@@ -493,7 +494,7 @@ class AgentLoop
                         continue;
                     }
 
-                    $this->log->error('Headless agent error', ['error' => $e->getMessage(), 'round' => $round]);
+                    $this->log->error('Headless agent error', ['error' => $e->getMessage(), ...$this->logContext($round)]);
 
                     return 'Error: '.$e->getMessage();
                 }
@@ -568,7 +569,7 @@ class AgentLoop
 
                 // Truncated response — max_tokens hit, continue to get more
                 if ($finishReason === FinishReason::Length) {
-                    $this->log->warning('Headless LLM response truncated (max_tokens)', ['round' => $round]);
+                    $this->log->warning('Headless LLM response truncated (max_tokens)', $this->logContext($round));
                     $this->history->addAssistant($fullText);
                     $this->history->addUser('Continue from where you left off. Do not repeat what you already said.');
 
@@ -799,6 +800,7 @@ class AgentLoop
             'attempt' => $trimAttempts,
             'messages_before' => $messagesBefore,
             'messages_after' => count($this->history->messages()),
+            ...$this->logContext(),
         ]);
 
         return true;
@@ -813,7 +815,7 @@ class AgentLoop
      */
     private function handleToolExecutionError(\Throwable $e, array $toolCalls, bool $interactive): array
     {
-        $this->log->error($interactive ? 'Tool execution failed' : 'Headless tool execution failed', ['error' => $e->getMessage()]);
+        $this->log->error($interactive ? 'Tool execution failed' : 'Headless tool execution failed', ['error' => $e->getMessage(), ...$this->logContext()]);
 
         if ($interactive) {
             SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
@@ -832,12 +834,14 @@ class AgentLoop
     private function handleFinalResponse(string $fullText, int $tokensIn, int $tokensOut, int $cacheRead, int $cacheWrite, int $round): void
     {
         $this->log->info('LLM response complete', [
+            'provider' => $this->llm->getProvider(),
             'model' => $this->contextManager->getModelName(),
             'tokens_in' => $tokensIn,
             'tokens_out' => $tokensOut,
             'cache_read_input_tokens' => $cacheRead,
             'cache_write_input_tokens' => $cacheWrite,
             'rounds' => $round,
+            'depth' => $this->agentContext?->depth,
         ]);
         $this->history->addAssistant($fullText);
         $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())], $tokensIn, $tokensOut);
@@ -948,6 +952,23 @@ class AgentLoop
             $this->persistMessage($lastMessage);
             $this->log->debug('Injected queued user message mid-turn', ['length' => strlen($message)]);
         }
+    }
+
+    /** Build structured context for log calls: provider, model, agent context. */
+    private function logContext(int $round = 0): array
+    {
+        $ctx = [
+            'round' => $round,
+            'provider' => $this->llm->getProvider(),
+            'model' => $this->llm->getModel(),
+        ];
+
+        if ($this->agentContext !== null) {
+            $ctx['depth'] = $this->agentContext->depth;
+            $ctx['agent_type'] = $this->agentContext->type->value;
+        }
+
+        return $ctx;
     }
 
     private function logMemoryUsage(): void

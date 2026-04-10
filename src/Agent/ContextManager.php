@@ -190,19 +190,21 @@ final class ContextManager
                 $this->sessionManager->addMemory('compaction', $title, $plan->summary, 'working', false, $expiresAt);
             }
 
-            // Extract durable memories (facts, decisions) from the compaction summary
-            $extraction = $this->compactor->extractMemories($plan->summary);
-            $tokensIn += $extraction['tokens_in'];
-            $tokensOut += $extraction['tokens_out'];
-
             if ($this->sessionManager !== null) {
-                foreach ($extraction['memories'] as $item) {
+                foreach ($plan->extractedMemories as $item) {
+                    $expiresAt = null;
+                    if (($item['memory_class'] ?? 'durable') === 'working') {
+                        $expiresDays = max(1, (int) ($item['expires_days'] ?? 14));
+                        $expiresAt = date('c', time() + ($expiresDays * 86400));
+                    }
+
                     $this->sessionManager->addMemory(
                         $item['type'],
                         $item['title'],
                         $item['content'],
                         $item['memory_class'] ?? 'durable',
                         (bool) ($item['pinned'] ?? false),
+                        $expiresAt,
                     );
                 }
                 // Merge duplicate or overlapping memories after extraction
@@ -217,7 +219,7 @@ final class ContextManager
             SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
             SafeDisplay::call(fn () => $this->ui->showNotice('Context compacted.'), $this->log);
             $this->log->info('Compaction complete', [
-                'memories_extracted' => count($extraction['memories']),
+                'memories_extracted' => count($plan->extractedMemories),
                 'messages_after' => count($history->messages()),
                 'compaction_tokens_in' => $plan->tokensIn,
                 'compaction_tokens_out' => $plan->tokensOut,

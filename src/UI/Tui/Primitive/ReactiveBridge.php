@@ -50,12 +50,17 @@ final class ReactiveBridge
             $store->hasThinkingLoaderSignal()->get();
             $store->hasCompactingLoaderSignal()->get();
             $store->thinkingPhraseSignal()->get();
+            $store->compactingBreathTickSignal()->get();
 
             // Tasks
             $store->hasTasksSignal()->get();
 
             // Subagents
             $store->hasRunningAgentsSignal()->get();
+            $store->cachedLoaderLabelSignal()->get();
+            $store->batchDisplayedSignal()->get();
+            $store->loaderBreathTickSignal()->get();
+            $store->startTimeSignal()->get();
 
             // Scroll / history
             $store->scrollOffsetSignal()->get();

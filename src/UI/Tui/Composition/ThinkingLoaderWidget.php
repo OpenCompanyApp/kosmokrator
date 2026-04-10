@@ -7,9 +7,10 @@ namespace Kosmokrator\UI\Tui\Composition;
 use Amp\DeferredCancellation;
 use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use Revolt\EventLoop;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
+use Symfony\Component\Tui\Widget\ParentInterface;
+use Symfony\Component\Tui\Widget\WidgetContext;
 
 /**
  * Reactive thinking loader — self-managing lifecycle.
@@ -20,17 +21,19 @@ use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
  *
  * Replaces the imperative loader management in TuiAnimationManager.
  */
-final class ThinkingLoaderWidget extends ReactiveWidget
+final class ThinkingLoaderWidget extends ReactiveWidget implements ParentInterface
 {
     private ?CancellableLoaderWidget $loader = null;
-
-    private ?string $timerId = null;
 
     private bool $mounted = false;
 
     private string $lastPhrase = '';
 
     private string $lastColor = '';
+
+    private bool $lastShowElapsed = false;
+
+    private int $lastElapsed = -1;
 
     private readonly TuiStateStore $state;
 
@@ -106,32 +109,28 @@ final class ThinkingLoaderWidget extends ReactiveWidget
             return false;
         }
 
-        // Update message/color reactively
         $newPhrase = $this->state->getThinkingPhrase() ?? '';
         $newColor = $this->state->getBreathColor() ?? '';
+        $showElapsed = ! $this->state->getHasSubagentActivity();
+        $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
 
-        if ($newPhrase === $this->lastPhrase && $newColor === $this->lastColor) {
+        if (
+            $newPhrase === $this->lastPhrase
+            && $newColor === $this->lastColor
+            && $showElapsed === $this->lastShowElapsed
+            && $elapsed === $this->lastElapsed
+        ) {
             return false;
         }
 
         $this->lastPhrase = $newPhrase;
         $this->lastColor = $newColor;
+        $this->lastShowElapsed = $showElapsed;
+        $this->lastElapsed = $elapsed;
 
-        if ($this->loader !== null) {
-            $r = "\033[0m";
-            $message = "{$newColor}{$newPhrase}{$r}";
+        $this->updateMessage($newPhrase, $newColor, $showElapsed, $elapsed);
 
-            if (! $this->state->getHasSubagentActivity()) {
-                $dim = "\033[38;5;245m";
-                $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
-                $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-                $message .= "{$dim} · {$formatted}{$r}";
-            }
-
-            $this->loader->setMessage($message);
-        }
-
-        return false;
+        return true;
     }
 
     public function render(RenderContext $context): array
@@ -161,25 +160,31 @@ final class ThinkingLoaderWidget extends ReactiveWidget
         $this->loader->setSpinner($spinnerName);
         $this->loader->setIntervalMs(120);
         $this->loader->start();
+        $this->attachLoader();
 
         $cancellation = $this->cancellation ?? $this->state->getRequestCancellation();
         $this->loader->onCancel(function () use ($cancellation): void {
             $cancellation?->cancel();
         });
 
-        $this->lastPhrase = $phrase;
-        $this->lastColor = '';
         $this->mounted = true;
+
+        $color = $this->state->getBreathColor() ?? '';
+        $showElapsed = ! $this->state->getHasSubagentActivity();
+        $elapsed = (int) (microtime(true) - $this->state->getThinkingStartTime());
+
+        $this->lastPhrase = $phrase;
+        $this->lastColor = $color;
+        $this->lastShowElapsed = $showElapsed;
+        $this->lastElapsed = $elapsed;
+
+        $this->updateMessage($phrase, $color, $showElapsed, $elapsed);
     }
 
     private function unmount(): void
     {
-        if ($this->timerId !== null) {
-            EventLoop::cancel($this->timerId);
-            $this->timerId = null;
-        }
-
         if ($this->loader !== null) {
+            $this->loader->detach();
             $this->loader->setFinishedIndicator('✓');
             $this->loader->stop();
             $this->loader = null;
@@ -188,6 +193,60 @@ final class ThinkingLoaderWidget extends ReactiveWidget
         $this->mounted = false;
         $this->lastPhrase = '';
         $this->lastColor = '';
+        $this->lastShowElapsed = false;
+        $this->lastElapsed = -1;
+    }
+
+    private function updateMessage(string $phrase, string $color, bool $showElapsed, int $elapsed): void
+    {
+        if ($this->loader === null) {
+            return;
+        }
+
+        $r = "\033[0m";
+        $message = "{$color}{$phrase}{$r}";
+
+        if ($showElapsed) {
+            $dim = "\033[38;5;245m";
+            $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
+            $message .= "{$dim} · {$formatted}{$r}";
+        }
+
+        $this->loader->setMessage($message);
+    }
+
+    /**
+     * @return list<CancellableLoaderWidget>
+     */
+    public function all(): array
+    {
+        return $this->loader !== null ? [$this->loader] : [];
+    }
+
+    protected function onAttach(WidgetContext $context): void
+    {
+        $this->attachLoader();
+    }
+
+    protected function onDetach(): void
+    {
+        if ($this->loader !== null && $this->loader->getContext() !== null) {
+            $this->loader->detach();
+        }
+    }
+
+    private function attachLoader(): void
+    {
+        if ($this->loader === null || $this->loader->getContext() !== null) {
+            return;
+        }
+
+        $context = $this->getContext();
+        if ($context === null) {
+            return;
+        }
+
+        $this->loader->attach($this, $context);
     }
 
     public static function registerSpinners(): void

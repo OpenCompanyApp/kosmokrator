@@ -235,29 +235,35 @@ class MessageRepository implements MessageRepositoryInterface
     }
 
     /**
-     * Search messages across all sessions for a project using a LIKE query.
+     * Search messages across all sessions for a project using FTS5 ranking.
      *
      * @param  string  $project  Project path to scope the search
-     * @param  string  $query  Search term (LIKE pattern, auto-escaped)
+     * @param  string  $query  Free-text query converted to an FTS expression
      * @param  string|null  $excludeSessionId  Optional session to exclude from results
      * @param  int  $limit  Maximum number of rows to return
      * @return array<int, array<string, mixed>> Matching message rows with session metadata
      */
     public function searchProjectHistory(string $project, string $query, ?string $excludeSessionId = null, int $limit = 5): array
     {
+        $ftsQuery = $this->buildFtsQuery($query);
+        if ($ftsQuery === null) {
+            return [];
+        }
+
         $sql = '
-            SELECT m.session_id, m.role, m.content, m.created_at, s.title, s.updated_at
-            FROM messages m
+            SELECT m.session_id, m.role, m.content, m.created_at, s.title, s.updated_at,
+                   bm25(messages_fts) AS rank
+            FROM messages_fts
+            INNER JOIN messages m ON m.id = messages_fts.rowid
             INNER JOIN sessions s ON s.id = m.session_id
             WHERE s.project = :project
               AND m.compacted = 0
               AND m.content IS NOT NULL
-              AND m.content LIKE :query ESCAPE \'\\\'
+              AND messages_fts MATCH :query
         ';
-        // Escape LIKE wildcards in the user query
         $params = [
             'project' => $project,
-            'query' => '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query).'%',
+            'query' => $ftsQuery,
         ];
 
         if ($excludeSessionId !== null) {
@@ -265,6 +271,93 @@ class MessageRepository implements MessageRepositoryInterface
             $params['exclude_session_id'] = $excludeSessionId;
         }
 
+        $sql .= ' ORDER BY rank ASC, s.updated_at DESC, m.id DESC LIMIT :limit';
+        $params['limit'] = $limit;
+
+        $stmt = $this->db->connection()->prepare($sql);
+        $stmt->execute($params);
+
+        $rows = $stmt->fetchAll();
+
+        if ($rows === [] || ($this->looksIdentifierLike($query) && count($rows) < $limit)) {
+            $rows = $this->mergeHistoryRows(
+                $rows,
+                $this->searchProjectHistoryLikeFallback($project, $query, $excludeSessionId, $limit),
+                $limit,
+            );
+        }
+
+        return $rows;
+    }
+
+    private function buildFtsQuery(string $query): ?string
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return null;
+        }
+
+        preg_match_all('/"([^"]+)"|([[:alnum:]_\\.\\/-]+)/u', $query, $matches, \PREG_SET_ORDER);
+        $terms = [];
+
+        foreach ($matches as $match) {
+            $phrase = trim((string) ($match[1] ?? ''));
+            if ($phrase !== '') {
+                $terms[] = '"'.str_replace('"', '""', $phrase).'"';
+
+                continue;
+            }
+
+            $term = trim((string) ($match[2] ?? ''));
+            if ($term === '') {
+                continue;
+            }
+
+            $quoted = strpbrk($term, '/._-') !== false;
+            $escaped = str_replace('"', '""', $term);
+            $terms[] = $quoted ? '"'.$escaped.'"' : $escaped.'*';
+        }
+
+        if ($terms === []) {
+            return null;
+        }
+
+        return implode(' AND ', $terms);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function searchProjectHistoryLikeFallback(string $project, string $query, ?string $excludeSessionId, int $limit): array
+    {
+        $tokens = $this->fallbackTerms($query);
+        if ($tokens === []) {
+            return [];
+        }
+
+        $sql = '
+            SELECT m.session_id, m.role, m.content, m.created_at, s.title, s.updated_at
+            FROM messages m
+            INNER JOIN sessions s ON s.id = m.session_id
+            WHERE s.project = :project
+              AND m.compacted = 0
+              AND m.content IS NOT NULL
+        ';
+        $params = ['project' => $project];
+
+        if ($excludeSessionId !== null) {
+            $sql .= ' AND m.session_id != :exclude_session_id';
+            $params['exclude_session_id'] = $excludeSessionId;
+        }
+
+        $clauses = [];
+        foreach ($tokens as $index => $term) {
+            $param = "query_{$index}";
+            $clauses[] = "m.content LIKE :{$param} ESCAPE '\\'";
+            $params[$param] = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term).'%';
+        }
+
+        $sql .= ' AND ('.implode(' OR ', $clauses).')';
         $sql .= ' ORDER BY s.updated_at DESC, m.id DESC LIMIT :limit';
         $params['limit'] = $limit;
 
@@ -272,5 +365,69 @@ class MessageRepository implements MessageRepositoryInterface
         $stmt->execute($params);
 
         return $stmt->fetchAll();
+    }
+
+    /**
+     * @return string[]
+     */
+    private function fallbackTerms(string $query): array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+
+        $terms = [$query];
+        preg_match_all('/[[:alnum:]_\\.\\/-]+/u', $query, $matches);
+
+        foreach (($matches[0] ?? []) as $term) {
+            $normalized = trim($term);
+            if ($normalized === '') {
+                continue;
+            }
+
+            if ($this->looksIdentifierLike($normalized) || mb_strlen($normalized) >= 3) {
+                $terms[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($terms));
+    }
+
+    private function looksIdentifierLike(string $query): bool
+    {
+        return strpbrk($query, '/._-') !== false;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $primary
+     * @param  array<int, array<string, mixed>>  $fallback
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergeHistoryRows(array $primary, array $fallback, int $limit): array
+    {
+        $merged = [];
+
+        foreach ([$primary, $fallback] as $rows) {
+            foreach ($rows as $row) {
+                $key = implode(':', [
+                    (string) ($row['session_id'] ?? ''),
+                    (string) ($row['created_at'] ?? ''),
+                    (string) ($row['role'] ?? ''),
+                    (string) ($row['content'] ?? ''),
+                ]);
+
+                if (isset($merged[$key])) {
+                    continue;
+                }
+
+                $merged[$key] = $row;
+                if (count($merged) >= $limit) {
+                    break 2;
+                }
+            }
+        }
+
+        return array_values($merged);
     }
 }

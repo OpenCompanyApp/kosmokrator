@@ -15,6 +15,8 @@ use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\DiscoveryBatchWidget;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Component\Tui\Widget\TextWidget;
 use Tempest\Highlight\Highlighter;
 
@@ -48,6 +50,7 @@ final class TuiToolRenderer implements ToolRendererInterface
     public function __construct(
         private readonly TuiCoreRenderer $core,
         private readonly TuiStateStore $state,
+        private readonly LoggerInterface $log = new NullLogger,
     ) {}
 
     private function toolExecutionCard(): ToolExecutionCard
@@ -367,7 +370,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         try {
             $highlighted = $this->getHighlighter()->parse($code, $language);
         } catch (\Throwable $e) {
-            error_log("[TuiToolRenderer] Syntax highlight failed: {$e->getMessage()}");
+            $this->log->warning('Syntax highlight failed', ['error' => $e->getMessage(), 'language' => $language]);
 
             return $output;
         }
@@ -516,7 +519,7 @@ final class TuiToolRenderer implements ToolRendererInterface
 
     private function getDiffRenderer(): DiffRenderer
     {
-        return $this->diffRenderer ??= new DiffRenderer;
+        return $this->diffRenderer ??= new DiffRenderer($this->log);
     }
 
     private function getHighlighter(): Highlighter
@@ -719,7 +722,7 @@ final class TuiToolRenderer implements ToolRendererInterface
         try {
             return $this->getHighlighter()->parse($code, new LuaLanguage);
         } catch (\Throwable $e) {
-            error_log("[TuiToolRenderer] Lua highlight failed: {$e->getMessage()}");
+            $this->log->warning('Lua highlight failed', ['error' => $e->getMessage()]);
 
             $r = Theme::reset();
             $text = Theme::text();

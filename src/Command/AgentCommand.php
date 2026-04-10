@@ -22,6 +22,7 @@ use Kosmokrator\UI\HeadlessRenderer;
 use Kosmokrator\UI\OutputFormat;
 use Kosmokrator\Update\UpdateChecker;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -455,7 +456,8 @@ class AgentCommand extends Command
                 }
             } catch (\Throwable $e) {
                 // Never let the sound system break the REPL — but log it
-                error_log('[CompletionSound] Hook failed: '.$e->getMessage());
+                $this->container->make(LoggerInterface::class)
+                    ->warning('Completion sound hook failed', ['error' => $e->getMessage()]);
             }
 
             // Plan mode: show approval dialog after run completes

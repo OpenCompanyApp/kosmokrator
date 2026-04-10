@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Skill;
 
+use Kosmokrator\Security\PromptInjectionScanner;
 use Symfony\Component\Yaml\Yaml;
 
 class SkillLoader
@@ -18,6 +19,7 @@ class SkillLoader
     public function __construct(
         private readonly string $projectRoot,
         private readonly string $userSkillsDir,
+        private readonly ?PromptInjectionScanner $scanner = null,
     ) {
         // Lowest precedence first — later entries override earlier ones
         $this->sources = [
@@ -120,6 +122,11 @@ class SkillLoader
         $description = $meta['description'] ?? '';
 
         if (! is_string($name) || $name === '') {
+            return null;
+        }
+
+        $scanner = $this->scanner ?? new PromptInjectionScanner;
+        if (! $scanner->isSafe($content)) {
             return null;
         }
 

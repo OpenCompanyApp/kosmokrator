@@ -24,11 +24,12 @@ final class MemorySelector
             return [];
         }
 
+        $normalizedQuery = $this->normalizeQuery($query);
         $terms = $this->terms($query);
 
-        usort($memories, function (array $a, array $b) use ($terms): int {
-            $scoreA = $this->score($a, $terms);
-            $scoreB = $this->score($b, $terms);
+        usort($memories, function (array $a, array $b) use ($terms, $normalizedQuery): int {
+            $scoreA = $this->score($a, $terms, $normalizedQuery);
+            $scoreB = $this->score($b, $terms, $normalizedQuery);
 
             if ($scoreA !== $scoreB) {
                 return $scoreB <=> $scoreA;
@@ -45,13 +46,14 @@ final class MemorySelector
      *
      * @param  string[]  $terms  Lowercased query terms extracted by terms()
      */
-    private function score(array $memory, array $terms): int
+    private function score(array $memory, array $terms, string $normalizedQuery): int
     {
         $score = 0;
         $type = (string) ($memory['type'] ?? '');
         $class = (string) ($memory['memory_class'] ?? 'durable');
         $title = mb_strtolower((string) ($memory['title'] ?? ''));
         $content = mb_strtolower((string) ($memory['content'] ?? ''));
+        $referenceTime = $this->referenceTimestamp($memory);
 
         $score += match ($class) {
             'priority' => 80,
@@ -72,16 +74,39 @@ final class MemorySelector
             $score += 40;
         }
 
+        if ($normalizedQuery !== '') {
+            if ($title === $normalizedQuery) {
+                $score += 70;
+            } elseif (str_contains($title, $normalizedQuery)) {
+                $score += 45;
+            }
+
+            if (str_contains($content, $normalizedQuery)) {
+                $score += 20;
+            }
+        }
+
         foreach ($terms as $term) {
             if ($term === '') {
                 continue;
             }
+            $identifierLike = $this->isIdentifierLike($term);
             if (str_contains($title, $term)) {
-                $score += 30;
+                $score += $identifierLike ? 42 : 30;
             }
             if (str_contains($content, $term)) {
-                $score += 15;
+                $score += $identifierLike ? 24 : 15;
             }
+        }
+
+        if ($type === 'decision') {
+            $score += $this->decisionRecencyBoost($referenceTime);
+        }
+
+        if ($class === 'working') {
+            $score -= $this->staleWorkingPenalty(
+                $this->timestamp((string) ($memory['last_surfaced_at'] ?? '')) ?? $referenceTime,
+            );
         }
 
         return $score;
@@ -92,12 +117,81 @@ final class MemorySelector
      */
     private function terms(?string $query): array
     {
-        if ($query === null || trim($query) === '') {
+        $normalized = $this->normalizeQuery($query);
+        if ($normalized === '') {
             return [];
         }
 
-        $parts = preg_split('/\s+/', mb_strtolower(trim($query))) ?: [];
+        preg_match_all('/[[:alnum:]_\\.\\/-]+/u', $normalized, $matches);
+        $parts = $matches[0] ?? [];
 
-        return array_values(array_filter($parts, fn (string $part) => mb_strlen($part) >= 3));
+        return array_values(array_filter($parts, function (string $part): bool {
+            if ($part === '') {
+                return false;
+            }
+
+            return $this->isIdentifierLike($part) || mb_strlen($part) >= 3;
+        }));
+    }
+
+    private function normalizeQuery(?string $query): string
+    {
+        if ($query === null) {
+            return '';
+        }
+
+        return mb_strtolower(trim($query));
+    }
+
+    private function isIdentifierLike(string $term): bool
+    {
+        return strpbrk($term, '/._-') !== false;
+    }
+
+    private function referenceTimestamp(array $memory): ?int
+    {
+        return $this->timestamp((string) ($memory['updated_at'] ?? ''))
+            ?? $this->timestamp((string) ($memory['created_at'] ?? ''));
+    }
+
+    private function timestamp(string $value): ?int
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($value);
+
+        return $timestamp === false ? null : $timestamp;
+    }
+
+    private function decisionRecencyBoost(?int $timestamp): int
+    {
+        if ($timestamp === null) {
+            return 0;
+        }
+
+        $age = time() - $timestamp;
+
+        return match (true) {
+            $age <= 30 * 86400 => 18,
+            $age <= 180 * 86400 => 10,
+            default => 0,
+        };
+    }
+
+    private function staleWorkingPenalty(?int $timestamp): int
+    {
+        if ($timestamp === null) {
+            return 0;
+        }
+
+        $age = time() - $timestamp;
+
+        return match (true) {
+            $age >= 60 * 86400 => 35,
+            $age >= 14 * 86400 => 20,
+            default => 0,
+        };
     }
 }

@@ -32,7 +32,7 @@ enum AgentMode: string
 
     private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
-    private const MEMORY_READ_TOOLS = ['memory_search'];
+    private const MEMORY_READ_TOOLS = ['memory_search', 'session_search'];
 
     private const MEMORY_WRITE_TOOLS = ['memory_save'];
 

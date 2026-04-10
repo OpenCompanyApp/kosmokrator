@@ -9,6 +9,8 @@ use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
+use Symfony\Component\Tui\Widget\ParentInterface;
+use Symfony\Component\Tui\Widget\WidgetContext;
 
 /**
  * Reactive compacting loader.
@@ -16,13 +18,17 @@ use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
  * Reads hasCompactingLoaderSignal to show/hide. Updates message from
  * thinkingPhraseSignal and compactingStartTimeSignal for elapsed time.
  */
-final class CompactingLoaderWidget extends ReactiveWidget
+final class CompactingLoaderWidget extends ReactiveWidget implements ParentInterface
 {
     private ?CancellableLoaderWidget $loader = null;
 
     private bool $mounted = false;
 
     private string $lastPhrase = '';
+
+    private int $lastBreathTick = -1;
+
+    private int $lastElapsed = -1;
 
     private readonly TuiStateStore $state;
 
@@ -59,16 +65,20 @@ final class CompactingLoaderWidget extends ReactiveWidget
             return false;
         }
 
-        // Update message with elapsed time
         $phrase = $this->state->getThinkingPhrase() ?? '';
-        if ($phrase === $this->lastPhrase) {
+        $tick = $this->state->getCompactingBreathTick();
+        $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
+
+        if ($phrase === $this->lastPhrase && $tick === $this->lastBreathTick && $elapsed === $this->lastElapsed) {
             return false;
         }
 
         $this->lastPhrase = $phrase;
-        $this->updateMessage();
+        $this->lastBreathTick = $tick;
+        $this->lastElapsed = $elapsed;
+        $this->updateMessage($phrase, $tick, $elapsed);
 
-        return false;
+        return true;
     }
 
     public function render(RenderContext $context): array
@@ -93,18 +103,24 @@ final class CompactingLoaderWidget extends ReactiveWidget
         $this->loader->setSpinner('hourglass');
         $this->loader->setIntervalMs(120);
         $this->loader->start();
+        $this->attachLoader();
 
         $this->state->setCompactingStartTime(microtime(true));
         $this->state->setCompactingBreathTick(0);
-        $this->lastPhrase = $phrase;
         $this->mounted = true;
 
-        $this->updateMessage();
+        $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
+        $this->lastPhrase = $phrase;
+        $this->lastBreathTick = 0;
+        $this->lastElapsed = $elapsed;
+
+        $this->updateMessage($phrase, 0, $elapsed);
     }
 
     private function unmount(): void
     {
         if ($this->loader !== null) {
+            $this->loader->detach();
             $this->loader->setFinishedIndicator('✓');
             $this->loader->stop();
             $this->loader = null;
@@ -112,9 +128,11 @@ final class CompactingLoaderWidget extends ReactiveWidget
 
         $this->mounted = false;
         $this->lastPhrase = '';
+        $this->lastBreathTick = -1;
+        $this->lastElapsed = -1;
     }
 
-    private function updateMessage(): void
+    private function updateMessage(string $phrase, int $tick, int $elapsed): void
     {
         if ($this->loader === null) {
             return;
@@ -122,17 +140,48 @@ final class CompactingLoaderWidget extends ReactiveWidget
 
         $r = "\033[0m";
         $dim = "\033[38;5;245m";
-        $tick = $this->state->getCompactingBreathTick();
         $t = sin($tick * 0.07);
         $cr = (int) (208 + 40 * $t);
         $cg = (int) (48 + 16 * $t);
         $cb = (int) (48 + 16 * $t);
         $color = Theme::rgb($cr, $cg, $cb);
 
-        $elapsed = (int) (microtime(true) - $this->state->getCompactingStartTime());
         $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
 
-        $phrase = $this->lastPhrase;
         $this->loader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
+    }
+
+    /**
+     * @return list<CancellableLoaderWidget>
+     */
+    public function all(): array
+    {
+        return $this->loader !== null ? [$this->loader] : [];
+    }
+
+    protected function onAttach(WidgetContext $context): void
+    {
+        $this->attachLoader();
+    }
+
+    protected function onDetach(): void
+    {
+        if ($this->loader !== null && $this->loader->getContext() !== null) {
+            $this->loader->detach();
+        }
+    }
+
+    private function attachLoader(): void
+    {
+        if ($this->loader === null || $this->loader->getContext() !== null) {
+            return;
+        }
+
+        $context = $this->getContext();
+        if ($context === null) {
+            return;
+        }
+
+        $this->loader->attach($this, $context);
     }
 }

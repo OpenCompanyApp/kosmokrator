@@ -111,6 +111,28 @@ class MemoryRepositoryTest extends TestCase
         $this->assertSame('JWT Auth', $results[0]['title']);
     }
 
+    public function test_search_prefers_exact_title_match_over_content_match(): void
+    {
+        $this->repo->add('project', 'Auth Notes', 'JWT Auth setup details', '/proj');
+        $this->repo->add('project', 'JWT Auth', 'General auth summary', '/proj');
+
+        $results = $this->repo->search('/proj', null, 'JWT Auth');
+
+        $this->assertCount(2, $results);
+        $this->assertSame('JWT Auth', $results[0]['title']);
+    }
+
+    public function test_search_prefers_priority_and_decision_when_query_ties(): void
+    {
+        $this->repo->add('project', 'Project JWT', 'JWT decision context', '/proj', null, 'durable');
+        $this->repo->add('decision', 'Decision JWT', 'JWT decision context', '/proj', null, 'priority');
+
+        $results = $this->repo->search('/proj', null, 'JWT');
+
+        $this->assertCount(2, $results);
+        $this->assertSame('Decision JWT', $results[0]['title']);
+    }
+
     public function test_search_combined_type_and_query(): void
     {
         $this->repo->add('project', 'JWT Auth', 'Uses JWT tokens', '/proj');

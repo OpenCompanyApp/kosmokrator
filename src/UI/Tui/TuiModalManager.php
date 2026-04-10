@@ -13,6 +13,8 @@ use Kosmokrator\UI\Tui\Widget\PlanApprovalWidget;
 use Kosmokrator\UI\Tui\Widget\QuestionWidget;
 use Kosmokrator\UI\Tui\Widget\SettingsWorkspaceWidget;
 use Kosmokrator\UI\Tui\Widget\SwarmDashboardWidget;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Event\SelectEvent;
@@ -46,6 +48,7 @@ final class TuiModalManager
         private readonly EditorWidget $input,
         private readonly \Closure $renderCallback,
         private readonly \Closure $forceRenderCallback,
+        private readonly LoggerInterface $log = new NullLogger,
     ) {}
 
     /**
@@ -405,7 +408,7 @@ final class TuiModalManager
                     $widget->setData($data['summary'], $data['stats']);
                     $this->forceRender();
                 } catch (\Throwable $e) {
-                    error_log("[TuiModalManager] Refresh error: {$e->getMessage()}");
+                    $this->log->warning('Dashboard refresh error', ['error' => $e->getMessage()]);
                 }
             });
         }

@@ -76,7 +76,21 @@ php vendor/bin/pint             # Code style (Laravel Pint)
 
 Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/config.yaml` or `.kosmokrator.yaml` in the working directory.
 
-`README.md`, `docs/architecture/overview.md`, `docs/architecture/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/proposals/` and `docs/audits/` are proposals or historical notes unless explicitly marked otherwise.
+`README.md`, `docs/architecture/overview.md`, `docs/architecture/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/proposals/` are design notes. Actionable backlog is tracked in Plane, not in repo audit/todo docs.
+
+## MCP CLI
+
+- MCP CLI is installed at `~/.local/bin/mcp-cli`.
+- Config is at `~/.config/mcp/mcp_servers.json`.
+- Common usage:
+- `mcp-cli`
+- `mcp-cli info <server>`
+- `mcp-cli call <server> <tool> '<json>'`
+- Connected servers currently include:
+- `founder-mode`
+- `notion`
+- `vibe_kanban`
+- `plane`
 
 ### Building a PHAR
 

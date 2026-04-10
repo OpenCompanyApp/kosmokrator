@@ -76,7 +76,10 @@
     "autoload-dev": {
         "psr-4": {
             "Kosmokrator\\Tests\\": "tests/"
-        }
+        },
+        "files": [
+            "stubs/lua-sandbox-polyfill.php"
+        ]
     },
     "config": {
         "preferred-install": "dist",

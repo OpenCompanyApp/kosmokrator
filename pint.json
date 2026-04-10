@@ -1,6 +1,7 @@
 {
     "preset": "laravel",
     "exclude": [
+        "integrations",
         "vendor-src",
         "website"
     ]

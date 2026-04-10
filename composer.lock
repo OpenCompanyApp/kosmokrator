@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "29325e9db1f3ad9d3cf00b57ab63120f",
+    "content-hash": "4ac0888cfaf845b85f0c6dd58faea235",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3631,8 +3631,8 @@
             "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "/Users/rutger/Sites/integrations/packages/clickup",
-                "reference": "8590ff9f0e5692bfa39707b144aa4b97d5260208"
+                "url": "integrations/packages/clickup",
+                "reference": "1b14240d32e7a64b97eba16c6d4ad6717e132fc7"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3673,7 +3673,7 @@
             ],
             "transport-options": {
                 "symlink": true,
-                "relative": false
+                "relative": true
             }
         },
         {
@@ -3681,8 +3681,8 @@
             "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "/Users/rutger/Sites/integrations/packages/coingecko",
-                "reference": "46b78f0d8ddc7250b50d8b8043abf362bd862d82"
+                "url": "integrations/packages/coingecko",
+                "reference": "fbc18b504c7a71c6681edf91515f8669cf4b7934"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3723,7 +3723,7 @@
             ],
             "transport-options": {
                 "symlink": true,
-                "relative": false
+                "relative": true
             }
         },
         {
@@ -3731,8 +3731,8 @@
             "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "/Users/rutger/Sites/integrations/core",
-                "reference": "bb3350a35c4fa2a69d184b382aec774b67521f62"
+                "url": "integrations/core",
+                "reference": "b47a39158521ee333af52d484bfbdd6ad70bc250"
             },
             "require": {
                 "illuminate/support": "^11.0 || ^12.0 || ^13.0",
@@ -3768,7 +3768,7 @@
                 "tools"
             ],
             "transport-options": {
-                "relative": false
+                "relative": true
             }
         },
         {
@@ -3776,8 +3776,8 @@
             "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "/Users/rutger/Sites/integrations/packages/plane",
-                "reference": "4ab2cdf6c4eebc5379dce73359f6ba80f8b09f2c"
+                "url": "integrations/packages/plane",
+                "reference": "e92979a8d1b4b2e7ffd1c25eb0e08760a4497525"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3818,7 +3818,7 @@
             ],
             "transport-options": {
                 "symlink": true,
-                "relative": false
+                "relative": true
             }
         },
         {
@@ -3826,8 +3826,8 @@
             "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "/Users/rutger/Sites/integrations/packages/plausible",
-                "reference": "0d6b7a49fda1b9a91db40feb330c73e0bc77c891"
+                "url": "integrations/packages/plausible",
+                "reference": "9b4456487fb22697c68c1176314f78989a7390f7"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3867,7 +3867,7 @@
             ],
             "transport-options": {
                 "symlink": true,
-                "relative": false
+                "relative": true
             }
         },
         {

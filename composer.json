@@ -43,12 +43,12 @@
         {
             "name": "integration-core",
             "type": "path",
-            "url": "/Users/rutger/Sites/integrations/core"
+            "url": "integrations/core"
         },
         {
             "name": "integrations-monorepo",
             "type": "path",
-            "url": "/Users/rutger/Sites/integrations/packages/*",
+            "url": "integrations/packages/*",
             "options": {
                 "symlink": true
             }

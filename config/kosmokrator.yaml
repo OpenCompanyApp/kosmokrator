@@ -125,6 +125,17 @@ ui:
 integrations:
   permissions_default: ask  # Default for operations not explicitly set
 
+gateway:
+  telegram:
+    enabled: false
+    token: null
+    session_mode: thread
+    allowed_users: []
+    allowed_chats: []
+    require_mention: true
+    free_response_chats: []
+    poll_timeout_seconds: 20
+
 tools:
   # Tools that are always denied, overriding all modes (including Prometheus).
   # Useful for hard-disabling tools in specific projects or CI environments.

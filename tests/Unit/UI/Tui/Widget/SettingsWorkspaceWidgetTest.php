@@ -50,6 +50,22 @@ final class SettingsWorkspaceWidgetTest extends TestCase
         $this->assertSame('gpt-4', $values['agent.default_model']);
     }
 
+    public function test_constructor_normalizes_array_field_values(): void
+    {
+        $widget = $this->createWidget([
+            'categories' => [[
+                'id' => 'gateway',
+                'label' => 'Gateway',
+                'fields' => [
+                    ['id' => 'gateway.telegram.allowed_users', 'label' => 'Allowed users', 'value' => ['alice', 'bob']],
+                ],
+            ]],
+        ]);
+
+        $values = $this->getProperty($widget, 'values');
+        $this->assertSame('alice, bob', $values['gateway.telegram.allowed_users']);
+    }
+
     public function test_constructor_stores_original_values(): void
     {
         $widget = $this->createWidget([
@@ -150,6 +166,32 @@ final class SettingsWorkspaceWidgetTest extends TestCase
         $this->setProperty($widget, 'deleteCustomProviderId', 'my_custom');
         $result = $this->invoke($widget, 'buildResult');
         $this->assertSame('my_custom', $result['delete_custom_provider']);
+    }
+
+    public function test_render_gateway_details_shows_status_and_start_command(): void
+    {
+        $widget = $this->createWidget([
+            'categories' => [
+                [
+                    'id' => 'gateway',
+                    'label' => 'Gateway',
+                    'fields' => [
+                        ['id' => 'gateway.telegram.enabled', 'label' => 'Telegram gateway', 'value' => 'on', 'source' => 'project', 'effect' => 'next_session', 'description' => 'Enable it.'],
+                        ['id' => 'gateway.telegram.secret.token', 'label' => 'Telegram bot token', 'value' => '(stored)', 'source' => 'secret_store', 'effect' => 'applies_now', 'description' => 'Stored outside YAML.'],
+                        ['id' => 'gateway.telegram.session_mode', 'label' => 'Session routing', 'value' => 'thread', 'source' => 'project', 'effect' => 'next_session', 'description' => 'Route mode.'],
+                        ['id' => 'gateway.telegram.allowed_users', 'label' => 'Allowed users', 'value' => 'alice', 'source' => 'project', 'effect' => 'next_session', 'description' => 'Users.'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $lines = $this->invoke($widget, 'renderGatewayDetails', 80, 16);
+        $output = implode("\n", $lines);
+
+        $this->assertStringContainsString('Telegram Gateway', $output);
+        $this->assertStringContainsString('Token: configured', $output);
+        $this->assertStringContainsString('Session routing: thread', $output);
+        $this->assertStringContainsString('php bin/kosmokrator gateway:telegram', $output);
     }
 
     // ── buildCustomProvider ──────────────────────────────────────────────
@@ -684,7 +726,6 @@ final class SettingsWorkspaceWidgetTest extends TestCase
         ]);
         $context = new RenderContext(120, 30);
         $lines = $widget->render($context);
-        $this->assertIsArray($lines);
         $this->assertNotEmpty($lines);
     }
 

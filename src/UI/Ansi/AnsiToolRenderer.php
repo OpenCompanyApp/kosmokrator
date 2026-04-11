@@ -9,6 +9,7 @@ use Kosmokrator\UI\Diff\DiffRenderer;
 use Kosmokrator\UI\Highlight\Lua\LuaLanguage;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\ToolRendererInterface;
+use Kosmokrator\UI\Tui\ExplorationClassifier;
 use Tempest\Highlight\Highlighter;
 
 /**
@@ -23,6 +24,13 @@ final class AnsiToolRenderer implements ToolRendererInterface
     private array $lastToolArgs = [];
 
     private ?TaskStore $taskStore = null;
+
+    private float $executingStartTime = 0.0;
+
+    /** @var array<int, array{name: string, args: array, output: ?string, success: ?bool}> */
+    private array $discoveryBatch = [];
+
+    private bool $discoveryBatchOpen = false;
 
     /** @var \Closure(): void */
     private \Closure $flushQuestionRecapCallback;
@@ -49,7 +57,8 @@ final class AnsiToolRenderer implements ToolRendererInterface
 
     public function showToolCall(string $name, array $args): void
     {
-        if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
+        // Skip flush during active discovery batch — the batch manages its own output
+        if (! in_array($name, ['ask_user', 'ask_choice'], true) && ! $this->discoveryBatchOpen) {
             ($this->flushQuestionRecapCallback)();
         }
 
@@ -61,6 +70,20 @@ final class AnsiToolRenderer implements ToolRendererInterface
         $this->lastToolArgs = $args;
         $friendly = Theme::toolLabel($name);
         $border = Theme::borderTask();
+
+        // Discovery batch: accumulate consecutive omens (read-only) tools
+        if (ExplorationClassifier::isOmensTool($name, $args)) {
+            if (! $this->discoveryBatchOpen) {
+                $this->discoveryBatchOpen = true;
+                echo "\n{$border}  ┌ {$gold}☽ Reading the omens...{$r}\n";
+            }
+            $this->discoveryBatch[] = ['name' => $name, 'args' => $args, 'output' => null, 'success' => null];
+
+            return;
+        }
+
+        // Non-omens tool: finalize any open discovery batch before rendering
+        $this->finalizeDiscoveryBatch();
 
         // Task tools: compact display, suppress noise
         if ($this->isTaskTool($name)) {
@@ -150,8 +173,23 @@ final class AnsiToolRenderer implements ToolRendererInterface
 
     public function showToolResult(string $name, string $output, bool $success): void
     {
-        if (! in_array($name, ['ask_user', 'ask_choice'], true)) {
+        // Skip flush during active discovery batch — the batch manages its own output
+        if (! in_array($name, ['ask_user', 'ask_choice'], true) && ! $this->discoveryBatchOpen) {
             ($this->flushQuestionRecapCallback)();
+        }
+
+        // Discovery batch: fill in the result for the pending entry
+        if ($this->discoveryBatchOpen && $this->discoveryBatch !== []) {
+            $last = &$this->discoveryBatch[count($this->discoveryBatch) - 1];
+            if ($last['output'] === null && $last['name'] === $name) {
+                $last['output'] = $output;
+                $last['success'] = $success;
+                unset($last);
+                $this->echoDiscoveryResultLine($name, $this->discoveryBatch[count($this->discoveryBatch) - 1]);
+
+                return;
+            }
+            unset($last);
         }
 
         $r = Theme::reset();
@@ -199,6 +237,23 @@ final class AnsiToolRenderer implements ToolRendererInterface
         if ($name === 'file_read') {
             $lineCount = count(explode("\n", $output));
             echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r} {$dim}({$lineCount} lines){$r}\n";
+
+            return;
+        }
+
+        // File write: compact creation notice
+        if ($name === 'file_write') {
+            $path = Theme::relativePath((string) ($this->lastToolArgs['path'] ?? ''));
+            $content = (string) ($this->lastToolArgs['content'] ?? $output);
+            $lineCount = substr_count($content, "\n") + 1;
+            echo "{$border}  ┃ {$status} {$dim}Created{$r} {$path} {$dim}({$lineCount} lines){$r}\n";
+
+            return;
+        }
+
+        // Apply patch: compact summary
+        if ($name === 'apply_patch') {
+            echo "{$border}  ┃ {$status} {$dim}{$friendly}{$r} {$dim}{$output}{$r}\n";
 
             return;
         }
@@ -265,9 +320,20 @@ final class AnsiToolRenderer implements ToolRendererInterface
         $r = Theme::reset();
         $yellow = Theme::warning();
         $dim = Theme::dim();
+        $border = Theme::borderTask();
+        $icon = Theme::toolIcon($toolName);
+        $friendly = Theme::toolLabel($toolName);
+
+        $context = $this->formatPermissionContext($toolName, $args);
+
+        echo "{$border}  ┌ {$yellow}{$icon} {$friendly}{$r}\n";
+        if ($context !== '') {
+            echo "{$border}  │{$r} {$context}\n";
+        }
+        echo "{$border}  │{$r}\n";
 
         while (true) {
-            $answer = readline("{$yellow}  ⟡ Allow?{$r} {$dim}[Y]es / [a]lways / [g]uardian / [p]rometheus / [n]o ▸{$r} ");
+            $answer = readline("{$border}  └ {$yellow}Allow?{$r} {$dim}[Y]es / [a]lways / [g]uardian / [p]rometheus / [n]o ▸{$r} ");
 
             if ($answer === false) {
                 return 'deny';
@@ -308,6 +374,7 @@ final class AnsiToolRenderer implements ToolRendererInterface
         if ($this->isTaskTool($name) || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
             return;
         }
+        $this->executingStartTime = microtime(true);
         $dim = Theme::dim();
         $r = Theme::reset();
         $border = Theme::borderTask();
@@ -328,14 +395,87 @@ final class AnsiToolRenderer implements ToolRendererInterface
             $dim = Theme::dim();
             $r = Theme::reset();
             $border = Theme::borderTask();
-            $preview = mb_strlen($last) > 80 ? mb_substr($last, 0, 80).'…' : $last;
-            echo "\r{$border}  ┃ {$dim}{$preview}{$r}\r";
+            $elapsed = $this->executingStartTime > 0 ? (int) (microtime(true) - $this->executingStartTime) : 0;
+            $elapsedStr = $elapsed > 0 ? " {$dim}({$elapsed}s){$r}" : '';
+            $maxPreview = 80 - ($elapsed > 0 ? strlen("({$elapsed}s) ") : 0);
+            $preview = mb_strlen($last) > $maxPreview ? mb_substr($last, 0, $maxPreview).'…' : $last;
+            echo "\r\033[2K{$border}  ┃ {$dim}{$preview}{$elapsedStr}{$r}\r";
         }
     }
 
     public function clearToolExecuting(): void
     {
         echo "\r\033[2K"; // Clear the running line
+    }
+
+    /** Closes any open discovery batch, printing the summary footer and resetting state. */
+    public function finalizeDiscoveryBatch(): void
+    {
+        if (! $this->discoveryBatchOpen) {
+            return;
+        }
+
+        $r = Theme::reset();
+        $border = Theme::borderTask();
+        $dim = Theme::dim();
+
+        $summary = $this->formatDiscoverySummary();
+        echo "{$border}  └ {$dim}{$summary}{$r}\n";
+
+        $this->discoveryBatch = [];
+        $this->discoveryBatchOpen = false;
+
+        // Flush any pending question recaps that were deferred during the batch
+        ($this->flushQuestionRecapCallback)();
+    }
+
+    /** Prints a single compact result line inside the discovery batch. */
+    private function echoDiscoveryResultLine(string $name, array $entry): void
+    {
+        $r = Theme::reset();
+        $border = Theme::borderTask();
+        $dim = Theme::dim();
+        $status = $entry['success'] ? Theme::success().'✓' : Theme::error().'✗';
+        $args = $entry['args'];
+        $output = (string) $entry['output'];
+
+        $label = match ($name) {
+            'file_read' => Theme::relativePath((string) ($args['path'] ?? ''))
+                ." {$dim}(".count(explode("\n", $output)).' lines)',
+            'glob' => ($args['pattern'] ?? '?')
+                ." {$dim}(".count(array_filter(explode("\n", $output), fn (string $l) => trim($l) !== '')).' matches)',
+            'grep' => '"'.mb_substr((string) ($args['pattern'] ?? ''), 0, 40).'"'
+                ." {$dim}(".count(array_filter(explode("\n", $output), fn (string $l) => trim($l) !== '')).' matches)',
+            'memory_search' => '"'.mb_substr((string) ($args['query'] ?? $args['type'] ?? ''), 0, 40).'"',
+            'bash' => $this->stripCwdPrefix(mb_substr(trim((string) ($args['command'] ?? '')), 0, 60)),
+            default => Theme::toolLabel($name),
+        };
+
+        echo "{$border}  │ {$status}{$r} {$label}{$r}\n";
+    }
+
+    /** Summarizes the discovery batch as "3 reads · 2 globs · 1 search". */
+    private function formatDiscoverySummary(): string
+    {
+        $counts = [];
+        foreach ($this->discoveryBatch as $entry) {
+            $label = match ($entry['name']) {
+                'file_read' => 'read',
+                'glob' => 'glob',
+                'grep' => 'search',
+                'memory_search' => 'recall',
+                'bash' => 'probe',
+                default => $entry['name'],
+            };
+            $counts[$label] = ($counts[$label] ?? 0) + 1;
+        }
+
+        $parts = [];
+        foreach ($counts as $label => $count) {
+            $parts[] = $count.' '.$label.($count > 1 ? 's' : '');
+        }
+
+        return implode(' · ', $parts);
     }
 
     /** Checks if a tool name is a task management tool. */
@@ -392,6 +532,30 @@ final class AnsiToolRenderer implements ToolRendererInterface
 
         // task_get, task_list: silent
         return null;
+    }
+
+    /** Extracts the primary context line for a permission prompt. */
+    private function formatPermissionContext(string $toolName, array $args): string
+    {
+        $dim = Theme::dim();
+        $r = Theme::reset();
+
+        return match ($toolName) {
+            'bash' => $this->stripCwdPrefix(trim((string) ($args['command'] ?? ''))),
+            'shell_start' => trim((string) ($args['command'] ?? '')),
+            'shell_write' => "{$dim}input:{$r} ".trim((string) ($args['input'] ?? '')),
+            'file_write', 'file_read' => Theme::relativePath((string) ($args['path'] ?? '')),
+            'file_edit' => Theme::relativePath((string) ($args['path'] ?? '')),
+            'apply_patch' => $this->countPatchFiles((string) ($args['patch'] ?? '')).' file(s)',
+            'execute_lua' => substr_count((string) ($args['code'] ?? ''), "\n") + 1 .' lines of Lua',
+            default => '',
+        };
+    }
+
+    /** Count files mentioned in a patch block. */
+    private function countPatchFiles(string $patch): int
+    {
+        return max(1, preg_match_all('/^(Add|Update|Delete|Move) File:/m', $patch));
     }
 
     /**

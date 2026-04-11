@@ -481,6 +481,8 @@ class AnsiRenderer implements RendererInterface
     /** Flushes all queued question/answer pairs as a formatted block before the next output. */
     private function flushPendingQuestionRecap(): void
     {
+        $this->tool->finalizeDiscoveryBatch();
+
         if ($this->pendingQuestionRecap === []) {
             return;
         }

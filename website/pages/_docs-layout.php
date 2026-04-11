@@ -11,6 +11,7 @@ $pageClass = 'docs-page';
 $topics = [
     'getting-started' => ['Getting Started',   'Quick-start guide'],
     'installation'    => ['Installation',       'Get up and running'],
+    'termux'          => ['Termux (Android)',   'Running on Android via Termux'],
     'configuration' => ['Configuration',       'Settings and config files'],
     'headless'      => ['Headless Mode',       'CI/CD and non-interactive execution'],
     'tools'         => ['Tools',               'Built-in tool reference'],

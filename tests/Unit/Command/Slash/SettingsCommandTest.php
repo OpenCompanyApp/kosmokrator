@@ -52,6 +52,19 @@ final class SettingsCommandTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_runtime_value_normalizes_array_fallbacks(): void
+    {
+        $command = new SettingsCommand(new Container);
+        $ctx = $this->createStub(SlashCommandContext::class);
+
+        $method = new \ReflectionMethod($command, 'runtimeValue');
+        $method->setAccessible(true);
+
+        $value = $method->invoke($command, $ctx, 'gateway.telegram.allowed_users', ['alice', 'bob']);
+
+        $this->assertSame('alice, bob', $value);
+    }
+
     public function test_execute_switches_runtime_provider_and_model_and_refreshes_ui(): void
     {
         $config = new Repository([]);

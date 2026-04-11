@@ -23,6 +23,10 @@ class DatabaseTest extends TestCase
         $this->assertContains('messages', $tableNames);
         $this->assertContains('messages_fts', $tableNames);
         $this->assertContains('memories', $tableNames);
+        $this->assertContains('gateway_sessions', $tableNames);
+        $this->assertContains('gateway_messages', $tableNames);
+        $this->assertContains('gateway_approvals', $tableNames);
+        $this->assertContains('gateway_checkpoints', $tableNames);
         $this->assertContains('schema_version', $tableNames);
     }
 
@@ -33,7 +37,7 @@ class DatabaseTest extends TestCase
 
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
         $this->assertNotFalse($version);
-        $this->assertEquals(5, $version['version']);
+        $this->assertEquals(6, $version['version']);
     }
 
     public function test_idempotent_schema_creation(): void
@@ -43,7 +47,7 @@ class DatabaseTest extends TestCase
 
         // Creating a second Database on the same connection shouldn't fail
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
-        $this->assertEquals(5, $version['version']);
+        $this->assertEquals(6, $version['version']);
     }
 
     public function test_foreign_keys_enabled(): void

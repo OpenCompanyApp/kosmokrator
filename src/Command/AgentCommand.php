@@ -502,39 +502,9 @@ class AgentCommand extends Command
      */
     private function buildSlashCommandRegistry(): SlashCommandRegistry
     {
-        $registry = new SlashCommandRegistry;
-
-        // Core commands
-        $registry->register(new Slash\QuitCommand);
-        // Session management commands
-        $registry->register(new Slash\ClearCommand);
-        $registry->register(new Slash\SeedCommand);
-        $registry->register(new Slash\TheogonyCommand);
-        $registry->register(new Slash\CompactCommand);
-        $registry->register(new Slash\TasksClearCommand);
-        $registry->register(new Slash\MemoriesCommand);
-        $registry->register(new Slash\SessionsCommand);
-        $registry->register(new Slash\ForgetCommand);
-
-        // Agent mode switches
-        $registry->register(new Slash\GuardianCommand);
-        $registry->register(new Slash\ArgusCommand);
-        $registry->register(new Slash\PrometheusCommand);
-        $registry->register(new Slash\ModeCommand(AgentMode::Edit));
-        $registry->register(new Slash\ModeCommand(AgentMode::Plan));
-        $registry->register(new Slash\ModeCommand(AgentMode::Ask));
-
-        // Utility commands
         $version = $this->getApplication()?->getVersion() ?? 'dev';
-        $registry->register(new Slash\NewCommand);
-        $registry->register(new Slash\ResumeCommand);
-        $registry->register(new Slash\SettingsCommand($this->container));
-        $registry->register(new Slash\AgentsCommand);
-        $registry->register(new Slash\UpdateCommand($version));
-        $registry->register(new Slash\FeedbackCommand($version));
-        $registry->register(new Slash\RenameCommand);
 
-        return $registry;
+        return SlashCommandRegistryFactory::build($this->container, $version);
     }
 
     /**

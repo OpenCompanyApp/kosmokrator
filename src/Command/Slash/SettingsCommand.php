@@ -124,6 +124,8 @@ final class SettingsCommand implements SlashCommand
                 'agent.default_provider' => $this->applyProvider($ctx, $catalog, $registry, $settings, $stringValue, $scope),
                 'agent.default_model' => $this->applyModel($ctx, $settings, $targetProvider, $stringValue, $scope),
                 'provider.secret.api_key' => $this->storeApiKey($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
+                'gateway.telegram.secret.token' => $this->storeGatewayTelegramToken($ctx, $stringValue),
+                'gateway.telegram.token_action' => $this->handleGatewayTelegramTokenAction($ctx, $stringValue),
                 'provider.auth_action' => $this->handleAuthAction($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
                 'provider.auth_status',
                 'provider.setup_provider',
@@ -490,6 +492,10 @@ final class SettingsCommand implements SlashCommand
                 $fields = array_merge($fields, $integrationView['fields']);
             }
 
+            if ($categoryId === 'gateway') {
+                $fields = array_merge($fields, $this->gatewayFields($ctx));
+            }
+
             $categories[] = [
                 'id' => $categoryId,
                 'label' => $label,
@@ -634,6 +640,43 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
+    private function storeGatewayTelegramToken(SlashCommandContext $ctx, string $value): void
+    {
+        if ($value === '' || str_starts_with($value, '(')) {
+            return;
+        }
+
+        $ctx->settings->set('global', 'gateway.telegram.token', $value);
+    }
+
+    private function handleGatewayTelegramTokenAction(SlashCommandContext $ctx, string $action): void
+    {
+        if ($action === '') {
+            return;
+        }
+
+        if ($action === 'clear_token') {
+            $ctx->settings->delete('global', 'gateway.telegram.token');
+            $ctx->ui->showNotice('Cleared Telegram gateway token.');
+
+            return;
+        }
+
+        if ($action === 'edit_token') {
+            $token = trim($ctx->ui->askUser('Enter Telegram bot token:'));
+            if ($token !== '') {
+                $ctx->settings->set('global', 'gateway.telegram.token', $token);
+                $ctx->ui->showNotice('Stored Telegram gateway token.');
+            }
+
+            return;
+        }
+
+        if ($action === 'status') {
+            $ctx->ui->showNotice($this->gatewayTelegramTokenStatus($ctx));
+        }
+    }
+
     /**
      * Dispatches provider-specific auth workflows: API key management, OAuth browser/device
      * login flows, and credential status inspection.
@@ -766,6 +809,47 @@ final class SettingsCommand implements SlashCommand
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function gatewayFields(SlashCommandContext $ctx): array
+    {
+        $value = $ctx->settings->get('global', 'gateway.telegram.token');
+        $masked = $value !== null && $value !== '' ? $this->maskSecret($value) : '';
+
+        return [
+            [
+                'id' => 'gateway.telegram.secret.token',
+                'label' => 'Telegram bot token',
+                'value' => $masked,
+                'source' => 'secret_store',
+                'effect' => 'applies_now',
+                'type' => 'text',
+                'options' => [],
+                'description' => 'Bot token stored separately from YAML config.',
+            ],
+            [
+                'id' => 'gateway.telegram.token_action',
+                'label' => 'Token action',
+                'value' => '',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'type' => 'choice',
+                'options' => ['status', 'edit_token', 'clear_token'],
+                'description' => 'Inspect, replace, or clear the stored Telegram bot token.',
+            ],
+        ];
+    }
+
+    private function gatewayTelegramTokenStatus(SlashCommandContext $ctx): string
+    {
+        $value = $ctx->settings->get('global', 'gateway.telegram.token');
+
+        return ($value !== null && $value !== '')
+            ? 'Telegram bot token is configured.'
+            : 'Telegram bot token is not configured.';
+    }
+
+    /**
      * @return array<int, array{value: string, label: string, description: string}>
      */
     private function authActionOptions(string $authMode): array
@@ -892,8 +976,33 @@ final class SettingsCommand implements SlashCommand
             'context.compact_threshold' => (string) ($ctx->agentLoop->getCompactor()?->getCompactThresholdPercent() ?? $fallback ?? 60),
             'context.prune_protect' => (string) ($ctx->agentLoop->getPruner()?->getProtectTokens() ?? $fallback ?? 40000),
             'context.prune_min_savings' => (string) ($ctx->agentLoop->getPruner()?->getMinSavings() ?? $fallback ?? 20000),
-            default => $fallback === null ? '' : (string) $fallback,
+            default => $this->stringifySettingValue($fallback),
         };
+    }
+
+    private function stringifySettingValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'on' : 'off';
+        }
+
+        if (is_array($value)) {
+            $items = array_values(array_filter(array_map(static function (mixed $item): string {
+                if (is_scalar($item) || $item === null) {
+                    return trim((string) $item);
+                }
+
+                return '';
+            }, $value), static fn (string $item): bool => $item !== ''));
+
+            return implode(', ', $items);
+        }
+
+        return (string) $value;
     }
 
     /**

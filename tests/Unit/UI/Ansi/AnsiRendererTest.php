@@ -148,8 +148,10 @@ class AnsiRendererTest extends TestCase
     public function test_set_phase_thinking_outputs_indicator(): void
     {
         $output = $this->captureOutput(fn () => $this->renderer->setPhase(AgentPhase::Thinking));
+        $plain = $this->stripAnsi($output);
 
-        $this->assertStringContainsString('Thinking', $output);
+        $this->assertStringContainsString('┌', $plain);
+        $this->assertStringContainsString('...', $plain);
     }
 
     public function test_set_phase_idle_without_prior_activity_is_noop(): void
@@ -164,8 +166,10 @@ class AnsiRendererTest extends TestCase
     public function test_show_thinking_outputs_text(): void
     {
         $output = $this->captureOutput(fn () => $this->renderer->showThinking());
+        $plain = $this->stripAnsi($output);
 
-        $this->assertStringContainsString('Thinking', $output);
+        $this->assertStringContainsString('┌', $plain);
+        $this->assertStringContainsString('...', $plain);
     }
 
     // ── showCompacting ───────────────────────────────────────────────────
@@ -174,7 +178,8 @@ class AnsiRendererTest extends TestCase
     {
         $output = $this->captureOutput(fn () => $this->renderer->showCompacting());
 
-        $this->assertStringContainsString('Compacting context', $output);
+        $this->assertStringContainsString('⧫', $output);
+        $this->assertStringContainsString('...', $output);
     }
 
     // ── showNotice ───────────────────────────────────────────────────────
@@ -413,10 +418,10 @@ class AnsiRendererTest extends TestCase
 
     public function test_show_tool_call_outputs_tool_info(): void
     {
-        $output = $this->captureOutput(fn () => $this->renderer->showToolCall('bash', ['command' => 'ls -la']));
+        $output = $this->captureOutput(fn () => $this->renderer->showToolCall('bash', ['command' => 'npm run build']));
         $plain = $this->stripAnsi($output);
 
-        $this->assertStringContainsString('ls -la', $plain);
+        $this->assertStringContainsString('npm run build', $plain);
     }
 
     public function test_show_tool_call_skips_content_keys(): void

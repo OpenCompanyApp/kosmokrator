@@ -181,7 +181,7 @@ Type these at the prompt during a session.
 |---------|-------------|
 | `/settings` | Open the settings workspace |
 | `/agents` | Show the live subagent swarm dashboard |
-| `/update` | Check for updates and self-update |
+| `kosmokrator update` | Check for updates and update based on install method |
 | `/feedback <text>` | Submit feedback or a bug report as a GitHub issue (requires `gh` CLI) |
 | `/tasks clear` | Remove all tasks |
 | `/clear` | Clear the terminal screen |

@@ -1249,3 +1249,32 @@
 [2026-04-10 18:10:51] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":858}
 [2026-04-10 18:10:51] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d93d2b69e4e.py","instrument":"Flute"}
 [2026-04-10 18:10:51] INFO: Worker finished
+[2026-04-10 23:19:41] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-10 23:19:42] INFO: Completion sound worker booted
+[2026-04-10 23:19:42] INFO: Worker starting composition {"instrument":24,"message_preview":"Done. Here's the final summary:\n\n## Split complete — 9 umbrella issues → 58 new atomic issues\n\n| Umb"}
+[2026-04-10 23:20:42] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"Completion sound LLM timed out after 60s"}
+[2026-04-10 23:20:43] ERROR: Completion sound: all attempts exhausted {"last_error":"Completion sound LLM timed out after 60s","attempts":2}
+[2026-04-10 23:20:43] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
+[2026-04-10 23:20:43] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69d985cb712ca.py","instrument":"Guitar"}
+[2026-04-10 23:20:43] INFO: Worker finished
+[2026-04-11 19:05:53] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-11 19:05:53] INFO: Completion sound worker booted
+[2026-04-11 19:05:54] INFO: Worker starting composition {"instrument":105,"message_preview":"Good. Progress summary:\n\n**Stories: 528\/822 done (64%)**, 294 remaining. ~15 more waves needed.\n\nThe"}
+[2026-04-11 19:06:53] WARNING: Completion sound: script rejected — Python syntax error {"output":"  File \"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_syntax_check_69da9bcd00462.py\", line 47\n    Rising C-major arpeggios at 120 BPM that crest on a bright C6, dip briefly (work remaining), then climb back — steady momentum energy with rich major harmony underneath. 6 seconds, ends on an expectant high note to convey \"still going.\"\n                                                                                                                 ^\nSyntaxError: invalid character '—' (U+2014)"}
+[2026-04-11 19:06:53] WARNING: Completion sound: script validation failed {"attempt":0}
+[2026-04-11 19:06:53] INFO: Completion sound: retrying composition {"attempt":1}
+[2026-04-11 19:07:27] INFO: Completion sound: script composed successfully {"attempt":1,"script_length":2285}
+[2026-04-11 19:07:27] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69da9befa4564.py","instrument":"Banjo"}
+[2026-04-11 19:07:27] INFO: Worker finished
+[2026-04-11 21:12:38] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-11 21:12:38] INFO: Completion sound worker booted
+[2026-04-11 21:12:38] INFO: Worker starting composition {"instrument":105,"message_preview":"Progress update: **Stories: 692\/822 (84%)**, 130 remaining. ~7 more waves to finish stories.\n\nAll 10"}
+[2026-04-11 21:13:07] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":987}
+[2026-04-11 21:13:07] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dab9633398d.py","instrument":"Banjo"}
+[2026-04-11 21:13:07] INFO: Worker finished
+[2026-04-12 00:30:23] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-12 00:30:23] INFO: Completion sound worker booted
+[2026-04-12 00:30:23] INFO: Worker starting composition {"instrument":46,"message_preview":"Hey! What can I help you with today?"}
+[2026-04-12 00:30:47] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":962}
+[2026-04-12 00:30:47] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dae7b7a14d9.py","instrument":"Harp"}
+[2026-04-12 00:30:47] INFO: Worker finished

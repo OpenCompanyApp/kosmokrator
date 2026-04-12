@@ -50,7 +50,7 @@ final class TelegramClient implements TelegramClientInterface
     /**
      * @return array<string, mixed>
      */
-    public function sendMessage(string $chatId, string $text, ?string $threadId = null, ?int $replyToMessageId = null, ?array $replyMarkup = null): array
+    public function sendMessage(string $chatId, string $text, ?string $threadId = null, ?int $replyToMessageId = null, ?array $replyMarkup = null, ?string $parseMode = null): array
     {
         $payload = [
             'chat_id' => $chatId,
@@ -70,13 +70,17 @@ final class TelegramClient implements TelegramClientInterface
             $payload['reply_markup'] = $replyMarkup;
         }
 
+        if ($parseMode !== null && $parseMode !== '') {
+            $payload['parse_mode'] = $parseMode;
+        }
+
         return $this->request('sendMessage', $payload);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function editMessageText(string $chatId, int $messageId, string $text, ?array $replyMarkup = null): array
+    public function editMessageText(string $chatId, int $messageId, string $text, ?array $replyMarkup = null, ?string $parseMode = null): array
     {
         $payload = [
             'chat_id' => $chatId,
@@ -89,10 +93,14 @@ final class TelegramClient implements TelegramClientInterface
             $payload['reply_markup'] = $replyMarkup;
         }
 
+        if ($parseMode !== null && $parseMode !== '') {
+            $payload['parse_mode'] = $parseMode;
+        }
+
         return $this->request('editMessageText', $payload);
     }
 
-    public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array
+    public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
     {
         $payload = ['chat_id' => $chatId];
         if ($threadId !== null) {
@@ -100,6 +108,9 @@ final class TelegramClient implements TelegramClientInterface
         }
         if ($caption !== null && $caption !== '') {
             $payload['caption'] = $caption;
+        }
+        if ($parseMode !== null && $parseMode !== '') {
+            $payload['parse_mode'] = $parseMode;
         }
 
         if (filter_var($path, FILTER_VALIDATE_URL)) {
@@ -111,7 +122,7 @@ final class TelegramClient implements TelegramClientInterface
         return $this->upload('sendPhoto', 'photo', $path, $payload);
     }
 
-    public function sendDocument(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array
+    public function sendDocument(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
     {
         $payload = ['chat_id' => $chatId];
         if ($threadId !== null) {
@@ -119,6 +130,9 @@ final class TelegramClient implements TelegramClientInterface
         }
         if ($caption !== null && $caption !== '') {
             $payload['caption'] = $caption;
+        }
+        if ($parseMode !== null && $parseMode !== '') {
+            $payload['parse_mode'] = $parseMode;
         }
 
         if (filter_var($path, FILTER_VALIDATE_URL)) {
@@ -130,7 +144,7 @@ final class TelegramClient implements TelegramClientInterface
         return $this->upload('sendDocument', 'document', $path, $payload);
     }
 
-    public function sendVoice(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array
+    public function sendVoice(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
     {
         $payload = ['chat_id' => $chatId];
         if ($threadId !== null) {
@@ -139,8 +153,25 @@ final class TelegramClient implements TelegramClientInterface
         if ($caption !== null && $caption !== '') {
             $payload['caption'] = $caption;
         }
+        if ($parseMode !== null && $parseMode !== '') {
+            $payload['parse_mode'] = $parseMode;
+        }
 
         return $this->upload('sendVoice', 'voice', $path, $payload);
+    }
+
+    public function sendChatAction(string $chatId, string $action = 'typing', ?string $threadId = null): void
+    {
+        $payload = [
+            'chat_id' => $chatId,
+            'action' => $action,
+        ];
+
+        if ($threadId !== null) {
+            $payload['message_thread_id'] = (int) $threadId;
+        }
+
+        $this->request('sendChatAction', $payload);
     }
 
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void

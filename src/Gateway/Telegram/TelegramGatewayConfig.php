@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Gateway\Telegram;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
 
 final readonly class TelegramGatewayConfig
@@ -25,13 +26,15 @@ final readonly class TelegramGatewayConfig
         public int $pollTimeoutSeconds,
     ) {}
 
-    public static function fromSettings(SettingsManager $settings, Repository $config): self
+    public static function fromSettings(SettingsManager $settings, Repository $config, ?SettingsRepositoryInterface $repository = null): self
     {
-        $enabled = self::toBool($settings->getRaw('kosmokrator.gateway.telegram.enabled')
+        $enabled = self::toBool(($repository?->get('global', 'kosmokrator.gateway.telegram.enabled'))
+            ?? $settings->getRaw('kosmokrator.gateway.telegram.enabled')
             ?? $config->get('kosmokrator.gateway.telegram.enabled', false));
 
         $token = trim((string) (
-            $settings->getRaw('kosmokrator.gateway.telegram.token')
+            $repository?->get('global', 'kosmokrator.gateway.telegram.token')
+            ?? $settings->getRaw('kosmokrator.gateway.telegram.token')
             ?? $config->get('kosmokrator.gateway.telegram.token', '')
             ?? getenv('KOSMOKRATOR_TELEGRAM_BOT_TOKEN')
             ?: ''
@@ -41,27 +44,33 @@ final readonly class TelegramGatewayConfig
             enabled: $enabled,
             token: $token,
             sessionMode: (string) (
-                $settings->getRaw('kosmokrator.gateway.telegram.session_mode')
+                ($repository?->get('global', 'kosmokrator.gateway.telegram.session_mode'))
+                ?? $settings->getRaw('kosmokrator.gateway.telegram.session_mode')
                 ?? $config->get('kosmokrator.gateway.telegram.session_mode', 'thread')
             ),
             allowedUsers: self::toList(
-                $settings->getRaw('kosmokrator.gateway.telegram.allowed_users')
+                ($repository?->get('global', 'kosmokrator.gateway.telegram.allowed_users'))
+                ?? $settings->getRaw('kosmokrator.gateway.telegram.allowed_users')
                 ?? $config->get('kosmokrator.gateway.telegram.allowed_users', [])
             ),
             allowedChats: self::toList(
-                $settings->getRaw('kosmokrator.gateway.telegram.allowed_chats')
+                ($repository?->get('global', 'kosmokrator.gateway.telegram.allowed_chats'))
+                ?? $settings->getRaw('kosmokrator.gateway.telegram.allowed_chats')
                 ?? $config->get('kosmokrator.gateway.telegram.allowed_chats', [])
             ),
             requireMention: self::toBool(
-                $settings->getRaw('kosmokrator.gateway.telegram.require_mention')
+                ($repository?->get('global', 'kosmokrator.gateway.telegram.require_mention'))
+                ?? $settings->getRaw('kosmokrator.gateway.telegram.require_mention')
                 ?? $config->get('kosmokrator.gateway.telegram.require_mention', true)
             ),
             freeResponseChats: self::toList(
-                $settings->getRaw('kosmokrator.gateway.telegram.free_response_chats')
+                ($repository?->get('global', 'kosmokrator.gateway.telegram.free_response_chats'))
+                ?? $settings->getRaw('kosmokrator.gateway.telegram.free_response_chats')
                 ?? $config->get('kosmokrator.gateway.telegram.free_response_chats', [])
             ),
             pollTimeoutSeconds: max(1, (int) (
-                $settings->getRaw('kosmokrator.gateway.telegram.poll_timeout_seconds')
+                ($repository?->get('global', 'kosmokrator.gateway.telegram.poll_timeout_seconds'))
+                ?? $settings->getRaw('kosmokrator.gateway.telegram.poll_timeout_seconds')
                 ?? $config->get('kosmokrator.gateway.telegram.poll_timeout_seconds', 20)
             )),
         );

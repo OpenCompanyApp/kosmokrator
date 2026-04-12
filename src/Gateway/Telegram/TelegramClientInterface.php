@@ -24,27 +24,29 @@ interface TelegramClientInterface
     /**
      * @return array<string, mixed>
      */
-    public function sendMessage(string $chatId, string $text, ?string $threadId = null, ?int $replyToMessageId = null, ?array $replyMarkup = null): array;
+    public function sendMessage(string $chatId, string $text, ?string $threadId = null, ?int $replyToMessageId = null, ?array $replyMarkup = null, ?string $parseMode = null): array;
 
     /**
      * @return array<string, mixed>
      */
-    public function editMessageText(string $chatId, int $messageId, string $text, ?array $replyMarkup = null): array;
+    public function editMessageText(string $chatId, int $messageId, string $text, ?array $replyMarkup = null, ?string $parseMode = null): array;
 
     /**
      * @return array<string, mixed>
      */
-    public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array;
+    public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array;
 
     /**
      * @return array<string, mixed>
      */
-    public function sendDocument(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array;
+    public function sendDocument(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array;
 
     /**
      * @return array<string, mixed>
      */
-    public function sendVoice(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array;
+    public function sendVoice(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array;
+
+    public function sendChatAction(string $chatId, string $action = 'typing', ?string $threadId = null): void;
 
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void;
 

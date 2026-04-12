@@ -266,7 +266,7 @@ class AgentCommand extends Command
             $currentVersion = $this->getApplication()?->getVersion() ?? 'dev';
             $updateAvailable = (new UpdateChecker($currentVersion))->check();
             if ($updateAvailable !== null) {
-                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run /update to install.");
+                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmokrator update` to install.");
             }
         }
 

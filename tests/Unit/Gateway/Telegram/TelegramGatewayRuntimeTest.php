@@ -8,6 +8,7 @@ use Illuminate\Container\Container;
 use Kosmokrator\Gateway\GatewayApprovalStore;
 use Kosmokrator\Gateway\GatewayCheckpointStore;
 use Kosmokrator\Gateway\GatewayMessageStore;
+use Kosmokrator\Gateway\GatewayPendingInputStore;
 use Kosmokrator\Gateway\GatewaySessionStore;
 use Kosmokrator\Gateway\Telegram\TelegramGatewayConfig;
 use Kosmokrator\Gateway\Telegram\TelegramGatewayRuntime;
@@ -27,6 +28,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             messages: new GatewayMessageStore($db),
             approvals: new GatewayApprovalStore($db),
             checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
             log: new NullLogger,
             launcher: new FakeTelegramWorkerLauncher,
         );
@@ -70,6 +72,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             messages: new GatewayMessageStore($db),
             approvals: new GatewayApprovalStore($db),
             checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
             log: new NullLogger,
             launcher: $launcher,
         );
@@ -104,6 +107,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             messages: new GatewayMessageStore($db),
             approvals: new GatewayApprovalStore($db),
             checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
             log: new NullLogger,
             launcher: $launcher,
         );
@@ -143,6 +147,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             messages: new GatewayMessageStore($db),
             approvals: new GatewayApprovalStore($db),
             checkpoints: $checkpoints,
+            pendingInputs: new GatewayPendingInputStore($db),
             log: new NullLogger,
             launcher: $launcher,
         );
@@ -189,6 +194,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             messages: new GatewayMessageStore($db),
             approvals: new GatewayApprovalStore($db),
             checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
             log: new NullLogger,
             launcher: $launcher,
         );
@@ -236,6 +242,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             messages: new GatewayMessageStore($db),
             approvals: $approvals,
             checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
             log: new NullLogger,
             launcher: new FakeTelegramWorkerLauncher,
         );
@@ -245,7 +252,7 @@ final class TelegramGatewayRuntimeTest extends TestCase
             'update_id' => 3,
             'callback_query' => [
                 'id' => 'cbq-1',
-                'data' => 'ga:approve:'.$approval->id,
+                'data' => 'ga:allow:'.$approval->id,
                 'from' => ['id' => 5, 'username' => 'rutger'],
                 'message' => [
                     'message_id' => 99,
@@ -259,6 +266,230 @@ final class TelegramGatewayRuntimeTest extends TestCase
         $this->assertCount(1, $client->callbackAnswers);
         $this->assertSame('Approved.', $client->callbackAnswers[0]['text']);
         $this->assertCount(1, $client->edited);
-        $this->assertSame('Approved `bash`.', $client->edited[0]['text']);
+        $this->assertSame('<b>Approved</b> <code>bash</code>.', $client->edited[0]['text']);
+        $this->assertSame('HTML', $client->edited[0]['parse_mode']);
+    }
+
+    public function test_callback_query_can_switch_to_prometheus_for_pending_request(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $approvals = new GatewayApprovalStore($db);
+        $db->connection()->prepare('INSERT INTO sessions (id, project, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute(['sess-1', null, null, 'test/model', date(DATE_ATOM), date(DATE_ATOM)]);
+        $approval = $approvals->createPending('telegram', 'telegram:123', 'sess-1', 'bash', ['command' => 'ls'], '123');
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: $approvals,
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
+            log: new NullLogger,
+            launcher: new FakeTelegramWorkerLauncher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 3,
+            'callback_query' => [
+                'id' => 'cbq-1',
+                'data' => 'ga:prometheus:'.$approval->id,
+                'from' => ['id' => 5, 'username' => 'rutger'],
+                'message' => [
+                    'message_id' => 99,
+                    'chat' => ['id' => 123, 'type' => 'private'],
+                ],
+            ],
+        ]]);
+
+        $resolved = $approvals->find($approval->id);
+        $this->assertSame('prometheus', $resolved?->status);
+        $this->assertSame('Switched To Prometheus.', $client->callbackAnswers[0]['text']);
+    }
+
+    public function test_status_includes_inline_control_keyboard(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
+            log: new NullLogger,
+            launcher: new FakeTelegramWorkerLauncher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 2,
+            'message' => [
+                'message_id' => 12,
+                'text' => '/status',
+                'chat' => ['id' => 123, 'type' => 'private'],
+                'from' => ['id' => 5, 'username' => 'rutger'],
+            ],
+        ]]);
+
+        $keyboard = $client->sent[0]['reply_markup']['inline_keyboard'] ?? [];
+        $this->assertSame('Edit', $keyboard[0][0]['text'] ?? null);
+        $this->assertSame('Prometheus', $keyboard[1][2]['text'] ?? null);
+        $this->assertSame('Compact', $keyboard[2][0]['text'] ?? null);
+    }
+
+    public function test_control_callback_launches_slash_command_as_new_turn(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $launcher = new FakeTelegramWorkerLauncher;
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
+            log: new NullLogger,
+            launcher: $launcher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 3,
+            'callback_query' => [
+                'id' => 'cbq-1',
+                'data' => 'gc:cmd:edit',
+                'from' => ['id' => 5, 'username' => 'rutger'],
+                'message' => [
+                    'message_id' => 99,
+                    'chat' => ['id' => 123, 'type' => 'private'],
+                ],
+            ],
+        ]]);
+
+        $this->assertCount(1, $launcher->launched);
+        $this->assertSame('/edit', $launcher->launched[0]->text);
+        $this->assertSame('Working…', $client->callbackAnswers[0]['text']);
+    }
+
+    public function test_second_message_is_queued_and_runs_after_active_route_finishes(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $launcher = new FakeTelegramWorkerLauncher;
+        $pendingInputs = new GatewayPendingInputStore($db);
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: $pendingInputs,
+            log: new NullLogger,
+            launcher: $launcher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 1,
+            'message' => [
+                'message_id' => 11,
+                'text' => 'first',
+                'chat' => ['id' => 123, 'type' => 'private'],
+                'from' => ['id' => 5, 'username' => 'rutger'],
+            ],
+        ]]);
+        $runtime->processUpdates([[
+            'update_id' => 2,
+            'message' => [
+                'message_id' => 12,
+                'text' => 'second',
+                'chat' => ['id' => 123, 'type' => 'private'],
+                'from' => ['id' => 5, 'username' => 'rutger'],
+            ],
+        ]]);
+
+        $this->assertCount(1, $launcher->launched);
+        $this->assertCount(1, $client->sent);
+        $this->assertSame('Queued for the next turn in this chat.', $client->sent[0]['text']);
+        $this->assertSame(1, $pendingInputs->count('telegram', 'telegram:123'));
+
+        $this->assertNotNull($launcher->lastHandle);
+        $launcher->lastHandle->running = false;
+
+        $runtime->processUpdates([]);
+
+        $this->assertCount(2, $launcher->launched);
+        $this->assertSame('second', $launcher->launched[1]->text);
+        $this->assertSame(0, $pendingInputs->count('telegram', 'telegram:123'));
+    }
+
+    public function test_new_clears_queued_inputs_for_route(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $launcher = new FakeTelegramWorkerLauncher;
+        $pendingInputs = new GatewayPendingInputStore($db);
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: $pendingInputs,
+            log: new NullLogger,
+            launcher: $launcher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 1,
+            'message' => [
+                'message_id' => 11,
+                'text' => 'first',
+                'chat' => ['id' => 123, 'type' => 'private'],
+                'from' => ['id' => 5, 'username' => 'rutger'],
+            ],
+        ]]);
+        $runtime->processUpdates([[
+            'update_id' => 2,
+            'message' => [
+                'message_id' => 12,
+                'text' => 'second',
+                'chat' => ['id' => 123, 'type' => 'private'],
+                'from' => ['id' => 5, 'username' => 'rutger'],
+            ],
+        ]]);
+        $runtime->processUpdates([[
+            'update_id' => 3,
+            'message' => [
+                'message_id' => 13,
+                'text' => '/new',
+                'chat' => ['id' => 123, 'type' => 'private'],
+                'from' => ['id' => 5, 'username' => 'rutger'],
+            ],
+        ]]);
+
+        $this->assertSame(0, $pendingInputs->count('telegram', 'telegram:123'));
+        $this->assertCount(2, $client->sent);
+        $this->assertSame('Started a fresh session for this chat. Your next message will create a new Kosmo session.', $client->sent[1]['text']);
     }
 }

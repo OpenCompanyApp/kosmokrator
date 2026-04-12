@@ -32,6 +32,9 @@ final class FakeTelegramClient implements TelegramClientInterface
     /** @var list<array<string, mixed>> */
     public array $callbackAnswers = [];
 
+    /** @var list<array<string, mixed>> */
+    public array $chatActions = [];
+
     public function __construct() {}
 
     public function setMyCommands(array $commands): void
@@ -52,7 +55,7 @@ final class FakeTelegramClient implements TelegramClientInterface
         return $batch;
     }
 
-    public function sendMessage(string $chatId, string $text, ?string $threadId = null, ?int $replyToMessageId = null, ?array $replyMarkup = null): array
+    public function sendMessage(string $chatId, string $text, ?string $threadId = null, ?int $replyToMessageId = null, ?array $replyMarkup = null, ?string $parseMode = null): array
     {
         $message = [
             'message_id' => count($this->sent) + 1,
@@ -61,43 +64,50 @@ final class FakeTelegramClient implements TelegramClientInterface
             'thread_id' => $threadId,
             'reply_to_message_id' => $replyToMessageId,
             'reply_markup' => $replyMarkup,
+            'parse_mode' => $parseMode,
         ];
         $this->sent[] = $message;
 
         return ['message_id' => $message['message_id']];
     }
 
-    public function editMessageText(string $chatId, int $messageId, string $text, ?array $replyMarkup = null): array
+    public function editMessageText(string $chatId, int $messageId, string $text, ?array $replyMarkup = null, ?string $parseMode = null): array
     {
         $this->edited[] = [
             'chat_id' => $chatId,
             'message_id' => $messageId,
             'text' => $text,
             'reply_markup' => $replyMarkup,
+            'parse_mode' => $parseMode,
         ];
 
         return ['message_id' => $messageId];
     }
 
-    public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array
+    public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
     {
-        $this->photos[] = compact('chatId', 'path', 'threadId', 'caption');
+        $this->photos[] = compact('chatId', 'path', 'threadId', 'caption', 'parseMode');
 
         return ['message_id' => count($this->photos) + 100];
     }
 
-    public function sendDocument(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array
+    public function sendDocument(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
     {
-        $this->documents[] = compact('chatId', 'path', 'threadId', 'caption');
+        $this->documents[] = compact('chatId', 'path', 'threadId', 'caption', 'parseMode');
 
         return ['message_id' => count($this->documents) + 200];
     }
 
-    public function sendVoice(string $chatId, string $path, ?string $threadId = null, ?string $caption = null): array
+    public function sendVoice(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
     {
-        $this->voices[] = compact('chatId', 'path', 'threadId', 'caption');
+        $this->voices[] = compact('chatId', 'path', 'threadId', 'caption', 'parseMode');
 
         return ['message_id' => count($this->voices) + 300];
+    }
+
+    public function sendChatAction(string $chatId, string $action = 'typing', ?string $threadId = null): void
+    {
+        $this->chatActions[] = compact('chatId', 'action', 'threadId');
     }
 
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void

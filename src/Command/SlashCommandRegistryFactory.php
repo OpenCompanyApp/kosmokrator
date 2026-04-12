@@ -22,6 +22,7 @@ final class SlashCommandRegistryFactory
         $registry->register(new Slash\SeedCommand);
         $registry->register(new Slash\TheogonyCommand);
         $registry->register(new Slash\CompactCommand);
+        $registry->register(new Slash\ModelsCommand($container));
         $registry->register(new Slash\TasksClearCommand);
         $registry->register(new Slash\MemoriesCommand);
         $registry->register(new Slash\SessionsCommand);
@@ -38,7 +39,6 @@ final class SlashCommandRegistryFactory
         $registry->register(new Slash\ResumeCommand);
         $registry->register(new Slash\SettingsCommand($container));
         $registry->register(new Slash\AgentsCommand);
-        $registry->register(new Slash\UpdateCommand($version));
         $registry->register(new Slash\FeedbackCommand($version));
         $registry->register(new Slash\RenameCommand);
 

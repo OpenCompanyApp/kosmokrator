@@ -15,6 +15,7 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ModelSwitcherHistory;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\ProviderDefinition;
 use Kosmokrator\LLM\RetryableLlmClient;
@@ -152,6 +153,7 @@ final class SettingsCommand implements SlashCommand
 
         // Refresh the status bar immediately so the user sees the new model/provider
         if (isset($changes['agent.default_provider']) || isset($changes['agent.default_model'])) {
+            (new ModelSwitcherHistory($ctx->settings, $settings))->record($targetProvider, $targetModel);
             $modelCatalog = $ctx->models ?? $this->container->make(ModelCatalog::class);
             $ctx->ui->refreshRuntimeSelection($targetProvider, $targetModel, $modelCatalog->contextWindow($targetModel));
         }

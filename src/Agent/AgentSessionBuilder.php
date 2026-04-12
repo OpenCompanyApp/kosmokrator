@@ -167,7 +167,10 @@ final class AgentSessionBuilder
 
         // Create LLM client (always use sync/prism for headless)
         $llmFactory = new LlmClientFactory($this->container);
-        $llm = $llmFactory->create('ansi', $ui);
+        // Gateway surfaces need the same async-capable LLM path as TUI sessions.
+        // Some providers, notably Z.AI coding, work correctly via the async transport
+        // but fail on the sync Prism path used for plain ANSI/headless mode.
+        $llm = $llmFactory->create('tui', $ui);
 
         // Apply model override if specified
         if (! empty($options['model'])) {
@@ -298,7 +301,8 @@ final class AgentSessionBuilder
         $ui->initialize();
 
         $llmFactory = new LlmClientFactory($this->container);
-        $llm = $llmFactory->create('ansi', $ui);
+        // Gateway surfaces need the same async-capable client selection as TUI.
+        $llm = $llmFactory->create('tui', $ui);
 
         if (! empty($options['model'])) {
             $llm->setModel($options['model']);

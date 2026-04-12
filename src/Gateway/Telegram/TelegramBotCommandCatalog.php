@@ -76,6 +76,10 @@ final class TelegramBotCommandCatalog
             $lines[] = sprintf('/%s — %s', $command['command'], $command['description']);
         }
 
+        $lines[] = '';
+        $lines[] = 'Approval shortcuts: /approve, /approve always, /approve guardian, /approve prometheus, /deny';
+        $lines[] = 'Inline buttons are also available on approval and status messages.';
+
         return implode("\n", $lines);
     }
 }

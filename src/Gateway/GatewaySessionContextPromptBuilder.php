@@ -40,7 +40,7 @@ final class GatewaySessionContextPromptBuilder
         $lines[] = '';
         $lines[] = 'Gateway notes:';
         $lines[] = '- Inline approval buttons may appear for dangerous operations.';
-        $lines[] = '- The user can also reply with /approve, /deny, or /cancel.';
+        $lines[] = '- The user can also reply with /approve, /approve always, /approve guardian, /approve prometheus, /deny, or /cancel.';
         $lines[] = '- Native Telegram attachments can be sent when the final text includes MEDIA:/absolute/path tags.';
 
         return implode("\n", $lines);

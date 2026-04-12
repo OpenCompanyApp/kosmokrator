@@ -196,11 +196,11 @@ ob_start();
     conversation history or context window. The agent retains full memory of the session.
 </p>
 
-<h4 id="cmd-update"><code>/update</code></h4>
+<h4 id="cmd-update"><code>kosmokrator update</code></h4>
 <p>
-    Check for new KosmoKrator versions. If an update is available, displays the changelog and
-    offers to apply the update automatically. For PHAR installations this downloads the new binary;
-    for Composer installations it runs the appropriate update command.
+    Check for new KosmoKrator versions from the shell. Static binary and PHAR
+    installs update in place. Source installs are detected and you get the
+    exact manual update commands to run.
 </p>
 
 <h4 id="cmd-feedback"><code>/feedback &lt;text&gt;</code> <small class="text-muted">(aliases: <code>/bug</code>, <code>/issue</code>)</small></h4>
@@ -341,9 +341,9 @@ ob_start();
             <td>Clear the terminal display.</td>
         </tr>
         <tr>
-            <td><code>/update</code></td>
+            <td><code>kosmokrator update</code></td>
             <td>None</td>
-            <td>Check for and apply KosmoKrator updates.</td>
+            <td>Check for and apply KosmoKrator updates based on install method.</td>
         </tr>
         <tr>
             <td><code>/feedback</code></td>
@@ -923,4 +923,4 @@ ob_start();
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

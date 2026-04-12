@@ -71,10 +71,18 @@ final class TelegramGatewayWorkerCommand extends Command
             return Command::FAILURE;
         }
 
+        $this->writeWorkerLog(sprintf(
+            'start route=%s chat=%s user=%s',
+            $event->routeKey,
+            $event->chatId,
+            $event->userId ?? 'unknown',
+        ));
+
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot(InstructionLoader::gitRoot() ?? getcwd());
-        $config = TelegramGatewayConfig::fromSettings($settings, $this->container->make('config'));
-        $secretToken = $this->container->make(SettingsRepositoryInterface::class)->get('global', 'gateway.telegram.token');
+        $settingsRepository = $this->container->make(SettingsRepositoryInterface::class);
+        $config = TelegramGatewayConfig::fromSettings($settings, $this->container->make('config'), $settingsRepository);
+        $secretToken = $settingsRepository->get('global', 'gateway.telegram.token');
         if (is_string($secretToken) && $secretToken !== '') {
             $config = new TelegramGatewayConfig(
                 enabled: $config->enabled,
@@ -117,7 +125,9 @@ final class TelegramGatewayWorkerCommand extends Command
             sessionId: $link?->sessionId ?? '',
             chatId: $event->chatId,
             threadId: $event->threadId,
-            approvalCallback: fn (): string => 'deny',
+            approvalCallback: function (int $approvalId): string {
+                return $this->awaitApprovalDecision($approvalId);
+            },
             cancellation: fn () => $cancellation->getCancellation(),
         );
 
@@ -184,11 +194,60 @@ final class TelegramGatewayWorkerCommand extends Command
             if ($cancelled) {
                 $renderer->showNotice('Cancelled.');
             }
+        } catch (\Throwable $e) {
+            $this->writeWorkerLog(sprintf(
+                'error route=%s session=%s %s: %s',
+                $event->routeKey,
+                $session?->sessionManager->currentSessionId() ?? ($link?->sessionId ?? 'unlinked'),
+                get_class($e),
+                $e->getMessage(),
+            ));
+
+            throw $e;
         } finally {
+            $this->writeWorkerLog(sprintf(
+                'finish route=%s session=%s cancelled=%s',
+                $event->routeKey,
+                $session?->sessionManager->currentSessionId() ?? ($link?->sessionId ?? 'unlinked'),
+                $cancelled ? 'yes' : 'no',
+            ));
             $session?->orchestrator?->cancelAll();
             $this->container->make(ShellSessionManager::class)->killAll();
         }
 
         return Command::SUCCESS;
+    }
+
+    private function awaitApprovalDecision(int $approvalId, int $timeoutSeconds = 300): string
+    {
+        $approvals = $this->container->make(GatewayApprovalStore::class);
+        $deadline = microtime(true) + $timeoutSeconds;
+
+        while (microtime(true) < $deadline) {
+            $approval = $approvals->find($approvalId);
+            $status = $approval?->status ?? 'denied';
+
+            if ($status !== 'pending') {
+                return match ($status) {
+                    'approved', 'allow' => 'allow',
+                    'always' => 'always',
+                    'guardian' => 'guardian',
+                    'prometheus' => 'prometheus',
+                    default => 'deny',
+                };
+            }
+
+            usleep(200_000);
+        }
+
+        $this->writeWorkerLog(sprintf('approval timeout id=%d', $approvalId));
+        $approvals->resolve($approvalId, 'denied');
+
+        return 'deny';
+    }
+
+    private function writeWorkerLog(string $message): void
+    {
+        file_put_contents('php://stderr', sprintf("[%s] %s\n", date(DATE_ATOM), $message), FILE_APPEND);
     }
 }

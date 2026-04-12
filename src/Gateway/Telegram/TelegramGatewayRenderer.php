@@ -16,7 +16,10 @@ final class TelegramGatewayRenderer implements RendererInterface
 {
     private const EMPTY_INLINE_KEYBOARD = ['inline_keyboard' => []];
 
-    private string $buffer = '';
+    private const TELEGRAM_PARSE_MODE = 'HTML';
+
+    /** @var list<string> */
+    private array $answerSegments = [''];
 
     private string $placeholderText = 'Thinking…';
 
@@ -26,9 +29,14 @@ final class TelegramGatewayRenderer implements RendererInterface
 
     private ?int $statusMessageId = null;
 
-    private ?int $answerMessageId = null;
+    /** @var list<int> */
+    private array $answerMessageIds = [];
+
+    private ?int $toolMessageId = null;
 
     private float $lastFlushAt = 0.0;
+
+    private float $lastTypingAt = 0.0;
 
     /**
      * @param  \Closure(int, string, array<string, mixed>): string  $approvalCallback
@@ -63,6 +71,7 @@ final class TelegramGatewayRenderer implements RendererInterface
 
     public function setPhase(AgentPhase $phase): void
     {
+        $this->maybeSendTyping();
         if ($phase === AgentPhase::Thinking) {
             $this->updateStatusMessage($this->composeStatusText());
         } elseif ($phase === AgentPhase::Tools) {
@@ -100,7 +109,8 @@ final class TelegramGatewayRenderer implements RendererInterface
 
     public function streamChunk(string $text): void
     {
-        $this->buffer .= $text;
+        $this->maybeSendTyping();
+        $this->answerSegments[array_key_last($this->answerSegments)] .= $text;
         $this->flushBufferedText(false);
     }
 
@@ -223,10 +233,23 @@ final class TelegramGatewayRenderer implements RendererInterface
     public function showToolCall(string $name, array $args): void
     {
         $this->activeToolName = $name;
+        $this->maybeSendTyping();
+        $this->startNewAnswerSegment();
+        $this->toolMessageId = null;
+        $this->toolMessageId = $this->sendOrEditToolMessage(
+            $this->toolMessageId,
+            TelegramTextFormatter::formatToolSummary($name, $args),
+        );
         $this->updateStatusMessage("Preparing tool: {$name}");
     }
 
-    public function showToolResult(string $name, string $output, bool $success): void {}
+    public function showToolResult(string $name, string $output, bool $success): void
+    {
+        $this->toolMessageId = $this->sendOrEditToolMessage(
+            $this->toolMessageId,
+            TelegramTextFormatter::formatToolResult($name, $output, $success),
+        );
+    }
 
     public function askToolPermission(string $toolName, array $args): string
     {
@@ -238,27 +261,42 @@ final class TelegramGatewayRenderer implements RendererInterface
             arguments: $args,
             chatId: $this->chatId,
             threadId: $this->threadId,
-            requestMessageId: $this->answerMessageId,
+            requestMessageId: $this->answerMessageIds === [] ? null : $this->answerMessageIds[array_key_last($this->answerMessageIds)],
         );
 
         $lines = [
-            "Approval required for `{$toolName}`.",
-            'Use the buttons below or reply with /approve or /deny.',
+            '<b>Approval required</b> <code>'.htmlspecialchars($toolName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</code>',
+            'Use the buttons below or reply with /approve, /approve always, /approve guardian, /approve prometheus, or /deny.',
         ];
-        $this->client->sendMessage(
+        $json = json_encode($args, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (is_string($json) && $json !== '') {
+            if (mb_strlen($json) > 2400) {
+                $json = mb_substr($json, 0, 2397).'...';
+            }
+            $lines[] = '<pre><code>'.htmlspecialchars($json, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</code></pre>';
+        }
+        $this->sendFormattedMessage(
             $this->chatId,
             implode("\n", $lines),
             $this->threadId,
             replyMarkup: [
-                'inline_keyboard' => [[
-                    ['text' => 'Approve', 'callback_data' => 'ga:approve:'.$approval->id],
-                    ['text' => 'Deny', 'callback_data' => 'ga:deny:'.$approval->id],
-                ]],
+                'inline_keyboard' => [
+                    [
+                        ['text' => 'Approve', 'callback_data' => 'ga:allow:'.$approval->id],
+                        ['text' => 'Always', 'callback_data' => 'ga:always:'.$approval->id],
+                    ],
+                    [
+                        ['text' => 'Guardian', 'callback_data' => 'ga:guardian:'.$approval->id],
+                        ['text' => 'Prometheus', 'callback_data' => 'ga:prometheus:'.$approval->id],
+                    ],
+                    [
+                        ['text' => 'Deny', 'callback_data' => 'ga:deny:'.$approval->id],
+                    ],
+                ],
             ],
         );
 
         $decision = ($this->approvalCallback)($approval->id, $toolName, $args);
-        $this->approvals->resolve($approval->id, $decision === 'deny' ? 'denied' : 'approved');
 
         return $decision;
     }
@@ -268,6 +306,11 @@ final class TelegramGatewayRenderer implements RendererInterface
     public function showToolExecuting(string $name): void
     {
         $this->activeToolName = $name;
+        $this->maybeSendTyping();
+        $this->toolMessageId = $this->sendOrEditToolMessage(
+            $this->toolMessageId,
+            '<b>Running tool</b> <code>'.htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</code>',
+        );
         $this->updateStatusMessage($name === 'concurrent' ? 'Running tools…' : "Using tool: {$name}");
     }
 
@@ -275,6 +318,11 @@ final class TelegramGatewayRenderer implements RendererInterface
     {
         $output = trim($output);
         if ($output !== '') {
+            $this->maybeSendTyping();
+            $summary = $this->activeToolName !== null && $this->activeToolName !== ''
+                ? '<b>Running tool</b> <code>'.htmlspecialchars($this->activeToolName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</code>\n<pre><code>".htmlspecialchars($this->limitToolOutput($output), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</code></pre>'
+                : '<pre><code>'.htmlspecialchars($this->limitToolOutput($output), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</code></pre>';
+            $this->toolMessageId = $this->sendOrEditToolMessage($this->toolMessageId, $summary);
             $this->updateStatusMessage($output);
         }
     }
@@ -282,6 +330,7 @@ final class TelegramGatewayRenderer implements RendererInterface
     public function clearToolExecuting(): void
     {
         $this->activeToolName = null;
+        $this->toolMessageId = null;
     }
 
     private function ensureStatusMessage(string $text): void
@@ -298,26 +347,8 @@ final class TelegramGatewayRenderer implements RendererInterface
         }
     }
 
-    private function ensureAnswerMessage(string $text): void
-    {
-        if ($this->answerMessageId !== null) {
-            return;
-        }
-
-        $message = $this->client->sendMessage($this->chatId, $this->limit($text), $this->threadId);
-        $messageId = (int) ($message['message_id'] ?? 0);
-        if ($messageId > 0) {
-            $this->answerMessageId = $messageId;
-            $this->messages->save('telegram', $this->routeKey, 'response', $this->chatId, $messageId, $this->threadId);
-        }
-    }
-
     private function flushBufferedText(bool $force): void
     {
-        if ($this->buffer === '') {
-            return;
-        }
-
         $display = $this->visibleText();
         if ($display === '') {
             return;
@@ -328,11 +359,33 @@ final class TelegramGatewayRenderer implements RendererInterface
             return;
         }
 
-        $this->ensureAnswerMessage($display);
-        if ($this->answerMessageId !== null) {
-            $this->client->editMessageText($this->chatId, $this->answerMessageId, $this->limit($display));
-            $this->lastFlushAt = $now;
+        $chunks = $this->answerChunks();
+        foreach ($chunks as $index => $chunk) {
+            $messageId = $this->answerMessageIds[$index] ?? null;
+            $formatted = TelegramTextFormatter::formatHtml($chunk);
+            if ($messageId === null) {
+                $message = $this->sendFormattedMessage(
+                    $this->chatId,
+                    $formatted,
+                    $this->threadId,
+                );
+                $messageId = (int) ($message['message_id'] ?? 0);
+                if ($messageId > 0) {
+                    $this->answerMessageIds[$index] = $messageId;
+                    if ($index === 0) {
+                        $this->messages->save('telegram', $this->routeKey, 'response', $this->chatId, $messageId, $this->threadId);
+                    }
+                }
+            } elseif ($messageId > 0) {
+                $this->editFormattedMessage(
+                    $this->chatId,
+                    $messageId,
+                    $formatted,
+                );
+            }
         }
+
+        $this->lastFlushAt = $now;
     }
 
     private function appendNotice(string $message): void
@@ -355,9 +408,22 @@ final class TelegramGatewayRenderer implements RendererInterface
         return rtrim(mb_substr($normalized, 0, 3897)).'...';
     }
 
+    private function limitToolOutput(string $text): string
+    {
+        $normalized = trim($text);
+        if (mb_strlen($normalized) <= 2200) {
+            return $normalized;
+        }
+
+        return rtrim(mb_substr($normalized, 0, 2197)).'...';
+    }
+
     private function visibleText(): string
     {
-        return $this->extractMediaPayload($this->buffer)['text'];
+        return implode("\n\n", array_values(array_filter(
+            array_map(fn (string $segment): string => $this->extractMediaPayload($segment)['text'], $this->answerSegments),
+            static fn (string $segment): bool => $segment !== '',
+        )));
     }
 
     private function composeStatusText(): string
@@ -371,6 +437,7 @@ final class TelegramGatewayRenderer implements RendererInterface
 
     private function updateStatusMessage(string $text): void
     {
+        $this->maybeSendTyping();
         $this->ensureStatusMessage($text);
 
         if ($this->statusMessageId !== null) {
@@ -380,27 +447,29 @@ final class TelegramGatewayRenderer implements RendererInterface
 
     private function deliverMediaAttachments(): void
     {
-        $payload = $this->extractMediaPayload($this->buffer);
-        foreach ($payload['media'] as $item) {
-            $path = $item['path'];
-            if ($path === '' || ! is_file($path)) {
-                continue;
+        foreach ($this->answerSegments as $segment) {
+            $payload = $this->extractMediaPayload($segment);
+            foreach ($payload['media'] as $item) {
+                $path = $item['path'];
+                if ($path === '' || ! is_file($path)) {
+                    continue;
+                }
+
+                $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+                if (in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+                    $this->client->sendPhoto($this->chatId, $path, $this->threadId);
+
+                    continue;
+                }
+
+                if ($item['voice'] && in_array($extension, ['ogg', 'opus', 'mp3', 'm4a', 'wav'], true)) {
+                    $this->client->sendVoice($this->chatId, $path, $this->threadId);
+
+                    continue;
+                }
+
+                $this->client->sendDocument($this->chatId, $path, $this->threadId);
             }
-
-            $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
-            if (in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
-                $this->client->sendPhoto($this->chatId, $path, $this->threadId);
-
-                continue;
-            }
-
-            if ($item['voice'] && in_array($extension, ['ogg', 'opus', 'mp3', 'm4a', 'wav'], true)) {
-                $this->client->sendVoice($this->chatId, $path, $this->threadId);
-
-                continue;
-            }
-
-            $this->client->sendDocument($this->chatId, $path, $this->threadId);
         }
     }
 
@@ -432,5 +501,111 @@ final class TelegramGatewayRenderer implements RendererInterface
             'text' => trim($display),
             'media' => $media,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function answerChunks(): array
+    {
+        $chunks = [];
+        foreach ($this->answerSegments as $segment) {
+            foreach (TelegramTextFormatter::splitPlainText($this->extractMediaPayload($segment)['text']) as $chunk) {
+                $chunks[] = $chunk;
+            }
+        }
+
+        return $chunks;
+    }
+
+    private function startNewAnswerSegment(): void
+    {
+        $current = $this->answerSegments[array_key_last($this->answerSegments)] ?? '';
+        if (trim($this->extractMediaPayload($current)['text']) !== '') {
+            $this->answerSegments[] = '';
+        }
+    }
+
+    private function sendOrEditToolMessage(?int $messageId, string $html): int
+    {
+        if ($messageId !== null) {
+            $this->editFormattedMessage(
+                $this->chatId,
+                $messageId,
+                $html,
+            );
+
+            return $messageId;
+        }
+
+        $message = $this->sendFormattedMessage(
+            $this->chatId,
+            $html,
+            $this->threadId,
+        );
+
+        return (int) ($message['message_id'] ?? 0);
+    }
+
+    private function sendFormattedMessage(
+        string $chatId,
+        string $html,
+        ?string $threadId = null,
+        ?int $replyToMessageId = null,
+        ?array $replyMarkup = null,
+    ): array {
+        try {
+            return $this->client->sendMessage(
+                $chatId,
+                $html,
+                $threadId,
+                $replyToMessageId,
+                $replyMarkup,
+                self::TELEGRAM_PARSE_MODE,
+            );
+        } catch (\Throwable) {
+            return $this->client->sendMessage(
+                $chatId,
+                $this->limit(TelegramTextFormatter::stripHtml($html)),
+                $threadId,
+                $replyToMessageId,
+                $replyMarkup,
+            );
+        }
+    }
+
+    private function editFormattedMessage(
+        string $chatId,
+        int $messageId,
+        string $html,
+        ?array $replyMarkup = null,
+    ): array {
+        try {
+            return $this->client->editMessageText(
+                $chatId,
+                $messageId,
+                $html,
+                $replyMarkup,
+                self::TELEGRAM_PARSE_MODE,
+            );
+        } catch (\Throwable) {
+            return $this->client->editMessageText(
+                $chatId,
+                $messageId,
+                $this->limit(TelegramTextFormatter::stripHtml($html)),
+                $replyMarkup,
+            );
+        }
+    }
+
+    private function maybeSendTyping(): void
+    {
+        $now = microtime(true);
+        if (($now - $this->lastTypingAt) < 4.0) {
+            return;
+        }
+
+        $this->client->sendChatAction($this->chatId, 'typing', $this->threadId);
+        $this->lastTypingAt = $now;
     }
 }

@@ -9,6 +9,7 @@ use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Gateway\GatewayApprovalStore;
 use Kosmokrator\Gateway\GatewayCheckpointStore;
 use Kosmokrator\Gateway\GatewayMessageStore;
+use Kosmokrator\Gateway\GatewayPendingInputStore;
 use Kosmokrator\Gateway\GatewaySessionStore;
 use Kosmokrator\Gateway\Telegram\SymfonyProcessTelegramWorkerLauncher;
 use Kosmokrator\Gateway\Telegram\TelegramClient;
@@ -36,8 +37,9 @@ final class TelegramGatewayCommand extends Command
     {
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot(InstructionLoader::gitRoot() ?? getcwd());
-        $config = TelegramGatewayConfig::fromSettings($settings, $this->container->make('config'));
-        $secretToken = $this->container->make(SettingsRepositoryInterface::class)->get('global', 'gateway.telegram.token');
+        $settingsRepository = $this->container->make(SettingsRepositoryInterface::class);
+        $config = TelegramGatewayConfig::fromSettings($settings, $this->container->make('config'), $settingsRepository);
+        $secretToken = $settingsRepository->get('global', 'gateway.telegram.token');
         if (is_string($secretToken) && $secretToken !== '') {
             $config = new TelegramGatewayConfig(
                 enabled: $config->enabled,
@@ -88,6 +90,7 @@ final class TelegramGatewayCommand extends Command
             messages: $this->container->make(GatewayMessageStore::class),
             approvals: $this->container->make(GatewayApprovalStore::class),
             checkpoints: $this->container->make(GatewayCheckpointStore::class),
+            pendingInputs: $this->container->make(GatewayPendingInputStore::class),
             log: $this->container->make(LoggerInterface::class),
             launcher: new SymfonyProcessTelegramWorkerLauncher(InstructionLoader::gitRoot() ?? getcwd()),
         );

@@ -12,6 +12,7 @@ use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
+use Kosmokrator\Session\Tool\SessionReadTool;
 use Kosmokrator\Session\Tool\SessionSearchTool;
 use Kosmokrator\Tool\Coding\ApplyPatchTool;
 use Kosmokrator\Tool\Coding\BashTool;
@@ -63,6 +64,7 @@ class ToolRegistryScopedTest extends TestCase
         $this->registry->register(new MemorySaveTool($sessionManager));
         $this->registry->register(new MemorySearchTool($sessionManager));
         $this->registry->register(new SessionSearchTool($sessionManager));
+        $this->registry->register(new SessionReadTool($sessionManager));
         // Simulate root SubagentTool in registry
         $this->orchestrator = new SubagentOrchestrator(new NullLogger, 3);
         $rootCtx = new AgentContext(AgentType::General, 0, 3, $this->orchestrator, 'root', '');

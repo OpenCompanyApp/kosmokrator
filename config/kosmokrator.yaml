@@ -157,6 +157,8 @@ tools:
     - ask_user
     - ask_choice
     - subagent
+    - session_search
+    - session_read
     - lua_list_docs
     - lua_search_docs
     - lua_read_doc

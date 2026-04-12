@@ -394,6 +394,151 @@ class MessageRepository implements MessageRepositoryInterface
         return array_values(array_unique($terms));
     }
 
+    /**
+     * FTS5 search grouped by session — returns per-session match info with context.
+     *
+     * For each matched session, returns the best-matching message and up to 2
+     * surrounding messages for context, plus a count of total matches in that session.
+     *
+     * @param  string  $project  Project path to scope the search
+     * @param  string  $query  Free-text query
+     * @param  string|null  $excludeSessionId  Optional session to exclude
+     * @param  int  $limit  Maximum number of unique sessions to return
+     * @return array<int, array{session_id: string, title: ?string, updated_at: string, match_count: int, best_match: array{role: string, content: string, created_at: string}, context: list<array{role: string, content: string}>}>
+     */
+    public function searchProjectHistoryGrouped(string $project, string $query, ?string $excludeSessionId = null, int $limit = 5): array
+    {
+        $ftsQuery = $this->buildFtsQuery($query);
+        if ($ftsQuery === null) {
+            return [];
+        }
+
+        // Fetch more results than needed so we can group and rank by session
+        $fetchLimit = $limit * 10;
+
+        $sql = '
+            SELECT m.id, m.session_id, m.role, m.content, m.created_at,
+                   s.title, s.updated_at, bm25(messages_fts) AS rank
+            FROM messages_fts
+            INNER JOIN messages m ON m.id = messages_fts.rowid
+            INNER JOIN sessions s ON s.id = m.session_id
+            WHERE s.project = :project
+              AND m.compacted = 0
+              AND m.content IS NOT NULL
+              AND messages_fts MATCH :query
+        ';
+        $params = ['project' => $project, 'query' => $ftsQuery];
+
+        if ($excludeSessionId !== null) {
+            $sql .= ' AND m.session_id != :exclude_session_id';
+            $params['exclude_session_id'] = $excludeSessionId;
+        }
+
+        $sql .= ' ORDER BY rank ASC, s.updated_at DESC LIMIT :fetch_limit';
+        $params['fetch_limit'] = $fetchLimit;
+
+        $stmt = $this->db->connection()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        // Group by session, keeping the best match (lowest rank = most relevant)
+        $sessions = [];
+        foreach ($rows as $row) {
+            $sid = $row['session_id'];
+            if (! isset($sessions[$sid])) {
+                $sessions[$sid] = [
+                    'session_id' => $sid,
+                    'title' => $row['title'],
+                    'updated_at' => $row['updated_at'],
+                    'match_count' => 0,
+                    'best_match_id' => (int) $row['id'],
+                    'best_match' => [
+                        'role' => $row['role'],
+                        'content' => $row['content'],
+                        'created_at' => $row['created_at'],
+                    ],
+                ];
+            }
+            $sessions[$sid]['match_count']++;
+
+            if (count($sessions) >= $limit && ! isset($sessions[$sid])) {
+                break;
+            }
+        }
+
+        // Fetch context (surrounding messages) for each session's best match
+        $result = [];
+        foreach (array_slice(array_values($sessions), 0, $limit) as $entry) {
+            $entry['context'] = $this->loadContextAroundMessage($entry['session_id'], $entry['best_match_id']);
+            unset($entry['best_match_id']);
+            $result[] = $entry;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Load 1 message before and 1 after the given message ID within the same session.
+     *
+     * @return list<array{role: string, content: string}>
+     */
+    private function loadContextAroundMessage(string $sessionId, int $messageId): array
+    {
+        $context = [];
+
+        // Message before
+        $stmt = $this->db->connection()->prepare('
+            SELECT role, content FROM messages
+            WHERE session_id = :sid AND id < :mid AND compacted = 0 AND content IS NOT NULL
+            ORDER BY id DESC LIMIT 1
+        ');
+        $stmt->execute(['sid' => $sessionId, 'mid' => $messageId]);
+        $before = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if ($before) {
+            $context[] = ['role' => $before['role'], 'content' => $before['content']];
+        }
+
+        // Message after
+        $stmt = $this->db->connection()->prepare('
+            SELECT role, content FROM messages
+            WHERE session_id = :sid AND id > :mid AND compacted = 0 AND content IS NOT NULL
+            ORDER BY id ASC LIMIT 1
+        ');
+        $stmt->execute(['sid' => $sessionId, 'mid' => $messageId]);
+        $after = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if ($after) {
+            $context[] = ['role' => $after['role'], 'content' => $after['content']];
+        }
+
+        return $context;
+    }
+
+    /**
+     * Load a session's messages formatted as a readable transcript.
+     *
+     * @param  string  $sessionId  Session to load
+     * @param  int  $limit  Maximum messages to return (0 = all)
+     * @return list<array{role: string, content: string, tool_calls: ?string, created_at: string}>
+     */
+    public function loadTranscript(string $sessionId, int $limit = 0): array
+    {
+        $sql = 'SELECT role, content, tool_calls, created_at
+                FROM messages
+                WHERE session_id = :sid AND compacted = 0
+                ORDER BY id ASC';
+        $params = ['sid' => $sessionId];
+
+        if ($limit > 0) {
+            $sql .= ' LIMIT :lim';
+            $params['lim'] = $limit;
+        }
+
+        $stmt = $this->db->connection()->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
     private function looksIdentifierLike(string $query): bool
     {
         return strpbrk($query, '/._-') !== false;

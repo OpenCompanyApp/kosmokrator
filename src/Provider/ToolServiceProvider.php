@@ -12,6 +12,7 @@ use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
+use Kosmokrator\Session\Tool\SessionReadTool;
 use Kosmokrator\Session\Tool\SessionSearchTool;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
@@ -149,6 +150,7 @@ class ToolServiceProvider extends ServiceProvider
             $registry->register(new MemorySaveTool($sessionManager));
             $registry->register(new MemorySearchTool($sessionManager));
             $registry->register(new SessionSearchTool($sessionManager));
+            $registry->register(new SessionReadTool($sessionManager));
 
             // Lua integration tools — only if Lua extension is available
             if (class_exists(Sandbox::class) && $this->container->bound(LuaDocService::class)) {

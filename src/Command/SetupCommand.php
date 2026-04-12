@@ -20,9 +20,14 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'setup', description: 'Configure KosmoKrator (API keys, provider, model)')]
 class SetupCommand extends Command
 {
+    /** @var (callable(string): string)|null */
+    private $promptReader;
+
     public function __construct(
         private readonly Container $container,
+        ?callable $promptReader = null,
     ) {
+        $this->promptReader = $promptReader;
         parent::__construct();
     }
 
@@ -53,7 +58,7 @@ class SetupCommand extends Command
         }
         echo "\n";
 
-        $provider = readline("{$dim}  Provider [{$currentProvider}]: {$r}") ?: $currentProvider;
+        $provider = $this->prompt("{$dim}  Provider [{$currentProvider}]: {$r}") ?: $currentProvider;
         $provider = trim($provider);
         $definition = $providers->provider($provider);
 
@@ -81,7 +86,7 @@ class SetupCommand extends Command
         if ($currentModel === null || ! $providers->supportsModel($provider, $currentModel)) {
             $currentModel = $definition->defaultModel !== '' ? $definition->defaultModel : ($providerModels[0] ?? '');
         }
-        $model = readline("{$dim}  Model [{$currentModel}]: {$r}") ?: $currentModel;
+        $model = $this->prompt("{$dim}  Model [{$currentModel}]: {$r}") ?: $currentModel;
         $model = trim($model);
 
         $configSettings->set('agent.default_provider', $provider, 'global');
@@ -90,7 +95,7 @@ class SetupCommand extends Command
 
         if ($definition->authMode === 'oauth') {
             echo "{$dim}  Codex uses your ChatGPT login, not an API key.{$r}\n";
-            $action = strtolower(trim(readline("{$dim}  Authenticate now? [browser/device/skip] {$r}")));
+            $action = strtolower(trim($this->prompt("{$dim}  Authenticate now? [browser/device/skip] {$r}")));
 
             try {
                 if ($action === 'browser' || $action === '') {
@@ -118,7 +123,7 @@ class SetupCommand extends Command
             $maskedKey = $currentKey !== '' ? substr($currentKey, 0, 8).'...'.substr($currentKey, -4) : '';
             $keyPrompt = $maskedKey !== '' ? " [{$maskedKey}]" : '';
 
-            $apiKey = readline("{$dim}  API key{$keyPrompt}: {$r}") ?: $currentKey;
+            $apiKey = $this->prompt("{$dim}  API key{$keyPrompt}: {$r}") ?: $currentKey;
             $apiKey = trim($apiKey);
 
             if ($apiKey === '') {
@@ -134,5 +139,24 @@ class SetupCommand extends Command
         echo "{$dim}  Run {$white}php bin/kosmokrator{$dim} to start.{$r}\n\n";
 
         return Command::SUCCESS;
+    }
+
+    private function prompt(string $message): string
+    {
+        if ($this->promptReader !== null) {
+            return (string) ($this->promptReader)($message);
+        }
+
+        if (\function_exists('readline')) {
+            $input = \readline($message);
+
+            return $input === false ? '' : $input;
+        }
+
+        echo $message;
+
+        $input = fgets(STDIN);
+
+        return $input === false ? '' : rtrim($input, "\r\n");
     }
 }

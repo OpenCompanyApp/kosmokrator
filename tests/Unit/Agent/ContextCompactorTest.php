@@ -9,10 +9,12 @@ use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Psr\Log\NullLogger;
 
+#[AllowMockObjectsWithoutExpectations]
 class ContextCompactorTest extends TestCase
 {
     private function makeCompactor(?LlmClientInterface $llm = null, int $thresholdPercent = 60): ContextCompactor

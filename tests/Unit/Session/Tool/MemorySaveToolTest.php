@@ -6,8 +6,10 @@ namespace Kosmokrator\Tests\Unit\Session\Tool;
 
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\Tool\MemorySaveTool;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class MemorySaveToolTest extends TestCase
 {
     private SessionManager $session;

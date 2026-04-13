@@ -9,8 +9,10 @@ use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\UIManager;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class UIManagerTest extends TestCase
 {
     /**
@@ -22,7 +24,6 @@ class UIManagerTest extends TestCase
         $mock = $this->createMock(RendererInterface::class);
 
         $ref = new \ReflectionProperty($manager, 'renderer');
-        $ref->setAccessible(true);
         $ref->setValue($manager, $mock);
 
         return [$manager, $mock];

@@ -11,8 +11,10 @@ use Kosmokrator\UI\Ansi\AnsiConversationRenderer;
 use Kosmokrator\UI\Ansi\AnsiRenderer;
 use Kosmokrator\UI\Ansi\AnsiSubagentRenderer;
 use Kosmokrator\UI\Ansi\AnsiToolRenderer;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class AnsiRendererTest extends TestCase
 {
     private AnsiRenderer $renderer;

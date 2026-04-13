@@ -16,8 +16,10 @@ use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\UIManager;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 final class SlashCommandContextTest extends TestCase
 {
     private UIManager $ui;

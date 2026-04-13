@@ -160,12 +160,9 @@ final class SelfUpdater implements SelfUpdaterInterface
 
         // Check HTTP status from response headers.
         $status = 0;
-        if (function_exists('http_get_last_response_headers')) {
-            $headers = http_get_last_response_headers() ?: [];
-        } else {
-            /** @var list<string> $http_response_header */
-            $headers = $http_response_header;
-        }
+        $headers = function_exists('http_get_last_response_headers')
+            ? (http_get_last_response_headers() ?: [])
+            : [];
 
         if ($headers !== []) {
             foreach ($headers as $header) {

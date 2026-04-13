@@ -58,7 +58,6 @@ final class SettingsCommandTest extends TestCase
         $ctx = $this->createStub(SlashCommandContext::class);
 
         $method = new \ReflectionMethod($command, 'runtimeValue');
-        $method->setAccessible(true);
 
         $value = $method->invoke($command, $ctx, 'gateway.telegram.allowed_users', ['alice', 'bob']);
 

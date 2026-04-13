@@ -6,8 +6,10 @@ namespace Kosmokrator\Tests\Unit\Session\Tool;
 
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\Tool\SessionReadTool;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class SessionReadToolTest extends TestCase
 {
     private SessionManager $session;

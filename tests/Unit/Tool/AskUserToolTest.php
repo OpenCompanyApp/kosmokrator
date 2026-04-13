@@ -6,8 +6,10 @@ namespace Kosmokrator\Tests\Unit\Tool;
 
 use Kosmokrator\Tool\AskUserTool;
 use Kosmokrator\UI\RendererInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class AskUserToolTest extends TestCase
 {
     private RendererInterface $ui;

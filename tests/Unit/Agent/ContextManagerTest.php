@@ -15,11 +15,13 @@ use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\UI\NullRenderer;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\NullLogger;
 
+#[AllowMockObjectsWithoutExpectations]
 class ContextManagerTest extends TestCase
 {
     public function test_circuit_breaker_resets_after_context_pressure_drops(): void

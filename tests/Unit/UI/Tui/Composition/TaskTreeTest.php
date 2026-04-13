@@ -7,9 +7,11 @@ namespace Kosmokrator\Tests\Unit\UI\Tui\Composition;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Tui\Composition\TaskTree;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Render\RenderContext;
 
+#[AllowMockObjectsWithoutExpectations]
 final class TaskTreeTest extends TestCase
 {
     private TuiStateStore $state;

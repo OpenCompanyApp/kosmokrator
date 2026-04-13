@@ -1278,3 +1278,34 @@
 [2026-04-12 00:30:47] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":962}
 [2026-04-12 00:30:47] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dae7b7a14d9.py","instrument":"Harp"}
 [2026-04-12 00:30:47] INFO: Worker finished
+[2026-04-12 21:20:59] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-12 21:21:00] INFO: Completion sound worker booted
+[2026-04-12 21:21:00] INFO: Worker starting composition {"instrument":112,"message_preview":"Here's a summary of the findings:\n\n---\n\n## UI Style Guide (`docs\/ui-design.md`)\n\nThe design doc defi"}
+[2026-04-12 21:21:36] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"API error (429): Rate limit reached for requests"}
+[2026-04-12 21:21:36] INFO: Completion sound: retrying composition {"attempt":1}
+[2026-04-12 21:22:13] WARNING: Completion sound: LLM call failed {"attempt":1,"error":"API error (429): Rate limit reached for requests"}
+[2026-04-12 21:22:13] ERROR: Completion sound: all attempts exhausted {"last_error":"API error (429): Rate limit reached for requests","attempts":2}
+[2026-04-12 21:22:14] WARNING: Completion sound: using fallback composition {"reason":"API error (429): Rate limit reached for requests"}
+[2026-04-12 21:22:14] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dc0d0626695.py","instrument":"Fiddle"}
+[2026-04-12 21:22:14] INFO: Worker finished
+[2026-04-12 22:08:56] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-12 22:08:57] INFO: Completion sound worker booted
+[2026-04-12 22:08:57] INFO: Worker starting composition {"instrument":112,"message_preview":"Done. `@tailwindcss\/typography` is now installed and registered via `@plugin` (Tailwind v4 syntax) i"}
+[2026-04-12 22:09:11] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":807}
+[2026-04-12 22:09:11] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dc18075c79b.py","instrument":"Fiddle"}
+[2026-04-12 22:09:11] INFO: Worker finished
+[2026-04-12 22:29:38] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-12 22:29:39] INFO: Completion sound worker booted
+[2026-04-12 22:29:39] INFO: Worker starting composition {"instrument":112,"message_preview":"Done. Switched from Instrument Sans to **Lexend** (weights 300–700) across the entire app:\n\n- `parti"}
+[2026-04-12 22:30:02] WARNING: Completion sound: script rejected — Python syntax error {"output":"  File \"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_syntax_check_69dc1cea94871.py\", line 30\n    A bright C-major fanfare (C5–E5–G5–C6) with major-triad bass support — short and satisfying for a clean, quick task completion.\n                                ^\nSyntaxError: invalid character '–' (U+2013)"}
+[2026-04-12 22:30:02] WARNING: Completion sound: script validation failed {"attempt":0}
+[2026-04-12 22:30:02] INFO: Completion sound: retrying composition {"attempt":1}
+[2026-04-12 22:30:15] INFO: Completion sound: script composed successfully {"attempt":1,"script_length":1021}
+[2026-04-12 22:30:15] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dc1cf7bc32a.py","instrument":"Fiddle"}
+[2026-04-12 22:30:15] INFO: Worker finished
+[2026-04-13 08:56:23] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-13 08:56:24] INFO: Completion sound worker booted
+[2026-04-13 08:56:24] INFO: Worker starting composition {"instrument":112,"message_preview":"All clean. The UI transformation is well underway. Here's the current status:\n\n**Completed:**\n- All "}
+[2026-04-13 08:57:02] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1136}
+[2026-04-13 08:57:02] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dcafde79594.py","instrument":"Fiddle"}
+[2026-04-13 08:57:02] INFO: Worker finished

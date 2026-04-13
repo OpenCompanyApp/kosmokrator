@@ -43,7 +43,7 @@ class IntegrationManager
     {
         $result = [];
         foreach ($this->getLocallyRunnableProviders() as $name => $provider) {
-            if ($this->isEnabled($name) && $this->credentials->isConfigured($name)) {
+            if ($this->isEnabled($name) && $this->isConfiguredForActivation($name, $provider)) {
                 $result[$name] = $provider;
             }
         }
@@ -88,8 +88,8 @@ class IntegrationManager
             return $permission;
         }
 
-        // Default: allow reads, ask for writes
-        return $operation === 'read' ? 'allow' : 'ask';
+        // Default: auto-allow both reads and writes unless explicitly overridden.
+        return 'allow';
     }
 
     /**
@@ -129,7 +129,7 @@ class IntegrationManager
     public function setAllPermissions(string $value, ?string $operation = null, string $scope = 'global'): void
     {
         foreach ($this->getLocallyRunnableProviders() as $name => $provider) {
-            if (! $this->credentials->isConfigured($name)) {
+            if (! $this->isConfiguredForActivation($name, $provider)) {
                 continue;
             }
 
@@ -188,5 +188,39 @@ class IntegrationManager
     public function getAllProviders(): array
     {
         return $this->providers->all();
+    }
+
+    private function isConfiguredForActivation(string $integration, ToolProvider $provider): bool
+    {
+        $requiredFields = array_filter(
+            $provider->credentialFields(),
+            static fn (array $field): bool => (bool) ($field['required'] ?? false),
+        );
+
+        if ($requiredFields === []) {
+            return true;
+        }
+
+        foreach ($requiredFields as $field) {
+            $key = (string) ($field['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+
+            $value = $this->credentials->get($integration, $key, null);
+            if ($value === null) {
+                return false;
+            }
+
+            if (is_string($value) && trim($value) === '') {
+                return false;
+            }
+
+            if (is_array($value) && $value === []) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

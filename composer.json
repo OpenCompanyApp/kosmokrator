@@ -15,7 +15,11 @@
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
         "opencompany/prism-codex": "dev-main",
+        "opencompanyapp/integration-clickup": "@dev",
+        "opencompanyapp/integration-coingecko": "@dev",
         "opencompanyapp/integration-core": "@dev",
+        "opencompanyapp/integration-plane": "@dev",
+        "opencompanyapp/integration-plausible": "@dev",
         "opencompanyapp/prism-relay": "dev-main",
         "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
@@ -39,7 +43,15 @@
         {
             "name": "integration-core",
             "type": "path",
-            "url": "/Users/rutger/Sites/integrations/core"
+            "url": "integrations/core"
+        },
+        {
+            "name": "integrations-monorepo",
+            "type": "path",
+            "url": "integrations/packages/*",
+            "options": {
+                "symlink": true
+            }
         },
         {
             "type": "vcs",
@@ -64,7 +76,10 @@
     "autoload-dev": {
         "psr-4": {
             "Kosmokrator\\Tests\\": "tests/"
-        }
+        },
+        "files": [
+            "stubs/lua-sandbox-polyfill.php"
+        ]
     },
     "config": {
         "preferred-install": "dist",

@@ -9,7 +9,8 @@ ob_start();
     typed at the input prompt with a <code>/</code> prefix, <strong>power commands</strong>
     prefixed with <code>:</code> that activate specialized agent behaviors, and <strong>skill
     commands</strong> prefixed with <code>$</code> that invoke reusable skill templates. This page
-    covers every command available in the interactive session.
+    covers the interactive command surface plus the main shell-level commands you are expected to
+    run directly.
 </p>
 
 <div class="tip">
@@ -107,6 +108,31 @@ ob_start();
 
 
 <!-- ------------------------------------------------------------------ -->
+<h3 id="model-switching">Model Switching</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<h4 id="cmd-models"><code>/models</code> <small class="text-muted">(alias: <code>/model</code>)</small></h4>
+<p>
+    Open the curated model switcher for day-to-day use. Instead of dumping the
+    full provider catalog, it shows the most likely choices in this order:
+    recent models you used, likely models from the current provider, and likely
+    models from your most recently used non-current provider.
+</p>
+<p>
+    You can also jump directly with arguments:
+</p>
+<pre><code>/models
+/models openai
+/models gpt-5.4
+/models anthropic:claude-sonnet-4-20250514</code></pre>
+<p>
+    Switching updates the live runtime immediately when the active LLM backend
+    supports it, and also updates the default provider/model used for future
+    sessions. Full provider and model inventory remains in <code>/settings</code>.
+</p>
+
+
+<!-- ------------------------------------------------------------------ -->
 <h3 id="permission-control">Permission Control</h3>
 <!-- ------------------------------------------------------------------ -->
 
@@ -181,8 +207,8 @@ ob_start();
 <h4 id="cmd-settings"><code>/settings</code></h4>
 <p>
     Open the interactive settings workspace. Navigate through categories (LLM, permissions, UI,
-    tools, etc.) and change configuration values in real time. Changes are persisted to your
-    user-level configuration and take effect immediately.
+    tools, gateway, integrations, etc.) and change configuration values in real time. Changes are
+    persisted to your user-level configuration and take effect immediately when supported.
 </p>
 
 
@@ -196,11 +222,87 @@ ob_start();
     conversation history or context window. The agent retains full memory of the session.
 </p>
 
-<h4 id="cmd-update"><code>/update</code></h4>
+<h4 id="cmd-update"><code>kosmokrator update</code></h4>
 <p>
-    Check for new KosmoKrator versions. If an update is available, displays the changelog and
-    offers to apply the update automatically. For PHAR installations this downloads the new binary;
-    for Composer installations it runs the appropriate update command.
+    Check for new KosmoKrator versions from the shell. Static binary and PHAR
+    installs update in place. Source installs are detected and you get the
+    exact manual update commands to run.
+</p>
+
+<!-- ================================================================== -->
+<h2 id="shell-commands">Shell Commands</h2>
+<!-- ================================================================== -->
+
+<p>
+    These commands are run directly from your terminal rather than inside the
+    interactive REPL.
+</p>
+
+<h4 id="cmd-shell-update"><code>kosmokrator update</code></h4>
+<p>
+    Check GitHub Releases for a newer version. Static binary and PHAR installs
+    can replace themselves in place. Source installs print the exact
+    <code>git pull</code> and <code>composer install</code> commands to run.
+</p>
+
+<h4 id="cmd-shell-gateway"><code>kosmokrator gateway:telegram</code></h4>
+<p>
+    Start the Telegram gateway worker. This turns KosmoKrator into a Telegram
+    bot surface backed by the normal agent/session runtime. The gateway keeps a
+    linked session per configured chat route, supports typing indicators,
+    streamed replies, queued follow-up messages, and inline approval buttons.
+</p>
+<p>
+    Typical flow:
+</p>
+<pre><code>/settings → Gateway
+enable Telegram, store bot token, set allowlist
+
+kosmokrator gateway:telegram</code></pre>
+<p>
+    The internal worker command <code>kosmokrator gateway:telegram:worker</code>
+    is process-managed by the main gateway and is not intended for normal manual
+    use.
+</p>
+
+<!-- ================================================================== -->
+<h2 id="telegram-gateway-commands">Telegram Gateway Commands</h2>
+<!-- ================================================================== -->
+
+<p>
+    When you talk to KosmoKrator through Telegram, the bot exposes a transport
+    layer of Telegram-native commands in addition to the normal Kosmo slash
+    commands.
+</p>
+
+<h4><code>/help</code></h4>
+<p>Show Telegram gateway help, available controls, and the supported slash-command bridge.</p>
+
+<h4><code>/status</code></h4>
+<p>Show the linked session, active run state, queued input count, and current mode details for that chat route.</p>
+
+<h4><code>/new</code></h4>
+<p>Start a fresh linked session for the current Telegram route.</p>
+
+<h4><code>/resume</code></h4>
+<p>Reuse the existing linked session for the current Telegram route if one exists.</p>
+
+<h4><code>/cancel</code></h4>
+<p>Cancel the active run for the current Telegram route.</p>
+
+<h4><code>/approve</code> / <code>/deny</code></h4>
+<p>
+    Resolve the latest pending approval request. Approval also supports scoped
+    variants:
+</p>
+<pre><code>/approve
+/approve always
+/approve guardian
+/approve prometheus
+/deny</code></pre>
+<p>
+    The Telegram gateway also provides inline approval buttons, so typing these
+    commands is optional in the normal case.
 </p>
 
 <h4 id="cmd-feedback"><code>/feedback &lt;text&gt;</code> <small class="text-muted">(aliases: <code>/bug</code>, <code>/issue</code>)</small></h4>
@@ -291,6 +393,11 @@ ob_start();
             <td>Switch to Plan mode (read-only analysis).</td>
         </tr>
         <tr>
+            <td><code>/models</code></td>
+            <td><code>[provider|model|provider:model]</code></td>
+            <td>Open the curated model switcher or jump directly to a likely provider/model.</td>
+        </tr>
+        <tr>
             <td><code>/ask</code></td>
             <td>None</td>
             <td>Switch to Ask mode (read-only Q&amp;A).</td>
@@ -341,11 +448,6 @@ ob_start();
             <td>Clear the terminal display.</td>
         </tr>
         <tr>
-            <td><code>/update</code></td>
-            <td>None</td>
-            <td>Check for and apply KosmoKrator updates.</td>
-        </tr>
-        <tr>
             <td><code>/feedback</code></td>
             <td><code>&lt;text&gt;</code></td>
             <td>Submit feedback or a bug report as a GitHub issue. <small class="text-muted">(aliases: <code>/bug</code>, <code>/issue</code>)</small></td>
@@ -367,6 +469,12 @@ ob_start();
         </tr>
     </tbody>
 </table>
+
+<p>
+    Shell-level commands are documented separately above. The main operational
+    ones are <code>kosmokrator update</code> and
+    <code>kosmokrator gateway:telegram</code>.
+</p>
 
 
 <!-- ================================================================== -->
@@ -923,4 +1031,4 @@ ob_start();
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

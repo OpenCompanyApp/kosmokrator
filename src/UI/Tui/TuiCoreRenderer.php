@@ -6,8 +6,6 @@ namespace Kosmokrator\UI\Tui;
 
 use Amp\Cancellation;
 use Amp\DeferredCancellation;
-use Athanor\Effect;
-use Athanor\EffectScope;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Ansi\AnsiAnimation;
@@ -18,10 +16,14 @@ use Kosmokrator\UI\Ansi\AnsiUnleash;
 use Kosmokrator\UI\CoreRendererInterface;
 use Kosmokrator\UI\TerminalNotification;
 use Kosmokrator\UI\Theme;
-use Kosmokrator\UI\Tui\Builder\StatusBarBuilder;
-use Kosmokrator\UI\Tui\Builder\TaskBarBuilder;
+use Kosmokrator\UI\Tui\Composition\CompactingLoaderWidget;
+use Kosmokrator\UI\Tui\Composition\ReactiveStatusBar;
+use Kosmokrator\UI\Tui\Composition\StatusBar;
+use Kosmokrator\UI\Tui\Composition\TaskTree;
+use Kosmokrator\UI\Tui\Composition\ThinkingLoaderWidget;
 use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
+use Kosmokrator\UI\Tui\Primitive\ReactiveBridge;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
@@ -58,13 +60,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private HistoryStatusWidget $historyStatus;
 
-    private StatusBarBuilder $statusBarBuilder;
+    private ReactiveStatusBar $statusBarWidget;
 
     private ContainerWidget $overlay;
 
-    private TaskBarBuilder $taskBarBuilder;
+    private ?TaskTree $taskTree = null;
 
-    private ContainerWidget $thinkingBar;
+    private ThinkingLoaderWidget $thinkingLoader;
+
+    private CompactingLoaderWidget $compactingLoader;
+
+    private ?ReactiveBridge $reactiveBridge = null;
 
     private EditorWidget $input;
 
@@ -77,8 +83,6 @@ final class TuiCoreRenderer implements CoreRendererInterface
     private readonly TuiStateStore $state;
 
     private PhaseStateMachine $phaseMachine;
-
-    private readonly EffectScope $effectScope;
 
     /** @var (\Closure(string): bool)|null */
     private ?\Closure $immediateCommandHandler = null;
@@ -166,14 +170,13 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function setTaskStore(TaskStore $store): void
     {
         $this->taskStore = $store;
-        $this->taskBarBuilder->setTaskStore($store);
+        $this->taskTree?->setTaskStore($store);
         $this->state->setHasTasks(! $store->isEmpty());
     }
 
     public function initialize(): void
     {
         $this->tui = new Tui(KosmokratorStyleSheet::create());
-        $this->effectScope = new EffectScope;
 
         $this->session = new ContainerWidget;
         $this->session->setId('session');
@@ -184,28 +187,32 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->conversation->setId('conversation');
         $this->conversation->expandVertically(true);
 
-        $this->historyStatus = new HistoryStatusWidget;
+        $this->historyStatus = HistoryStatusWidget::of($this->state);
         $this->historyStatus->setId('history-status');
 
-        $this->statusBarBuilder = StatusBarBuilder::create($this->state);
+        // Status bar — ReactiveWidget that self-syncs via beforeRender()
+        $this->statusBarWidget = ReactiveStatusBar::create($this->state);
 
         $this->overlay = new ContainerWidget;
         $this->overlay->setId('overlay');
 
-        $this->taskBarBuilder = TaskBarBuilder::create($this->state);
+        // Task tree — ReactiveWidget (self-syncs via beforeRender)
+        $this->taskTree = TaskTree::of($this->taskStore, $this->state);
 
-        $this->thinkingBar = new ContainerWidget;
-        $this->thinkingBar->setId('thinking-bar');
+        // Loaders — ReactiveWidgets that show/hide based on signals
+        $this->thinkingLoader = new ThinkingLoaderWidget($this->state);
+        $this->compactingLoader = new CompactingLoaderWidget($this->state);
 
         $this->subagentDisplay = new SubagentDisplayManager(
             state: $this->state,
             conversation: $this->conversation,
-            ensureSpinners: fn () => $this->animationManager->ensureSpinnersRegistered(),
+            ensureSpinners: fn () => ThinkingLoaderWidget::registerSpinners(),
         );
 
+        // Animation manager — signal-only. Sets phase/breathColor/thinkingPhrase.
+        // No longer manages CancellableLoaderWidget instances directly.
         $this->animationManager = new TuiAnimationManager(
             state: $this->state,
-            thinkingBar: $this->thinkingBar,
             subagentTickCallback: fn () => $this->subagentDisplay->tickTreeRefresh(),
             subagentCleanupCallback: fn () => $this->subagentDisplay->cleanup(),
             renderCallback: fn () => $this->flushRender(),
@@ -237,13 +244,15 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
         $this->bindInputHandlers();
 
+        // ── Layout ───
         $this->session->add($this->conversation);
         $this->session->add($this->historyStatus);
         $this->session->add($this->overlay);
-        $this->session->add($this->taskBarBuilder->getWidget());
-        $this->session->add($this->thinkingBar);
+        $this->session->add($this->taskTree);
+        $this->session->add($this->thinkingLoader);
+        $this->session->add($this->compactingLoader);
         $this->session->add($this->input);
-        $this->session->add($this->statusBarBuilder->getWidget());
+        $this->session->add($this->statusBarWidget);
 
         $this->tui->add($this->session);
         $this->tui->setFocus($this->input);
@@ -259,42 +268,17 @@ final class TuiCoreRenderer implements CoreRendererInterface
             $this->animationManager->setPhase($agentPhase, $this->state->getRequestCancellation());
         });
 
-        // ── Wire Effects ──────────────────────────────────────────────
+        // ── Wire ReactiveBridge ───────────────────────────────────────
+        // Single Effect that replaces the 4 separate Effects below.
+        // Touches all display signals → auto-tracks → requestRender() on change.
+        $this->reactiveBridge = new ReactiveBridge;
+        $this->reactiveBridge->start($this->tui, $this->state);
 
-        // Status bar effect: auto-update when any status-bar signal changes
-        $this->effectScope->effect(function (): void {
-            $this->statusBarBuilder->update();
-        });
-
-        // History status effect: show/hide based on scroll state
-        $this->effectScope->effect(function (): void {
-            $scrollOffset = $this->state->getScrollOffset();
-            if ($scrollOffset <= 0) {
-                $this->historyStatus->hide();
-
-                return;
-            }
-
-            $hasHidden = $this->state->getHasHiddenActivityBelow();
-            $this->historyStatus->show($hasHidden);
-        });
-
-        // Task bar effect: auto-refresh when animation state changes
-        // (breathTick fires at ~30fps during thinking, keeping the task bar animated)
-        $this->effectScope->effect(function (): void {
-            $this->state->breathColorSignal()->get();
-            $this->state->thinkingPhraseSignal()->get();
-            $this->state->hasThinkingLoaderSignal()->get();
-            $this->state->hasRunningAgentsSignal()->get();
-            $this->state->breathTickSignal()->get();
-            $this->taskBarBuilder->update();
-        });
-
-        // Render trigger effect: flush render when trigger counter changes
-        $this->effectScope->effect(function (): void {
-            $this->state->renderTriggerSignal()->get();
-            $this->flushRender();
-        });
+        // All reactive widgets self-sync via beforeRender():
+        // - TaskTree: breathColor + taskStore state
+        // - HistoryStatusWidget: scrollOffset + hasHiddenActivityBelow
+        // - ReactiveStatusBar: statusBarMessage + tokensIn + maxContext
+        // ReactiveBridge handles requestRender() for all signal changes.
     }
 
     public function renderIntro(bool $animated): void
@@ -517,7 +501,6 @@ HELP;
         $current = $activeResponse->getText();
         $activeResponse->setText($current.$text);
         $this->markHiddenConversationActivity();
-        $this->state->triggerRender();
     }
 
     public function streamComplete(): void
@@ -560,18 +543,14 @@ HELP;
         $this->state->setMaxContext($maxContext);
         $this->state->setModel($model);
 
-        $this->statusBarBuilder->updateProgress($tokensIn, $maxContext);
-        $this->statusBarBuilder->formatTokenDetail($model, $tokensIn, $maxContext);
-        $this->state->triggerRender();
+        StatusBar::formatTokenDetail($this->state, $model, $tokensIn, $maxContext);
     }
 
     public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void
     {
         $tokensIn = min($this->state->getTokensIn() ?? 0, $maxContext);
 
-        $this->statusBarBuilder->updateProgress($tokensIn, $maxContext);
-        $this->statusBarBuilder->formatRuntimeDetail($provider, $model, $tokensIn, $maxContext);
-        $this->state->triggerRender();
+        StatusBar::formatRuntimeDetail($this->state, $provider, $model, $tokensIn, $maxContext);
     }
 
     public function consumeQueuedMessage(): ?string
@@ -586,7 +565,7 @@ HELP;
 
     public function teardown(): void
     {
-        $this->effectScope->dispose();
+        $this->reactiveBridge?->stop();
 
         if ($this->tui->isRunning()) {
             $this->tui->stop();
@@ -632,7 +611,9 @@ HELP;
 
     public function refreshTaskBar(): void
     {
-        $this->taskBarBuilder->update();
+        // TaskTree is a ReactiveWidget — it auto-syncs via beforeRender().
+        // Still refresh for immediate imperative callers during migration.
+        $this->taskTree?->invalidate();
     }
 
     // ── Public helpers for other sub-renderers ──────────────────────────
@@ -653,6 +634,13 @@ HELP;
     {
         $this->conversation->add($widget);
         $this->state->triggerRender();
+    }
+
+    public function getLastConversationWidget(): ?AbstractWidget
+    {
+        $children = $this->conversation->all();
+
+        return $children === [] ? null : $children[array_key_last($children)];
     }
 
     public function queueQuestionRecap(string $question, string $answer, bool $answered, bool $recommended = false): void
@@ -683,7 +671,6 @@ HELP;
         $this->state->setPendingQuestionRecap([]);
         $this->state->setScrollOffset(0);
         $this->state->setHasHiddenActivityBelow(false);
-        $this->historyStatus->hide();
         $this->tui->setScrollOffset(0);
 
         if ($this->toolStateResetCallback !== null) {

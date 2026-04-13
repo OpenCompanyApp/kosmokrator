@@ -21,7 +21,13 @@ class DatabaseTest extends TestCase
         $this->assertContains('settings', $tableNames);
         $this->assertContains('sessions', $tableNames);
         $this->assertContains('messages', $tableNames);
+        $this->assertContains('messages_fts', $tableNames);
         $this->assertContains('memories', $tableNames);
+        $this->assertContains('gateway_sessions', $tableNames);
+        $this->assertContains('gateway_messages', $tableNames);
+        $this->assertContains('gateway_approvals', $tableNames);
+        $this->assertContains('gateway_checkpoints', $tableNames);
+        $this->assertContains('gateway_pending_inputs', $tableNames);
         $this->assertContains('schema_version', $tableNames);
     }
 
@@ -32,7 +38,7 @@ class DatabaseTest extends TestCase
 
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
         $this->assertNotFalse($version);
-        $this->assertEquals(4, $version['version']);
+        $this->assertEquals(7, $version['version']);
     }
 
     public function test_idempotent_schema_creation(): void
@@ -42,7 +48,7 @@ class DatabaseTest extends TestCase
 
         // Creating a second Database on the same connection shouldn't fail
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
-        $this->assertEquals(4, $version['version']);
+        $this->assertEquals(7, $version['version']);
     }
 
     public function test_foreign_keys_enabled(): void
@@ -52,5 +58,17 @@ class DatabaseTest extends TestCase
 
         $result = $pdo->query('PRAGMA foreign_keys')->fetch();
         $this->assertEquals(1, $result['foreign_keys']);
+    }
+
+    public function test_messages_fts_triggers_keep_index_in_sync(): void
+    {
+        $db = new Database(':memory:');
+        $pdo = $db->connection();
+
+        $pdo->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('sess1', '/project', 'model', '2026-04-09T00:00:00+00:00', '2026-04-09T00:00:00+00:00')");
+        $pdo->exec("INSERT INTO messages (session_id, role, content, created_at) VALUES ('sess1', 'assistant', 'JWT auth uses sqlite fts', '2026-04-09T00:00:00+00:00')");
+
+        $count = $pdo->query("SELECT COUNT(*) AS cnt FROM messages_fts WHERE messages_fts MATCH 'jwt*'")->fetch();
+        $this->assertSame(1, (int) $count['cnt']);
     }
 }

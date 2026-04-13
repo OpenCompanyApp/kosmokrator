@@ -28,11 +28,23 @@ class LuaDocService
      */
     public function listDocs(?string $namespace = null): string
     {
-        $output = $this->docRenderer->generateNamespaceIndex(
-            $this->buildNamespaces(),
-            $this->getStaticPageContents(),
-            $namespace,
-        );
+        $namespaces = $namespace !== null && str_ends_with($namespace, '.default')
+            ? $this->buildNamespaces()
+            : $this->buildVisibleNamespaces();
+
+        if ($namespaces === [] && $namespace === null) {
+            $availableProviders = array_keys($this->integrationManager->getLocallyRunnableProviders());
+            sort($availableProviders);
+
+            $output = "No active Lua integration namespaces are available in this session.\n\n"
+                .$this->summarizeInactiveIntegrations($availableProviders);
+        } else {
+            $output = $this->docRenderer->generateNamespaceIndex(
+                $namespaces,
+                $this->getStaticPageContents(),
+                $namespace,
+            );
+        }
 
         // Append native tools section
         if ($this->nativeToolBridge !== null) {
@@ -54,7 +66,7 @@ class LuaDocService
      */
     public function searchDocs(string $query, int $limit = 10): string
     {
-        $namespaces = $this->buildNamespaces();
+        $namespaces = $this->buildVisibleNamespaces();
 
         // Include native tools as a virtual namespace so they appear in search results
         if ($this->nativeToolBridge !== null) {
@@ -105,11 +117,21 @@ class LuaDocService
             }
             // Handle namespace-only: "integrations.gmail"
             elseif (in_array($ns, ['integrations', 'mcp'])) {
+                $inactive = $this->inactiveNamespaceMessage($ns.'.'.$function);
+                if ($inactive !== null) {
+                    return $inactive;
+                }
+
                 return $this->docRenderer->generateNamespaceDocs(
                     $ns.'.'.$function,
                     $this->buildNamespaces(),
                     fn (string $n) => $this->getProviderLuaDocs($n),
                 );
+            }
+
+            $inactive = $this->inactiveNamespaceMessage($ns);
+            if ($inactive !== null) {
+                return $inactive;
             }
 
             return $this->docRenderer->generateFunctionDocs(
@@ -120,6 +142,11 @@ class LuaDocService
         }
 
         // Try as namespace
+        $inactive = $this->inactiveNamespaceMessage($page);
+        if ($inactive !== null) {
+            return $inactive;
+        }
+
         $namespaceDocs = $this->docRenderer->generateNamespaceDocs(
             $page,
             $this->buildNamespaces(),
@@ -179,16 +206,54 @@ class LuaDocService
      */
     public function getNamespaceSummary(): string
     {
-        $namespaces = $this->buildNamespaces();
+        $parts = [];
+        $activeProviders = array_keys($this->integrationManager->getActiveProviders());
+        $availableProviders = array_keys($this->integrationManager->getLocallyRunnableProviders());
+        sort($activeProviders);
+        sort($availableProviders);
+
+        if ($availableProviders !== []) {
+            $inactiveProviders = array_values(array_diff($availableProviders, $activeProviders));
+            $lines = [
+                'app.integrations.* — Installed integration namespaces exposed to Lua.',
+                '  Active now:',
+                '    '.$this->summarizeNamespaces($activeProviders),
+            ];
+
+            if ($inactiveProviders !== []) {
+                $lines[] = '  Available but inactive:';
+                $lines[] = '    '.$this->summarizeNamespaces($inactiveProviders);
+            }
+
+            $lines[] = '  Multi-credential namespaces: configured integrations can also expose `app.integrations.{name}.default` and `app.integrations.{name}.{account}` aliases.';
+            $lines[] = '  Use lua_list_docs or lua_read_doc to inspect a namespace before writing Lua code.';
+            $lines[] = '  If an integration is inactive, enable/configure it in /settings → Integrations.';
+            $parts[] = implode("\n", $lines);
+        }
+
+        $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
+
+        return implode("\n\n", $parts);
+    }
+
+    public function getPromptNamespaceSummary(): string
+    {
+        $activeProviders = array_keys($this->integrationManager->getActiveProviders());
+        sort($activeProviders);
 
         $parts = [];
 
-        // Integration namespaces
-        if ($namespaces !== []) {
-            $parts[] = $this->docRenderer->getNamespaceSummary($namespaces);
+        if ($activeProviders !== []) {
+            $lines = [
+                'app.integrations.* — Active integration namespaces exposed to Lua in this session.',
+                '  Active now:',
+                '    '.$this->summarizeNamespaces($activeProviders),
+                '  Multi-credential namespaces can also expose `app.integrations.{name}.default` and `app.integrations.{name}.{account}` aliases.',
+                '  Use lua_list_docs or lua_read_doc to inspect a namespace before writing Lua code.',
+            ];
+            $parts[] = implode("\n", $lines);
         }
 
-        // Native tools namespace
         $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
 
         return implode("\n\n", $parts);
@@ -202,7 +267,7 @@ class LuaDocService
     public function getAvailablePages(): array
     {
         $pages = $this->docRenderer->getAvailablePages(
-            $this->buildNamespaces(),
+            $this->buildVisibleNamespaces(),
             $this->getStaticPageContents(),
         );
 
@@ -212,6 +277,79 @@ class LuaDocService
         }
 
         return $pages;
+    }
+
+    /**
+     * @param  list<string>  $providers
+     */
+    private function summarizeNamespaces(array $providers): string
+    {
+        if ($providers === []) {
+            return 'none';
+        }
+
+        $namespaces = array_map(
+            static fn (string $name): string => "app.integrations.{$name}",
+            $providers,
+        );
+
+        $chunks = array_chunk($namespaces, 12);
+        $lines = array_map(
+            static fn (array $chunk): string => implode(', ', $chunk),
+            $chunks,
+        );
+
+        return implode("\n    ", $lines);
+    }
+
+    private function inactiveNamespaceMessage(string $page): ?string
+    {
+        if (! str_starts_with($page, 'integrations.')) {
+            return null;
+        }
+
+        $parts = explode('.', $page);
+        $provider = $parts[1] ?? '';
+        if ($provider === '') {
+            return null;
+        }
+
+        if (array_key_exists($provider, $this->integrationManager->getActiveProviders())) {
+            return null;
+        }
+
+        if (! array_key_exists($provider, $this->integrationManager->getLocallyRunnableProviders())) {
+            return null;
+        }
+
+        return "Namespace '{$page}' is installed but not active in this session.\n\n"
+            ."Enable and configure '{$provider}' in /settings → Integrations, then start a new turn or session.\n\n"
+            .$this->getNamespaceSummary();
+    }
+
+    /**
+     * @param  list<string>  $providers
+     */
+    private function summarizeInactiveIntegrations(array $providers): string
+    {
+        if ($providers === []) {
+            return 'No installed CLI-compatible integrations were found. Configure integrations via /settings → Integrations.';
+        }
+
+        $examples = array_slice($providers, 0, 12);
+        $line = implode(', ', array_map(
+            static fn (string $name): string => "app.integrations.{$name}",
+            $examples,
+        ));
+
+        $suffix = count($providers) > count($examples)
+            ? "\nExamples: {$line}, ... +".(count($providers) - count($examples)).' more'
+            : "\nExamples: {$line}";
+
+        return 'Installed but inactive integrations: '.count($providers).".\n"
+            .'Enable/configure one in /settings → Integrations to expose its Lua namespace.'
+            .$suffix
+            ."\nUse lua_read_doc(page: \"integrations.NAME\") after enabling one.";
     }
 
     /**
@@ -231,6 +369,30 @@ class LuaDocService
         );
 
         return $this->cachedNamespaces;
+    }
+
+    /**
+     * Collapse redundant `.default` aliases from discovery surfaces while
+     * keeping them callable for direct docs lookups and runtime execution.
+     *
+     * @return array<string, array{description: string, functions: array}>
+     */
+    private function buildVisibleNamespaces(): array
+    {
+        $namespaces = $this->buildNamespaces();
+
+        foreach (array_keys($namespaces) as $namespace) {
+            if (! str_ends_with($namespace, '.default')) {
+                continue;
+            }
+
+            $base = substr($namespace, 0, -strlen('.default'));
+            if ($base !== '' && array_key_exists($base, $namespaces)) {
+                unset($namespaces[$namespace]);
+            }
+        }
+
+        return $namespaces;
     }
 
     /**

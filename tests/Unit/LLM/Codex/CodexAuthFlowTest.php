@@ -9,9 +9,11 @@ use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use OpenCompany\PrismCodex\CodexOAuthService;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 final class CodexAuthFlowTest extends TestCase
 {
     private CodexOAuthService&MockObject $oauth;

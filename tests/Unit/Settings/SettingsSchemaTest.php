@@ -77,6 +77,7 @@ final class SettingsSchemaTest extends TestCase
             'context_memory',
             'agent',
             'permissions',
+            'gateway',
             'integrations',
             'subagents',
             'advanced',

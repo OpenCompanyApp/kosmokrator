@@ -93,11 +93,13 @@ class RetryableLlmClient implements LlmClientInterface
                 $totalWait = ($totalWait ?? 0.0) + $delay;
                 $category = $this->classifyError($e);
                 $level = $attempt >= 5 ? 'error' : 'warning';
-                $this->log->{$level}("LLM stream {$category} (attempt {$attempt}), retrying in {$delay}s", [
+                $delaySec = (int) ceil($delay);
+                $this->log->{$level}("LLM stream {$category} (attempt {$attempt}), retrying in {$delaySec}s", [
                     'error' => $e->getMessage(),
                     'exception' => get_class($e),
                     'provider' => $this->inner->getProvider(),
                     'model' => $this->inner->getModel(),
+                    'delay_exact' => round($delay, 2),
                     'total_wait' => round($totalWait, 1),
                 ]);
 
@@ -143,11 +145,13 @@ class RetryableLlmClient implements LlmClientInterface
                 $totalWait = ($totalWait ?? 0.0) + $delay;
                 $category = $this->classifyError($e);
                 $level = $attempt >= 5 ? 'error' : 'warning';
-                $this->log->{$level}("LLM request {$category} (attempt {$attempt}), retrying in {$delay}s", [
+                $delaySec = (int) ceil($delay);
+                $this->log->{$level}("LLM request {$category} (attempt {$attempt}), retrying in {$delaySec}s", [
                     'error' => $e->getMessage(),
                     'exception' => get_class($e),
                     'provider' => $this->inner->getProvider(),
                     'model' => $this->inner->getModel(),
+                    'delay_exact' => round($delay, 2),
                     'total_wait' => round($totalWait, 1),
                 ]);
 

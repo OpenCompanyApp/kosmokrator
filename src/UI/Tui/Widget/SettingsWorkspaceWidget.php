@@ -59,6 +59,15 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /** Index of the highlighted provider in the provider-setup browser. */
     private int $providerSetupListIndex = 0;
 
+    /** Whether the integrations category is showing the configure view for one integration. */
+    private bool $integrationEditing = false;
+
+    /** Index of the highlighted integration in the integrations browser. */
+    private int $integrationListIndex = 0;
+
+    /** ID of the integration currently being configured. */
+    private string $selectedIntegrationId = '';
+
     /** @var array<string, string> Current field values keyed by field ID. */
     private array $values = [];
 
@@ -89,7 +98,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
                     continue;
                 }
 
-                $value = (string) ($field['value'] ?? '');
+                $value = $this->stringifyFieldValue($field['value'] ?? '');
                 $this->values[$id] = $value;
                 $this->originalValues[$id] = $value;
             }
@@ -280,7 +289,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         if ($data === 'r') {
             $field = $this->selectedField();
-            if ($field !== null) {
+            if ($field !== null && array_key_exists((string) ($field['id'] ?? ''), $this->originalValues)) {
                 $this->values[$field['id']] = $this->originalValues[$field['id']] ?? '';
                 $this->invalidate();
             }
@@ -319,6 +328,12 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             return;
         }
 
+        if ($this->isIntegrationsCategory() && ! $this->integrationEditing) {
+            $this->handleIntegrationBrowserInput($data, $kb);
+
+            return;
+        }
+
         $fields = $this->visibleFields();
 
         if ($fields === []) {
@@ -342,6 +357,14 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         if ($kb->matches($data, 'left') && $this->isProviderSetupCategory() && $this->providerSetupEditing) {
             $this->providerSetupEditing = false;
             $this->fieldIndex = $this->providerSetupListIndex;
+            $this->invalidate();
+
+            return;
+        }
+
+        if ($kb->matches($data, 'left') && $this->isIntegrationsCategory() && $this->integrationEditing) {
+            $this->integrationEditing = false;
+            $this->fieldIndex = $this->integrationListIndex;
             $this->invalidate();
 
             return;
@@ -977,6 +1000,16 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             }
         }
 
+        if ($this->isIntegrationsCategory()) {
+            $title = 'Integrations';
+            if ($this->integrationEditing) {
+                $integration = $this->selectedIntegration();
+                if ($integration !== null) {
+                    $title .= ' · '.(string) ($integration['name'] ?? $integration['label'] ?? $integration['id'] ?? '');
+                }
+            }
+        }
+
         $lines = [$this->boxHeader($title, $width)];
         $fields = $this->visibleFields();
 
@@ -1046,6 +1079,14 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         if ($this->isProviderSetupCategory() && ! $this->providerSetupEditing) {
             return $this->renderProviderSetupBrowserDetails($width, $height);
+        }
+
+        if ($this->isIntegrationsCategory()) {
+            return $this->renderIntegrationDetails($width, $height);
+        }
+
+        if ($this->isGatewayCategory()) {
+            return $this->renderGatewayDetails($width, $height);
         }
 
         $field = $this->selectedField();
@@ -1137,6 +1178,175 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     /**
      * @return list<string>
      */
+    private function renderIntegrationDetails(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Details', $width)];
+        $field = $this->selectedField();
+
+        if ($field !== null) {
+            if ($this->editing) {
+                $label = (string) ($field['label'] ?? $field['id']);
+                $lines[] = $this->boxLine('Editing: '.$label, $width, Theme::accent());
+                $lines[] = $this->boxLine('Enter saves · Esc cancels · paste supported', $width);
+                $lines[] = $this->boxLine('', $width);
+
+                foreach ($this->wrapForBox($this->editBuffer === '' ? ' ' : $this->editBuffer, max(8, $width - 2)) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
+
+                $lines[] = $this->boxLine('', $width);
+            }
+
+            foreach ($this->wrap((string) ($field['description'] ?? ''), $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+            $lines[] = $this->boxLine('', $width);
+            $lines[] = $this->boxLine('Source: '.($field['source'] ?? 'default'), $width);
+            $lines[] = $this->boxLine('Effect: '.($field['effect'] ?? 'applies_now'), $width);
+            if (! $this->integrationEditing && (($field['type'] ?? '') === 'integration')) {
+                $lines[] = $this->boxLine('Enter opens configuration for this integration.', $width);
+            }
+        }
+
+        $integration = $this->selectedIntegration();
+        if ($integration !== null) {
+            $lines[] = $this->boxLine('', $width);
+            $lines[] = $this->boxLine('Integration', $width, Theme::accent());
+            $lines[] = $this->boxLine('ID: '.($integration['id'] ?? 'unknown'), $width);
+            $lines[] = $this->boxLine('Label: '.($integration['label'] ?? 'Unknown'), $width);
+            $lines[] = $this->boxLine('Mode: '.(($integration['locally_runnable'] ?? false) ? 'CLI-compatible' : 'Not locally runnable'), $width);
+            $lines[] = $this->boxLine('Status: '.(($integration['configured'] ?? false) ? 'Configured' : 'Not configured'), $width);
+            $lines[] = $this->boxLine('Enabled: '.(($integration['enabled'] ?? false) ? 'on' : 'off'), $width);
+            $lines[] = $this->boxLine('Read permission: '.($integration['read_permission'] ?? 'allow'), $width);
+            $lines[] = $this->boxLine('Write permission: '.($integration['write_permission'] ?? 'ask'), $width);
+            $lines[] = $this->boxLine('Accounts: '.($this->formatIntegrationAccounts($integration['accounts'] ?? [])), $width);
+
+            $credentialFields = is_array($integration['credential_fields'] ?? null) ? $integration['credential_fields'] : [];
+            if ($credentialFields !== []) {
+                $lines[] = $this->boxLine('', $width);
+                $lines[] = $this->boxLine('Credentials', $width, Theme::accent());
+                foreach ($credentialFields as $credential) {
+                    $label = (string) ($credential['label'] ?? ($credential['key'] ?? 'Credential'));
+                    $status = ($credential['configured'] ?? false) ? 'saved' : 'empty';
+                    $required = ($credential['required'] ?? false) ? 'required' : 'optional';
+                    $lines[] = $this->boxLine("{$label}: {$status} · {$required}", $width);
+                }
+            }
+
+            foreach ($this->wrap((string) ($integration['description'] ?? ''), $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+        } else {
+            $emptyState = is_array($this->view['integration_empty_state'] ?? null) ? $this->view['integration_empty_state'] : null;
+            if ($emptyState !== null) {
+                $lines[] = $this->boxLine('', $width);
+                $lines[] = $this->boxLine((string) ($emptyState['title'] ?? 'Integrations'), $width, Theme::accent());
+                foreach ($this->wrap((string) ($emptyState['message'] ?? ''), $width - 2) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
+
+                foreach (($emptyState['details'] ?? []) as $detail) {
+                    foreach ($this->wrap((string) $detail, $width - 2) as $line) {
+                        $lines[] = $this->boxLine($line, $width);
+                    }
+                }
+            }
+        }
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderGatewayDetails(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Details', $width)];
+        $field = $this->selectedField();
+
+        if ($field !== null) {
+            if ($this->editing) {
+                $label = (string) ($field['label'] ?? $field['id']);
+                $lines[] = $this->boxLine('Editing: '.$label, $width, Theme::accent());
+                $lines[] = $this->boxLine('Enter saves · Esc cancels · paste supported', $width);
+                $lines[] = $this->boxLine('', $width);
+
+                foreach ($this->wrapForBox($this->editBuffer === '' ? ' ' : $this->editBuffer, max(8, $width - 2)) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
+
+                $lines[] = $this->boxLine('', $width);
+            }
+
+            foreach ($this->wrap((string) ($field['description'] ?? ''), $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+            $lines[] = $this->boxLine('', $width);
+            $lines[] = $this->boxLine('Source: '.($field['source'] ?? 'default'), $width);
+            $lines[] = $this->boxLine('Effect: '.($field['effect'] ?? 'next_session'), $width);
+        }
+
+        $enabled = $this->stringifyFieldValue($this->values['gateway.telegram.enabled'] ?? 'off');
+        $token = trim($this->stringifyFieldValue($this->values['gateway.telegram.secret.token'] ?? ''));
+        $sessionMode = $this->stringifyFieldValue($this->values['gateway.telegram.session_mode'] ?? 'thread');
+        $allowedUsers = $this->stringifyFieldValue($this->values['gateway.telegram.allowed_users'] ?? '');
+        $allowedChats = $this->stringifyFieldValue($this->values['gateway.telegram.allowed_chats'] ?? '');
+        $freeResponse = $this->stringifyFieldValue($this->values['gateway.telegram.free_response_chats'] ?? '');
+        $requireMention = $this->stringifyFieldValue($this->values['gateway.telegram.require_mention'] ?? 'on');
+
+        $lines[] = $this->boxLine('', $width);
+        $lines[] = $this->boxLine('Telegram Gateway', $width, Theme::accent());
+        $lines[] = $this->boxLine('Enabled: '.$enabled, $width);
+        $lines[] = $this->boxLine('Token: '.($token !== '' ? 'configured' : 'missing'), $width);
+        $lines[] = $this->boxLine('Session routing: '.$sessionMode, $width);
+        $lines[] = $this->boxLine('Require mention: '.$requireMention, $width);
+        $lines[] = $this->boxLine('Allowed users: '.($allowedUsers !== '' ? $allowedUsers : '(all)'), $width);
+        $lines[] = $this->boxLine('Allowed chats: '.($allowedChats !== '' ? $allowedChats : '(all)'), $width);
+        $lines[] = $this->boxLine('Free-response chats: '.($freeResponse !== '' ? $freeResponse : '(none)'), $width);
+        $lines[] = $this->boxLine('', $width);
+        $lines[] = $this->boxLine('Start with: php bin/kosmokrator gateway:telegram', $width);
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    private function stringifyFieldValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'on' : 'off';
+        }
+
+        if (is_array($value)) {
+            $items = array_values(array_filter(array_map(static function (mixed $item): string {
+                if (is_scalar($item) || $item === null) {
+                    return trim((string) $item);
+                }
+
+                return '';
+            }, $value), static fn (string $item): bool => $item !== ''));
+
+            return implode(', ', $items);
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * @return list<string>
+     */
     /** Generate a YAML preview of the current custom provider definition for display in details. */
     private function buildYamlPreview(): array
     {
@@ -1188,6 +1398,22 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
             return AnsiUtils::truncateToWidth(
                 "{$dim}Tab/Shift+Tab category  ↑↓ fields  ← back to providers  → open list  Enter select/edit  Esc clear/back  s/q save+close  Esc discard  g/p scope  r reset{$r}",
+                $width,
+                '',
+            );
+        }
+
+        if ($this->isIntegrationsCategory()) {
+            if (! $this->integrationEditing) {
+                return AnsiUtils::truncateToWidth(
+                    "{$dim}Tab/Shift+Tab category  ↑↓ browse integrations  Enter configure  s/q save+close  Esc discard  g/p scope{$r}",
+                    $width,
+                    '',
+                );
+            }
+
+            return AnsiUtils::truncateToWidth(
+                "{$dim}Tab/Shift+Tab category  ↑↓ fields  ← back to integrations  → open list  Enter select/edit  Esc clear/back  s/q save+close  g/p scope  r reset{$r}",
                 $width,
                 '',
             );
@@ -1263,6 +1489,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $this->categoryIndex = ($this->categoryIndex + $direction + count($categories)) % count($categories);
         $this->fieldIndex = 0;
         $this->providerSetupEditing = false;
+        $this->integrationEditing = false;
         $this->syncProviderSetupListIndex();
         $this->invalidate();
     }
@@ -1277,6 +1504,15 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $categoryId = (string) ($this->selectedCategory()['id'] ?? '');
 
         if ($categoryId !== 'provider_setup') {
+            if ($categoryId === 'integrations') {
+                $visible = $this->integrationEditing
+                    ? $this->integrationDetailFields($fields)
+                    : $this->integrationBrowserItems();
+                $this->fieldIndex = min($this->fieldIndex, max(0, count($visible) - 1));
+
+                return $visible;
+            }
+
             $this->fieldIndex = min($this->fieldIndex, max(0, count($fields) - 1));
 
             return $fields;
@@ -1318,6 +1554,16 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     private function isProviderSetupCategory(): bool
     {
         return (string) ($this->selectedCategory()['id'] ?? '') === 'provider_setup';
+    }
+
+    private function isIntegrationsCategory(): bool
+    {
+        return (string) ($this->selectedCategory()['id'] ?? '') === 'integrations';
+    }
+
+    private function isGatewayCategory(): bool
+    {
+        return (string) ($this->selectedCategory()['id'] ?? '') === 'gateway';
     }
 
     /** Handle Up/Down/Enter/Right input when the models browser is active. */
@@ -1400,6 +1646,41 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
 
         $this->selectProviderSetupItem((string) ($selected['value'] ?? ''));
+    }
+
+    private function handleIntegrationBrowserInput(string $data, object $kb): void
+    {
+        $items = $this->integrationBrowserItems();
+        if ($items === []) {
+            return;
+        }
+
+        if ($kb->matches($data, 'up')) {
+            $this->fieldIndex = ($this->fieldIndex - 1 + count($items)) % count($items);
+            $this->integrationListIndex = $this->fieldIndex;
+            $this->invalidate();
+
+            return;
+        }
+
+        if ($kb->matches($data, 'down')) {
+            $this->fieldIndex = ($this->fieldIndex + 1) % count($items);
+            $this->integrationListIndex = $this->fieldIndex;
+            $this->invalidate();
+
+            return;
+        }
+
+        if (! $kb->matches($data, 'confirm') && ! $kb->matches($data, 'right')) {
+            return;
+        }
+
+        $selected = $items[$this->fieldIndex] ?? null;
+        if ($selected === null || ($selected['type'] ?? '') !== 'integration') {
+            return;
+        }
+
+        $this->selectIntegration((string) ($selected['integration'] ?? ''));
     }
 
     /** Check whether a field offers selectable options (choice, toggle, or dynamic_choice). */
@@ -1643,6 +1924,124 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function integrationBrowserItems(): array
+    {
+        $integrations = is_array($this->view['integrations_by_id'] ?? null) ? $this->view['integrations_by_id'] : [];
+        if ($integrations === []) {
+            return $this->selectedCategory()['fields'] ?? [];
+        }
+
+        $enabled = [];
+        $available = [];
+        foreach ($integrations as $id => $integration) {
+            if (! is_array($integration)) {
+                continue;
+            }
+
+            if (($integration['enabled'] ?? false) === true) {
+                $enabled[$id] = $integration;
+            } else {
+                $available[$id] = $integration;
+            }
+        }
+
+        uasort($enabled, static fn (array $a, array $b): int => strcasecmp((string) ($a['name'] ?? $a['label'] ?? ''), (string) ($b['name'] ?? $b['label'] ?? '')));
+        uasort($available, static fn (array $a, array $b): int => strcasecmp((string) ($a['name'] ?? $a['label'] ?? ''), (string) ($b['name'] ?? $b['label'] ?? '')));
+
+        $items = [];
+        if ($enabled !== []) {
+            $items[] = [
+                'id' => 'integration-browser.section.enabled',
+                'label' => 'Enabled Integrations',
+                'value' => count($enabled).' active',
+                'type' => 'readonly',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'description' => 'Integrations that are currently enabled.',
+            ];
+
+            foreach ($enabled as $id => $integration) {
+                $items[] = $this->integrationBrowserItem($id, $integration);
+            }
+        }
+
+        if ($available !== []) {
+            $items[] = [
+                'id' => 'integration-browser.section.available',
+                'label' => 'Available Integrations',
+                'value' => count($available).' available',
+                'type' => 'readonly',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'description' => 'Installed CLI-compatible integrations you can configure and enable.',
+            ];
+
+            foreach ($available as $id => $integration) {
+                $items[] = $this->integrationBrowserItem($id, $integration);
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $integration
+     * @return array<string, mixed>
+     */
+    private function integrationBrowserItem(string $id, array $integration): array
+    {
+        $status = [];
+        $status[] = ($integration['configured'] ?? false) ? 'Configured' : 'Not configured';
+        $status[] = ($integration['enabled'] ?? false) ? 'Enabled' : 'Disabled';
+
+        return [
+            'id' => "integration-browser.{$id}",
+            'integration' => $id,
+            'type' => 'integration',
+            'label' => (string) ($integration['name'] ?? $integration['label'] ?? $id),
+            'value' => implode(' · ', $status),
+            'source' => 'runtime',
+            'effect' => 'applies_now',
+            'description' => (string) ($integration['description'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $fields
+     * @return list<array<string, mixed>>
+     */
+    private function integrationDetailFields(array $fields): array
+    {
+        $integrationId = $this->selectedIntegrationId;
+        if ($integrationId === '') {
+            return [];
+        }
+
+        $visible = array_values(array_filter($fields, static function (array $field) use ($integrationId): bool {
+            $id = (string) ($field['id'] ?? '');
+
+            return str_starts_with($id, "integration.{$integrationId}.")
+                && ! str_ends_with($id, '._summary');
+        }));
+
+        return $visible;
+    }
+
+    private function selectIntegration(string $integrationId): void
+    {
+        if ($integrationId === '') {
+            return;
+        }
+
+        $this->selectedIntegrationId = $integrationId;
+        $this->integrationEditing = true;
+        $this->fieldIndex = 0;
+        $this->invalidate();
+    }
+
+    /**
      * @param  array<string, mixed>  $field
      */
     /** Open the inline picker overlay for a field, pre-selecting the current value. */
@@ -1814,6 +2213,42 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
 
         return $value;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function selectedIntegration(): ?array
+    {
+        if (! $this->isIntegrationsCategory()) {
+            return null;
+        }
+
+        $integrationId = $this->selectedIntegrationId;
+        if ($integrationId === '') {
+            $fieldId = (string) (($this->selectedField()['id'] ?? ''));
+            if (preg_match('/^integration\.([^.]+)\./', $fieldId, $m)) {
+                $integrationId = $m[1];
+            } elseif (preg_match('/^integration-browser\.([^.]+)$/', $fieldId, $m)) {
+                $integrationId = $m[1];
+            }
+        }
+
+        $integrations = is_array($this->view['integrations_by_id'] ?? null) ? $this->view['integrations_by_id'] : [];
+
+        return $integrationId !== '' && is_array($integrations[$integrationId] ?? null) ? $integrations[$integrationId] : null;
+    }
+
+    /**
+     * @param  list<string>  $accounts
+     */
+    private function formatIntegrationAccounts(array $accounts): string
+    {
+        if ($accounts === []) {
+            return 'default';
+        }
+
+        return 'default, '.implode(', ', $accounts);
     }
 
     /** Keep the provider-setup browser highlight aligned with the selected provider. */

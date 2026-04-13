@@ -18,8 +18,10 @@ use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\UIManager;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class AgentsCommandTest extends TestCase
 {
     private AgentsCommand $command;
@@ -105,7 +107,7 @@ class AgentsCommandTest extends TestCase
             ->with(
                 $this->callback(fn (array $summary) => $summary['total'] === 1 && $summary['done'] === 1),
                 $this->identicalTo($stats),
-                $this->isType('callable'),
+                $this->isCallable(),
             );
 
         $ctx = $this->makeContext(ui: $ui, orchestrator: $orchestrator, llm: $llm);

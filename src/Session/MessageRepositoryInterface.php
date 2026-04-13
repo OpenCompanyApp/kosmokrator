@@ -96,13 +96,33 @@ interface MessageRepositoryInterface
     public function sumTokens(string $sessionId): array;
 
     /**
-     * Search messages across all sessions for a project using a LIKE query.
+     * Search messages across all sessions for a project using FTS5.
      *
      * @param  string  $project  Project path to scope the search
-     * @param  string  $query  Search term (LIKE pattern, auto-escaped)
+     * @param  string  $query  User query text converted to an FTS expression internally
      * @param  string|null  $excludeSessionId  Optional session to exclude from results
      * @param  int  $limit  Maximum number of rows to return
      * @return array<int, array<string, mixed>> Matching message rows with session metadata
      */
     public function searchProjectHistory(string $project, string $query, ?string $excludeSessionId = null, int $limit = 5): array;
+
+    /**
+     * FTS5 search grouped by session — returns per-session match info with context.
+     *
+     * @param  string  $project  Project path to scope the search
+     * @param  string  $query  Free-text query
+     * @param  string|null  $excludeSessionId  Optional session to exclude
+     * @param  int  $limit  Maximum number of unique sessions to return
+     * @return array<int, array{session_id: string, title: ?string, updated_at: string, match_count: int, best_match: array{role: string, content: string, created_at: string}, context: list<array{role: string, content: string}>}>
+     */
+    public function searchProjectHistoryGrouped(string $project, string $query, ?string $excludeSessionId = null, int $limit = 5): array;
+
+    /**
+     * Load a session's messages formatted as a readable transcript.
+     *
+     * @param  string  $sessionId  Session to load
+     * @param  int  $limit  Maximum messages to return (0 = all)
+     * @return list<array{role: string, content: string, tool_calls: ?string, created_at: string}>
+     */
+    public function loadTranscript(string $sessionId, int $limit = 0): array;
 }

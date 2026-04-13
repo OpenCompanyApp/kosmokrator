@@ -8,8 +8,10 @@ use Kosmokrator\Skill\SkillDispatcher;
 use Kosmokrator\Skill\SkillLoader;
 use Kosmokrator\Skill\SkillRegistry;
 use Kosmokrator\UI\UIManager;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class SkillDispatcherTest extends TestCase
 {
     private string $tmpDir;

@@ -2,40 +2,39 @@
 
 declare(strict_types=1);
 
-namespace Kosmokrator\UI\Tui\Builder;
+namespace Kosmokrator\UI\Tui\Composition;
 
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use Symfony\Component\Tui\Widget\TextWidget;
+use Symfony\Component\Tui\Render\RenderContext;
 
 /**
- * Builds the task bar text from TaskStore + reactive animation signals.
+ * Reactive task tree widget.
  *
- * Called by the breathTick-driven Effect at ~30fps during thinking/tools
- * phases. Reads breathColor, thinkingPhrase, hasThinkingLoader, and
- * hasRunningAgents signals to produce animated task bar output.
+ * Replaces TaskBarBuilder. Self-contained ReactiveWidget that reads
+ * breathColor and thinkingPhrase signals every frame and renders the
+ * task tree with animation colors.
  */
-final class TaskBarBuilder
+final class TaskTree extends ReactiveWidget
 {
-    private ?TaskStore $taskStore = null;
+    private ?TaskStore $taskStore;
 
-    public function __construct(
-        private readonly TuiStateStore $state,
-        private readonly TextWidget $widget,
-    ) {}
+    private readonly TuiStateStore $state;
 
-    public static function create(TuiStateStore $state): self
+    private string $lastText = '';
+
+    public function __construct(?TaskStore $taskStore, TuiStateStore $state)
     {
-        $widget = new TextWidget('');
-        $widget->setId('task-bar');
-
-        return new self($state, $widget);
+        $this->taskStore = $taskStore;
+        $this->state = $state;
+        $this->setId('task-tree');
     }
 
-    public function getWidget(): TextWidget
+    public static function of(?TaskStore $taskStore, TuiStateStore $state): self
     {
-        return $this->widget;
+        return new self($taskStore, $state);
     }
 
     public function setTaskStore(?TaskStore $store): void
@@ -43,18 +42,16 @@ final class TaskBarBuilder
         $this->taskStore = $store;
     }
 
-    /**
-     * Rebuild the task bar text from current state.
-     *
-     * Called by the breathTick-driven Effect — no manual render needed.
-     */
-    public function update(): void
+    public function syncFromSignals(): bool
     {
         if ($this->taskStore === null || $this->taskStore->isEmpty()) {
-            $this->widget->setText('');
             $this->state->setHasTasks(false);
+            if ($this->lastText === '') {
+                return false;
+            }
+            $this->lastText = '';
 
-            return;
+            return true;
         }
 
         $this->state->setHasTasks(true);
@@ -88,6 +85,21 @@ final class TaskBarBuilder
 
         $bar .= "\n  {$border}└{$r}";
 
-        $this->widget->setText($bar);
+        if ($bar === $this->lastText) {
+            return false;
+        }
+
+        $this->lastText = $bar;
+
+        return true;
+    }
+
+    public function render(RenderContext $context): array
+    {
+        if ($this->lastText === '') {
+            return [];
+        }
+
+        return explode("\n", $this->lastText);
     }
 }

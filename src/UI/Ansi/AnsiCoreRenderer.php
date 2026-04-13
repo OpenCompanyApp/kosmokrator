@@ -19,6 +19,31 @@ use Kosmokrator\UI\Theme;
  */
 final class AnsiCoreRenderer implements CoreRendererInterface
 {
+    private const THINKING_PHRASES = [
+        '◈ Consulting the Oracle at Delphi...',
+        '♃ Aligning the celestial spheres...',
+        '⚡ Channeling Prometheus\' fire...',
+        '♄ Weaving the threads of Fate...',
+        '☽ Reading the astral charts...',
+        '♂ Invoking the nine Muses...',
+        '♆ Traversing the Aether...',
+        '♅ Deciphering cosmic glyphs...',
+        '⚡ Summoning Athena\'s wisdom...',
+        '☉ Attuning to the Music of the Spheres...',
+        '♃ Gazing into the cosmic void...',
+        '◈ Unraveling the Labyrinth...',
+        '♆ Communing with the Titans...',
+        '♄ Forging in Hephaestus\' workshop...',
+        '☽ Scrying the heavens...',
+    ];
+
+    private const COMPACTION_PHRASES = [
+        '⧫ Condensing the cosmic record...',
+        '⧫ Distilling the essence of memory...',
+        '⧫ Weaving threads of context...',
+        '⧫ Forging a compact chronicle...',
+    ];
+
     private readonly AnsiIntro $intro;
 
     private string $streamBuffer = '';
@@ -124,8 +149,9 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         $r = Theme::reset();
         $dim = Theme::dim();
         $blue = Theme::rgb(112, 160, 208);
+        $phrase = self::THINKING_PHRASES[array_rand(self::THINKING_PHRASES)];
 
-        echo "\n{$dim}  ┌ {$blue}⚡ Thinking...{$r}\n";
+        echo "\n{$dim}  ┌ {$blue}{$phrase}{$r}\n";
     }
 
     /** No-op: ANSI thinking indicator is static text. */
@@ -138,7 +164,8 @@ final class AnsiCoreRenderer implements CoreRendererInterface
     {
         $r = Theme::reset();
         $red = Theme::rgb(208, 64, 64);
-        echo "\n{$red}  ⧫ Compacting context...{$r}\n";
+        $phrase = self::COMPACTION_PHRASES[array_rand(self::COMPACTION_PHRASES)];
+        echo "\n{$red}  {$phrase}{$r}\n";
     }
 
     /** No-op: ANSI compacting indicator is static text. */
@@ -196,7 +223,18 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         ($this->flushQuestionRecapCallback)();
         $r = Theme::reset();
         $err = Theme::error();
-        echo "\n{$err}  ✗ Error: {$message}{$r}\n\n";
+        $dim = Theme::dim();
+
+        if (str_contains($message, "\n")) {
+            $border = Theme::borderTask();
+            echo "\n{$border}  ┌ {$err}✗ Error{$r}\n";
+            foreach (explode("\n", $message) as $line) {
+                echo "{$border}  │{$r} {$dim}{$line}{$r}\n";
+            }
+            echo "{$border}  └{$r}\n\n";
+        } else {
+            echo "\n{$err}  ✗ Error: {$message}{$r}\n\n";
+        }
     }
 
     public function showNotice(string $message): void

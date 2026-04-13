@@ -15,11 +15,13 @@ use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\UI\NullRenderer;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\NullLogger;
 
+#[AllowMockObjectsWithoutExpectations]
 class ContextManagerTest extends TestCase
 {
     public function test_circuit_breaker_resets_after_context_pressure_drops(): void
@@ -187,6 +189,91 @@ class ContextManagerTest extends TestCase
         $this->assertGreaterThan(0, $tokensIn, 'Expected compaction to consume input tokens');
         $this->assertGreaterThan(0, $tokensOut, 'Expected compaction to consume output tokens');
         $this->assertLessThan($messageCountBefore, count($history->messages()), 'Expected history to be shorter after compaction');
+    }
+
+    public function test_preflight_check_persists_extracted_memories_from_same_compaction_call(): void
+    {
+        $llm = $this->createMock(LlmClientInterface::class);
+        $llm->method('getProvider')->willReturn('test');
+        $llm->method('getModel')->willReturn('model');
+        $llm->expects($this->once())
+            ->method('chat')
+            ->willReturn(new LlmResponse(
+                json_encode([
+                    'summary' => 'Summary of conversation so far',
+                    'memories' => [
+                        ['type' => 'decision', 'title' => 'Use SQLite', 'content' => 'Keep SQLite for local-first persistence'],
+                        ['type' => 'project', 'title' => 'Pending cleanup', 'content' => 'Refactor pending after compaction', 'memory_class' => 'working', 'expires_days' => 7],
+                    ],
+                ], JSON_THROW_ON_ERROR),
+                FinishReason::Stop,
+                [],
+                80,
+                20,
+            ));
+
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->method('getSetting')->willReturn('off');
+        $sessionManager->expects($this->once())->method('persistCompactionPlan');
+        $sessionManager->expects($this->exactly(3))
+            ->method('addMemory')
+            ->willReturnCallback(function (string $type, string $title, string $content, string $memoryClass = 'durable', bool $pinned = false, ?string $expiresAt = null): int {
+                static $calls = [];
+                $calls[] = [$type, $title, $content, $memoryClass, $pinned, $expiresAt];
+
+                if (count($calls) === 1) {
+                    TestCase::assertSame('compaction', $type);
+                    TestCase::assertSame('working', $memoryClass);
+                    TestCase::assertNotNull($expiresAt);
+                }
+
+                if (count($calls) === 2) {
+                    TestCase::assertSame('decision', $type);
+                    TestCase::assertSame('Use SQLite', $title);
+                    TestCase::assertSame('durable', $memoryClass);
+                    TestCase::assertNull($expiresAt);
+                }
+
+                if (count($calls) === 3) {
+                    TestCase::assertSame('project', $type);
+                    TestCase::assertSame('Pending cleanup', $title);
+                    TestCase::assertSame('working', $memoryClass);
+                    TestCase::assertNotNull($expiresAt);
+                }
+
+                return count($calls);
+            });
+        $sessionManager->expects($this->once())->method('consolidateMemories');
+
+        $models = new ModelCatalog([
+            'models' => [],
+            'default' => ['context' => 1_000, 'input_price' => 3.0, 'output_price' => 15.0],
+        ]);
+        $budget = new ContextBudget(
+            models: $models,
+            reserveOutputTokens: 0,
+            warningBufferTokens: 700,
+            autoCompactBufferTokens: 700,
+            blockingBufferTokens: 100,
+        );
+        $compactor = new ContextCompactor($llm, $models, new NullLogger, 60, $budget);
+        $manager = new ContextManager(
+            llm: $llm,
+            ui: new NullRenderer,
+            log: new NullLogger,
+            baseSystemPrompt: 'Base prompt',
+            compactor: $compactor,
+            pruner: null,
+            models: $models,
+            sessionManager: $sessionManager,
+            taskStore: null,
+            budget: $budget,
+        );
+
+        [$tokensIn, $tokensOut] = $manager->preFlightCheck($this->makeLargeHistory(), AgentMode::Edit);
+
+        $this->assertSame(80, $tokensIn);
+        $this->assertSame(20, $tokensOut);
     }
 
     public function test_preflight_check_blocks_when_at_limit(): void

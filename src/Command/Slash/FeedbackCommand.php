@@ -51,7 +51,9 @@ class FeedbackCommand implements SlashCommand
             return SlashCommandResult::continue();
         }
 
-        $renderer = $ctx->ui->getActiveRenderer();
+        $renderer = method_exists($ctx->ui, 'getActiveRenderer')
+            ? $ctx->ui->getActiveRenderer()
+            : 'unknown';
         $provider = $ctx->llm->getProvider();
         $model = $ctx->llm->getModel();
         $os = PHP_OS_FAMILY.' '.php_uname('m');

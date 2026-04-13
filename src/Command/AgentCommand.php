@@ -22,6 +22,7 @@ use Kosmokrator\UI\HeadlessRenderer;
 use Kosmokrator\UI\OutputFormat;
 use Kosmokrator\Update\UpdateChecker;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -141,10 +142,6 @@ class AgentCommand extends Command
             fwrite(STDERR, "Run kosmokrator setup to configure your provider and API key.\n");
 
             return 1;
-        } catch (\ValueError $e) {
-            fwrite(STDERR, "Invalid option: {$e->getMessage()}\n");
-
-            return 2;
         }
 
         /** @var HeadlessRenderer $renderer */
@@ -269,7 +266,7 @@ class AgentCommand extends Command
             $currentVersion = $this->getApplication()?->getVersion() ?? 'dev';
             $updateAvailable = (new UpdateChecker($currentVersion))->check();
             if ($updateAvailable !== null) {
-                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run /update to install.");
+                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmokrator update` to install.");
             }
         }
 
@@ -455,7 +452,8 @@ class AgentCommand extends Command
                 }
             } catch (\Throwable $e) {
                 // Never let the sound system break the REPL — but log it
-                error_log('[CompletionSound] Hook failed: '.$e->getMessage());
+                $this->container->make(LoggerInterface::class)
+                    ->warning('Completion sound hook failed', ['error' => $e->getMessage()]);
             }
 
             // Plan mode: show approval dialog after run completes
@@ -504,39 +502,9 @@ class AgentCommand extends Command
      */
     private function buildSlashCommandRegistry(): SlashCommandRegistry
     {
-        $registry = new SlashCommandRegistry;
-
-        // Core commands
-        $registry->register(new Slash\QuitCommand);
-        // Session management commands
-        $registry->register(new Slash\ClearCommand);
-        $registry->register(new Slash\SeedCommand);
-        $registry->register(new Slash\TheogonyCommand);
-        $registry->register(new Slash\CompactCommand);
-        $registry->register(new Slash\TasksClearCommand);
-        $registry->register(new Slash\MemoriesCommand);
-        $registry->register(new Slash\SessionsCommand);
-        $registry->register(new Slash\ForgetCommand);
-
-        // Agent mode switches
-        $registry->register(new Slash\GuardianCommand);
-        $registry->register(new Slash\ArgusCommand);
-        $registry->register(new Slash\PrometheusCommand);
-        $registry->register(new Slash\ModeCommand(AgentMode::Edit));
-        $registry->register(new Slash\ModeCommand(AgentMode::Plan));
-        $registry->register(new Slash\ModeCommand(AgentMode::Ask));
-
-        // Utility commands
         $version = $this->getApplication()?->getVersion() ?? 'dev';
-        $registry->register(new Slash\NewCommand);
-        $registry->register(new Slash\ResumeCommand);
-        $registry->register(new Slash\SettingsCommand($this->container));
-        $registry->register(new Slash\AgentsCommand);
-        $registry->register(new Slash\UpdateCommand($version));
-        $registry->register(new Slash\FeedbackCommand($version));
-        $registry->register(new Slash\RenameCommand);
 
-        return $registry;
+        return SlashCommandRegistryFactory::build($this->container, $version);
     }
 
     /**

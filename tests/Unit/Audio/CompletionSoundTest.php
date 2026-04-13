@@ -6,10 +6,12 @@ namespace Kosmokrator\Tests\Unit\Audio;
 
 use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\LlmClientInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
+#[AllowMockObjectsWithoutExpectations]
 class CompletionSoundTest extends TestCase
 {
     private LlmClientInterface&MockObject $llm;

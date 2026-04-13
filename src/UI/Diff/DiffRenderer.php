@@ -6,6 +6,8 @@ namespace Kosmokrator\UI\Diff;
 
 use Kosmokrator\UI\Ansi\KosmokratorTerminalTheme;
 use Kosmokrator\UI\Theme;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use SebastianBergmann\Diff\Differ;
 use SebastianBergmann\Diff\Output\DiffOnlyOutputBuilder;
 use Tempest\Highlight\Highlighter;
@@ -28,6 +30,10 @@ final class DiffRenderer
     private const float WORD_DIFF_THRESHOLD = 0.4;
 
     private ?Highlighter $highlighter = null;
+
+    public function __construct(
+        private readonly LoggerInterface $log = new NullLogger,
+    ) {}
 
     /**
      * Format a byte count as a human-readable size string.
@@ -609,7 +615,7 @@ final class DiffRenderer
         try {
             return $this->getHighlighter()->parse($code, $language);
         } catch (\Throwable $e) {
-            error_log("[DiffRenderer] Highlight failed: {$e->getMessage()}");
+            $this->log->warning('Diff highlight failed', ['error' => $e->getMessage(), 'language' => $language]);
 
             return $code;
         }

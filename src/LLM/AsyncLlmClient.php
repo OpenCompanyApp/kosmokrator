@@ -90,7 +90,7 @@ class AsyncLlmClient implements LlmClientInterface
             return $this->registry->capabilities($this->provider)['streaming'];
         }
 
-        return ProviderCapabilities::for($this->provider, $this->registry)->supportsStreaming();
+        return ProviderCapabilities::defaults()[$this->provider]['streaming'] ?? true;
     }
 
     public function setSystemPrompt(string $prompt): void
@@ -440,7 +440,7 @@ class AsyncLlmClient implements LlmClientInterface
             return $this->registry->capabilities($this->provider)['temperature'];
         }
 
-        return ProviderCapabilities::for($this->provider, $this->registry)->supportsTemperature();
+        return ProviderCapabilities::defaults()[$this->provider]['temperature'] ?? true;
     }
 
     /**
@@ -450,10 +450,10 @@ class AsyncLlmClient implements LlmClientInterface
     private function supportsStreamUsage(): bool
     {
         if ($this->registry !== null) {
-            return $this->registry->capabilities($this->provider)['stream_usage'];
+            return $this->registry->capabilities($this->provider)['stream_usage'] ?? true;
         }
 
-        return ProviderCapabilities::for($this->provider, $this->registry)->supportsStreamUsage();
+        return ProviderCapabilities::defaults()[$this->provider]['stream_usage'] ?? true;
     }
 
     /**

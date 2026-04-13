@@ -9,10 +9,12 @@ use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Psr\Log\NullLogger;
 
+#[AllowMockObjectsWithoutExpectations]
 class ContextCompactorTest extends TestCase
 {
     private function makeCompactor(?LlmClientInterface $llm = null, int $thresholdPercent = 60): ContextCompactor
@@ -158,60 +160,99 @@ class ContextCompactorTest extends TestCase
         $compactor->compact($history, 1);
     }
 
-    public function test_extract_memories_returns_valid_items_and_tokens(): void
+    public function test_build_plan_extracts_memories_from_structured_response(): void
     {
         $json = json_encode([
-            ['type' => 'project', 'title' => 'Uses JWT', 'content' => 'Auth uses JWT tokens'],
-            ['type' => 'user', 'title' => 'Prefers tabs', 'content' => 'User prefers tab indentation'],
+            'summary' => '## Goal'."\n".'Keep context',
+            'memories' => [
+                ['type' => 'project', 'title' => 'Uses JWT', 'content' => 'Auth uses JWT tokens'],
+                ['type' => 'user', 'title' => 'Prefers tabs', 'content' => 'User prefers tab indentation', 'memory_class' => 'priority', 'pinned' => true],
+                ['type' => 'decision', 'title' => 'Pending cleanup', 'content' => 'Cleanup remains', 'memory_class' => 'working', 'expires_days' => 7],
+            ],
         ]);
 
         $compactor = $this->makeCompactor($this->createMockLlm($json));
+        $history = new ConversationHistory;
+        $history->addUser('First question');
+        $history->addAssistant('First answer');
+        $history->addUser('Second question');
+        $history->addAssistant('Second answer');
 
-        $result = $compactor->extractMemories('Some summary');
+        $plan = $compactor->buildPlan($history, keepRecent: 1);
 
-        $this->assertCount(2, $result['memories']);
-        $this->assertSame('project', $result['memories'][0]['type']);
-        $this->assertSame('user', $result['memories'][1]['type']);
-        $this->assertSame(100, $result['tokens_in']);
-        $this->assertSame(50, $result['tokens_out']);
+        $this->assertSame("## Goal\nKeep context", $plan->summary);
+        $this->assertCount(3, $plan->extractedMemories);
+        $this->assertSame('project', $plan->extractedMemories[0]['type']);
+        $this->assertSame('priority', $plan->extractedMemories[1]['memory_class']);
+        $this->assertTrue($plan->extractedMemories[1]['pinned']);
+        $this->assertSame(7, $plan->extractedMemories[2]['expires_days']);
+        $this->assertSame(100, $plan->tokensIn);
+        $this->assertSame(50, $plan->tokensOut);
     }
 
-    public function test_extract_memories_returns_empty_on_invalid_json(): void
+    public function test_build_plan_falls_back_to_plain_text_summary_on_invalid_json(): void
     {
         $compactor = $this->makeCompactor($this->createMockLlm('not valid json'));
+        $history = new ConversationHistory;
+        $history->addUser('First question');
+        $history->addAssistant('First answer');
+        $history->addUser('Second question');
+        $history->addAssistant('Second answer');
 
-        $result = $compactor->extractMemories('Some summary');
+        $plan = $compactor->buildPlan($history, keepRecent: 1);
 
-        $this->assertSame([], $result['memories']);
+        $this->assertSame('not valid json', $plan->summary);
+        $this->assertSame([], $plan->extractedMemories);
     }
 
-    public function test_extract_memories_filters_invalid_types(): void
+    public function test_build_plan_filters_invalid_memory_items(): void
     {
         $json = json_encode([
-            ['type' => 'project', 'title' => 'Valid', 'content' => 'content'],
-            ['type' => 'invalid_type', 'title' => 'Bad', 'content' => 'content'],
-            ['missing_fields' => true],
+            'summary' => 'Summary',
+            'memories' => [
+                ['type' => 'project', 'title' => 'Valid', 'content' => 'content'],
+                ['type' => 'invalid_type', 'title' => 'Bad', 'content' => 'content'],
+                ['missing_fields' => true],
+                ['type' => 'decision', 'title' => '', 'content' => 'empty title'],
+            ],
         ]);
 
         $compactor = $this->makeCompactor($this->createMockLlm($json));
+        $history = new ConversationHistory;
+        $history->addUser('First question');
+        $history->addAssistant('First answer');
+        $history->addUser('Second question');
+        $history->addAssistant('Second answer');
 
-        $result = $compactor->extractMemories('Summary');
+        $plan = $compactor->buildPlan($history, keepRecent: 1);
 
-        $this->assertCount(1, $result['memories']);
-        $this->assertSame('project', $result['memories'][0]['type']);
+        $this->assertCount(1, $plan->extractedMemories);
+        $this->assertSame('project', $plan->extractedMemories[0]['type']);
     }
 
-    public function test_extract_memories_returns_empty_on_exception(): void
+    public function test_build_plan_synthesizes_safe_fallback_summary_when_json_lacks_summary(): void
     {
-        $llm = $this->createMock(LlmClientInterface::class);
-        $llm->method('chat')->willThrowException(new \RuntimeException('API error'));
+        $json = json_encode([
+            'memories' => [
+                ['type' => 'decision', 'title' => 'Use SQLite', 'content' => 'Keep SQLite locally'],
+                ['type' => 'project', 'title' => 'Auth refactor', 'content' => 'Auth code was reworked'],
+                ['type' => 'project', 'title' => 'Pending cleanup', 'content' => 'Cleanup remains', 'memory_class' => 'working'],
+            ],
+        ]);
 
-        $models = new ModelCatalog(['models' => [], 'default' => ['context' => 128_000, 'input_price' => 3.0, 'output_price' => 15.0]]);
-        $compactor = new ContextCompactor($llm, $models, new NullLogger);
+        $compactor = $this->makeCompactor($this->createMockLlm($json));
+        $history = new ConversationHistory;
+        $history->addUser('First question');
+        $history->addAssistant('First answer');
+        $history->addUser('Second question');
+        $history->addAssistant('Second answer');
 
-        $result = $compactor->extractMemories('Summary');
+        $plan = $compactor->buildPlan($history, keepRecent: 1);
 
-        $this->assertSame([], $result['memories']);
-        $this->assertSame(0, $result['tokens_in']);
+        $this->assertStringContainsString('## Goal', $plan->summary);
+        $this->assertStringContainsString('[Compaction summary unavailable]', $plan->summary);
+        $this->assertStringContainsString('Use SQLite', $plan->summary);
+        $this->assertStringNotContainsString('{"memories"', $plan->summary);
+        $this->assertCount(3, $plan->extractedMemories);
     }
 }

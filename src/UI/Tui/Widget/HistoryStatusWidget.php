@@ -5,44 +5,63 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Tui\Widget;
 
 use Kosmokrator\UI\Theme;
+use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
+use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
-use Symfony\Component\Tui\Widget\AbstractWidget;
 
 /**
- * Thin status bar shown when the user is browsing conversation history.
- * Displays scroll hints or a "new activity below" indicator.
+ * Reactive status bar shown when the user is browsing conversation history.
+ *
+ * Reads scrollOffset and hasHiddenActivityBelow signals via beforeRender().
+ * No manual show()/hide() calls needed — visibility is derived from state.
  */
-final class HistoryStatusWidget extends AbstractWidget
+final class HistoryStatusWidget extends ReactiveWidget
 {
     private bool $visible = false;
 
-    /** Whether new agent activity occurred while browsing history. */
     private bool $hasHiddenActivity = false;
 
-    /** Make the status bar visible, optionally flagging new activity below. */
-    public function show(bool $hasHiddenActivity): void
+    private readonly TuiStateStore $state;
+
+    public function __construct(TuiStateStore $state)
     {
-        $this->visible = true;
-        $this->hasHiddenActivity = $hasHiddenActivity;
-        $this->invalidate();
+        $this->state = $state;
     }
 
-    /** Hide the status bar when returning to live view. */
-    public function hide(): void
+    public static function of(TuiStateStore $state): self
     {
-        // Skip repaint if already hidden with no pending activity flag
-        if (! $this->visible && ! $this->hasHiddenActivity) {
-            return;
+        return new self($state);
+    }
+
+    public function syncFromSignals(): bool
+    {
+        $scrollOffset = $this->state->getScrollOffset();
+
+        if ($scrollOffset <= 0) {
+            if (! $this->visible && ! $this->hasHiddenActivity) {
+                return false;
+            }
+
+            $this->visible = false;
+            $this->hasHiddenActivity = false;
+
+            return true;
         }
 
-        $this->visible = false;
-        $this->hasHiddenActivity = false;
-        $this->invalidate();
+        $newHasHidden = $this->state->getHasHiddenActivityBelow();
+
+        if ($this->visible && $newHasHidden === $this->hasHiddenActivity) {
+            return false;
+        }
+
+        $this->visible = true;
+        $this->hasHiddenActivity = $newHasHidden;
+
+        return true;
     }
 
     /**
-     * @param  RenderContext  $context  Terminal dimensions
      * @return list<string> Single ANSI-formatted status line, or empty when hidden
      */
     public function render(RenderContext $context): array
@@ -57,13 +76,11 @@ final class HistoryStatusWidget extends AbstractWidget
         $border = Theme::borderTask();
 
         $left = "{$dim}Browsing history{$r}";
-        // Show activity nudge or scroll keybindings on the right side
         $right = $this->hasHiddenActivity
             ? "{$accent}new activity below ↓{$r}"
             : "{$dim}PgUp/PgDn scroll  End latest{$r}";
 
         $columns = $context->getColumns();
-        // -6 accounts for " │ " on each side
         $spacing = max(1, $columns - AnsiUtils::visibleWidth($left) - AnsiUtils::visibleWidth($right) - 6);
         $line = " {$border}│{$r} {$left}".str_repeat(' ', $spacing)."{$right} {$border}│{$r}";
 

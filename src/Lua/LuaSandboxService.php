@@ -248,7 +248,15 @@ class LuaSandboxService
 
         $sandbox->register('__regex', [
             'match' => function (string $subject, string $pattern, int $flags = 0): mixed {
-                if (preg_match($pattern, $subject, $matches, $flags) === 1) {
+                $pregFlags = match ($flags) {
+                    0,
+                    PREG_OFFSET_CAPTURE,
+                    PREG_UNMATCHED_AS_NULL,
+                    PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL => $flags,
+                    default => 0,
+                };
+
+                if (preg_match($pattern, $subject, $matches, $pregFlags) === 1) {
                     return $matches;
                 }
 

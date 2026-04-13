@@ -137,6 +137,7 @@ class AgentSessionBuilderTest extends TestCase
         $builder = new AgentSessionBuilder($container);
         $session = $builder->build('ansi', false);
 
+        $this->assertInstanceOf(UIManager::class, $session->ui);
         $this->assertSame('ansi', $session->ui->getActiveRenderer());
     }
 

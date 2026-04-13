@@ -73,7 +73,7 @@ final class MessageSerializer
         return array_map(fn (ToolCall $tc) => [
             'id' => $tc->id,
             'name' => $tc->name,
-            'arguments' => $tc->arguments(),
+            'arguments' => ToolCallMapper::safeArguments($tc),
         ], $toolCalls);
     }
 

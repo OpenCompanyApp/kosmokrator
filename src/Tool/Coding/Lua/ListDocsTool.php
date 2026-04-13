@@ -21,7 +21,7 @@ class ListDocsTool extends AbstractTool
 
     public function description(): string
     {
-        return 'List available Lua API namespaces and functions. Each namespace maps to an integration (plausible, coingecko, celestial, etc.). Shows function signatures with parameter names. Use this first to discover what integrations are available.';
+        return 'List available Lua API namespaces as a concise discovery catalog. Each namespace maps to an integration or internal API surface. Use this first to see what exists, then use lua_read_doc before calling any functions.';
     }
 
     public function parameters(): array

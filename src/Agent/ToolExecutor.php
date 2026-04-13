@@ -69,12 +69,12 @@ final class ToolExecutor
         $seenAskTool = false;
 
         foreach ($toolCalls as $toolCall) {
-            // Guard against malformed JSON arguments from the LLM
-            try {
-                $args = $toolCall->arguments();
-            } catch (\JsonException $e) {
-                $output = "Invalid tool call arguments (malformed JSON): {$e->getMessage()}. Please retry with valid JSON arguments.";
-                $this->log->warning('Malformed tool call arguments', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
+            $decodedCall = ToolCallMapper::tryExtractCall($toolCall);
+            $args = $decodedCall['args'];
+
+            if ($decodedCall['argumentsError'] !== null) {
+                $output = "Invalid tool call arguments (malformed JSON): {$decodedCall['argumentsError']}. Please retry with valid JSON arguments.";
+                $this->log->warning('Malformed tool call arguments', ['tool' => $toolCall->name, 'error' => $decodedCall['argumentsError']]);
                 SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, []), $this->log);
                 SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
                 $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, [], $output);
@@ -87,9 +87,9 @@ final class ToolExecutor
             if ($this->isAskTool($toolCall->name)) {
                 if ($seenAskTool) {
                     $output = 'Only one interactive question may be asked per response. Use a single ask_user or ask_choice call, wait for the answer, then continue.';
-                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
                     SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
-                    $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                    $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output);
 
                     continue;
                 }
@@ -97,7 +97,7 @@ final class ToolExecutor
                 $seenAskTool = true;
             }
 
-            [$permDenied, $wasAutoApproved] = $this->checkPermission($toolCall);
+            [$permDenied, $wasAutoApproved] = $this->checkPermission($toolCall, $args);
             if ($permDenied !== null) {
                 $denied[$toolCall->id] = $permDenied;
 
@@ -110,35 +110,35 @@ final class ToolExecutor
                 $output = $existsInAll
                     ? "Tool '{$toolCall->name}' is not available in {$mode->label()} mode. Switch to Edit mode to use write tools."
                     : "Tool '{$toolCall->name}' not found.";
-                SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
                 SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
-                $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output);
 
                 continue;
             }
 
             // Read-only mode shell write-guard
             if (($mode === AgentMode::Ask || $mode === AgentMode::Plan) && $this->isReadOnlyShellTool($tool->name())) {
-                $cmd = $this->commandLikeInput($toolCall);
+                $cmd = $this->commandLikeInput($args);
                 if ($this->permissions?->isMutativeCommand($cmd)) {
                     $output = "Command blocked in {$mode->label()} mode (read-only). Switch to Edit mode for write operations.";
-                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
                     SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
-                    $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output);
+                    $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output);
 
                     continue;
                 }
             }
 
-            $approved[] = [$toolCall, $tool];
+            $approved[] = [$toolCall, $tool, $args];
             $autoApproved[$toolCall->id] = $wasAutoApproved;
         }
 
         // Show subagent spawn indicators before execution starts
         $subagentSpawns = [];
-        foreach ($approved as [$tc, $_]) {
+        foreach ($approved as [$tc, $_, $args]) {
             if ($tc->name === 'subagent') {
-                $subagentSpawns[] = ['args' => $tc->arguments(), 'id' => $tc->id];
+                $subagentSpawns[] = ['args' => $args, 'id' => $tc->id];
             }
         }
         if ($subagentSpawns !== []) {
@@ -153,34 +153,34 @@ final class ToolExecutor
 
         // Build lookup: toolCall id → [toolCall, wasAutoApproved]
         $approvedById = [];
-        foreach ($approved as [$tc, $t]) {
-            $approvedById[$tc->id] = [$tc, $t, $autoApproved[$tc->id] ?? false];
+        foreach ($approved as [$tc, $t, $args]) {
+            $approvedById[$tc->id] = [$tc, $t, $args, $autoApproved[$tc->id] ?? false];
         }
 
         foreach ($groups as $group) {
             if (count($group) === 1) {
-                [$toolCall, $tool] = $group[0];
+                [$toolCall, $tool, $args] = $group[0];
 
                 if ($toolCall->name !== 'subagent') {
                     // Show header + spinner before execution
-                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                    SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
                     if ($autoApproved[$toolCall->id] ?? false) {
                         SafeDisplay::call(fn () => $this->ui->showAutoApproveIndicator($toolCall->name), $this->log);
                     }
                     SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
                 }
 
-                $result = $this->executeSingleTool($toolCall, $tool, $stats, $mode);
+                $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode);
 
                 if ($toolCall->name !== 'subagent') {
                     SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
                 }
 
-                $this->collectResult($toolCall, $result, $agentContext, $subagentBatch, $results);
+                $this->collectResult($toolCall, $args, $result, $agentContext, $subagentBatch, $results);
             } else {
                 // Concurrent group: launch all, then show header+result pairs in order
                 $hasNonSubagent = false;
-                foreach ($group as [$tc, $_]) {
+                foreach ($group as [$tc, $_, $_args]) {
                     if ($tc->name !== 'subagent') {
                         $hasNonSubagent = true;
                         break;
@@ -192,20 +192,20 @@ final class ToolExecutor
 
                 // Launch all futures concurrently
                 $futures = [];
-                foreach ($group as [$toolCall, $tool]) {
-                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $tool, $stats, $mode));
+                foreach ($group as [$toolCall, $tool, $args]) {
+                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode));
                 }
 
                 // Await and display each header+result pair in original order
-                foreach ($group as [$toolCall, $tool]) {
+                foreach ($group as [$toolCall, $tool, $args]) {
                     $outcome = $futures[$toolCall->id]->await();
 
                     if ($toolCall->name !== 'subagent') {
                         SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
-                        SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+                        SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
                     }
 
-                    $this->collectResult($toolCall, $outcome, $agentContext, $subagentBatch, $results);
+                    $this->collectResult($toolCall, $args, $outcome, $agentContext, $subagentBatch, $results);
                 }
             }
         }
@@ -243,34 +243,34 @@ final class ToolExecutor
      *
      * @return array{?ToolResult, bool} [denied result or null, was auto-approved]
      */
-    private function checkPermission(ToolCall $toolCall): array
+    private function checkPermission(ToolCall $toolCall, array $args): array
     {
         if ($this->permissions === null) {
             return [null, false];
         }
 
-        $permResult = $this->permissions->evaluate($toolCall->name, $toolCall->arguments());
+        $permResult = $this->permissions->evaluate($toolCall->name, $args);
 
         if ($permResult->action === PermissionAction::Deny) {
             $output = ($permResult->reason ?? "Permission denied: '{$toolCall->name}' is blocked by policy.")
                 .' Try a different approach.';
             $this->log->info('Tool denied by policy', ['tool' => $toolCall->name, 'reason' => $permResult->reason]);
-            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
+            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
             SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
-            return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
+            return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output), false];
         }
 
         if ($permResult->action === PermissionAction::Ask) {
-            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $toolCall->arguments()), $this->log);
-            $decision = $this->ui->askToolPermission($toolCall->name, $toolCall->arguments());
+            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
+            $decision = $this->ui->askToolPermission($toolCall->name, $args);
 
             if ($decision === 'deny') {
                 $output = "User denied permission for '{$toolCall->name}'. Try a different approach.";
                 $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
                 SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
-                return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $output), false];
+                return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output), false];
             }
 
             if ($decision === 'always') {
@@ -294,10 +294,9 @@ final class ToolExecutor
     /**
      * Execute a single tool call with error handling and output truncation.
      */
-    private function executeSingleTool(ToolCall $toolCall, Tool $tool, ?SubagentStats $stats, AgentMode $mode): ToolResult
+    private function executeSingleTool(ToolCall $toolCall, array $args, Tool $tool, ?SubagentStats $stats, AgentMode $mode): ToolResult
     {
         try {
-            $args = $toolCall->arguments();
             if ($toolCall->name === 'shell_start') {
                 $args['read_only'] = $mode !== AgentMode::Edit;
             }
@@ -315,11 +314,11 @@ final class ToolExecutor
                 'output_length' => strlen($outputStr),
             ]);
 
-            return ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $toolCall->arguments(), $outputStr);
+            return ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
         } catch (\RuntimeException $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
-            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $toolCall->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $args, 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
         } catch (\Throwable $e) {
             $this->log->error('Tool execution failed with unexpected exception', [
                 'tool' => $toolCall->name,
@@ -327,7 +326,7 @@ final class ToolExecutor
                 'error' => $e->getMessage(),
             ]);
 
-            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $toolCall->arguments(), 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $args, 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
         }
     }
 
@@ -337,8 +336,8 @@ final class ToolExecutor
      * Calls within a group have no file-path conflicts. Groups run sequentially.
      * Conservative: if any write conflict or bash+write mix exists, falls back to fully sequential.
      *
-     * @param  array<array{ToolCall, Tool}>  $approved
-     * @return array<array<array{ToolCall, Tool}>>
+     * @param  array<array{ToolCall, Tool, array<string, mixed>}>  $approved
+     * @return array<array<array{ToolCall, Tool, array<string, mixed>}>>
      */
     private function partitionConcurrentGroups(array $approved): array
     {
@@ -346,7 +345,7 @@ final class ToolExecutor
             return [$approved];
         }
 
-        foreach ($approved as [$toolCall, $_]) {
+        foreach ($approved as [$toolCall, $_, $_args]) {
             if ($this->isAskTool($toolCall->name)) {
                 return array_map(fn ($item) => [$item], $approved);
             }
@@ -360,9 +359,9 @@ final class ToolExecutor
         $hasBash = false;
         $hasWrites = false;
 
-        foreach ($approved as $i => [$toolCall, $tool]) {
+        foreach ($approved as $i => [$toolCall, $tool, $args]) {
             $name = $toolCall->name;
-            $path = $toolCall->arguments()['path'] ?? null;
+            $path = $args['path'] ?? null;
 
             if ($path !== null && in_array($name, $writeTools, true)) {
                 $resolved = realpath($path) ?: $path;
@@ -372,7 +371,7 @@ final class ToolExecutor
             if ($name === 'apply_patch') {
                 $hasWrites = true;
                 // Extract file paths from the patch argument for conflict detection
-                $patchContent = $toolCall->arguments()['patch'] ?? '';
+                $patchContent = $args['patch'] ?? '';
                 if (is_string($patchContent) && $patchContent !== '') {
                     // Match paths from lines like: "Update File: path/to/file" or "*** Begin Patch\nAdd File: path"
                     if (preg_match_all('/(?:Update File|Add File|Delete File|File):\s*(\S+)/i', $patchContent, $matches)) {
@@ -399,11 +398,11 @@ final class ToolExecutor
                 return array_map(fn ($item) => [$item], $approved);
             }
 
-            foreach ($approved as $j => [$tc, $_]) {
+            foreach ($approved as $j => [$tc, $_, $readArgs]) {
                 if (in_array($j, $writeIndices, true)) {
                     continue;
                 }
-                $readPath = $tc->arguments()['path'] ?? null;
+                $readPath = $readArgs['path'] ?? null;
                 if ($readPath !== null) {
                     $resolvedRead = realpath($readPath) ?: $readPath;
                     if ($resolvedRead === $writePath) {
@@ -425,6 +424,7 @@ final class ToolExecutor
      */
     private function collectResult(
         ToolCall $toolCall,
+        array $args,
         ToolResult $result,
         ?AgentContext $agentContext,
         array &$subagentBatch,
@@ -433,10 +433,10 @@ final class ToolExecutor
         $success = ! ToolCallMapper::isErrorResult($result);
 
         if ($toolCall->name === 'subagent') {
-            $agentId = $toolCall->arguments()['id'] ?? '';
+            $agentId = $args['id'] ?? '';
             $orchestrator = $agentContext?->orchestrator;
             $subagentBatch[] = [
-                'args' => $toolCall->arguments(),
+                'args' => $args,
                 'result' => ToolCallMapper::cleanErrorResult($result),
                 'success' => $success,
                 'children' => $orchestrator !== null ? $this->treeBuilder->buildSubtree($orchestrator, $agentId) : [],
@@ -490,8 +490,8 @@ final class ToolExecutor
     }
 
     /** Extract the command string from a tool call's arguments (handles both 'command' and 'input' keys). */
-    private function commandLikeInput(ToolCall $toolCall): string
+    private function commandLikeInput(array $args): string
     {
-        return (string) ($toolCall->arguments()['command'] ?? $toolCall->arguments()['input'] ?? '');
+        return (string) ($args['command'] ?? $args['input'] ?? '');
     }
 }

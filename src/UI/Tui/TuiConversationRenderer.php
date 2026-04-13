@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui;
 
+use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\UI\ConversationRendererInterface;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
@@ -103,7 +104,7 @@ final class TuiConversationRenderer implements ConversationRendererInterface
                 // Tool calls — each paired with its result
                 foreach ($msg->toolCalls as $toolCall) {
                     $name = $toolCall->name;
-                    $args = $toolCall->arguments();
+                    $args = ToolCallMapper::safeArguments($toolCall);
                     $toolResult = $resultsByCallId[$toolCall->id] ?? null;
 
                     if ($name === 'ask_user') {

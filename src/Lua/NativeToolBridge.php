@@ -64,6 +64,8 @@ class NativeToolBridge
             }
         }
 
+        // Debug: log the return type to verify PHP side is correct
+
         return $table;
     }
 

@@ -19,6 +19,8 @@ final class ExplorationClassifier
         'glob',
         'grep',
         'memory_search',
+        'session_search',
+        'session_read',
     ];
 
     private const EXPLORATORY_BASH_PREFIXES = [

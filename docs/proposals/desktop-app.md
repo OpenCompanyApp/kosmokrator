@@ -291,6 +291,6 @@ This means:
 | Terminal (ANSI) | `AnsiRenderer` | readline | ANSI escape codes | `php bin/kosmokrator` |
 | Terminal (TUI) | `TuiRenderer` | Symfony TUI InputWidget | TUI widgets + Revolt | `php bin/kosmokrator` |
 | Desktop | `WebRenderer` | Vue frontend via WebSocket | Electron BrowserWindow | NativePHP (bundled PHP) |
-| *(future)* Mobile | `MobileRenderer` | Native UI via EDGE | Swift/Kotlin shell | NativePHP Mobile |
+| Kosmo (mobile + desktop) | Flutter thin client | touch + voice | Stream cards | Kosmo Cloud / OpenCompany backend |
 
-All implement `RendererInterface`. The engine doesn't know which surface it's running on.
+Terminal and Desktop surfaces implement `RendererInterface` — the engine doesn't know which surface it's on. Kosmo is a separate thin client that talks to the same backend (Kosmo Cloud / OpenCompany) over WebSocket, not a RendererInterface implementation.

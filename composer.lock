@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "edaf746ca7b16d40bf61370ddeb6b6f9",
+    "content-hash": "4ac0888cfaf845b85f0c6dd58faea235",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3627,12 +3627,112 @@
             "time": "2026-04-03T11:52:31+00:00"
         },
         {
-            "name": "opencompanyapp/integration-core",
-            "version": "dev-feat/new-integrations",
+            "name": "opencompanyapp/integration-clickup",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "/Users/rutger/Sites/integrations/core",
-                "reference": "bb3350a35c4fa2a69d184b382aec774b67521f62"
+                "url": "integrations/packages/clickup",
+                "reference": "1b14240d32e7a64b97eba16c6d4ad6717e132fc7"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-clickup": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\ClickUp\\ClickUpServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\ClickUp\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "ClickUp integration for OpenCompany — tasks, docs, time tracking, chat, and workspace management.",
+            "keywords": [
+                "clickup",
+                "opencompany",
+                "project-management",
+                "tasks",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-coingecko",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "integrations/packages/coingecko",
+                "reference": "fbc18b504c7a71c6681edf91515f8669cf4b7934"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-coingecko": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\CoinGecko\\CoinGeckoServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\CoinGecko\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "CoinGecko cryptocurrency integration for Laravel — search coins, prices, market data, trending, historical charts.",
+            "keywords": [
+                "bitcoin",
+                "coingecko",
+                "crypto",
+                "opencompany",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-core",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "integrations/core",
+                "reference": "b47a39158521ee333af52d484bfbdd6ad70bc250"
             },
             "require": {
                 "illuminate/support": "^11.0 || ^12.0 || ^13.0",
@@ -3668,7 +3768,106 @@
                 "tools"
             ],
             "transport-options": {
-                "relative": false
+                "relative": true
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-plane",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "integrations/packages/plane",
+                "reference": "e92979a8d1b4b2e7ffd1c25eb0e08760a4497525"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-plane": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\Plane\\PlaneServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\Plane\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "Plane.so integration for Laravel — manage projects, issues, cycles, modules, and team members.",
+            "keywords": [
+                "issues",
+                "opencompany",
+                "plane",
+                "project-management",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-plausible",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "integrations/packages/plausible",
+                "reference": "9b4456487fb22697c68c1176314f78989a7390f7"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-plausible": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\Plausible\\PlausibleServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\Plausible\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "Plausible Analytics integration for Laravel — query stats, realtime visitors, manage sites and goals.",
+            "keywords": [
+                "analytics",
+                "opencompany",
+                "plausible",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": true,
+                "relative": true
             }
         },
         {
@@ -9394,7 +9593,11 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "opencompany/prism-codex": 20,
+        "opencompanyapp/integration-clickup": 20,
+        "opencompanyapp/integration-coingecko": 20,
         "opencompanyapp/integration-core": 20,
+        "opencompanyapp/integration-plane": 20,
+        "opencompanyapp/integration-plausible": 20,
         "opencompanyapp/prism-relay": 20,
         "symfony/tui": 20
     },

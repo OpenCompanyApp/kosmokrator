@@ -10,18 +10,12 @@ use Throwable;
 
 /**
  * Reads file contents with line numbers, supporting offset/limit for partial reads.
- * Caches previous reads to avoid re-sending identical content (saves tokens on repeat reads of unchanged files).
  * Large files (>10 MB) are streamed line-by-line to keep memory usage low.
  * Prefer this over shell commands (`cat`, `head`) for inspecting files.
  */
 class FileReadTool extends AbstractTool
 {
     private const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
-
-    private const UNCHANGED_RESULT_TEMPLATE = '[Unchanged since last file_read of %s (lines %d-%d); content omitted to save tokens]';
-
-    /** @var array<string, true> */
-    private array $readCache = [];
 
     /**
      * @param  string|null  $projectRoot  Absolute path to project root for boundary enforcement
@@ -58,7 +52,7 @@ class FileReadTool extends AbstractTool
 
     /**
      * @param  array{path: string, offset?: int, limit?: int}  $args  File path and optional line range
-     * @return ToolResult File contents with line numbers, or cached "unchanged" notice
+     * @return ToolResult File contents with line numbers
      */
     protected function handle(array $args): ToolResult
     {
@@ -87,19 +81,9 @@ class FileReadTool extends AbstractTool
             return ToolResult::error("Path is a directory, not a file: {$path}");
         }
 
-        $cacheKey = $this->buildCacheKey($path, $offset, $limit);
-        if (isset($this->readCache[$cacheKey])) {
-            return ToolResult::success($this->formatUnchangedResult($path, $offset, $limit));
-        }
-
         $fileSize = filesize($path);
         if ($fileSize !== false && $fileSize > self::LARGE_FILE_THRESHOLD) {
-            $result = $this->readLargeFile($path, $offset, $limit);
-            if ($result->success) {
-                $this->readCache[$cacheKey] = true;
-            }
-
-            return $result;
+            return $this->readLargeFile($path, $offset, $limit);
         }
 
         $lines = file($path);
@@ -121,15 +105,7 @@ class FileReadTool extends AbstractTool
             $output .= "\n... {$remaining} more lines";
         }
 
-        $this->readCache[$cacheKey] = true;
-
         return ToolResult::success(rtrim($output));
-    }
-
-    /** Clears the read cache so subsequent reads will return full content again. */
-    public function resetCache(): void
-    {
-        $this->readCache = [];
     }
 
     /**
@@ -167,26 +143,5 @@ class FileReadTool extends AbstractTool
         }
 
         return ToolResult::success(rtrim($output));
-    }
-
-    private function buildCacheKey(string $path, int $offset, int $limit): string
-    {
-        $resolvedPath = realpath($path) ?: $path;
-        $mtime = filemtime($path);
-
-        return implode(':', [
-            $resolvedPath,
-            $mtime === false ? '0' : (string) $mtime,
-            (string) $offset,
-            (string) $limit,
-        ]);
-    }
-
-    private function formatUnchangedResult(string $path, int $offset, int $limit): string
-    {
-        $resolvedPath = realpath($path) ?: $path;
-        $endLine = $offset + $limit - 1;
-
-        return sprintf(self::UNCHANGED_RESULT_TEMPLATE, $resolvedPath, $offset, $endLine);
     }
 }

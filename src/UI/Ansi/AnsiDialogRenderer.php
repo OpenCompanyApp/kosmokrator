@@ -251,10 +251,82 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         return $items[$choice - 1]['value'];
     }
 
-    /** No-op: ANSI mode has no interactive plan approval dialog. */
     public function approvePlan(string $currentPermissionMode): ?array
     {
-        return null;
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $gold = Theme::accent();
+        $white = "\033[1;37m";
+        $border = Theme::borderTask();
+
+        $permissions = [
+            'g' => ['id' => 'guardian', 'label' => 'Guardian ◈'],
+            'a' => ['id' => 'argus', 'label' => 'Argus ◉'],
+            'p' => ['id' => 'prometheus', 'label' => 'Prometheus ⚡'],
+        ];
+
+        $contexts = [
+            'k' => ['id' => 'keep', 'label' => 'keep context'],
+            'c' => ['id' => 'compact', 'label' => 'compact'],
+            'r' => ['id' => 'clear', 'label' => 'clear'],
+        ];
+
+        $permissionId = $currentPermissionMode;
+        $contextId = 'keep';
+
+        echo "\n{$border}  ┌ {$gold}Plan Complete{$r}\n";
+        echo "{$border}  │{$r}\n";
+
+        // Permission selection
+        $permHints = [];
+        foreach ($permissions as $key => $perm) {
+            $marker = $perm['id'] === $permissionId ? $white : $dim;
+            $permHints[] = "[{$key}]{$marker}{$perm['label']}{$r}";
+        }
+        echo "{$border}  │{$r} {$dim}Permission:{$r} ".implode("{$dim} · {$r}", $permHints)."\n";
+
+        // Context selection
+        $ctxHints = [];
+        foreach ($contexts as $key => $ctx) {
+            $marker = $ctx['id'] === $contextId ? $white : $dim;
+            $ctxHints[] = "[{$key}]{$marker}{$ctx['label']}{$r}";
+        }
+        echo "{$border}  │{$r} {$dim}Context:   {$r} ".implode("{$dim} · {$r}", $ctxHints)."\n";
+        echo "{$border}  │{$r}\n";
+
+        while (true) {
+            $answer = readline("{$border}  └ {$gold}Enter{$r}{$dim} implement / {$r}{$gold}d{$r}{$dim} dismiss ▸{$r} ");
+
+            if ($answer === false) {
+                return null;
+            }
+
+            $char = strtolower(trim($answer));
+
+            // Accept with defaults
+            if ($char === '' || $char === 'i') {
+                return ['permission' => $permissionId, 'context' => $contextId];
+            }
+
+            // Dismiss
+            if ($char === 'd') {
+                return null;
+            }
+
+            // Permission change
+            if (isset($permissions[$char])) {
+                $permissionId = $permissions[$char]['id'];
+
+                return ['permission' => $permissionId, 'context' => $contextId];
+            }
+
+            // Context change
+            if (isset($contexts[$char])) {
+                $contextId = $contexts[$char]['id'];
+
+                return ['permission' => $permissionId, 'context' => $contextId];
+            }
+        }
     }
 
     public function askUser(string $question): string

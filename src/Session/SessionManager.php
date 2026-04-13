@@ -423,6 +423,34 @@ class SessionManager
     }
 
     /**
+     * FTS5 search grouped by session — returns per-session match info with context.
+     *
+     * @param  string  $query  Search terms
+     * @param  int  $limit  Maximum unique sessions to return
+     * @return array<int, array<string, mixed>>
+     */
+    public function searchSessionHistoryGrouped(string $query, int $limit = 5): array
+    {
+        if ($this->project === null || trim($query) === '') {
+            return [];
+        }
+
+        return $this->messages->searchProjectHistoryGrouped($this->project, $query, $this->currentSessionId, $limit);
+    }
+
+    /**
+     * Load a session's messages as a readable transcript.
+     *
+     * @param  string  $sessionId  Session to load
+     * @param  int  $limit  Maximum messages (0 = all)
+     * @return list<array{role: string, content: string, tool_calls: ?string, created_at: string}>
+     */
+    public function loadSessionTranscript(string $sessionId, int $limit = 0): array
+    {
+        return $this->messages->loadTranscript($sessionId, $limit);
+    }
+
+    /**
      * Remove expired and excess compaction memories for the current project.
      *
      * @return int Number of memories removed

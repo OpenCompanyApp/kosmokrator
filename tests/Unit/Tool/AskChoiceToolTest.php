@@ -6,8 +6,10 @@ namespace Kosmokrator\Tests\Unit\Tool;
 
 use Kosmokrator\Tool\AskChoiceTool;
 use Kosmokrator\UI\RendererInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class AskChoiceToolTest extends TestCase
 {
     public function test_execute_passes_recommended_choice_metadata_to_renderer(): void

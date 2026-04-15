@@ -14,6 +14,8 @@ use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
+use Kosmokrator\Setup\SetupFlowInterface;
+use Kosmokrator\Setup\SetupSettingsFlow;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\AgentTreeBuilder;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
@@ -98,6 +100,9 @@ class CoreServiceProvider extends ServiceProvider
             $this->container->make(SettingsRepositoryInterface::class),
             $this->container->make('config'),
             $this->container->make(CodexTokenStoreContract::class),
+        ));
+        $this->container->singleton(SetupFlowInterface::class, fn () => new SetupSettingsFlow(
+            $this->container,
         ));
 
         // UI display utilities (stateless singletons)

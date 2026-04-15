@@ -12,6 +12,7 @@ use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepositoryInterface;
+use Kosmokrator\Setup\SetupFlowInterface;
 use Kosmokrator\Skill\SkillDispatcher;
 use Kosmokrator\Skill\SkillLoader;
 use Kosmokrator\Skill\SkillRegistry;
@@ -222,11 +223,25 @@ class AgentCommand extends Command
      */
     private function runInteractive(InputInterface $input, OutputInterface $output): int
     {
-        // Build the agent session (UI + LLM + permissions) from container bindings.
-        // Falls back to a friendly error when the provider is not yet configured.
         $config = $this->container->make('config');
         $rendererPref = $input->getOption('renderer') ?: $config->get('kosmokrator.ui.renderer', 'auto');
         $animated = ! $input->getOption('no-animation') && $config->get('kosmokrator.ui.intro_animated', true);
+        $setup = $this->container->make(SetupFlowInterface::class);
+
+        if ($setup->needsProviderSetup()) {
+            $completed = $setup->open(
+                rendererPref: (string) $rendererPref,
+                animated: $animated,
+                showIntro: false,
+                notice: 'No provider is configured yet. Finish setup first, then KosmoKrator will continue.',
+            );
+
+            if (! $completed) {
+                return Command::FAILURE;
+            }
+
+            $animated = false;
+        }
 
         $builder = new AgentSessionBuilder($this->container);
 

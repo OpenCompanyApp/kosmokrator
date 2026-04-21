@@ -67,9 +67,11 @@ final class ZaiProvidersTest extends TestCase
             'apiKey' => 'zai-test-key',
         ]);
 
+        $guard = $this->createMock(WebRequestGuard::class);
+
         $provider = new ZaiReaderFetchProvider(
             auth: $auth,
-            guard: new WebRequestGuard,
+            guard: $guard,
             extractor: new MarkdownPageExtractor,
             httpClient: new HttpClient(new class implements DelegateHttpClient
             {

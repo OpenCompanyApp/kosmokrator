@@ -37,8 +37,10 @@ final class DirectFetchProviderTest extends TestCase
 </html>
 HTML;
 
+        $guard = $this->createMock(WebRequestGuard::class);
+
         $provider = new DirectFetchProvider(
-            new WebRequestGuard,
+            $guard,
             new HtmlPageExtractor,
             httpClient: new HttpClient(new class(gzencode($html, 9)) implements DelegateHttpClient
             {

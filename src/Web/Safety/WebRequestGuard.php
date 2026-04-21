@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Web\Safety;
 
-final class WebRequestGuard
+class WebRequestGuard
 {
     public function assertSafePublicUrl(string $url): void
     {

@@ -29,15 +29,17 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         $dim = Theme::dim();
         $accent = Theme::warning();
         $white = "\033[1;37m";
+        $title = (string) ($currentSettings['title'] ?? 'Settings');
 
-        echo "\n{$accent}  ⚙ Settings{$r}\n";
+        echo "\n{$accent}  ⚙ {$title}{$r}\n";
         echo "{$dim}  Separate settings workspace. Press Enter to keep a value unchanged.{$r}\n\n";
 
-        $scope = strtolower(trim(readline('  Scope [project/global, default project]: ')));
-        $scope = $scope === 'global' ? 'global' : 'project';
+        $defaultScope = (string) ($currentSettings['scope'] ?? 'project');
+        $scope = strtolower(trim($this->prompt("  Scope [project/global, default {$defaultScope}]: ")));
+        $scope = $scope === '' ? $defaultScope : ($scope === 'global' ? 'global' : 'project');
 
         $changes = [];
-        $categories = is_array($currentSettings['categories'] ?? null) ? $currentSettings['categories'] : [];
+        $categories = $this->orderedCategories($currentSettings);
 
         foreach ($categories as $category) {
             echo "{$white}  {$category['label']}{$r}\n";
@@ -45,7 +47,7 @@ final class AnsiDialogRenderer implements DialogRendererInterface
             foreach ($category['fields'] ?? [] as $field) {
                 $id = (string) ($field['id'] ?? '');
                 $type = (string) ($field['type'] ?? 'text');
-                $current = (string) ($field['value'] ?? '');
+                $current = $this->stringifySettingValue($field['value'] ?? '');
 
                 if ($type === 'readonly') {
                     echo "{$dim}    {$field['label']}: {$current}{$r}\n";
@@ -54,12 +56,12 @@ final class AnsiDialogRenderer implements DialogRendererInterface
                 }
 
                 $hint = '';
-                $options = is_array($field['options'] ?? null) ? $field['options'] : [];
+                $options = $this->stringifySettingOptions($field['options'] ?? []);
                 if ($options !== []) {
                     $hint = ' ['.implode('/', $options).']';
                 }
 
-                $answer = readline("  {$field['label']}{$hint} [{$current}]: ");
+                $answer = $this->prompt("  {$field['label']}{$hint} [{$current}]: ");
                 $answer = trim($answer);
 
                 if ($answer === '') {
@@ -243,7 +245,7 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         }
         echo "{$dim}  [0] Cancel{$r}\n";
 
-        $choice = (int) readline('  > ');
+        $choice = (int) $this->prompt('  > ');
         if ($choice < 1 || $choice > count($items)) {
             return null;
         }
@@ -251,10 +253,82 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         return $items[$choice - 1]['value'];
     }
 
-    /** No-op: ANSI mode has no interactive plan approval dialog. */
     public function approvePlan(string $currentPermissionMode): ?array
     {
-        return null;
+        $r = Theme::reset();
+        $dim = Theme::dim();
+        $gold = Theme::accent();
+        $white = "\033[1;37m";
+        $border = Theme::borderTask();
+
+        $permissions = [
+            'g' => ['id' => 'guardian', 'label' => 'Guardian ◈'],
+            'a' => ['id' => 'argus', 'label' => 'Argus ◉'],
+            'p' => ['id' => 'prometheus', 'label' => 'Prometheus ⚡'],
+        ];
+
+        $contexts = [
+            'k' => ['id' => 'keep', 'label' => 'keep context'],
+            'c' => ['id' => 'compact', 'label' => 'compact'],
+            'r' => ['id' => 'clear', 'label' => 'clear'],
+        ];
+
+        $permissionId = $currentPermissionMode;
+        $contextId = 'keep';
+
+        echo "\n{$border}  ┌ {$gold}Plan Complete{$r}\n";
+        echo "{$border}  │{$r}\n";
+
+        // Permission selection
+        $permHints = [];
+        foreach ($permissions as $key => $perm) {
+            $marker = $perm['id'] === $permissionId ? $white : $dim;
+            $permHints[] = "[{$key}]{$marker}{$perm['label']}{$r}";
+        }
+        echo "{$border}  │{$r} {$dim}Permission:{$r} ".implode("{$dim} · {$r}", $permHints)."\n";
+
+        // Context selection
+        $ctxHints = [];
+        foreach ($contexts as $key => $ctx) {
+            $marker = $ctx['id'] === $contextId ? $white : $dim;
+            $ctxHints[] = "[{$key}]{$marker}{$ctx['label']}{$r}";
+        }
+        echo "{$border}  │{$r} {$dim}Context:   {$r} ".implode("{$dim} · {$r}", $ctxHints)."\n";
+        echo "{$border}  │{$r}\n";
+
+        while (true) {
+            $answer = $this->prompt("{$border}  └ {$gold}Enter{$r}{$dim} implement / {$r}{$gold}d{$r}{$dim} dismiss ▸{$r} ");
+
+            if ($answer === false) {
+                return null;
+            }
+
+            $char = strtolower(trim($answer));
+
+            // Accept with defaults
+            if ($char === '' || $char === 'i') {
+                return ['permission' => $permissionId, 'context' => $contextId];
+            }
+
+            // Dismiss
+            if ($char === 'd') {
+                return null;
+            }
+
+            // Permission change
+            if (isset($permissions[$char])) {
+                $permissionId = $permissions[$char]['id'];
+
+                return ['permission' => $permissionId, 'context' => $contextId];
+            }
+
+            // Context change
+            if (isset($contexts[$char])) {
+                $contextId = $contexts[$char]['id'];
+
+                return ['permission' => $permissionId, 'context' => $contextId];
+            }
+        }
     }
 
     public function askUser(string $question): string
@@ -262,7 +336,7 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         $r = Theme::reset();
         $accent = Theme::accent();
         echo "\n{$accent}?{$r} {$question}\n";
-        $answer = readline('> ') ?: '';
+        $answer = $this->prompt('> ');
         $trimmed = trim($answer);
 
         ($this->queueQuestionRecapCallback)($question, $trimmed, $trimmed !== '', false);
@@ -285,7 +359,7 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         }
         echo "  {$dim}".(count($choices) + 1).". Dismiss{$r}\n";
 
-        $pick = (int) readline("{$dim}>{$r} ");
+        $pick = (int) $this->prompt("{$dim}>{$r} ");
         if ($pick >= 1 && $pick <= count($choices)) {
             $choice = $choices[$pick - 1];
             ($this->queueQuestionRecapCallback)($question, $choice['label'], true, (bool) ($choice['recommended'] ?? false));
@@ -296,5 +370,98 @@ final class AnsiDialogRenderer implements DialogRendererInterface
         ($this->queueQuestionRecapCallback)($question, '', false, false);
 
         return 'dismissed';
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function orderedCategories(array $currentSettings): array
+    {
+        $categories = is_array($currentSettings['categories'] ?? null) ? $currentSettings['categories'] : [];
+        $initialCategory = trim((string) ($currentSettings['initial_category'] ?? ''));
+        if ($initialCategory === '') {
+            return $categories;
+        }
+
+        usort($categories, static function (array $a, array $b) use ($initialCategory): int {
+            $aId = (string) ($a['id'] ?? '');
+            $bId = (string) ($b['id'] ?? '');
+
+            if ($aId === $initialCategory) {
+                return -1;
+            }
+
+            if ($bId === $initialCategory) {
+                return 1;
+            }
+
+            return 0;
+        });
+
+        return $categories;
+    }
+
+    private function prompt(string $message): string
+    {
+        if (\function_exists('readline')) {
+            $input = \readline($message);
+
+            return $input === false ? '' : $input;
+        }
+
+        echo $message;
+        $input = fgets(STDIN);
+
+        return $input === false ? '' : rtrim($input, "\r\n");
+    }
+
+    private function stringifySettingValue(mixed $value): string
+    {
+        if (is_array($value)) {
+            $parts = [];
+
+            foreach ($value as $item) {
+                if (is_scalar($item)) {
+                    $parts[] = (string) $item;
+                }
+            }
+
+            return implode(', ', $parts);
+        }
+
+        if (is_scalar($value) || $value === null) {
+            return (string) $value;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stringifySettingOptions(mixed $options): array
+    {
+        if (! is_array($options)) {
+            return [];
+        }
+
+        $labels = [];
+
+        foreach ($options as $option) {
+            if (is_scalar($option)) {
+                $labels[] = (string) $option;
+
+                continue;
+            }
+
+            if (is_array($option)) {
+                $label = $option['label'] ?? $option['value'] ?? null;
+                if (is_scalar($label)) {
+                    $labels[] = (string) $label;
+                }
+            }
+        }
+
+        return $labels;
     }
 }

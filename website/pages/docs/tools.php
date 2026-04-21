@@ -932,6 +932,12 @@ subagent task="Design a unified event system based on the auth, payment, and not
     writing code.
 </p>
 
+<div class="tip">
+    For the full Lua model &mdash; host-side Lua tools, <code>app.integrations.*</code>,
+    <code>app.tools.*</code>, multi-account namespaces, and discovery workflow &mdash; see
+    <a href="/docs/lua">Lua</a>.
+</div>
+
 <h3 id="execute_lua">execute_lua</h3>
 
 <p>
@@ -1362,4 +1368,4 @@ print(stats.visitors)"</code></pre>
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

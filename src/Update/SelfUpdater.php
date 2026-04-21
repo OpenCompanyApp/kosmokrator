@@ -11,7 +11,7 @@ namespace Kosmokrator\Update;
  * binary type and downloads the matching asset from GitHub Releases.
  * Source installations (git clone) are rejected with guidance.
  */
-final class SelfUpdater
+final class SelfUpdater implements SelfUpdaterInterface
 {
     private const GITHUB_REPO = 'OpenCompanyApp/kosmokrator';
 
@@ -56,6 +56,28 @@ final class SelfUpdater
         @unlink($backupPath);
 
         return "Updated to v{$targetVersion}. Restart KosmoKrator to use the new version.";
+    }
+
+    public function installationMethod(): string
+    {
+        if (\Phar::running(false) !== '') {
+            return 'phar';
+        }
+
+        $path = realpath($_SERVER['argv'][0] ?? '');
+        if ($path === false || ! is_file($path)) {
+            return 'unknown';
+        }
+
+        return $this->isSourceInstallation($path) ? 'source' : 'binary';
+    }
+
+    public function sourceUpdateInstructions(): string
+    {
+        $path = realpath($_SERVER['argv'][0] ?? '');
+        $projectRoot = $path !== false ? dirname($path, 2) : getcwd();
+
+        return "cd {$projectRoot}\ngit pull\ncomposer install";
     }
 
     /**
@@ -136,10 +158,14 @@ final class SelfUpdater
 
         $data = @file_get_contents($url, false, $context);
 
-        // Check HTTP status from response headers ($http_response_header is set by file_get_contents)
+        // Check HTTP status from response headers.
         $status = 0;
-        if ($http_response_header !== []) {
-            foreach ($http_response_header as $header) {
+        $headers = function_exists('http_get_last_response_headers')
+            ? (http_get_last_response_headers() ?: [])
+            : [];
+
+        if ($headers !== []) {
+            foreach ($headers as $header) {
                 if (preg_match('/^HTTP\/[\d.]+ (\d{3})/', $header, $m)) {
                     $status = (int) $m[1];
                 }

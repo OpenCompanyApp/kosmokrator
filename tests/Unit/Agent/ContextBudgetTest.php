@@ -6,8 +6,10 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Kosmokrator\Agent\ContextBudget;
 use Kosmokrator\LLM\ModelCatalog;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 final class ContextBudgetTest extends TestCase
 {
     // ---------------------------------------------------------------

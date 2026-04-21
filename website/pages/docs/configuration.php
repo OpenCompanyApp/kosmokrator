@@ -164,7 +164,7 @@ audio:
 </table>
 
 <div class="tip">
-    <p><strong>Tip:</strong> You can switch providers and models mid-session with the <code>/model</code> slash command without restarting.</p>
+    <p><strong>Tip:</strong> You can switch providers and models mid-session with <code>/models</code> without restarting. The command shows recent and likely choices first; full inventory remains in <code>/settings</code>.</p>
 </div>
 
 <!-- ---------------------------------------- Agent ---------------------------------------- -->
@@ -373,6 +373,92 @@ audio:
         </tr>
     </tbody>
 </table>
+
+<!-- ---------------------------------------- Gateway ---------------------------------------- -->
+<h3 id="gateway">Gateway</h3>
+
+<p>
+    The Gateway category controls external chat surfaces. Today the shipped
+    gateway is Telegram, started with <code>kosmokrator gateway:telegram</code>.
+    Gateway state lives partly in normal config and partly in the local secret
+    store, so you usually manage it through <code>/settings</code> rather than
+    by editing YAML directly.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>gateway.telegram.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable or disable the Telegram gateway runtime.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>gateway.telegram.session_mode</code></td>
+            <td>choice: <code>chat</code>, <code>chat_user</code>, <code>thread</code>, <code>thread_user</code></td>
+            <td><code>thread</code></td>
+            <td>
+                Controls how Telegram chats map to Kosmo sessions.
+                <ul>
+                    <li><code>chat</code> &mdash; one session per chat</li>
+                    <li><code>chat_user</code> &mdash; one session per chat/user pair</li>
+                    <li><code>thread</code> &mdash; one session per Telegram thread/topic</li>
+                    <li><code>thread_user</code> &mdash; one session per thread/user pair</li>
+                </ul>
+            </td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>gateway.telegram.allowed_users</code></td>
+            <td>list</td>
+            <td><em>empty</em></td>
+            <td>Optional Telegram user allowlist. Accepts numeric user IDs and usernames. Empty means any user is allowed.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>gateway.telegram.allowed_chats</code></td>
+            <td>list</td>
+            <td><em>empty</em></td>
+            <td>Optional Telegram chat allowlist. Empty means all chats are allowed.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>gateway.telegram.require_mention</code></td>
+            <td>toggle</td>
+            <td><code>on</code></td>
+            <td>Require a mention or direct reply in group chats before the bot responds. Direct messages are unaffected.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>gateway.telegram.free_response_chats</code></td>
+            <td>list</td>
+            <td><em>empty</em></td>
+            <td>Chats that are allowed to receive normal free-form responses without mention gating.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>gateway.telegram.poll_timeout_seconds</code></td>
+            <td>number</td>
+            <td><code>20</code></td>
+            <td>Long-poll timeout for the Telegram bot loop.</td>
+            <td>next session</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="tip">
+    <p><strong>Telegram token:</strong> The bot token is managed through <code>/settings → Gateway</code> and stored outside normal YAML by default. You can also provide it via <code>KOSMOKRATOR_TELEGRAM_BOT_TOKEN</code>.</p>
+</div>
 
 <!-- ---------------------------------------- Codex ---------------------------------------- -->
 <h3 id="codex">Codex</h3>

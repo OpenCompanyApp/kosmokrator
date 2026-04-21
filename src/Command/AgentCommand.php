@@ -12,6 +12,7 @@ use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\SettingsRepositoryInterface;
+use Kosmokrator\Setup\SetupFlowInterface;
 use Kosmokrator\Skill\SkillDispatcher;
 use Kosmokrator\Skill\SkillLoader;
 use Kosmokrator\Skill\SkillRegistry;
@@ -222,11 +223,25 @@ class AgentCommand extends Command
      */
     private function runInteractive(InputInterface $input, OutputInterface $output): int
     {
-        // Build the agent session (UI + LLM + permissions) from container bindings.
-        // Falls back to a friendly error when the provider is not yet configured.
         $config = $this->container->make('config');
         $rendererPref = $input->getOption('renderer') ?: $config->get('kosmokrator.ui.renderer', 'auto');
         $animated = ! $input->getOption('no-animation') && $config->get('kosmokrator.ui.intro_animated', true);
+        $setup = $this->container->make(SetupFlowInterface::class);
+
+        if ($setup->needsProviderSetup()) {
+            $completed = $setup->open(
+                rendererPref: (string) $rendererPref,
+                animated: $animated,
+                showIntro: false,
+                notice: 'No provider is configured yet. Finish setup first, then KosmoKrator will continue.',
+            );
+
+            if (! $completed) {
+                return Command::FAILURE;
+            }
+
+            $animated = false;
+        }
 
         $builder = new AgentSessionBuilder($this->container);
 
@@ -266,7 +281,7 @@ class AgentCommand extends Command
             $currentVersion = $this->getApplication()?->getVersion() ?? 'dev';
             $updateAvailable = (new UpdateChecker($currentVersion))->check();
             if ($updateAvailable !== null) {
-                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run /update to install.");
+                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmokrator update` to install.");
             }
         }
 
@@ -502,39 +517,9 @@ class AgentCommand extends Command
      */
     private function buildSlashCommandRegistry(): SlashCommandRegistry
     {
-        $registry = new SlashCommandRegistry;
-
-        // Core commands
-        $registry->register(new Slash\QuitCommand);
-        // Session management commands
-        $registry->register(new Slash\ClearCommand);
-        $registry->register(new Slash\SeedCommand);
-        $registry->register(new Slash\TheogonyCommand);
-        $registry->register(new Slash\CompactCommand);
-        $registry->register(new Slash\TasksClearCommand);
-        $registry->register(new Slash\MemoriesCommand);
-        $registry->register(new Slash\SessionsCommand);
-        $registry->register(new Slash\ForgetCommand);
-
-        // Agent mode switches
-        $registry->register(new Slash\GuardianCommand);
-        $registry->register(new Slash\ArgusCommand);
-        $registry->register(new Slash\PrometheusCommand);
-        $registry->register(new Slash\ModeCommand(AgentMode::Edit));
-        $registry->register(new Slash\ModeCommand(AgentMode::Plan));
-        $registry->register(new Slash\ModeCommand(AgentMode::Ask));
-
-        // Utility commands
         $version = $this->getApplication()?->getVersion() ?? 'dev';
-        $registry->register(new Slash\NewCommand);
-        $registry->register(new Slash\ResumeCommand);
-        $registry->register(new Slash\SettingsCommand($this->container));
-        $registry->register(new Slash\AgentsCommand);
-        $registry->register(new Slash\UpdateCommand($version));
-        $registry->register(new Slash\FeedbackCommand($version));
-        $registry->register(new Slash\RenameCommand);
 
-        return $registry;
+        return SlashCommandRegistryFactory::build($this->container, $version);
     }
 
     /**

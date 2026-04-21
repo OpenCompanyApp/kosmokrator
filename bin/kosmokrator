@@ -10,6 +10,9 @@ use Kosmokrator\Command\CodexLogoutCommand;
 use Kosmokrator\Command\CodexStatusCommand;
 use Kosmokrator\Command\ConfigCommand;
 use Kosmokrator\Command\SetupCommand;
+use Kosmokrator\Command\TelegramGatewayCommand;
+use Kosmokrator\Command\TelegramGatewayWorkerCommand;
+use Kosmokrator\Command\UpdateCommand;
 use Kosmokrator\Kernel;
 use NunoMaduro\Collision\Provider;
 
@@ -38,12 +41,15 @@ $console->addCommand(new CodexLogoutCommand($kernel->getContainer()));
 $console->addCommand(new SetupCommand($kernel->getContainer()));
 $console->addCommand(new ConfigCommand($kernel->getContainer()));
 $console->addCommand(new AuthCommand($kernel->getContainer()));
+$console->addCommand(new UpdateCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
+$console->addCommand(new TelegramGatewayCommand($kernel->getContainer()));
+$console->addCommand(new TelegramGatewayWorkerCommand($kernel->getContainer()));
 
 // Default to agent in single-command mode unless another explicit command is requested.
 // 'agent' is removed from the explicit list so that `kosmokrator agent "prompt"`
 // enters single-command mode correctly (positional prompt binds to the command).
 $args = $_SERVER['argv'] ?? [];
-$explicitCommands = ['setup', 'config', 'auth', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
+$explicitCommands = ['setup', 'config', 'auth', 'update', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
 $requestedCommand = $args[1] ?? null;
 $isExplicitCommand = is_string($requestedCommand) && ! str_starts_with($requestedCommand, '-') && in_array($requestedCommand, $explicitCommands, true);
 

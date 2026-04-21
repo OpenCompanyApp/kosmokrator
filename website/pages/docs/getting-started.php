@@ -138,6 +138,39 @@ kosmokrator</code></pre>
 
 
 <!-- ================================================================== -->
+<h2 id="telegram-gateway">Optional: Add Telegram</h2>
+<!-- ================================================================== -->
+
+<p>
+    KosmoKrator can also run as a Telegram bot surface backed by the same
+    session and agent runtime. This is optional, but useful when you want to
+    continue a session from your phone or use KosmoKrator outside the terminal.
+</p>
+
+<ol>
+    <li>Open KosmoKrator locally and go to <code>/settings</code> → <strong>Gateway</strong>.</li>
+    <li>Enable Telegram, store the bot token, and set an allowlist for your Telegram user ID or username.</li>
+    <li>Choose a session mode such as <code>chat_user</code> for isolated personal chats.</li>
+    <li>Start the gateway from your shell:</li>
+</ol>
+
+<pre><code>kosmokrator gateway:telegram</code></pre>
+
+<p>
+    Then DM the bot and start with:
+</p>
+
+<pre><code>/status</code></pre>
+
+<p>
+    The gateway supports streaming replies, typing indicators, queued follow-up
+    messages, inline approval buttons, and a bridge for the main Kosmo slash
+    commands like <code>/edit</code>, <code>/plan</code>, <code>/ask</code>,
+    <code>/compact</code>, and <code>/models</code>.
+</p>
+
+
+<!-- ================================================================== -->
 <h2 id="first-task">Your First Task</h2>
 <!-- ================================================================== -->
 
@@ -412,4 +445,4 @@ function switchInstallTab(event, panelId) {
 </script>
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

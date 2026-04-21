@@ -15,12 +15,15 @@ use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ModelSwitcherHistory;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\ProviderDefinition;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Tool\Permission\PermissionMode;
+use Kosmokrator\Web\Provider\WebFetchProviderManager;
+use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use OpenCompany\IntegrationCore\Contracts\ConfigurableIntegration;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
@@ -58,21 +61,43 @@ final class SettingsCommand implements SlashCommand
 
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
-        // Resolve catalogs and settings manager, then render the settings UI
+        $this->openWorkspace($ctx);
 
+        return SlashCommandResult::continue();
+    }
+
+    /**
+     * @param  array<string, mixed>  $viewOverrides
+     */
+    public function openWorkspace(SlashCommandContext $ctx, array $viewOverrides = []): bool
+    {
         $catalog = $ctx->providers ?? $this->container->make(ProviderCatalog::class);
         $registry = $this->container->make(RelayRegistry::class);
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot($ctx->sessionManager->getProject() ?? getcwd());
 
-        $view = $this->buildSettingsView($ctx, $catalog, $settings);
+        $view = array_replace($this->buildSettingsView($ctx, $catalog, $settings), $viewOverrides);
         $result = $ctx->ui->showSettings($view);
 
-        // No changes submitted
         if ($result === [] || ! is_array($result)) {
-            return SlashCommandResult::continue();
+            return false;
         }
 
+        $this->applyWorkspaceResult($ctx, $catalog, $registry, $settings, $result);
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function applyWorkspaceResult(
+        SlashCommandContext $ctx,
+        ProviderCatalog $catalog,
+        RelayRegistry $registry,
+        SettingsManager $settings,
+        array $result,
+    ): void {
         $scope = (string) ($result['scope'] ?? 'project');
         $changes = is_array($result['changes'] ?? null) ? $result['changes'] : [];
 
@@ -81,7 +106,6 @@ final class SettingsCommand implements SlashCommand
             ? trim((string) $result['delete_custom_provider'])
             : '';
 
-        // Determine which provider the setup panel is configuring (may be custom)
         $setupProvider = trim((string) ($changes['provider.setup_provider'] ?? $ctx->llm->getProvider()));
         if ($setupProvider === '__custom__') {
             $setupProvider = trim((string) ($customProvider['id'] ?? ''));
@@ -103,7 +127,6 @@ final class SettingsCommand implements SlashCommand
 
         $targetProvider = (string) ($changes['agent.default_provider'] ?? $ctx->llm->getProvider());
         $targetModel = (string) ($changes['agent.default_model'] ?? $ctx->llm->getModel());
-        // Fall back to the provider's default model if the selected one isn't supported
         if (! $catalog->supportsModel($targetProvider, $targetModel)) {
             $fallbackModel = $catalog->defaultModel($targetProvider) ?? ($catalog->modelIds($targetProvider)[0] ?? $targetModel);
             $changes['agent.default_model'] = $fallbackModel;
@@ -114,7 +137,6 @@ final class SettingsCommand implements SlashCommand
         foreach ($changes as $id => $value) {
             $stringValue = is_scalar($value) || $value === null ? (string) $value : '';
 
-            // Dispatch each setting change to the appropriate handler
             match ($id) {
                 'agent.mode' => $this->applyMode($ctx, $stringValue, $scope),
                 'tools.default_permission_mode' => $this->applyPermissionMode($ctx, $stringValue, $scope),
@@ -124,6 +146,8 @@ final class SettingsCommand implements SlashCommand
                 'agent.default_provider' => $this->applyProvider($ctx, $catalog, $registry, $settings, $stringValue, $scope),
                 'agent.default_model' => $this->applyModel($ctx, $settings, $targetProvider, $stringValue, $scope),
                 'provider.secret.api_key' => $this->storeApiKey($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
+                'gateway.telegram.secret.token' => $this->storeGatewayTelegramToken($ctx, $stringValue),
+                'gateway.telegram.token_action' => $this->handleGatewayTelegramTokenAction($ctx, $stringValue),
                 'provider.auth_action' => $this->handleAuthAction($ctx, $catalog, $setupProvider !== '' ? $setupProvider : $targetProvider, $stringValue),
                 'provider.auth_status',
                 'provider.setup_provider',
@@ -148,13 +172,12 @@ final class SettingsCommand implements SlashCommand
             };
         }
 
-        // Refresh the status bar immediately so the user sees the new model/provider
         if (isset($changes['agent.default_provider']) || isset($changes['agent.default_model'])) {
+            (new ModelSwitcherHistory($ctx->settings, $settings))->record($targetProvider, $targetModel);
             $modelCatalog = $ctx->models ?? $this->container->make(ModelCatalog::class);
             $ctx->ui->refreshRuntimeSelection($targetProvider, $targetModel, $modelCatalog->contextWindow($targetModel));
         }
 
-        // Codex requires OAuth; prompt the user to authenticate if credentials are missing
         if (($changes['agent.default_provider'] ?? null) === 'codex' && ! isset($changes['provider.auth_action'])) {
             $flow = $this->container->make(CodexAuthFlow::class);
             if ($flow->current() === null) {
@@ -183,8 +206,6 @@ final class SettingsCommand implements SlashCommand
         if ($updatedKeys !== []) {
             $ctx->ui->showNotice('Settings updated: '.implode(', ', $updatedKeys));
         }
-
-        return SlashCommandResult::continue();
     }
 
     /**
@@ -222,6 +243,19 @@ final class SettingsCommand implements SlashCommand
                     'description' => $definition->description,
                 ];
             }
+
+            foreach ($fields as &$field) {
+                if (($field['id'] ?? null) === 'web.search.default_provider'
+                    && $this->container->bound(WebSearchProviderManager::class)) {
+                    $field['options'] = $this->container->make(WebSearchProviderManager::class)->availableProviderIds();
+                }
+
+                if (($field['id'] ?? null) === 'web.fetch.default_provider'
+                    && $this->container->bound(WebFetchProviderManager::class)) {
+                    $field['options'] = $this->container->make(WebFetchProviderManager::class)->availableProviderIds();
+                }
+            }
+            unset($field);
 
             if ($categoryId === 'models') {
                 $providerId = (string) ($fields[0]['value'] ?? $currentProvider);
@@ -490,6 +524,10 @@ final class SettingsCommand implements SlashCommand
                 $fields = array_merge($fields, $integrationView['fields']);
             }
 
+            if ($categoryId === 'gateway') {
+                $fields = array_merge($fields, $this->gatewayFields($ctx));
+            }
+
             $categories[] = [
                 'id' => $categoryId,
                 'label' => $label,
@@ -634,6 +672,43 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
+    private function storeGatewayTelegramToken(SlashCommandContext $ctx, string $value): void
+    {
+        if ($value === '' || str_starts_with($value, '(')) {
+            return;
+        }
+
+        $ctx->settings->set('global', 'gateway.telegram.token', $value);
+    }
+
+    private function handleGatewayTelegramTokenAction(SlashCommandContext $ctx, string $action): void
+    {
+        if ($action === '') {
+            return;
+        }
+
+        if ($action === 'clear_token') {
+            $ctx->settings->delete('global', 'gateway.telegram.token');
+            $ctx->ui->showNotice('Cleared Telegram gateway token.');
+
+            return;
+        }
+
+        if ($action === 'edit_token') {
+            $token = trim($ctx->ui->askUser('Enter Telegram bot token:'));
+            if ($token !== '') {
+                $ctx->settings->set('global', 'gateway.telegram.token', $token);
+                $ctx->ui->showNotice('Stored Telegram gateway token.');
+            }
+
+            return;
+        }
+
+        if ($action === 'status') {
+            $ctx->ui->showNotice($this->gatewayTelegramTokenStatus($ctx));
+        }
+    }
+
     /**
      * Dispatches provider-specific auth workflows: API key management, OAuth browser/device
      * login flows, and credential status inspection.
@@ -766,6 +841,47 @@ final class SettingsCommand implements SlashCommand
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function gatewayFields(SlashCommandContext $ctx): array
+    {
+        $value = $ctx->settings->get('global', 'gateway.telegram.token');
+        $masked = $value !== null && $value !== '' ? $this->maskSecret($value) : '';
+
+        return [
+            [
+                'id' => 'gateway.telegram.secret.token',
+                'label' => 'Telegram bot token',
+                'value' => $masked,
+                'source' => 'secret_store',
+                'effect' => 'applies_now',
+                'type' => 'text',
+                'options' => [],
+                'description' => 'Bot token stored separately from YAML config.',
+            ],
+            [
+                'id' => 'gateway.telegram.token_action',
+                'label' => 'Token action',
+                'value' => '',
+                'source' => 'runtime',
+                'effect' => 'applies_now',
+                'type' => 'choice',
+                'options' => ['status', 'edit_token', 'clear_token'],
+                'description' => 'Inspect, replace, or clear the stored Telegram bot token.',
+            ],
+        ];
+    }
+
+    private function gatewayTelegramTokenStatus(SlashCommandContext $ctx): string
+    {
+        $value = $ctx->settings->get('global', 'gateway.telegram.token');
+
+        return ($value !== null && $value !== '')
+            ? 'Telegram bot token is configured.'
+            : 'Telegram bot token is not configured.';
+    }
+
+    /**
      * @return array<int, array{value: string, label: string, description: string}>
      */
     private function authActionOptions(string $authMode): array
@@ -892,8 +1008,33 @@ final class SettingsCommand implements SlashCommand
             'context.compact_threshold' => (string) ($ctx->agentLoop->getCompactor()?->getCompactThresholdPercent() ?? $fallback ?? 60),
             'context.prune_protect' => (string) ($ctx->agentLoop->getPruner()?->getProtectTokens() ?? $fallback ?? 40000),
             'context.prune_min_savings' => (string) ($ctx->agentLoop->getPruner()?->getMinSavings() ?? $fallback ?? 20000),
-            default => $fallback === null ? '' : (string) $fallback,
+            default => $this->stringifySettingValue($fallback),
         };
+    }
+
+    private function stringifySettingValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'on' : 'off';
+        }
+
+        if (is_array($value)) {
+            $items = array_values(array_filter(array_map(static function (mixed $item): string {
+                if (is_scalar($item) || $item === null) {
+                    return trim((string) $item);
+                }
+
+                return '';
+            }, $value), static fn (string $item): bool => $item !== ''));
+
+            return implode(', ', $items);
+        }
+
+        return (string) $value;
     }
 
     /**

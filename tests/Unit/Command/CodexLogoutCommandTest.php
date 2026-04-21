@@ -8,11 +8,13 @@ use Illuminate\Container\Container;
 use Kosmokrator\Command\CodexLogoutCommand;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismCodex\ValueObjects\CodexToken;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 
+#[AllowMockObjectsWithoutExpectations]
 class CodexLogoutCommandTest extends TestCase
 {
     private Container&MockObject $container;

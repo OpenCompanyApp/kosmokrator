@@ -244,4 +244,105 @@ class MessageRepositoryTest extends TestCase
 
         $this->assertSame([], $results);
     }
+
+    public function test_search_grouped_returns_per_session_results(): void
+    {
+        $sessions = new SessionRepository($this->db);
+        $s1 = $sessions->create('/project', 'model-1');
+        $s2 = $sessions->create('/project', 'model-1');
+
+        $this->messages->append($s1, 'user', 'How does JWT auth work?');
+        $this->messages->append($s1, 'assistant', 'JWT tokens are signed credentials');
+        $this->messages->append($s2, 'user', 'Fix the JWT refresh bug');
+        $this->messages->append($s2, 'assistant', 'The JWT refresh endpoint was broken');
+
+        $results = $this->messages->searchProjectHistoryGrouped('/project', 'JWT', $this->sessionId, 5);
+
+        $this->assertCount(2, $results);
+        // Each result has required fields
+        foreach ($results as $r) {
+            $this->assertArrayHasKey('session_id', $r);
+            $this->assertArrayHasKey('match_count', $r);
+            $this->assertArrayHasKey('best_match', $r);
+            $this->assertArrayHasKey('context', $r);
+            $this->assertGreaterThanOrEqual(1, $r['match_count']);
+        }
+    }
+
+    public function test_search_grouped_excludes_current_session(): void
+    {
+        $this->messages->append($this->sessionId, 'user', 'JWT auth in current session');
+
+        $results = $this->messages->searchProjectHistoryGrouped('/project', 'JWT', $this->sessionId, 5);
+
+        $this->assertSame([], $results);
+    }
+
+    public function test_search_grouped_limits_unique_sessions(): void
+    {
+        $sessions = new SessionRepository($this->db);
+        for ($i = 0; $i < 5; $i++) {
+            $sid = $sessions->create('/project', 'model-1');
+            $this->messages->append($sid, 'user', "Discussion about Redis caching #{$i}");
+        }
+
+        $results = $this->messages->searchProjectHistoryGrouped('/project', 'Redis', $this->sessionId, 2);
+
+        $this->assertCount(2, $results);
+    }
+
+    public function test_search_grouped_includes_context_messages(): void
+    {
+        $sessions = new SessionRepository($this->db);
+        $sid = $sessions->create('/project', 'model-1');
+
+        $this->messages->append($sid, 'user', 'Tell me about Docker');
+        $this->messages->append($sid, 'assistant', 'Docker uses containers for isolation');
+        $this->messages->append($sid, 'user', 'How does Docker networking work?');
+
+        $results = $this->messages->searchProjectHistoryGrouped('/project', 'Docker networking', $this->sessionId, 5);
+
+        $this->assertCount(1, $results);
+        // Context should contain surrounding messages
+        $this->assertNotEmpty($results[0]['context']);
+    }
+
+    public function test_load_transcript_returns_ordered_messages(): void
+    {
+        $this->messages->append($this->sessionId, 'user', 'Hello');
+        $this->messages->append($this->sessionId, 'assistant', 'Hi there');
+        $this->messages->append($this->sessionId, 'user', 'Help me');
+
+        $transcript = $this->messages->loadTranscript($this->sessionId);
+
+        $this->assertCount(3, $transcript);
+        $this->assertSame('user', $transcript[0]['role']);
+        $this->assertSame('Hello', $transcript[0]['content']);
+        $this->assertSame('assistant', $transcript[1]['role']);
+        $this->assertSame('user', $transcript[2]['role']);
+    }
+
+    public function test_load_transcript_respects_limit(): void
+    {
+        $this->messages->append($this->sessionId, 'user', 'First');
+        $this->messages->append($this->sessionId, 'assistant', 'Second');
+        $this->messages->append($this->sessionId, 'user', 'Third');
+
+        $transcript = $this->messages->loadTranscript($this->sessionId, 2);
+
+        $this->assertCount(2, $transcript);
+        $this->assertSame('First', $transcript[0]['content']);
+    }
+
+    public function test_load_transcript_excludes_compacted(): void
+    {
+        $id1 = $this->messages->append($this->sessionId, 'user', 'Old message');
+        $this->messages->append($this->sessionId, 'assistant', 'Current message');
+        $this->messages->markCompactedIds([$id1]);
+
+        $transcript = $this->messages->loadTranscript($this->sessionId);
+
+        $this->assertCount(1, $transcript);
+        $this->assertSame('Current message', $transcript[0]['content']);
+    }
 }

@@ -30,6 +30,7 @@ use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
 
+#[AllowMockObjectsWithoutExpectations]
 class AgentLoopTest extends TestCase
 {
     private LlmClientInterface&Stub $llm;

@@ -23,6 +23,7 @@ Forward-looking design docs. Not shipped — may reference classes or features t
 | [ecosystem-architecture.md](proposals/ecosystem-architecture.md) | Lua code mode, MCP integration, OpenCompany tool ecosystem |
 | [integration-refactor-plan.md](proposals/integration-refactor-plan.md) | Refactoring tool packages to framework-agnostic contracts |
 | [desktop-app.md](proposals/desktop-app.md) | NativePHP + Electron desktop surface proposal |
+| [hermes-style-gateway.md](proposals/hermes-style-gateway.md) | Hermes-style Telegram-first gateway surface for KosmoKrator |
 | [tui-ux-improvements.md](proposals/tui-ux-improvements.md) | 10 ranked UX improvements with mockups |
 | [command-inspiration.md](proposals/command-inspiration.md) | Slash/power command ideas from competitive analysis |
 | [laravel-ai-patterns.md](proposals/laravel-ai-patterns.md) | Patterns from Laravel AI SDK worth borrowing |

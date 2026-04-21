@@ -19,7 +19,9 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\HeadlessRenderer;
 use Kosmokrator\UI\OutputFormat;
+use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\UIManager;
+use Kosmokrator\Web\Cache\WebTransientCache;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
@@ -91,6 +93,7 @@ final class AgentSessionBuilder
 
         // Append Lua integration docs if available
         $baseSystemPrompt .= $this->buildLuaDocsSuffix();
+        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
 
         // Task store
         $taskStore = $this->container->make(TaskStore::class);
@@ -112,7 +115,7 @@ final class AgentSessionBuilder
             $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager,
             $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
             $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events,
+            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
         );
 
         // Subagent pipeline (orchestrator, root context, factory)
@@ -166,7 +169,10 @@ final class AgentSessionBuilder
 
         // Create LLM client (always use sync/prism for headless)
         $llmFactory = new LlmClientFactory($this->container);
-        $llm = $llmFactory->create('ansi', $ui);
+        // Gateway surfaces need the same async-capable LLM path as TUI sessions.
+        // Some providers, notably Z.AI coding, work correctly via the async transport
+        // but fail on the sync Prism path used for plain ANSI/headless mode.
+        $llm = $llmFactory->create('tui', $ui);
 
         // Apply model override if specified
         if (! empty($options['model'])) {
@@ -218,6 +224,7 @@ final class AgentSessionBuilder
 
         // Append Lua integration docs if available
         $baseSystemPrompt .= $this->buildLuaDocsSuffix();
+        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
 
         // Task store
         $taskStore = $this->container->make(TaskStore::class);
@@ -239,7 +246,7 @@ final class AgentSessionBuilder
             $persistSession ? $sessionManager : null,
             $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
             $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events,
+            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
         );
 
         // Apply guardrails
@@ -283,6 +290,114 @@ final class AgentSessionBuilder
     }
 
     /**
+     * Build an agent session for a non-terminal surface such as the Telegram gateway.
+     *
+     * Uses a caller-supplied renderer while keeping normal session persistence,
+     * permissions, tool wiring, and subagent support intact.
+     *
+     * @param  array{model?: string, permission_mode?: string, agent_mode?: string, system_prompt?: string, append_system_prompt?: string, max_turns?: int, timeout?: int}  $options
+     */
+    public function buildGateway(RendererInterface $ui, array $options = []): AgentSession
+    {
+        $config = $this->container->make('config');
+
+        $ui->initialize();
+
+        $llmFactory = new LlmClientFactory($this->container);
+        // Gateway surfaces need the same async-capable client selection as TUI.
+        $llm = $llmFactory->create('tui', $ui);
+
+        if (! empty($options['model'])) {
+            $llm->setModel($options['model']);
+        }
+
+        $log = $this->container->make(LoggerInterface::class);
+
+        $toolRegistry = $this->container->make(ToolRegistry::class);
+        $toolRegistry->register(new AskUserTool($ui));
+        $toolRegistry->register(new AskChoiceTool($ui));
+        $permissions = $this->container->make(PermissionEvaluator::class);
+        $models = $this->container->make(ModelCatalog::class);
+
+        $sessionManager = $this->container->make(SessionManager::class);
+        $project = InstructionLoader::gitRoot() ?? getcwd();
+        $sessionManager->setProject($project);
+
+        $kosmokratorConfig = $config->get('kosmokrator', []);
+        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
+        $settingsApplier->apply($llm, $permissions);
+
+        if (! empty($options['permission_mode'])) {
+            $permissions->setPermissionMode(PermissionMode::from((string) $options['permission_mode']));
+        }
+
+        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+            .InstructionLoader::gather()
+            .EnvironmentContext::gather();
+
+        if (! empty($options['system_prompt'])) {
+            $baseSystemPrompt = (string) $options['system_prompt'];
+        }
+        if (! empty($options['append_system_prompt'])) {
+            $baseSystemPrompt .= "\n\n".(string) $options['append_system_prompt'];
+        }
+
+        $baseSystemPrompt .= $this->buildLuaDocsSuffix();
+        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
+
+        $taskStore = $this->container->make(TaskStore::class);
+        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
+        $contextPipeline = $contextFactory->create($llm);
+        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
+        $events = $this->container->bound(Dispatcher::class)
+            ? $this->container->make(Dispatcher::class)
+            : null;
+
+        $agentLoop = new AgentLoop(
+            $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager,
+            $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
+            $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
+            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
+        );
+
+        if (! empty($options['max_turns'])) {
+            $agentLoop->setMaxTurns((int) $options['max_turns']);
+        }
+
+        if (! empty($options['timeout'])) {
+            $agentLoop->setTimeout((int) $options['timeout']);
+        }
+
+        if (! empty($options['agent_mode'])) {
+            $agentLoop->setMode(AgentMode::from((string) $options['agent_mode']));
+        }
+
+        $prismProviders = $config->get('prism.providers', []);
+        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
+        $subagentPipelineFactory = new SubagentPipelineFactory(
+            $sessionManager,
+            $this->container->make(ProviderCatalog::class),
+            $this->container->make(RelayRegistry::class),
+            $models,
+            $this->container->make(Relay::class),
+            $log,
+            $subagentConfig,
+        );
+        $subagentPipeline = $subagentPipelineFactory->create(
+            $llm, $toolRegistry, $permissions, $ui, $contextPipeline, 'ansi',
+        );
+
+        $toolRegistry->register(new SubagentTool(
+            $subagentPipeline->rootContext,
+            fn (AgentContext $ctx, string $task) => $subagentPipeline->factory->createAndRunAgent($ctx, $task),
+        ));
+        $agentLoop->setAgentContext($subagentPipeline->rootContext);
+        $agentLoop->setTools($toolRegistry->toPrismTools());
+
+        return new AgentSession($ui, $agentLoop, $llm, $permissions, $sessionManager, $subagentPipeline->orchestrator);
+    }
+
+    /**
      * Build the Lua integration docs suffix for the system prompt.
      */
     private function buildLuaDocsSuffix(): string
@@ -312,5 +427,20 @@ final class AgentSessionBuilder
         } catch (\Throwable) {
             return '';
         }
+    }
+
+    private function buildWebToolsSuffix(ToolRegistry $toolRegistry): string
+    {
+        if ($toolRegistry->get('web_search') === null && $toolRegistry->get('web_fetch') === null) {
+            return '';
+        }
+
+        return "\n\n# Web Research\n\n"
+            .'Web tools are available: `web_search` for discovery and `web_fetch` for reading pages. '
+            .'For large pages, prefer `web_fetch` in `metadata` or `outline` mode first, then fetch only the relevant '
+            ."section, match, or chunk.\n\n"
+            .'For multi-source research, prefer subagents so different sources can be searched and inspected in parallel. '
+            .'Have subagents return concise findings with URLs, then synthesize in the parent agent instead of loading many '
+            .'full pages into the main conversation context.';
     }
 }

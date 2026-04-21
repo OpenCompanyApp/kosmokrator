@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\TuiModalManager;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Tui;
@@ -13,6 +14,7 @@ use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
 
+#[AllowMockObjectsWithoutExpectations]
 final class TuiModalManagerTest extends TestCase
 {
     private function createManager(): TuiModalManager

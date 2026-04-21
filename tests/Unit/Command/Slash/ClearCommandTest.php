@@ -8,8 +8,10 @@ use Kosmokrator\Command\Slash\ClearCommand;
 use Kosmokrator\Command\SlashCommandAction;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 class ClearCommandTest extends TestCase
 {
     private ClearCommand $command;

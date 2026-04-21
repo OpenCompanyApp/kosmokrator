@@ -98,13 +98,14 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
                     continue;
                 }
 
-                $value = (string) ($field['value'] ?? '');
+                $value = $this->stringifyFieldValue($field['value'] ?? '');
                 $this->values[$id] = $value;
                 $this->originalValues[$id] = $value;
             }
         }
 
         $this->syncProviderSetupListIndex();
+        $this->applyInitialCategory();
     }
 
     /** Register the callback invoked when the user saves changes. */
@@ -935,6 +936,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $accent = Theme::accent();
         $white = Theme::white();
         $dim = Theme::dim();
+        $heading = (string) ($this->view['title'] ?? 'Settings');
 
         $provider = $this->values['agent.default_provider'] ?? '';
         $model = $this->values['agent.default_model'] ?? '';
@@ -944,10 +946,34 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $modelLabel = $this->displayLabelForFieldValue('agent.default_model', $model);
 
         return [
-            "{$accent}⚙ Settings{$r}  {$dim}scope{$r}: {$white}{$this->scope}{$r}  {$dim}provider{$r}: {$white}{$providerLabel}{$r}  {$dim}model{$r}: {$white}{$modelLabel}{$r}  {$status}{$unsaved}{$r}",
+            "{$accent}⚙ {$heading}{$r}  {$dim}scope{$r}: {$white}{$this->scope}{$r}  {$dim}provider{$r}: {$white}{$providerLabel}{$r}  {$dim}model{$r}: {$white}{$modelLabel}{$r}  {$status}{$unsaved}{$r}",
             "{$dim}Separate settings workspace. Save writes YAML-backed config; auth secrets remain managed separately.{$r}",
             str_repeat('─', max(10, $width - 2)),
         ];
+    }
+
+    private function applyInitialCategory(): void
+    {
+        $initialCategory = trim((string) ($this->view['initial_category'] ?? ''));
+        if ($initialCategory === '') {
+            return;
+        }
+
+        foreach ($this->categories() as $index => $category) {
+            if ((string) ($category['id'] ?? '') !== $initialCategory) {
+                continue;
+            }
+
+            $this->categoryIndex = $index;
+            $this->fieldIndex = 0;
+
+            if ($initialCategory === 'provider_setup') {
+                $this->providerSetupEditing = false;
+                $this->syncProviderSetupListIndex();
+            }
+
+            return;
+        }
     }
 
     /**
@@ -1083,6 +1109,10 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
 
         if ($this->isIntegrationsCategory()) {
             return $this->renderIntegrationDetails($width, $height);
+        }
+
+        if ($this->isGatewayCategory()) {
+            return $this->renderGatewayDetails($width, $height);
         }
 
         $field = $this->selectedField();
@@ -1255,6 +1285,89 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $lines[] = $this->boxFooter($width);
 
         return array_slice($lines, 0, $height);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderGatewayDetails(int $width, int $height): array
+    {
+        $lines = [$this->boxHeader('Details', $width)];
+        $field = $this->selectedField();
+
+        if ($field !== null) {
+            if ($this->editing) {
+                $label = (string) ($field['label'] ?? $field['id']);
+                $lines[] = $this->boxLine('Editing: '.$label, $width, Theme::accent());
+                $lines[] = $this->boxLine('Enter saves · Esc cancels · paste supported', $width);
+                $lines[] = $this->boxLine('', $width);
+
+                foreach ($this->wrapForBox($this->editBuffer === '' ? ' ' : $this->editBuffer, max(8, $width - 2)) as $line) {
+                    $lines[] = $this->boxLine($line, $width);
+                }
+
+                $lines[] = $this->boxLine('', $width);
+            }
+
+            foreach ($this->wrap((string) ($field['description'] ?? ''), $width - 2) as $line) {
+                $lines[] = $this->boxLine($line, $width);
+            }
+            $lines[] = $this->boxLine('', $width);
+            $lines[] = $this->boxLine('Source: '.($field['source'] ?? 'default'), $width);
+            $lines[] = $this->boxLine('Effect: '.($field['effect'] ?? 'next_session'), $width);
+        }
+
+        $enabled = $this->stringifyFieldValue($this->values['gateway.telegram.enabled'] ?? 'off');
+        $token = trim($this->stringifyFieldValue($this->values['gateway.telegram.secret.token'] ?? ''));
+        $sessionMode = $this->stringifyFieldValue($this->values['gateway.telegram.session_mode'] ?? 'thread');
+        $allowedUsers = $this->stringifyFieldValue($this->values['gateway.telegram.allowed_users'] ?? '');
+        $allowedChats = $this->stringifyFieldValue($this->values['gateway.telegram.allowed_chats'] ?? '');
+        $freeResponse = $this->stringifyFieldValue($this->values['gateway.telegram.free_response_chats'] ?? '');
+        $requireMention = $this->stringifyFieldValue($this->values['gateway.telegram.require_mention'] ?? 'on');
+
+        $lines[] = $this->boxLine('', $width);
+        $lines[] = $this->boxLine('Telegram Gateway', $width, Theme::accent());
+        $lines[] = $this->boxLine('Enabled: '.$enabled, $width);
+        $lines[] = $this->boxLine('Token: '.($token !== '' ? 'configured' : 'missing'), $width);
+        $lines[] = $this->boxLine('Session routing: '.$sessionMode, $width);
+        $lines[] = $this->boxLine('Require mention: '.$requireMention, $width);
+        $lines[] = $this->boxLine('Allowed users: '.($allowedUsers !== '' ? $allowedUsers : '(all)'), $width);
+        $lines[] = $this->boxLine('Allowed chats: '.($allowedChats !== '' ? $allowedChats : '(all)'), $width);
+        $lines[] = $this->boxLine('Free-response chats: '.($freeResponse !== '' ? $freeResponse : '(none)'), $width);
+        $lines[] = $this->boxLine('', $width);
+        $lines[] = $this->boxLine('Start with: php bin/kosmokrator gateway:telegram', $width);
+
+        while (count($lines) < $height - 1) {
+            $lines[] = $this->boxLine('', $width);
+        }
+        $lines[] = $this->boxFooter($width);
+
+        return array_slice($lines, 0, $height);
+    }
+
+    private function stringifyFieldValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'on' : 'off';
+        }
+
+        if (is_array($value)) {
+            $items = array_values(array_filter(array_map(static function (mixed $item): string {
+                if (is_scalar($item) || $item === null) {
+                    return trim((string) $item);
+                }
+
+                return '';
+            }, $value), static fn (string $item): bool => $item !== ''));
+
+            return implode(', ', $items);
+        }
+
+        return (string) $value;
     }
 
     /**
@@ -1472,6 +1585,11 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
     private function isIntegrationsCategory(): bool
     {
         return (string) ($this->selectedCategory()['id'] ?? '') === 'integrations';
+    }
+
+    private function isGatewayCategory(): bool
+    {
+        return (string) ($this->selectedCategory()['id'] ?? '') === 'gateway';
     }
 
     /** Handle Up/Down/Enter/Right input when the models browser is active. */

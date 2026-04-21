@@ -12,7 +12,7 @@ use Psr\Log\LoggerInterface;
  * Caches the result to avoid hitting the API on every session start.
  * The cache lives in ~/.kosmokrator/update-check.json with a configurable TTL.
  */
-final class UpdateChecker
+final class UpdateChecker implements UpdateCheckerInterface
 {
     private const GITHUB_REPO = 'OpenCompanyApp/kosmokrator';
 

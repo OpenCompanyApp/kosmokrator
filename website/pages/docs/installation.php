@@ -276,15 +276,15 @@ composer install</code></pre>
 <h2 id="updating">Updating</h2>
 
 <p>
-    KosmoKrator includes a built-in update mechanism. From a running session,
-    use the slash command:
+    KosmoKrator includes a built-in update command. From your shell, run:
 </p>
 
-<pre><code>/update</code></pre>
+<pre><code>kosmokrator update</code></pre>
 
 <p>
-    This checks the GitHub Releases page for a newer version and, if one is
-    available, downloads and replaces the current binary or PHAR in place.
+    This checks GitHub Releases for a newer version and follows the right
+    update path for your installation method. Static binary and PHAR installs
+    update in place. Source installs print the exact manual update commands.
 </p>
 
 <p>
@@ -471,4 +471,4 @@ box compile</code></pre>
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

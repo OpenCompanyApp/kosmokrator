@@ -21,7 +21,6 @@ final class ToastManagerTest extends TestCase
 
         // Reset ID counter for predictable tests
         $ref = new \ReflectionProperty(ToastItem::class, 'idCounter');
-        $ref->setAccessible(true);
         $ref->setValue(null, 0);
 
         $this->desktopNotificationFired = false;

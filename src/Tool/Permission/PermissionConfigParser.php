@@ -25,6 +25,7 @@ class PermissionConfigParser
         'memory_save', 'memory_search',
         'ask_user', 'ask_choice',
         'subagent',
+        'web_search', 'web_fetch',
     ];
 
     public function parse(Repository $config): array

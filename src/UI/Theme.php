@@ -309,6 +309,8 @@ class Theme
             'shell_kill' => '✕',  // Terminating a live session
             'grep' => '⊛',       // Astral search — seeking through the cosmos
             'glob' => '✧',       // Star cluster — surveying many points of light
+            'web_search' => '⌕', // Search through the wider world
+            'web_fetch' => '☍',  // Pulling a distant page into view
             'task_create' => '⊕', // Circled plus — bringing new labors into being
             'task_update' => '⊙', // Circled dot — altering the fate of a labor
             'task_list' => '☰',   // Trigram — surveying all labors
@@ -343,6 +345,8 @@ class Theme
             'shell_kill' => 'Shell',
             'grep' => 'Search',
             'glob' => 'Glob',
+            'web_search' => 'Web Search',
+            'web_fetch' => 'Web Fetch',
             'task_create' => 'Task',
             'task_update' => 'Task',
             'task_list' => 'Tasks',

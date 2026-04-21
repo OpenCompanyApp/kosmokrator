@@ -14,6 +14,7 @@ use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Session\Tool\SessionReadTool;
 use Kosmokrator\Session\Tool\SessionSearchTool;
+use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
@@ -44,6 +45,10 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
+use Kosmokrator\Tool\Web\WebFetchTool;
+use Kosmokrator\Tool\Web\WebSearchTool;
+use Kosmokrator\Web\Provider\WebFetchProviderManager;
+use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use Lua\Sandbox;
 use OpenCompany\IntegrationCore\Contracts\LuaToolInvoker;
 use Psr\Log\LoggerInterface;
@@ -125,6 +130,14 @@ class ToolServiceProvider extends ServiceProvider
             ));
             $registry->register(new GlobTool);
             $registry->register(new GrepTool);
+            $registry->register(new WebSearchTool(
+                $this->container->make(WebSearchProviderManager::class),
+                $this->container->make(SettingsManager::class),
+            ));
+            $registry->register(new WebFetchTool(
+                $this->container->make(WebFetchProviderManager::class),
+                $this->container->make(SettingsManager::class),
+            ));
             $registry->register(new BashTool($bashTimeout));
             $registry->register(new ShellStartTool(
                 $this->container->make(ShellSessionManager::class),

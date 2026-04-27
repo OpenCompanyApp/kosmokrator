@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Integration\IntegrationCapabilityResolver;
 use Kosmokrator\Integration\IntegrationManager;
 use Kosmokrator\Integration\KosmokratorFileStorage;
 use Kosmokrator\Integration\KosmokratorLuaToolInvoker;
@@ -81,6 +82,7 @@ class IntegrationServiceProvider extends ServiceProvider
         });
 
         // Integration manager — orchestrates providers, credentials, permissions
+        $this->container->singleton(IntegrationCapabilityResolver::class);
         $this->container->singleton(IntegrationManager::class);
 
         $this->container->singleton(IntegrationCatalog::class);

@@ -42,9 +42,13 @@ final class IntegrationRuntime
             throw new \RuntimeException("Unknown integration function: {$name}");
         }
 
-        $provider = $this->integrationManager->getLocallyRunnableProviders()[$function->provider] ?? null;
+        $provider = $this->integrationManager->getDiscoverableProviders()[$function->provider] ?? null;
         if ($provider === null) {
-            throw new \RuntimeException("Integration '{$function->provider}' is not locally runnable.");
+            throw new \RuntimeException("Integration '{$function->provider}' is not installed.");
+        }
+
+        if (! $this->integrationManager->isCliRuntimeSupported($provider)) {
+            throw new \RuntimeException("Integration '{$function->provider}' is discoverable but is not supported by the local CLI runtime yet.");
         }
 
         if (! $this->integrationManager->isEnabled($function->provider)) {

@@ -61,8 +61,9 @@ final class TuiAnimationManager
         private readonly \Closure $subagentCleanupCallback,
         private readonly \Closure $renderCallback,
         private readonly \Closure $forceRenderCallback,
+        ?TuiScheduler $scheduler = null,
     ) {
-        $this->breathingDriver = new BreathingDriver($state);
+        $this->breathingDriver = new BreathingDriver($state, $scheduler ?? TuiScheduler::fallback());
         $this->breathingDriver->setSubagentTickCallback($subagentTickCallback);
         $this->breathingDriver->setRenderCallback($renderCallback);
     }

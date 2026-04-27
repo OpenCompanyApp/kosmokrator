@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\Command;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Kosmokrator\Command\ConfigCommand;
+use Kosmokrator\Settings\SettingsCatalog;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
@@ -46,6 +47,7 @@ class ConfigCommandTest extends TestCase
 
         $this->container->singleton(SettingsManager::class, static fn () => $manager);
         $this->container->singleton(SettingsSchema::class, static fn () => $schema);
+        $this->container->singleton(SettingsCatalog::class, fn () => new SettingsCatalog($manager, $schema, $this->container));
 
         $command = new ConfigCommand($this->container);
 

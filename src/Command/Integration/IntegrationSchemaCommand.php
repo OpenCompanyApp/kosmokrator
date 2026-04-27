@@ -33,7 +33,7 @@ final class IntegrationSchemaCommand extends Command
         $catalog = $this->container->make(IntegrationCatalog::class);
         $function = $catalog->get($name);
         if ($function === null) {
-            $output->writeln("<error>Unknown integration function: {$name}</error>");
+            $this->writeJson($output, ['success' => false, 'error' => "Unknown integration function: {$name}"]);
 
             return Command::FAILURE;
         }

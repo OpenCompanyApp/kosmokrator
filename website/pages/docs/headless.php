@@ -58,6 +58,50 @@ kosmokrator integrations:lua workflow.lua --json</code></pre>
     detail in <a href="/docs/integrations">Integrations CLI</a>.
 </p>
 
+<p>
+    Integration calls remain governed in headless mode. Read/write permissions configured with
+    <code>integrations:configure --read=...</code>, <code>--write=...</code>, or
+    <code>integrations.permissions_default</code> are checked before execution. A trusted automation
+    job can pass <code>--force</code> to bypass only that integration read/write policy.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
+<h3 id="headless-configuration">Headless Configuration</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    You can bootstrap KosmoKrator itself without opening the setup wizard or settings TUI:
+</p>
+
+<pre><code># Configure an LLM provider and credentials
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# Discover and set normal settings
+kosmokrator settings:list --json
+kosmokrator settings:set tools.default_permission_mode guardian --global --json
+
+# Batch apply settings from JSON
+jq -n '{settings:{"agent.mode":"plan","context.max_output_lines":1200}}' | \
+  kosmokrator settings:apply --stdin-json --global --json
+
+# Store managed secrets without echoing raw values
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+# Configure Telegram gateway without the TUI
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmokrator gateway:telegram:configure --token-stdin \
+  --enabled on --session-mode thread_user --global --json</code></pre>
+
+<p>
+    Use <code>settings:doctor --json</code>, <code>providers:list --json</code>, and
+    <code>secrets:list --json</code> as the agent-friendly discovery path. See
+    <a href="/docs/configuration">Configuration</a> and <a href="/docs/providers">Providers</a>
+    for the full command reference.
+</p>
+
 <!-- ================================================================== -->
 <h2 id="output-formats">Output Formats</h2>
 <!-- ================================================================== -->
@@ -187,20 +231,24 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <h2 id="permissions">Permissions in Headless Mode</h2>
 <!-- ================================================================== -->
 
-<p>In headless mode, tool calls that reach an interactive approval prompt are auto-approved &mdash; there's no terminal dialog to ask for permission. Hard denies still apply first: blocked paths, explicit deny rules, agent-mode tool filtering, and file path validation can still stop a call before it executes.</p>
+<p>In headless mode, there is no terminal dialog for approval. KosmoKrator still evaluates the configured permission mode, denied tools, blocked paths, agent mode, integration read/write policy, and file path validation before executing work. Calls that would require an unavailable prompt fail with a structured error unless you explicitly choose an auto-approval policy.</p>
 
-<p>Use <code>--yolo</code> to explicitly opt into Prometheus-style auto-approval for governed calls:</p>
+<p>Use <code>--yolo</code> to explicitly opt into Prometheus-style auto-approval for agent tool calls:</p>
 
 <pre><code># Auto-approve governed permission prompts
 kosmokrator -p --yolo "run the full test suite and fix any failures"</code></pre>
 
-<p>Or use <code>--permission-mode</code> for explicit control:</p>
+<p>Or use <code>--permission-mode</code> for explicit control. For direct integration commands, use
+    <code>--force</code> when a trusted automation job should bypass integration read/write policy:</p>
 
 <pre><code># Use Guardian mode (auto-approve safe tools, deny risky ones)
 kosmokrator -p --permission-mode guardian "add type hints to src/Utils.php"
 
 # Use Argus mode (deny tools that would normally ask)
-kosmokrator -p --permission-mode argus "what files are in the project?"</code></pre>
+kosmokrator -p --permission-mode argus "what files are in the project?"
+
+# Bypass integration read/write policy for this direct call only
+kosmokrator integrations:call plane.create_issue --force --json</code></pre>
 
 <p>See <a href="/docs/permissions">Permissions</a> for details on each mode.</p>
 
@@ -337,7 +385,8 @@ jobs:
       - name: Setup KosmoKrator
         run: |
           curl -sSL https://kosmokrator.dev/install.sh | bash
-          kosmokrator setup --provider anthropic --api-key ${{ secrets.ANTHROPIC_API_KEY }}
+          printf %s "${{ secrets.ANTHROPIC_API_KEY }}" | \
+            kosmokrator setup --provider anthropic --api-key-stdin --global --json
 
       - name: Run AI Review
         run: |
@@ -476,7 +525,7 @@ sys.exit(proc.returncode)</code></pre>
 <tbody>
 <tr><td>Input method</td><td>REPL prompt</td><td>CLI arg, stdin, or <code>-p</code></td></tr>
 <tr><td>Output</td><td>TUI / ANSI renderer</td><td>stdout (text, JSON, stream-json)</td></tr>
-<tr><td>Tool permissions</td><td>Interactive prompts</td><td>Auto-approved</td></tr>
+<tr><td>Tool permissions</td><td>Interactive prompts</td><td>Policy evaluated; use <code>--yolo</code> for agent auto-approval</td></tr>
 <tr><td>Plan approval</td><td>Interactive dialog</td><td>Plans output but not auto-implemented</td></tr>
 <tr><td>Ask user/choice</td><td>Interactive prompts</td><td>Returns empty/dismissed</td></tr>
 <tr><td>Slash commands</td><td>Available</td><td>Not available</td></tr>

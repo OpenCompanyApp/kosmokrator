@@ -232,6 +232,38 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
     </tbody>
 </table>
 
+<p>
+    The catalog intentionally includes integrations that are not fully usable from the local CLI yet.
+    For example, redirect-based OAuth integrations can appear in <code>integrations:list</code>,
+    <code>integrations:status</code>, <code>integrations:search</code>, and
+    <code>integrations:docs</code> even when <code>cli_setup_supported</code> or
+    <code>cli_runtime_supported</code> is false. They remain visible so agents can discover the
+    integration surface now and move to proxy-backed execution when support lands.
+</p>
+
+<h3 id="capability-metadata">Capability Metadata</h3>
+
+<p>
+    Machine-readable output includes capability fields from the integration package when available:
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Field</th>
+            <th>Meaning</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td><code>auth_strategy</code></td><td>Authentication style such as <code>api_key</code>, <code>bearer_token</code>, or <code>oauth2_authorization_code</code>.</td></tr>
+        <tr><td><code>cli_setup_supported</code></td><td>Whether <code>integrations:configure</code> can set credentials headlessly.</td></tr>
+        <tr><td><code>cli_runtime_supported</code></td><td>Whether local <code>integrations:call</code> / <code>integrations:lua</code> execution is supported.</td></tr>
+        <tr><td><code>host_availability</code></td><td>Where the integration can run, including CLI, web, or future proxy hosts.</td></tr>
+        <tr><td><code>runtime_requirements</code></td><td>External runtime dependencies, such as rendering CLIs.</td></tr>
+        <tr><td><code>compatibility_summary</code></td><td>Short human-readable compatibility guidance for agents and users.</td></tr>
+    </tbody>
+</table>
+
 <!-- ================================================================== -->
 <h2 id="argument-passing">Argument Passing</h2>
 <!-- ================================================================== -->
@@ -350,7 +382,8 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
 <p>
     Use <code>--force</code> to bypass only the integration read/write permission policy. This is
     intentionally narrower than Prometheus mode in the coding agent. It does not bypass credential
-    checks, provider activation, argument validation, Lua resource limits, or provider API errors.
+    checks, provider activation, argument validation, CLI compatibility, Lua resource limits, or
+    provider API errors.
 </p>
 
 <pre><code>kosmokrator integrations:plane create_issue \
@@ -364,6 +397,13 @@ kosmokrator integrations:lua workflow.lua --force --json</code></pre>
 <!-- ================================================================== -->
 <h2 id="json-output">JSON Output</h2>
 <!-- ================================================================== -->
+
+<p>
+    Discovery commands use stable JSON envelopes. For example,
+    <code>integrations:list --json</code> returns <code>success</code> and a
+    <code>providers</code> object keyed by provider ID; <code>integrations:search --json</code>
+    returns <code>success</code>, <code>query</code>, and <code>functions</code>.
+</p>
 
 <p>
     Add <code>--json</code> to runtime calls when another process needs a stable result envelope:
@@ -622,6 +662,11 @@ kosmokrator integrations:lua workflow.lua \
             <td>Run <code>integrations:doctor provider --json</code>, then configure with <code>integrations:configure</code> or <code>/settings</code>.</td>
         </tr>
         <tr>
+            <td>CLI runtime unsupported</td>
+            <td><code>Integration 'provider' is discoverable but is not supported by the local CLI runtime yet.</code></td>
+            <td>Inspect <code>integrations:doctor provider --json</code>. The provider is visible for discovery and future proxy support.</td>
+        </tr>
+        <tr>
             <td>Missing account credentials</td>
             <td><code>Integration 'provider' is missing required credentials for account 'work'...</code></td>
             <td>Run <code>integrations:fields provider --account work --json</code>, then configure that account.</td>
@@ -691,10 +736,16 @@ kosmokrator integrations:configure plane \
   --arg api_key "$PLANE_API_KEY" \
   --arg url "$PLANE_URL" \
   '{
+    account: "default",
     set: {api_key: $api_key, url: $url},
     enabled: true,
     permissions: {read: "allow", write: "ask"}
   }' | kosmokrator integrations:configure plane --stdin-json --json</code></pre>
+
+<p>
+    Stdin JSON also accepts <code>credentials</code> as an alias for <code>set</code>, plus
+    <code>account</code> and <code>scope</code> (<code>global</code> or <code>project</code>) fields.
+</p>
 
 <p>
     Interactive setup is still available: open <code>/settings</code>, go to
@@ -719,6 +770,39 @@ kosmokrator integrations:configure plane \
 # Named account alias
 kosmokrator integrations:call plane.list_projects --account work --json
 kosmokrator integrations:plane list_projects --account work --json</code></pre>
+
+<p>
+    Headless multi-credential support is account-scoped end to end. Credential discovery checks the
+    requested alias with <code>integrations:fields provider --account work --json</code>,
+    configuration stores values under that alias with <code>integrations:configure --account</code>,
+    direct calls validate that alias before execution, and provider tools receive the selected
+    account in their execution context. This lets a caller keep separate work, personal, staging, or
+    production credentials for the same integration.
+</p>
+
+<pre><code># Agent-friendly named-account setup from JSON
+jq -n \
+  --arg api_key "$PLANE_WORK_API_KEY" \
+  --arg url "$PLANE_WORK_URL" \
+  '{
+    account: "work",
+    credentials: {api_key: $api_key, url: $url},
+    enabled: true,
+    permissions: {read: "allow", write: "ask"}
+  }' | kosmokrator integrations:configure plane --stdin-json --json
+
+# Validate and run against the named account
+kosmokrator integrations:fields plane --account work --json
+kosmokrator integrations:call plane.list_projects --account work --dry-run --json
+kosmokrator integrations:call plane.list_projects --account work --json</code></pre>
+
+<p>
+    Lua exposes the same aliases as namespaces:
+</p>
+
+<pre><code>app.integrations.plane.list_projects({...})          -- default account
+app.integrations.plane.default.list_projects({...})  -- explicit default account
+app.integrations.plane.work.list_projects({...})     -- work account</code></pre>
 
 <!-- ================================================================== -->
 <h2 id="coding-cli-patterns">Patterns for Other Coding CLIs</h2>

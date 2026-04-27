@@ -152,14 +152,34 @@ only that integration permission policy for trusted automation.
 Other commands:
 
 ```bash
-bin/kosmokrator setup                   # First-run provider/model wizard
-bin/kosmokrator config show             # Inspect resolved configuration
-bin/kosmokrator config set <key> <val>  # Persist a setting override
-bin/kosmokrator auth status [provider]  # Check authentication status
-bin/kosmokrator auth login <provider>   # Authenticate (--api-key or --device for OAuth)
-bin/kosmokrator auth logout <provider>  # Clear stored credentials
-bin/kosmokrator codex:login             # ChatGPT OAuth for the Codex provider
+bin/kosmokrator setup                         # Interactive provider/model wizard
+printf %s "$OPENAI_API_KEY" | bin/kosmokrator setup --provider openai \
+  --model gpt-5.4-mini --api-key-stdin --global --json
+
+bin/kosmokrator config show --json            # Inspect resolved configuration
+bin/kosmokrator config paths --json           # Show global/project config paths
+bin/kosmokrator settings:list --json          # Discover configurable settings
+bin/kosmokrator settings:set agent.mode plan --global --json
+bin/kosmokrator settings:doctor --json        # Diagnose headless readiness
+
+bin/kosmokrator providers:list --json
+printf %s "$OPENAI_API_KEY" | \
+  bin/kosmokrator providers:configure openai --api-key-stdin --json
+bin/kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --json
+
+printf %s "$OPENAI_API_KEY" | \
+  bin/kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  bin/kosmokrator gateway:telegram:configure --token-stdin --enabled on --json
+bin/kosmokrator gateway:telegram:status --json
+bin/kosmokrator codex:login                   # ChatGPT OAuth for the Codex provider
 ```
+
+The `settings:*`, `providers:*`, `secrets:*`, and
+`gateway:telegram:configure/status` commands are the headless configuration
+surface. They use stable JSON, expose discovery helpers, and avoid echoing raw
+secret values.
 
 ## Agent Modes
 
@@ -456,7 +476,7 @@ Environment variables (`${VAR_NAME}`) are resolved in all YAML files.
 kosmokrator:
   agent:
     default_provider: z
-    default_model: GLM-5.1
+    default_model: glm-5.1
     temperature: 0.0
     max_retries: 0
     subagent_max_depth: 3

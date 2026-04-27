@@ -168,13 +168,64 @@ ob_start();
 
 <pre><code>kosmokrator setup</code></pre>
 
+<p>
+    The same setup can run headlessly. Use this form for containers, CI, and remote machines:
+</p>
+
+<pre><code># Configure an API-key provider and default model without exposing the key in argv
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator setup --provider openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# Equivalent provider-specific command
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# OAuth providers can use device login when available
+kosmokrator providers:configure codex --device --global --json</code></pre>
+
+<h3>Headless provider discovery</h3>
+
+<p>
+    Provider commands are designed for agents and scripts: they expose stable JSON, never print raw
+    secrets, and include enough metadata to choose valid next commands.
+</p>
+
+<pre><code># List providers, auth mode, source, and configured status
+kosmokrator providers:list --json
+
+# Show one provider's status
+kosmokrator providers:status openai --json
+
+# List advertised models for a provider
+kosmokrator providers:models openai --json
+
+# Clear a stored API key
+kosmokrator providers:logout openai --json</code></pre>
+
+<p>
+    Provider commands reject unknown provider IDs with <code>success: false</code> and a non-zero
+    exit code. This keeps automation from mistaking an empty result for a valid provider.
+</p>
+
 <h3>API key storage</h3>
 
 <p>
-    API keys entered through the setup wizard or the <code>/settings</code> command are encrypted and stored in the
-    local SQLite database at <code>~/.kosmokrator/data/kosmokrator.db</code>. Keys are never written to
-    plain-text config files.
+    API keys entered through the setup wizard, <code>providers:configure</code>, or
+    <code>secrets:set</code> are stored in the local SQLite database at
+    <code>~/.kosmokrator/data/kosmokrator.db</code>. Keys are never written to plain-text config
+    files and JSON output only reports masked/configured status.
 </p>
+
+<pre><code># Set a provider key without putting it in argv history
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+# Check managed secret status
+kosmokrator secrets:status provider.openai.api_key --json
+kosmokrator secrets:list --json
+kosmokrator secrets:unset provider.openai.api_key --json</code></pre>
 
 <h3>Environment variables</h3>
 
@@ -327,6 +378,29 @@ subagent_model: claude-haiku-4-5-20251001
     <li>Add a new provider with a unique ID.</li>
     <li>Configure the required fields:</li>
 </ol>
+
+<p>
+    Or create/update the provider headlessly:
+</p>
+
+<pre><code>printf %s "$CORP_LLM_API_KEY" | kosmokrator providers:custom:upsert corp_llm \
+  --label "Corporate LLM" \
+  --url https://llm.corp.example/v1 \
+  --model llama-3.1-70b \
+  --context 128000 \
+  --max-output 8192 \
+  --api-key-stdin \
+  --global --json
+
+kosmokrator providers:custom:list --json
+kosmokrator providers:custom:delete corp_llm --json</code></pre>
+
+<p>
+    For richer definitions, pass JSON on stdin. The payload may include <code>id</code>,
+    <code>scope</code>, <code>api_key</code>, and a <code>definition</code> object with the same fields
+    used in YAML (<code>label</code>, <code>driver</code>, <code>auth</code>, <code>url</code>,
+    <code>default_model</code>, <code>modalities</code>, and <code>models</code>).
+</p>
 
 <table>
     <thead>

@@ -45,6 +45,8 @@ class AgentLoop
 
     private const STREAM_PARTIAL_FLUSH_SECONDS = 0.08;
 
+    private const MAX_REASONING_CONTENT_BYTES = 65_536;
+
     private ConversationHistory $history;
 
     /** @var Tool[] Full set of tools from registry */
@@ -807,6 +809,9 @@ class AgentLoop
         }
 
         $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+        $reasoningContent = $this->shouldRetainReasoning()
+            ? $this->capReasoningContent($response->reasoningContent)
+            : '';
 
         return new ResponseData(
             $response->text,
@@ -816,7 +821,7 @@ class AgentLoop
             $response->completionTokens,
             $response->cacheReadInputTokens,
             $response->cacheWriteInputTokens,
-            $response->reasoningContent,
+            $reasoningContent,
         );
     }
 
@@ -1058,6 +1063,8 @@ class AgentLoop
     {
         $fullText = '';
         $reasoningContent = '';
+        $retainReasoning = $this->shouldRetainReasoning();
+        $reasoningTruncated = false;
         $toolCalls = [];
         $tokensIn = 0;
         $tokensOut = 0;
@@ -1091,8 +1098,12 @@ class AgentLoop
                     SafeDisplay::call(fn () => $this->ui->streamChunk($partial), $this->log);
                 }
             } elseif ($event->type === 'thinking_delta') {
-                // Accumulate reasoning silently — displayed once after stream completes
-                $reasoningContent .= $event->delta;
+                if ($retainReasoning && ! $reasoningTruncated) {
+                    [$reasoningContent, $reasoningTruncated] = $this->appendReasoningContent(
+                        $reasoningContent,
+                        $event->delta,
+                    );
+                }
             } elseif ($event->type === 'tool_call') {
                 $toolCalls[] = new ToolCall(
                     id: $event->toolCall['id'],
@@ -1122,6 +1133,42 @@ class AgentLoop
         ]);
 
         return [$fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent];
+    }
+
+    private function shouldRetainReasoning(): bool
+    {
+        return ($this->sessionManager?->getSetting('show_reasoning') ?? 'off') === 'on';
+    }
+
+    /**
+     * @return array{string, bool} [reasoning content, whether the cap was reached]
+     */
+    private function appendReasoningContent(string $current, string $delta): array
+    {
+        $remaining = self::MAX_REASONING_CONTENT_BYTES - strlen($current);
+        if ($remaining <= 0) {
+            return [$this->capReasoningContent($current), true];
+        }
+
+        if (strlen($delta) <= $remaining) {
+            return [$current.$delta, false];
+        }
+
+        return [
+            $current.mb_strcut($delta, 0, $remaining, 'UTF-8')
+                ."\n\n[reasoning truncated at ".self::MAX_REASONING_CONTENT_BYTES.' bytes]',
+            true,
+        ];
+    }
+
+    private function capReasoningContent(string $content): string
+    {
+        if (strlen($content) <= self::MAX_REASONING_CONTENT_BYTES) {
+            return $content;
+        }
+
+        return mb_strcut($content, 0, self::MAX_REASONING_CONTENT_BYTES, 'UTF-8')
+            ."\n\n[reasoning truncated at ".self::MAX_REASONING_CONTENT_BYTES.' bytes]';
     }
 
     public function performCompaction(): void

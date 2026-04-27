@@ -36,17 +36,22 @@ final class IntegrationSearchCommand extends Command
         $results = $this->container->make(IntegrationCatalog::class)->search((string) $input->getArgument('query'));
 
         if ($input->getOption('json')) {
-            $this->writeJson($output, array_map(static fn ($function): array => $function->toArray(), $results));
+            $this->writeJson($output, [
+                'success' => true,
+                'query' => (string) $input->getArgument('query'),
+                'functions' => array_map(static fn ($function): array => $function->toArray(), $results),
+            ]);
 
             return Command::SUCCESS;
         }
 
         (new Table($output))
-            ->setHeaders(['Function', 'Operation', 'Status', 'Description'])
+            ->setHeaders(['Function', 'Operation', 'Status', 'Compatibility', 'Description'])
             ->setRows(array_map(static fn ($function): array => [
                 $function->fullName(),
                 $function->operation,
                 $function->active ? 'active' : 'inactive',
+                $function->capabilities['compatibility_summary'] ?? '',
                 trim((string) preg_replace('/\s+/', ' ', $function->description)),
             ], $results))
             ->render();

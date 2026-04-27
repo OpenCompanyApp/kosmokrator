@@ -105,6 +105,16 @@ final class PlaneIntegrationRuntimeTest extends TestCase
         $runtime->call('plane.list_workspaces', [], 'missing');
     }
 
+    public function test_runtime_rejects_discoverable_providers_without_cli_runtime_support(): void
+    {
+        [, $runtime] = $this->buildRuntime(new RuntimeOauthPlaneProvider);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not supported by the local CLI runtime yet');
+
+        $runtime->call('plane.list_workspaces', []);
+    }
+
     public function test_runtime_follows_integration_write_permissions_unless_forced(): void
     {
         $provider = new RuntimeFakePlaneProvider;
@@ -244,7 +254,7 @@ final class RuntimeFakeCredentialResolver implements CredentialResolver
     }
 }
 
-final class RuntimeFakePlaneProvider implements ToolProvider
+class RuntimeFakePlaneProvider implements ToolProvider
 {
     public int $createToolCalls = 0;
 
@@ -307,6 +317,16 @@ final class RuntimeFakePlaneProvider implements ToolProvider
     {
         return [
             ['key' => 'api_key', 'type' => 'secret', 'label' => 'API Key', 'required' => true],
+        ];
+    }
+}
+
+final class RuntimeOauthPlaneProvider extends RuntimeFakePlaneProvider
+{
+    public function credentialFields(): array
+    {
+        return [
+            ['key' => 'oauth', 'type' => 'oauth_connect', 'label' => 'Connect Plane', 'required' => true],
         ];
     }
 }

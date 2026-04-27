@@ -15,18 +15,51 @@ class IntegrationManager
         private readonly ToolProviderRegistry $providers,
         private readonly SettingsManager $settings,
         private readonly CredentialResolver $credentials,
+        private readonly ?IntegrationCapabilityResolver $capabilityResolver = null,
     ) {}
 
+    private function capabilities(): IntegrationCapabilityResolver
+    {
+        return $this->capabilityResolver ?? new IntegrationCapabilityResolver;
+    }
+
     /**
-     * Get all registered providers that can run in a CLI context (no OAuth).
+     * Get all registered providers that can execute in the local CLI runtime.
      *
      * @return array<string, ToolProvider>
      */
     public function getLocallyRunnableProviders(): array
     {
         $result = [];
-        foreach ($this->providers->all() as $name => $provider) {
+        foreach ($this->getDiscoverableProviders() as $name => $provider) {
             if ($this->isLocallyRunnable($provider)) {
+                $result[$name] = $provider;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get all integration providers that should be shown in catalog/docs.
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getDiscoverableProviders(): array
+    {
+        return $this->providers->all();
+    }
+
+    /**
+     * Get providers that can be configured from the headless CLI.
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getCliConfigurableProviders(): array
+    {
+        $result = [];
+        foreach ($this->getDiscoverableProviders() as $name => $provider) {
+            if ($this->isCliSetupSupported($provider)) {
                 $result[$name] = $provider;
             }
         }
@@ -52,17 +85,29 @@ class IntegrationManager
     }
 
     /**
-     * Check if a provider can run locally (no OAuth dependency).
+     * Check if a provider can execute in the local CLI runtime.
      */
     public function isLocallyRunnable(ToolProvider $provider): bool
     {
-        foreach ($provider->credentialFields() as $field) {
-            if (($field['type'] ?? '') === 'oauth_connect') {
-                return false;
-            }
-        }
+        return $this->isCliRuntimeSupported($provider);
+    }
 
-        return true;
+    public function isCliSetupSupported(ToolProvider $provider): bool
+    {
+        return $this->capabilities()->cliSetupSupported($provider);
+    }
+
+    public function isCliRuntimeSupported(ToolProvider $provider): bool
+    {
+        return $this->capabilities()->cliRuntimeSupported($provider);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function capabilityMetadata(ToolProvider $provider): array
+    {
+        return $this->capabilities()->resolve($provider);
     }
 
     /**
@@ -185,7 +230,7 @@ class IntegrationManager
     }
 
     /**
-     * Get all installed providers (including OAuth-only ones).
+     * Get all installed providers that should be visible in settings and catalogs.
      *
      * @return array<string, ToolProvider>
      */

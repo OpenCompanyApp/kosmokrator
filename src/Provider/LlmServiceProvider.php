@@ -106,7 +106,7 @@ class LlmServiceProvider extends ServiceProvider
                 new AsyncLlmClient(
                     apiKey: $providers->apiKey($provider),
                     baseUrl: $providerUrl,
-                    model: $config->get('kosmokrator.agent.default_model', 'GLM-5.1'),
+                    model: $config->get('kosmokrator.agent.default_model', 'glm-5.1'),
                     systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
                     maxTokens: $config->get('kosmokrator.agent.max_tokens'),
                     temperature: $config->get('kosmokrator.agent.temperature', 0.0),

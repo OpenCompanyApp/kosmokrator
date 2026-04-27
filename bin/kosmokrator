@@ -9,6 +9,8 @@ use Kosmokrator\Command\CodexLoginCommand;
 use Kosmokrator\Command\CodexLogoutCommand;
 use Kosmokrator\Command\CodexStatusCommand;
 use Kosmokrator\Command\ConfigCommand;
+use Kosmokrator\Command\Gateway\TelegramConfigureCommand;
+use Kosmokrator\Command\Gateway\TelegramStatusCommand;
 use Kosmokrator\Command\Integration\IntegrationCallCommand;
 use Kosmokrator\Command\Integration\IntegrationConfigureCommand;
 use Kosmokrator\Command\Integration\IntegrationDoctorCommand;
@@ -22,6 +24,26 @@ use Kosmokrator\Command\Integration\IntegrationSchemaCommand;
 use Kosmokrator\Command\Integration\IntegrationSearchCommand;
 use Kosmokrator\Command\Integration\IntegrationStatusCommand;
 use Kosmokrator\Command\SetupCommand;
+use Kosmokrator\Command\Provider\ProvidersConfigureCommand;
+use Kosmokrator\Command\Provider\ProvidersCustomDeleteCommand;
+use Kosmokrator\Command\Provider\ProvidersCustomListCommand;
+use Kosmokrator\Command\Provider\ProvidersCustomUpsertCommand;
+use Kosmokrator\Command\Provider\ProvidersListCommand;
+use Kosmokrator\Command\Provider\ProvidersLogoutCommand;
+use Kosmokrator\Command\Provider\ProvidersModelsCommand;
+use Kosmokrator\Command\Provider\ProvidersStatusCommand;
+use Kosmokrator\Command\Secrets\SecretsListCommand;
+use Kosmokrator\Command\Secrets\SecretsSetCommand;
+use Kosmokrator\Command\Secrets\SecretsStatusCommand;
+use Kosmokrator\Command\Secrets\SecretsUnsetCommand;
+use Kosmokrator\Command\Settings\SettingsApplyCommand;
+use Kosmokrator\Command\Settings\SettingsDoctorCommand;
+use Kosmokrator\Command\Settings\SettingsExamplesCommand;
+use Kosmokrator\Command\Settings\SettingsGetCommand;
+use Kosmokrator\Command\Settings\SettingsListCommand;
+use Kosmokrator\Command\Settings\SettingsOptionsCommand;
+use Kosmokrator\Command\Settings\SettingsSetCommand;
+use Kosmokrator\Command\Settings\SettingsUnsetCommand;
 use Kosmokrator\Command\TelegramGatewayCommand;
 use Kosmokrator\Command\TelegramGatewayWorkerCommand;
 use Kosmokrator\Command\UpdateCommand;
@@ -54,9 +76,31 @@ $console->addCommand(new CodexLogoutCommand($kernel->getContainer()));
 $console->addCommand(new SetupCommand($kernel->getContainer()));
 $console->addCommand(new ConfigCommand($kernel->getContainer()));
 $console->addCommand(new AuthCommand($kernel->getContainer()));
+$console->addCommand(new SettingsListCommand($kernel->getContainer()));
+$console->addCommand(new SettingsGetCommand($kernel->getContainer()));
+$console->addCommand(new SettingsSetCommand($kernel->getContainer()));
+$console->addCommand(new SettingsUnsetCommand($kernel->getContainer()));
+$console->addCommand(new SettingsApplyCommand($kernel->getContainer()));
+$console->addCommand(new SettingsOptionsCommand($kernel->getContainer()));
+$console->addCommand(new SettingsDoctorCommand($kernel->getContainer()));
+$console->addCommand(new SettingsExamplesCommand);
+$console->addCommand(new ProvidersListCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersModelsCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersStatusCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersConfigureCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersLogoutCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersCustomListCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersCustomUpsertCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersCustomDeleteCommand($kernel->getContainer()));
+$console->addCommand(new SecretsListCommand($kernel->getContainer()));
+$console->addCommand(new SecretsStatusCommand($kernel->getContainer()));
+$console->addCommand(new SecretsSetCommand($kernel->getContainer()));
+$console->addCommand(new SecretsUnsetCommand($kernel->getContainer()));
 $console->addCommand(new UpdateCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
 $console->addCommand(new TelegramGatewayCommand($kernel->getContainer()));
 $console->addCommand(new TelegramGatewayWorkerCommand($kernel->getContainer()));
+$console->addCommand(new TelegramConfigureCommand($kernel->getContainer()));
+$console->addCommand(new TelegramStatusCommand($kernel->getContainer()));
 $console->addCommand(new IntegrationListCommand($kernel->getContainer()));
 $console->addCommand(new IntegrationStatusCommand($kernel->getContainer()));
 $console->addCommand(new IntegrationSearchCommand($kernel->getContainer()));
@@ -81,7 +125,12 @@ $explicitCommands = ['setup', 'config', 'auth', 'update', 'gateway:telegram', 'g
 $requestedCommand = $args[1] ?? null;
 $isExplicitCommand = is_string($requestedCommand)
     && ! str_starts_with($requestedCommand, '-')
-    && (in_array($requestedCommand, $explicitCommands, true) || str_starts_with($requestedCommand, 'integrations:'));
+    && (in_array($requestedCommand, $explicitCommands, true)
+        || str_starts_with($requestedCommand, 'integrations:')
+        || str_starts_with($requestedCommand, 'settings:')
+        || str_starts_with($requestedCommand, 'providers:')
+        || str_starts_with($requestedCommand, 'secrets:')
+        || str_starts_with($requestedCommand, 'gateway:telegram:'));
 
 if (! $isExplicitCommand) {
     $console->setDefaultCommand('agent', true);

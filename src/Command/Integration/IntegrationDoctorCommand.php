@@ -37,7 +37,7 @@ final class IntegrationDoctorCommand extends Command
         $manager = $this->container->make(IntegrationManager::class);
         $catalog = $this->container->make(IntegrationCatalog::class);
         $providerFilter = $input->getArgument('provider');
-        $providers = $manager->getLocallyRunnableProviders();
+        $providers = $manager->getDiscoverableProviders();
 
         if (is_string($providerFilter) && $providerFilter !== '') {
             $providers = isset($providers[$providerFilter]) ? [$providerFilter => $providers[$providerFilter]] : [];
@@ -47,6 +47,7 @@ final class IntegrationDoctorCommand extends Command
         $data = [];
         foreach ($providers as $name => $provider) {
             $missing = [];
+            $capabilities = $manager->capabilityMetadata($provider);
             foreach ($provider->credentialFields() as $field) {
                 $key = (string) ($field['key'] ?? '');
                 $value = $key !== '' ? $manager->credentialValue($name, $key) : null;
@@ -59,11 +60,13 @@ final class IntegrationDoctorCommand extends Command
             $enabled = $manager->isEnabled($name);
             $functions = $functionsByProvider[$name] ?? [];
             $next = [];
-            if ($missing !== []) {
+            if ($missing !== [] && $capabilities['cli_setup_supported']) {
                 $next[] = 'kosmokrator integrations:fields '.$name.' --json';
                 $next[] = 'kosmokrator integrations:configure '.$name.' --set '.implode('=... --set ', $missing).'=... --json';
             }
-            if (! $enabled) {
+            if (! $capabilities['cli_setup_supported']) {
+                $next[] = 'kosmokrator integrations:docs '.$name;
+            } elseif (! $enabled) {
                 $next[] = 'kosmokrator integrations:configure '.$name.' --enable --json';
             }
             if ($configured && $enabled && $functions !== []) {
@@ -72,10 +75,17 @@ final class IntegrationDoctorCommand extends Command
 
             $data[$name] = [
                 'provider' => $name,
-                'locally_runnable' => true,
+                'locally_runnable' => $capabilities['cli_runtime_supported'],
+                'cli_setup_supported' => $capabilities['cli_setup_supported'],
+                'cli_runtime_supported' => $capabilities['cli_runtime_supported'],
+                'auth_strategy' => $capabilities['auth_strategy'],
+                'host_availability' => $capabilities['host_availability'],
+                'runtime_requirements' => $capabilities['runtime_requirements'],
+                'compatibility' => $capabilities['compatibility'],
+                'compatibility_summary' => $capabilities['compatibility_summary'],
                 'enabled' => $enabled,
                 'configured' => $configured,
-                'active' => $enabled && $configured,
+                'active' => $enabled && $configured && $capabilities['cli_runtime_supported'],
                 'missing_credentials' => $missing,
                 'accounts' => array_values(array_unique(array_merge(['default'], $manager->getAccounts($name)))),
                 'permissions' => [
@@ -95,7 +105,7 @@ final class IntegrationDoctorCommand extends Command
         }
 
         if ($data === []) {
-            $output->writeln('<error>No matching locally runnable integration providers.</error>');
+            $output->writeln('<error>No matching integration providers.</error>');
 
             return Command::FAILURE;
         }
@@ -105,6 +115,7 @@ final class IntegrationDoctorCommand extends Command
             $rows[] = [
                 $name,
                 $row['active'] ? 'yes' : 'no',
+                $row['compatibility_summary'],
                 implode(', ', $row['missing_credentials']),
                 "read={$row['permissions']['read']} write={$row['permissions']['write']}",
                 implode("\n", $row['next_commands']),
@@ -112,7 +123,7 @@ final class IntegrationDoctorCommand extends Command
         }
 
         (new Table($output))
-            ->setHeaders(['Provider', 'Active', 'Missing Credentials', 'Permissions', 'Next'])
+            ->setHeaders(['Provider', 'Active', 'Compatibility', 'Missing Credentials', 'Permissions', 'Next'])
             ->setRows($rows)
             ->render();
 

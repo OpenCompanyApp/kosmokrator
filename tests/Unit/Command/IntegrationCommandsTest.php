@@ -9,6 +9,10 @@ use Illuminate\Container\Container;
 use Kosmokrator\Command\Integration\IntegrationConfigureCommand;
 use Kosmokrator\Command\Integration\IntegrationDoctorCommand;
 use Kosmokrator\Command\Integration\IntegrationFieldsCommand;
+use Kosmokrator\Command\Integration\IntegrationListCommand;
+use Kosmokrator\Command\Integration\IntegrationSchemaCommand;
+use Kosmokrator\Command\Integration\IntegrationSearchCommand;
+use Kosmokrator\Command\Integration\IntegrationStatusCommand;
 use Kosmokrator\Integration\IntegrationManager;
 use Kosmokrator\Integration\Runtime\IntegrationCatalog;
 use Kosmokrator\Integration\YamlCredentialResolver;
@@ -51,6 +55,7 @@ final class IntegrationCommandsTest extends TestCase
 
         $registry = new ToolProviderRegistry;
         $registry->register(new CommandFakeProvider);
+        $registry->register(new CommandOauthProvider);
 
         $credentials = new YamlCredentialResolver($this->settingsRepository);
         $manager = new IntegrationManager($registry, $this->settingsManager, $credentials);
@@ -107,6 +112,36 @@ final class IntegrationCommandsTest extends TestCase
         $this->assertContains('github.example', $doctorData['example_functions']);
     }
 
+    public function test_discovery_commands_use_success_json_envelopes(): void
+    {
+        $list = new CommandTester(new IntegrationListCommand($this->container));
+        $this->assertSame(0, $list->execute(['--json' => true]));
+        $listData = json_decode($list->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertTrue($listData['success']);
+        $this->assertArrayHasKey('github', $listData['providers']);
+
+        $search = new CommandTester(new IntegrationSearchCommand($this->container));
+        $this->assertSame(0, $search->execute(['query' => 'github', '--json' => true]));
+        $searchData = json_decode($search->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertTrue($searchData['success']);
+        $this->assertNotEmpty($searchData['functions']);
+
+        $status = new CommandTester(new IntegrationStatusCommand($this->container));
+        $this->assertSame(0, $status->execute(['--json' => true]));
+        $statusData = json_decode($status->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertTrue($statusData['success']);
+        $this->assertArrayHasKey('github', $statusData['providers']);
+    }
+
+    public function test_schema_errors_are_json(): void
+    {
+        $schema = new CommandTester(new IntegrationSchemaCommand($this->container));
+        $this->assertSame(1, $schema->execute(['function' => 'missing.nope']));
+        $data = json_decode($schema->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($data['success']);
+        $this->assertStringContainsString('Unknown integration function', $data['error']);
+    }
+
     public function test_empty_credentials_are_reported_as_missing(): void
     {
         $this->settingsRepository->set('global', 'integration.github.accounts', json_encode(['default' => true]));
@@ -121,6 +156,29 @@ final class IntegrationCommandsTest extends TestCase
         $this->assertSame(0, $doctor->execute(['provider' => 'github', '--json' => true]));
         $doctorData = json_decode($doctor->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         $this->assertContains('api_key', $doctorData['missing_credentials']);
+    }
+
+    public function test_non_headless_setup_integrations_remain_discoverable(): void
+    {
+        $fields = new CommandTester(new IntegrationFieldsCommand($this->container));
+        $this->assertSame(0, $fields->execute(['provider' => 'google_docs', '--json' => true]));
+        $fieldsData = json_decode($fields->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($fieldsData['cli_setup_supported']);
+        $this->assertFalse($fieldsData['cli_runtime_supported']);
+        $this->assertNull($fieldsData['example']);
+
+        $doctor = new CommandTester(new IntegrationDoctorCommand($this->container));
+        $this->assertSame(0, $doctor->execute(['provider' => 'google_docs', '--json' => true]));
+        $doctorData = json_decode($doctor->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('oauth2_authorization_code', $doctorData['auth_strategy']);
+        $this->assertFalse($doctorData['cli_setup_supported']);
+        $this->assertContains('kosmokrator integrations:docs google_docs', $doctorData['next_commands']);
+
+        $configure = new CommandTester(new IntegrationConfigureCommand($this->container));
+        $this->assertSame(1, $configure->execute(['provider' => 'google_docs', '--enable' => true, '--json' => true]));
+        $configureData = json_decode($configure->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($configureData['success']);
+        $this->assertStringContainsString('does not support headless credential setup', $configureData['error']);
     }
 }
 
@@ -191,5 +249,52 @@ final class CommandFakeTool implements Tool
     public function execute(array $args): ToolResult
     {
         return ToolResult::success(['ok' => true]);
+    }
+}
+
+final class CommandOauthProvider implements ToolProvider
+{
+    public function appName(): string
+    {
+        return 'google_docs';
+    }
+
+    public function appMeta(): array
+    {
+        return ['label' => 'Google Docs', 'description' => 'Google Docs integration'];
+    }
+
+    public function tools(): array
+    {
+        return [
+            'google_docs_example' => [
+                'class' => CommandFakeTool::class,
+                'type' => 'read',
+                'name' => 'Example',
+                'description' => 'Example function',
+            ],
+        ];
+    }
+
+    public function isIntegration(): bool
+    {
+        return true;
+    }
+
+    public function createTool(string $class, array $context = []): Tool
+    {
+        return new CommandFakeTool;
+    }
+
+    public function luaDocsPath(): ?string
+    {
+        return null;
+    }
+
+    public function credentialFields(): array
+    {
+        return [
+            ['key' => 'oauth', 'type' => 'oauth_connect', 'label' => 'Connect Google', 'required' => true],
+        ];
     }
 }

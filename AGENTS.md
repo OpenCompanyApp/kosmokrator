@@ -76,6 +76,12 @@ php vendor/bin/phpunit
 php vendor/bin/pint             # Code style (Laravel Pint)
 ```
 
+When adding or changing user-facing features, update the website documentation in `website/pages/docs/` in the same change and rebuild generated docs with:
+
+```bash
+php website/build.php
+```
+
 ### Config
 
 Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/config.yaml` or `.kosmokrator.yaml` in the working directory.

@@ -77,10 +77,9 @@ class MessageRepository implements MessageRepositoryInterface
             'SELECT * FROM messages WHERE session_id = :session_id AND compacted = 0 ORDER BY id ASC'
         );
         $stmt->execute(['session_id' => $sessionId]);
-        $rows = $stmt->fetchAll();
 
         $messages = [];
-        foreach ($rows as $row) {
+        while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) !== false) {
             $message = $this->serializer->deserializeMessage($row);
             if ($message !== null) {
                 $messages[] = $message;

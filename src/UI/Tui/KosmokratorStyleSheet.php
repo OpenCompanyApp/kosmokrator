@@ -2,6 +2,8 @@
 
 namespace Kosmokrator\UI\Tui;
 
+use Kosmokrator\UI\Tui\Widget\KosmokratorEditorWidget;
+use Kosmokrator\UI\Tui\Widget\KosmokratorMarkdownWidget;
 use Symfony\Component\Tui\Style\Border;
 use Symfony\Component\Tui\Style\BorderPattern;
 use Symfony\Component\Tui\Style\Color;
@@ -11,8 +13,6 @@ use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\StyleSheet;
 use Symfony\Component\Tui\Style\TextAlign;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
-use Symfony\Component\Tui\Widget\EditorWidget;
-use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SettingsListWidget;
 
@@ -29,7 +29,7 @@ class KosmokratorStyleSheet
      */
     public static function create(): StyleSheet
     {
-        return new StyleSheet([
+        $sheet = new StyleSheet([
             // Root session container
             '.session' => new Style(
                 direction: Direction::Vertical,
@@ -126,17 +126,16 @@ class KosmokratorStyleSheet
             ),
 
             // Editor prompt (Enter = submit, Shift+Enter = newline)
-            // EditorWidget draws its own ─── top/bottom borders via 'frame' sub-element
-            EditorWidget::class => new Style(
+            KosmokratorEditorWidget::class => new Style(
                 padding: new Padding(0, 1, 0, 1),
                 color: Color::hex('#dcdcdc'),
             ),
 
-            EditorWidget::class.'::frame' => new Style(
+            KosmokratorEditorWidget::class.'::frame' => new Style(
                 color: Color::hex('#6b3028'),
             ),
 
-            EditorWidget::class.':focus::frame' => new Style(
+            KosmokratorEditorWidget::class.'::frame:focus' => new Style(
                 color: Color::hex('#c85a42'),
             ),
 
@@ -201,7 +200,7 @@ class KosmokratorStyleSheet
             ),
 
             // Markdown widget — cap width for readability
-            MarkdownWidget::class => new Style(
+            KosmokratorMarkdownWidget::class => new Style(
                 padding: new Padding(0, 2, 0, 2),
                 maxColumns: 100,
             ),
@@ -249,5 +248,15 @@ class KosmokratorStyleSheet
                 color: Color::hex('#606060'),
             ),
         ]);
+
+        $sheet->addBreakpoint(120, SettingsListWidget::class, new Style(
+            padding: new Padding(0, 2, 0, 2),
+        ));
+
+        $sheet->addBreakpoint(140, KosmokratorMarkdownWidget::class, new Style(
+            maxColumns: 120,
+        ));
+
+        return $sheet;
     }
 }

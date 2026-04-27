@@ -31,9 +31,10 @@ final class IntegrationCatalog
         $active = $this->integrationManager->getActiveProviders();
         $functions = [];
 
-        foreach ($this->integrationManager->getLocallyRunnableProviders() as $providerName => $provider) {
+        foreach ($this->integrationManager->getDiscoverableProviders() as $providerName => $provider) {
             $configured = $this->integrationManager->isConfiguredForActivation($providerName, $provider);
             $accounts = $this->integrationManager->getAccounts($providerName);
+            $capabilities = $this->integrationManager->capabilityMetadata($provider);
 
             foreach ($provider->tools() as $slug => $meta) {
                 $toolClass = (string) ($meta['class'] ?? '');
@@ -76,6 +77,7 @@ final class IntegrationCatalog
                     active: isset($active[$providerName]),
                     configured: $configured,
                     accounts: $accounts,
+                    capabilities: $capabilities,
                 );
 
                 $functions[$entry->fullName()] = $entry;
@@ -131,6 +133,7 @@ final class IntegrationCatalog
             active: $function->active,
             configured: $function->configured,
             accounts: $function->accounts,
+            capabilities: $function->capabilities,
         );
     }
 

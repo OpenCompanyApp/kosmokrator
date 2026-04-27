@@ -1353,3 +1353,41 @@
 [2026-04-27 17:12:51] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
 [2026-04-27 17:12:51] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69ef99136c067.py","instrument":"Piano"}
 [2026-04-27 17:12:51] INFO: Worker finished
+[2026-04-27 19:07:45] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 19:07:45] INFO: Completion sound worker booted
+[2026-04-27 19:07:45] INFO: Worker starting composition {"instrument":105,"message_preview":"Hey! What can I help you with today?"}
+[2026-04-27 19:08:00] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":879}
+[2026-04-27 19:08:00] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69efb4107020f.py","instrument":"Banjo"}
+[2026-04-27 19:08:00] INFO: Worker finished
+[2026-04-27 19:12:27] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 19:12:27] INFO: Completion sound worker booted
+[2026-04-27 19:12:27] INFO: Worker starting composition {"instrument":112,"message_preview":"Here's the project summary:\n\n---\n\n## KosmoKrator — AI Coding Agent for the Terminal\n\n**What it is**:"}
+[2026-04-27 19:12:40] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":834}
+[2026-04-27 19:12:40] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69efb528d3aaf.py","instrument":"Fiddle"}
+[2026-04-27 19:12:40] INFO: Worker finished
+[2026-04-27 19:14:24] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 19:14:25] INFO: Completion sound worker booted
+[2026-04-27 19:14:25] INFO: Worker starting composition {"instrument":112,"message_preview":"Here's the breakdown:\n\n| Area | Lines |\n|------|------:|\n| **`src\/`** (PHP source) | **77,628** |\n| "}
+[2026-04-27 19:15:07] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1195}
+[2026-04-27 19:15:07] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69efb5bba1f98.py","instrument":"Fiddle"}
+[2026-04-27 19:15:07] INFO: Worker finished
+[2026-04-27 19:16:04] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 19:16:04] INFO: Completion sound worker booted
+[2026-04-27 19:16:04] INFO: Worker starting composition {"instrument":112,"message_preview":"`\/tmp\/kosmokrator-symfony-status` was already up to date. That's the only git repo in `\/tmp` — there"}
+[2026-04-27 19:16:36] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1009}
+[2026-04-27 19:16:36] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69efb614ad711.py","instrument":"Fiddle"}
+[2026-04-27 19:16:36] INFO: Worker finished
+[2026-04-27 19:16:58] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 19:16:59] INFO: Completion sound worker booted
+[2026-04-27 19:16:59] INFO: Worker starting composition {"instrument":112,"message_preview":"Here are the results for all repos in `tmp\/`:\n\n| Repo | Status |\n|------|--------|\n| **codex** | Upd"}
+[2026-04-27 19:17:18] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1022}
+[2026-04-27 19:17:18] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69efb63edfa72.py","instrument":"Fiddle"}
+[2026-04-27 19:17:18] INFO: Worker finished
+[2026-04-27 19:29:46] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 19:29:46] INFO: Completion sound worker booted
+[2026-04-27 19:29:46] INFO: Worker starting composition {"instrument":112,"message_preview":"Here's my estimate based on the project's size, complexity, and domain difficulty:\n\n## Project Scope"}
+[2026-04-27 19:30:47] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"Completion sound LLM timed out after 60s"}
+[2026-04-27 19:30:47] ERROR: Completion sound: all attempts exhausted {"last_error":"Completion sound LLM timed out after 60s","attempts":2}
+[2026-04-27 19:30:47] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
+[2026-04-27 19:30:47] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69efb9673068f.py","instrument":"Fiddle"}
+[2026-04-27 19:30:47] INFO: Worker finished

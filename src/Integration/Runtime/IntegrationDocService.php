@@ -65,6 +65,8 @@ final class IntegrationDocService
         $lines = [$provider, ''];
         $lines[] = 'Status: '.($active ? 'active' : ($configured ? 'configured but disabled' : 'inactive'));
         $lines[] = 'Accounts: '.($accounts === [] ? 'default' : 'default, '.implode(', ', $accounts));
+        $lines[] = 'Auth: '.($functions[0]->capabilities['auth_strategy'] ?? 'none');
+        $lines[] = 'Compatibility: '.($functions[0]->capabilities['compatibility_summary'] ?? '');
         $lines[] = '';
         $lines[] = 'Functions:';
 
@@ -88,6 +90,8 @@ final class IntegrationDocService
         $lines[] = '';
         $lines[] = 'Operation: '.$function->operation;
         $lines[] = 'Status: '.($function->active ? 'active' : 'inactive');
+        $lines[] = 'Auth: '.($function->capabilities['auth_strategy'] ?? 'none');
+        $lines[] = 'Compatibility: '.($function->capabilities['compatibility_summary'] ?? '');
         $lines[] = '';
         $lines[] = 'Direct CLI:';
         $lines[] = '  '.$this->directCliExample($function);

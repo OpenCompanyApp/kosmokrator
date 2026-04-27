@@ -10,7 +10,10 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Kosmokrator\LLM\ProviderAuthService;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderConfigurator;
 use Kosmokrator\Session\SettingsRepositoryInterface;
+use Kosmokrator\Settings\SecretStore;
+use Kosmokrator\Settings\SettingsCatalog;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
@@ -60,6 +63,14 @@ class CoreServiceProvider extends ServiceProvider
             store: $this->container->make(YamlConfigStore::class),
             baseConfigPath: $this->basePath.'/config',
         ));
+        $this->container->singleton(SettingsCatalog::class, fn () => new SettingsCatalog(
+            $this->container->make(SettingsManager::class),
+            $this->container->make(SettingsSchema::class),
+            $this->container,
+        ));
+        $this->container->singleton(SecretStore::class, fn () => new SecretStore(
+            $this->container->make(SettingsRepositoryInterface::class),
+        ));
         $this->container->singleton(RelayRegistryBuilder::class, fn () => new RelayRegistryBuilder(
             configDir: $this->basePath.'/vendor/opencompanyapp/prism-relay/config',
         ));
@@ -98,6 +109,12 @@ class CoreServiceProvider extends ServiceProvider
             $this->container->make(SettingsRepositoryInterface::class),
             $this->container->make('config'),
             $this->container->make(CodexTokenStoreContract::class),
+        ));
+        $this->container->singleton(ProviderConfigurator::class, fn () => new ProviderConfigurator(
+            $this->container->make(ProviderCatalog::class),
+            $this->container->make(SettingsManager::class),
+            $this->container->make(SettingsRepositoryInterface::class),
+            $this->container->make(SecretStore::class),
         ));
 
         // UI display utilities (stateless singletons)

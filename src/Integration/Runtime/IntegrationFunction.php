@@ -12,6 +12,7 @@ final readonly class IntegrationFunction
      * @param  array<string, array<string, mixed>>  $parameters
      * @param  array<string, mixed>  $meta
      * @param  list<string>  $accounts
+     * @param  array<string, mixed>  $capabilities
      */
     public function __construct(
         public string $provider,
@@ -27,6 +28,7 @@ final readonly class IntegrationFunction
         public bool $active,
         public bool $configured,
         public array $accounts = [],
+        public array $capabilities = [],
     ) {}
 
     public function fullName(): string
@@ -95,6 +97,14 @@ final readonly class IntegrationFunction
             'active' => $this->active,
             'configured' => $this->configured,
             'accounts' => $this->accounts,
+            'auth' => $this->capabilities['auth'] ?? 'none',
+            'auth_strategy' => $this->capabilities['auth_strategy'] ?? 'none',
+            'host_availability' => $this->capabilities['host_availability'] ?? [],
+            'runtime_requirements' => $this->capabilities['runtime_requirements'] ?? [],
+            'compatibility' => $this->capabilities['compatibility'] ?? [],
+            'compatibility_summary' => $this->capabilities['compatibility_summary'] ?? '',
+            'cli_setup_supported' => $this->capabilities['cli_setup_supported'] ?? true,
+            'cli_runtime_supported' => $this->capabilities['cli_runtime_supported'] ?? true,
             'input_schema' => $this->inputSchema(),
         ];
     }

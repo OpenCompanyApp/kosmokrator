@@ -6,7 +6,7 @@ namespace Kosmokrator\UI\Tui\Toast;
 
 use Athanor\Signal;
 use Kosmokrator\UI\TerminalNotification;
-use Revolt\EventLoop;
+use Kosmokrator\UI\Tui\TuiScheduler;
 
 /**
  * Manages the lifecycle of toast notifications.
@@ -46,9 +46,12 @@ final class ToastManager
     /** @var bool Whether to also fire TerminalNotification (desktop) for errors */
     private bool $desktopNotifyOnError = true;
 
+    private TuiScheduler $scheduler;
+
     private function __construct()
     {
         $this->toasts = self::signalOfList();
+        $this->scheduler = TuiScheduler::fallback();
     }
 
     /**
@@ -57,6 +60,11 @@ final class ToastManager
     public static function getInstance(): self
     {
         return self::$instance ??= new self;
+    }
+
+    public static function useScheduler(TuiScheduler $scheduler): void
+    {
+        self::getInstance()->scheduler = $scheduler;
     }
 
     // --- Static convenience API ---
@@ -260,7 +268,7 @@ final class ToastManager
         $toast->opacity->set(0.0);
 
         $currentFrame = 0;
-        $timerId = EventLoop::repeat(
+        $timerId = $this->scheduler->every(
             $frameDuration / 1000,
             function () use ($toast, &$currentFrame, $frames, $slideStart) {
                 $currentFrame++;
@@ -292,7 +300,7 @@ final class ToastManager
             return; // Sticky toast — no auto-dismiss
         }
 
-        $timerId = EventLoop::delay(
+        $timerId = $this->scheduler->after(
             $toast->durationMs / 1000,
             function () use ($toast): void {
                 if ($toast->phase->get() === ToastPhase::Visible) {
@@ -313,7 +321,7 @@ final class ToastManager
         $frameDuration = self::EXIT_DURATION_MS / $frames;
 
         $currentFrame = 0;
-        $timerId = EventLoop::repeat(
+        $timerId = $this->scheduler->every(
             $frameDuration / 1000,
             function () use ($toast, &$currentFrame, $frames) {
                 $currentFrame++;
@@ -342,7 +350,7 @@ final class ToastManager
         foreach (['_entrance', '_auto', '_exit'] as $suffix) {
             $key = $toastId.$suffix;
             if (isset($this->timers[$key])) {
-                EventLoop::cancel($this->timers[$key]);
+                $this->scheduler->cancel($this->timers[$key]);
                 unset($this->timers[$key]);
             }
         }

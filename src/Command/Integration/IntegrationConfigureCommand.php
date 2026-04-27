@@ -46,13 +46,16 @@ final class IntegrationConfigureCommand extends Command
     {
         $providerName = (string) $input->getArgument('provider');
         $manager = $this->container->make(IntegrationManager::class);
-        if (! isset($manager->getLocallyRunnableProviders()[$providerName])) {
-            return $this->fail($input, $output, "Unknown locally runnable integration provider: {$providerName}");
+        $provider = $manager->getDiscoverableProviders()[$providerName] ?? null;
+        if ($provider === null) {
+            return $this->fail($input, $output, "Unknown integration provider: {$providerName}");
         }
 
-        $account = (string) ($input->getOption('account') ?: 'default');
-        $accountArg = $account === 'default' ? null : $account;
-        $scope = $input->getOption('project') ? 'project' : 'global';
+        $capabilities = $manager->capabilityMetadata($provider);
+        if (! $capabilities['cli_setup_supported']) {
+            return $this->fail($input, $output, "Integration '{$providerName}' does not support headless credential setup yet. It is visible for discovery and future proxy support.");
+        }
+
         $credentials = $this->container->make(YamlCredentialResolver::class);
         try {
             $payload = $input->getOption('stdin-json') ? $this->stdinPayload() : [];
@@ -60,7 +63,16 @@ final class IntegrationConfigureCommand extends Command
             return $this->fail($input, $output, $exception->getMessage());
         }
 
-        $sets = $this->normaliseSets($input->getOption('set'), $payload['set'] ?? []);
+        $payloadAccount = $payload['account'] ?? null;
+        $account = is_string($payloadAccount) && $payloadAccount !== '' && $input->getOption('account') === 'default'
+            ? $payloadAccount
+            : (string) ($input->getOption('account') ?: 'default');
+        $accountArg = $account === 'default' ? null : $account;
+
+        $payloadScope = $payload['scope'] ?? null;
+        $scope = $input->getOption('project') || $payloadScope === 'project' ? 'project' : 'global';
+
+        $sets = $this->normaliseSets($input->getOption('set'), $payload['set'] ?? $payload['credentials'] ?? []);
         $unsets = $this->normaliseList($input->getOption('unset'), $payload['unset'] ?? []);
         $permissions = array_merge(
             $this->parsePermissions((string) ($input->getOption('permissions') ?? '')),
@@ -110,7 +122,9 @@ final class IntegrationConfigureCommand extends Command
             'credentials_set' => array_keys($sets),
             'credentials_unset' => $unsets,
             'enabled' => $manager->isEnabled($providerName),
-            'configured' => $manager->isConfiguredForActivation($providerName, $manager->getLocallyRunnableProviders()[$providerName]),
+            'configured' => $manager->isConfiguredForActivation($providerName, $provider),
+            'cli_setup_supported' => $capabilities['cli_setup_supported'],
+            'cli_runtime_supported' => $capabilities['cli_runtime_supported'],
             'permissions' => [
                 'read' => $manager->getPermission($providerName, 'read'),
                 'write' => $manager->getPermission($providerName, 'write'),

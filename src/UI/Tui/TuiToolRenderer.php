@@ -60,6 +60,7 @@ final class TuiToolRenderer implements ToolRendererInterface
                 state: $this->state,
                 conversation: $this->core->getConversation(),
                 addConversationWidget: fn ($w) => $this->core->addConversationWidget($w),
+                scheduler: $this->core->getScheduler(),
             );
         }
 

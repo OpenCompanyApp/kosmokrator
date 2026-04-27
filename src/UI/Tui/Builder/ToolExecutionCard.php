@@ -6,7 +6,7 @@ namespace Kosmokrator\UI\Tui\Builder;
 
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use Revolt\EventLoop;
+use Kosmokrator\UI\Tui\TuiScheduler;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 
@@ -23,11 +23,16 @@ final class ToolExecutionCard
 
     private ?string $timerId = null;
 
+    private readonly TuiScheduler $scheduler;
+
     public function __construct(
         private readonly TuiStateStore $state,
         private readonly ContainerWidget $conversation,
         private readonly \Closure $addConversationWidget,
-    ) {}
+        ?TuiScheduler $scheduler = null,
+    ) {
+        $this->scheduler = $scheduler ?? TuiScheduler::fallback();
+    }
 
     /**
      * Create and start the tool executing loader with its own 20fps timer.
@@ -50,7 +55,7 @@ final class ToolExecutionCard
 
         ($this->addConversationWidget)($this->loader);
 
-        $this->timerId = EventLoop::repeat(0.05, function () use ($dim, $r): void {
+        $this->timerId = $this->scheduler->every(0.05, function () use ($dim, $r): void {
             if ($this->loader === null) {
                 return;
             }
@@ -95,7 +100,7 @@ final class ToolExecutionCard
     public function stop(): void
     {
         if ($this->timerId !== null) {
-            EventLoop::cancel($this->timerId);
+            $this->scheduler->cancel($this->timerId);
             $this->timerId = null;
         }
         if ($this->loader !== null) {

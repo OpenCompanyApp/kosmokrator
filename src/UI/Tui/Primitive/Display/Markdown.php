@@ -6,13 +6,13 @@ namespace Kosmokrator\UI\Tui\Primitive\Display;
 
 use Athanor\Signal;
 use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
+use Kosmokrator\UI\Tui\Widget\KosmokratorMarkdownWidget;
 use Symfony\Component\Tui\Render\RenderContext;
-use Symfony\Component\Tui\Widget\MarkdownWidget;
 
 /**
  * Reactive markdown widget bound to a Signal<string>.
  *
- * Wraps MarkdownWidget. Updates content when the signal changes.
+ * Wraps KosmokratorMarkdownWidget. Updates content when the signal changes.
  *
  * Usage:
  *   Markdown::of($state->activeResponseTextSignal())
@@ -48,8 +48,7 @@ final class Markdown extends ReactiveWidget
 
     public function render(RenderContext $context): array
     {
-        // Delegate to Symfony TUI's MarkdownWidget rendering
-        $md = new MarkdownWidget($this->text);
+        $md = new KosmokratorMarkdownWidget($this->text);
         $md->addStyleClass('response');
 
         return $md->render($context);

@@ -7,7 +7,7 @@ namespace Kosmokrator\UI\Tui\Builder;
 use Athanor\BatchScope;
 use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
-use Revolt\EventLoop;
+use Kosmokrator\UI\Tui\TuiScheduler;
 
 /**
  * Single 33ms breathing animation driver.
@@ -28,9 +28,14 @@ final class BreathingDriver
     /** @var \Closure(): void Renders the TUI */
     private \Closure $renderCallback;
 
+    private readonly TuiScheduler $scheduler;
+
     public function __construct(
         private readonly TuiStateStore $state,
-    ) {}
+        ?TuiScheduler $scheduler = null,
+    ) {
+        $this->scheduler = $scheduler ?? TuiScheduler::fallback();
+    }
 
     /**
      * Set the subagent tree refresh callback (called every ~0.5s).
@@ -57,7 +62,7 @@ final class BreathingDriver
             return;
         }
 
-        $this->timerId = EventLoop::repeat(0.033, function (): void {
+        $this->timerId = $this->scheduler->every(0.033, function (): void {
             $this->tick();
         });
     }
@@ -68,7 +73,7 @@ final class BreathingDriver
     public function stop(): void
     {
         if ($this->timerId !== null) {
-            EventLoop::cancel($this->timerId);
+            $this->scheduler->cancel($this->timerId);
             $this->timerId = null;
         }
     }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4ac0888cfaf845b85f0c6dd58faea235",
+    "content-hash": "3c6191747528f53446bd6f7b406db406",
     "packages": [
         {
             "name": "amphp/amp",
@@ -7035,14 +7035,13 @@
             "version": "dev-tui",
             "source": {
                 "type": "git",
-                "url": "https://github.com/OpenCompanyApp/symfony.git",
-                "reference": "a5a770c178f9d4b470a600709194ca32fdb3dbc3"
+                "url": "https://github.com/fabpot/symfony.git",
+                "reference": "07fa8230295091e5d1e56883b0d73a0649cb316d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/OpenCompanyApp/symfony/zipball/a5a770c178f9d4b470a600709194ca32fdb3dbc3",
-                "reference": "a5a770c178f9d4b470a600709194ca32fdb3dbc3",
-                "shasum": ""
+                "url": "https://api.github.com/repos/fabpot/symfony/zipball/07fa8230295091e5d1e56883b0d73a0649cb316d",
+                "reference": "07fa8230295091e5d1e56883b0d73a0649cb316d"
             },
             "require": {
                 "php": ">=8.4",
@@ -7050,14 +7049,10 @@
                 "symfony/event-dispatcher": "^8.0",
                 "symfony/string": "^8.0"
             },
-            "require-dev": {
-                "league/commonmark": "^2.9",
-                "tempest/highlight": "^2.16"
-            },
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "Symfony\\Component\\Tui\\": ""
+                    "Symfony\\Component\\Tui\\": "src/Symfony/Component/Tui/"
                 },
                 "exclude-from-classmap": [
                     "/Tests/"
@@ -7066,25 +7061,7 @@
             "license": [
                 "MIT"
             ],
-            "authors": [
-                {
-                    "name": "Fabien Potencier",
-                    "email": "fabien@symfony.com"
-                },
-                {
-                    "name": "Symfony Community",
-                    "homepage": "https://symfony.com/contributors"
-                }
-            ],
-            "description": "Provides a terminal UI framework for building rich, interactive CLI applications in PHP",
-            "homepage": "https://symfony.com",
-            "keywords": [
-                "cli",
-                "console",
-                "terminal",
-                "tui"
-            ],
-            "time": "2026-03-29T12:53:33+02:00"
+            "description": "Provides a terminal UI framework for building rich, interactive CLI applications in PHP"
         },
         {
             "name": "symfony/uid",

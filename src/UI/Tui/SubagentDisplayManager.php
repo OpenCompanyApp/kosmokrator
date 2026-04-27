@@ -11,7 +11,6 @@ use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Psr\Log\LoggerInterface;
-use Revolt\EventLoop;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
@@ -44,6 +43,8 @@ final class SubagentDisplayManager
 
     private ?\Closure $treeProvider = null;
 
+    private readonly TuiScheduler $scheduler;
+
     /**
      * @param  TuiStateStore  $state  Centralized reactive state store
      * @param  ContainerWidget  $conversation  The conversation container to add/remove widgets
@@ -57,7 +58,10 @@ final class SubagentDisplayManager
         private readonly ?LoggerInterface $log = null,
         private readonly AgentDisplayFormatter $formatter = new AgentDisplayFormatter,
         private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
-    ) {}
+        ?TuiScheduler $scheduler = null,
+    ) {
+        $this->scheduler = $scheduler ?? TuiScheduler::fallback();
+    }
 
     /**
      * Set the callback that returns the live agent tree array.
@@ -198,7 +202,7 @@ final class SubagentDisplayManager
         }
 
         // Breathing timer — blue color modulation at ~30fps, label update every ~1s
-        $this->elapsedTimerId = EventLoop::repeat(0.033, function () use ($dim, $r): void {
+        $this->elapsedTimerId = $this->scheduler->every(0.033, function () use ($dim, $r): void {
             if ($this->loader === null) {
                 return;
             }
@@ -514,7 +518,7 @@ final class SubagentDisplayManager
     private function stopLoader(): void
     {
         if ($this->elapsedTimerId !== null) {
-            EventLoop::cancel($this->elapsedTimerId);
+            $this->scheduler->cancel($this->elapsedTimerId);
             $this->elapsedTimerId = null;
         }
         if ($this->loader !== null && $this->container !== null) {

@@ -37,10 +37,10 @@ final class IntegrationFieldsCommand extends Command
         $providerName = (string) $input->getArgument('provider');
         $account = (string) ($input->getOption('account') ?: 'default');
         $manager = $this->container->make(IntegrationManager::class);
-        $provider = $manager->getLocallyRunnableProviders()[$providerName] ?? null;
+        $provider = $manager->getDiscoverableProviders()[$providerName] ?? null;
 
         if ($provider === null) {
-            $message = "Unknown locally runnable integration provider: {$providerName}";
+            $message = "Unknown integration provider: {$providerName}";
             if ($input->getOption('json')) {
                 $this->writeJson($output, ['success' => false, 'error' => $message]);
             } else {
@@ -50,6 +50,7 @@ final class IntegrationFieldsCommand extends Command
             return Command::FAILURE;
         }
 
+        $capabilities = $manager->capabilityMetadata($provider);
         $fields = array_map(function (array $field) use ($manager, $providerName, $account): array {
             $key = (string) ($field['key'] ?? '');
             $value = $key !== '' ? $manager->credentialValue($providerName, $key, $account === 'default' ? null : $account) : null;
@@ -69,8 +70,14 @@ final class IntegrationFieldsCommand extends Command
             'provider' => $providerName,
             'account' => $account,
             'accounts' => array_values(array_unique(array_merge(['default'], $manager->getAccounts($providerName)))),
+            'cli_setup_supported' => $capabilities['cli_setup_supported'],
+            'cli_runtime_supported' => $capabilities['cli_runtime_supported'],
+            'auth_strategy' => $capabilities['auth_strategy'],
+            'compatibility_summary' => $capabilities['compatibility_summary'],
             'fields' => $fields,
-            'example' => "kosmokrator integrations:configure {$providerName} --account={$account} --set key=value --enable --json",
+            'example' => $capabilities['cli_setup_supported']
+                ? "kosmokrator integrations:configure {$providerName} --account={$account} --set key=value --enable --json"
+                : null,
         ];
 
         if ($input->getOption('json')) {
@@ -94,7 +101,11 @@ final class IntegrationFieldsCommand extends Command
             ->setHeaders(['Key', 'Label', 'Type', 'Required', 'Configured'])
             ->setRows($rows)
             ->render();
-        $output->writeln($data['example']);
+        if (is_string($data['example'])) {
+            $output->writeln($data['example']);
+        } else {
+            $output->writeln('Headless credential setup is not supported for this integration yet.');
+        }
 
         return Command::SUCCESS;
     }

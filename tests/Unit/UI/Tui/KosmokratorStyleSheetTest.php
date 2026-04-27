@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\UI\Tui\KosmokratorStyleSheet;
+use Kosmokrator\UI\Tui\Widget\KosmokratorEditorWidget;
+use Kosmokrator\UI\Tui\Widget\KosmokratorMarkdownWidget;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Style\Direction;
 use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Style\StyleSheet;
 use Symfony\Component\Tui\Style\TextAlign;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
-use Symfony\Component\Tui\Widget\EditorWidget;
-use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 use Symfony\Component\Tui\Widget\SettingsListWidget;
 
@@ -60,9 +60,9 @@ final class KosmokratorStyleSheetTest extends TestCase
             // Status bar
             '.status-bar',
             // Editor
-            EditorWidget::class,
-            EditorWidget::class.'::frame',
-            EditorWidget::class.':focus::frame',
+            KosmokratorEditorWidget::class,
+            KosmokratorEditorWidget::class.'::frame',
+            KosmokratorEditorWidget::class.'::frame:focus',
             // Progress bar
             ProgressBarWidget::class,
             ProgressBarWidget::class.'::bar-fill',
@@ -81,7 +81,7 @@ final class KosmokratorStyleSheetTest extends TestCase
             // Subagent loader
             '.subagent-loader',
             // Markdown
-            MarkdownWidget::class,
+            KosmokratorMarkdownWidget::class,
             // Permission prompt
             '.permission-prompt',
             // Slash completion
@@ -220,7 +220,7 @@ final class KosmokratorStyleSheetTest extends TestCase
     public function test_editor_widget_has_color(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
-        $style = $rules[EditorWidget::class];
+        $style = $rules[KosmokratorEditorWidget::class];
 
         $this->assertNotNull($style->getColor());
         $this->assertNotNull($style->getPadding());
@@ -230,8 +230,8 @@ final class KosmokratorStyleSheetTest extends TestCase
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
-        $this->assertNotNull($rules[EditorWidget::class.'::frame']->getColor());
-        $this->assertNotNull($rules[EditorWidget::class.':focus::frame']->getColor());
+        $this->assertNotNull($rules[KosmokratorEditorWidget::class.'::frame']->getColor());
+        $this->assertNotNull($rules[KosmokratorEditorWidget::class.'::frame:focus']->getColor());
     }
 
     public function test_progress_bar_bar_fill_has_color(): void
@@ -290,7 +290,7 @@ final class KosmokratorStyleSheetTest extends TestCase
     public function test_markdown_widget_has_max_columns(): void
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
-        $style = $rules[MarkdownWidget::class];
+        $style = $rules[KosmokratorMarkdownWidget::class];
 
         $this->assertSame(100, $style->getMaxColumns());
     }
@@ -345,5 +345,20 @@ final class KosmokratorStyleSheetTest extends TestCase
         $style = $rules['.subagent-loader'];
 
         $this->assertSame(0, $style->getPadding()->getTop());
+    }
+
+    public function test_markdown_uses_wider_max_columns_on_large_terminals(): void
+    {
+        $style = KosmokratorStyleSheet::create()->resolve(new KosmokratorMarkdownWidget(''), 140);
+
+        $this->assertSame(120, $style->getMaxColumns());
+    }
+
+    public function test_settings_list_uses_roomier_padding_on_wide_terminals(): void
+    {
+        $style = KosmokratorStyleSheet::create()->resolve(new SettingsListWidget([]), 120);
+
+        $this->assertSame(2, $style->getPadding()->getRight());
+        $this->assertSame(2, $style->getPadding()->getLeft());
     }
 }

@@ -54,8 +54,39 @@
             }
         },
         {
-            "type": "vcs",
-            "url": "https://github.com/OpenCompanyApp/symfony.git"
+            "type": "package",
+            "package": {
+                "name": "symfony/tui",
+                "version": "dev-tui",
+                "type": "library",
+                "description": "Provides a terminal UI framework for building rich, interactive CLI applications in PHP",
+                "license": "MIT",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/fabpot/symfony.git",
+                    "reference": "07fa8230295091e5d1e56883b0d73a0649cb316d"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/fabpot/symfony/zipball/07fa8230295091e5d1e56883b0d73a0649cb316d",
+                    "reference": "07fa8230295091e5d1e56883b0d73a0649cb316d"
+                },
+                "require": {
+                    "php": ">=8.4",
+                    "revolt/event-loop": "^1.0",
+                    "symfony/event-dispatcher": "^8.0",
+                    "symfony/string": "^8.0"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Symfony\\Component\\Tui\\": "src/Symfony/Component/Tui/"
+                    },
+                    "exclude-from-classmap": [
+                        "/Tests/"
+                    ]
+                },
+                "minimum-stability": "dev"
+            }
         },
         {
             "type": "vcs",
@@ -69,8 +100,7 @@
     "autoload": {
         "psr-4": {
             "Kosmokrator\\": "src/",
-        "Athanor\\": "src/Athanor/",
-            "Symfony\\Component\\Tui\\": "vendor/symfony/tui/src/Symfony/Component/Tui/"
+            "Athanor\\": "src/Athanor/"
         }
     },
     "autoload-dev": {

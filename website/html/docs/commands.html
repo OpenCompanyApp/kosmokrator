@@ -31,15 +31,43 @@
 </p> <h2 id="shell-commands">Shell Commands</h2> <p> These commands are run directly from your terminal rather than inside the interactive REPL.
 </p> <h4 id="cmd-shell-update"><code>kosmokrator update</code></h4> <p> Check GitHub Releases for a newer version. Static binary and PHAR installs can replace themselves in place. Source installs print the exact <code>git pull</code> and <code>composer install</code> commands to run.
 </p> <h4 id="cmd-shell-setup"><code>kosmokrator setup</code></h4> <p> Run the interactive first-time configuration flow. It selects a provider, stores credentials, and writes the default provider/model settings used by future sessions.
-</p> <h4 id="cmd-shell-config"><code>kosmokrator config</code></h4> <p> Inspect and edit resolved settings from the shell. Supports <code>show</code>, <code>get</code>, <code>set</code>, <code>unset</code>, and <code>edit</code>, with <code>--global</code> and <code>--project</code> to choose where overrides are written.
+</p> <h4 id="cmd-shell-config"><code>kosmokrator config</code></h4> <p> Inspect and edit resolved settings from the shell. Supports <code>show</code>, <code>get</code>, <code>set</code>, <code>unset</code>, <code>paths</code>, and <code>edit</code>, with <code>--global</code> and <code>--project</code> to choose where overrides are written. Add <code>--json</code> to <code>show</code>, <code>get</code>, <code>set</code>, <code>unset</code>, or <code>paths</code> for machine-readable output.
 </p> <pre><code>kosmokrator config show
-kosmokrator config get llm.default_model
-kosmokrator config set llm.default_model GLM-5.1 --global
-kosmokrator config edit --project</code></pre> <h4 id="cmd-shell-auth"><code>kosmokrator auth</code></h4> <p> Manage provider authentication. Use <code>status</code> to inspect providers, <code>login</code> to store an API key or run OAuth, and <code>logout</code> to remove stored credentials.
+kosmokrator config show --json
+kosmokrator config paths --json
+kosmokrator config get agent.default_model --json
+kosmokrator config set agent.default_model glm-5.1 --provider z --global --json
+kosmokrator config edit --project</code></pre> <h4 id="cmd-shell-settings"><code>kosmokrator settings:*</code></h4> <p> Agent-friendly configuration commands backed by the same schema as <code>/settings</code>. They expose categories, labels, descriptions, current values, sources, effects, valid options, and YAML target paths.
+</p> <pre><code>kosmokrator settings:list --json
+kosmokrator settings:list --category permissions --json
+kosmokrator settings:get tools.default_permission_mode --json
+kosmokrator settings:options agent.default_model --provider openai --json
+kosmokrator settings:set agent.mode plan --global --json
+kosmokrator settings:set tools.safe_tools "file_read,glob,grep" --project --json
+jq -n '{settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.4-mini"}}' | \
+  kosmokrator settings:apply --stdin-json --global --json
+kosmokrator settings:unset agent.mode --project --json
+kosmokrator settings:doctor --json
+kosmokrator settings:examples --json</code></pre> <h4 id="cmd-shell-providers"><code>kosmokrator providers:*</code></h4> <p> Configure LLM providers, discover models, manage custom OpenAI-compatible endpoints, and inspect authentication status without opening the setup TUI. Provider commands never echo raw API keys in JSON or text output.
+</p> <pre><code>kosmokrator providers:list --json
+kosmokrator providers:models openai --json
+kosmokrator providers:status openai --json
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json
+kosmokrator providers:configure codex --device --global --json
+kosmokrator providers:logout openai --json
+kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --global --json
+kosmokrator providers:custom:list --json
+kosmokrator providers:custom:delete local_ai --json</code></pre> <h4 id="cmd-shell-secrets"><code>kosmokrator secrets:*</code></h4> <p> Store and inspect managed secrets headlessly. Supported keys currently use <code>provider.&lt;id&gt;.api_key</code> for LLM providers and <code>gateway.telegram.token</code> for the Telegram gateway.
+</p> <pre><code>printf %s "$OPENAI_API_KEY" | kosmokrator secrets:set provider.openai.api_key --stdin --json
+kosmokrator secrets:status provider.openai.api_key --json
+kosmokrator secrets:list --json
+kosmokrator secrets:unset provider.openai.api_key --json</code></pre> <h4 id="cmd-shell-auth"><code>kosmokrator auth</code></h4> <p> Manage provider authentication. Use <code>status</code> to inspect providers, <code>login</code> to store an API key or run OAuth, and <code>logout</code> to remove stored credentials.
 </p> <pre><code>kosmokrator auth status
-kosmokrator auth login openai --api-key="$OPENAI_API_KEY"
+printf %s "$OPENAI_API_KEY" | kosmokrator auth login openai --api-key-stdin --json
+kosmokrator auth login openai --api-key-env OPENAI_API_KEY --json
 kosmokrator auth login codex --device
-kosmokrator auth logout openai</code></pre> <h4 id="cmd-shell-codex"><code>kosmokrator codex:*</code></h4> <p> Convenience commands for the Codex provider's ChatGPT OAuth flow. These map to the same credential store used by <code>auth login codex</code>.
+kosmokrator auth logout openai --json</code></pre> <h4 id="cmd-shell-codex"><code>kosmokrator codex:*</code></h4> <p> Convenience commands for the Codex provider's ChatGPT OAuth flow. These map to the same credential store used by <code>auth login codex</code>.
 </p> <pre><code>kosmokrator codex:login
 kosmokrator codex:login --device
 kosmokrator codex:status
@@ -61,7 +89,15 @@ kosmokrator integrations:lua workflow.lua --force --json</code></pre> <p> See <a
 </p> <pre><code>/settings → Gateway
 enable Telegram, store bot token, set allowlist
 
-kosmokrator gateway:telegram</code></pre> <p> The internal worker command <code>kosmokrator gateway:telegram:worker</code> is process-managed by the main gateway and is not intended for normal manual use.
+kosmokrator gateway:telegram</code></pre> <p> The gateway can also be configured headlessly:
+</p> <pre><code>printf %s "$TELEGRAM_BOT_TOKEN" | kosmokrator gateway:telegram:configure \
+  --token-stdin \
+  --enabled on \
+  --session-mode thread_user \
+  --allowed-users "123456789,@maintainer" \
+  --global --json
+
+kosmokrator gateway:telegram:status --json</code></pre> <p> The internal worker command <code>kosmokrator gateway:telegram:worker</code> is process-managed by the main gateway and is not intended for normal manual use.
 </p> <h2 id="telegram-gateway-commands">Telegram Gateway Commands</h2> <p> When you talk to KosmoKrator through Telegram, the bot exposes a transport layer of Telegram-native commands in addition to the normal Kosmo slash commands.
 </p> <h4><code>/help</code></h4> <p>Show Telegram gateway help, available controls, and the supported slash-command bridge.</p> <h4><code>/status</code></h4> <p>Show the linked session, active run state, queued input count, and current mode details for that chat route.</p> <h4><code>/new</code></h4> <p>Start a fresh linked session for the current Telegram route.</p> <h4><code>/resume</code></h4> <p>Reuse the existing linked session for the current Telegram route if one exists.</p> <h4><code>/cancel</code></h4> <p>Cancel the active run for the current Telegram route.</p> <h4><code>/approve</code> / <code>/deny</code></h4> <p> Resolve the latest pending approval request. Approval also supports scoped variants:
 </p> <pre><code>/approve

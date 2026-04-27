@@ -324,7 +324,8 @@ final class SettingsManager
 
         return match ($definition->type) {
             'number' => is_numeric($value) ? (str_contains((string) $value, '.') ? (float) $value : (int) $value) : $value,
-            'toggle' => in_array((string) $value, ['1', 'true', 'on', 'yes'], true) ? 'on' : (in_array((string) $value, ['0', 'false', 'off', 'no'], true) ? 'off' : (string) $value),
+            'toggle' => in_array(strtolower((string) $value), ['1', 'true', 'on', 'yes'], true) ? 'on' : (in_array(strtolower((string) $value), ['0', 'false', 'off', 'no'], true) ? 'off' : (string) $value),
+            'string_list', 'json', 'yaml' => (new SettingValueParser)->parse($definition, $value),
             default => $value,
         };
     }

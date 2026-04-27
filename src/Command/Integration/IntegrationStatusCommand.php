@@ -40,11 +40,15 @@ final class IntegrationStatusCommand extends Command
                 'configured' => $first->configured,
                 'accounts' => $first->accounts === [] ? ['default'] : array_merge(['default'], $first->accounts),
                 'functions' => count($functions),
+                'auth_strategy' => $first->capabilities['auth_strategy'] ?? 'none',
+                'cli_setup_supported' => $first->capabilities['cli_setup_supported'] ?? true,
+                'cli_runtime_supported' => $first->capabilities['cli_runtime_supported'] ?? true,
+                'compatibility_summary' => $first->capabilities['compatibility_summary'] ?? '',
             ];
         }
 
         if ($input->getOption('json')) {
-            $this->writeJson($output, $data);
+            $this->writeJson($output, ['success' => true, 'providers' => $data]);
 
             return Command::SUCCESS;
         }
@@ -56,12 +60,13 @@ final class IntegrationStatusCommand extends Command
                 $row['active'] ? 'yes' : 'no',
                 $row['configured'] ? 'yes' : 'no',
                 implode(', ', $row['accounts']),
+                $row['compatibility_summary'],
                 (string) $row['functions'],
             ];
         }
 
         (new Table($output))
-            ->setHeaders(['Provider', 'Active', 'Configured', 'Accounts', 'Functions'])
+            ->setHeaders(['Provider', 'Active', 'Configured', 'Accounts', 'Compatibility', 'Functions'])
             ->setRows($rows)
             ->render();
 

@@ -91,7 +91,7 @@ class OutputTruncator
         $fullPath = $this->saveFull($output, $toolCallId);
 
         if ($lines > $this->maxLines) {
-            $output = implode("\n", array_slice(explode("\n", $output), 0, $this->maxLines));
+            $output = $this->firstLines($output, $this->maxLines);
         }
 
         // Byte check runs after line truncation to catch oversized single lines
@@ -100,6 +100,27 @@ class OutputTruncator
         }
 
         return $output."\n\n[truncated - full output saved to {$fullPath}; inspect with targeted grep/file_read rather than pasting it back into context]";
+    }
+
+    private function firstLines(string $output, int $maxLines): string
+    {
+        if ($maxLines <= 0) {
+            return '';
+        }
+
+        $offset = 0;
+        for ($line = 1; $line < $maxLines; $line++) {
+            $next = strpos($output, "\n", $offset);
+            if ($next === false) {
+                return $output;
+            }
+
+            $offset = $next + 1;
+        }
+
+        $end = strpos($output, "\n", $offset);
+
+        return $end === false ? $output : substr($output, 0, $end);
     }
 
     /**

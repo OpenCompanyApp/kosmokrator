@@ -72,6 +72,65 @@ audio:
     <p><strong>Tip:</strong> Settings saved via <code>/settings</code> are written to your YAML config files, using the same priority chain as manual edits. To revert a runtime setting, clear it in <code>/settings</code> and the bundled defaults take over again.</p>
 </div>
 
+<h3 id="headless-settings-cli">Headless Settings CLI</h3>
+
+<p>
+    Every setting exposed in <code>/settings</code> is also available from a non-interactive shell API.
+    This is the preferred surface for CI images, bootstrap scripts, remote servers, and other coding
+    agents that need to configure KosmoKrator without a TUI.
+</p>
+
+<pre><code># Discover categories, keys, current values, sources, effects, and YAML paths
+kosmokrator settings:list --json
+kosmokrator settings:list --category permissions --json
+
+# Inspect one setting and enumerate valid options
+kosmokrator settings:get agent.default_provider --json
+kosmokrator settings:options agent.default_provider --json
+kosmokrator settings:options agent.default_model --provider openai --json
+
+# Write one value to global or project config
+kosmokrator settings:set agent.mode plan --global --json
+kosmokrator settings:set tools.denied_tools "bash,file_write" --project --json
+kosmokrator settings:set agent.default_model gpt-5.4-mini --provider openai --global --json
+
+# Apply multiple settings atomically from JSON
+jq -n '{
+  scope: "global",
+  settings: {
+    "agent.default_provider": "openai",
+    "agent.default_model": "gpt-5.4-mini",
+    "tools.default_permission_mode": "guardian"
+  }
+}' | kosmokrator settings:apply --stdin-json --json
+
+# Remove an override so lower-priority config/defaults take over
+kosmokrator settings:unset agent.mode --project --json
+
+# Diagnose whether headless runs are ready
+kosmokrator settings:doctor --json
+kosmokrator settings:examples --json</code></pre>
+
+<p>
+    Write responses include both the value written to the requested scope and the effective value
+    after the normal project/global/default priority chain is applied. This matters when, for
+    example, a global write is masked by a project override.
+</p>
+
+<p>
+    Values are parsed by setting type: toggles accept <code>on</code>/<code>off</code>,
+    <code>true</code>/<code>false</code>, or <code>1</code>/<code>0</code>; list settings accept comma,
+    newline, or JSON-array input; JSON/YAML settings are parsed structurally instead of by string
+    splitting. Machine-readable commands return the resolved value, display value, source
+    (<code>default</code>, <code>global</code>, or <code>project</code>), effect timing, and valid options.
+</p>
+
+<div class="tip">
+    <p><strong>Secrets:</strong> API keys and tokens are not written through <code>settings:set</code>.
+    Use <code>providers:configure</code>, <code>secrets:set</code>, or the gateway-specific configure
+    command so secret values stay in the managed secret store and are only reported as masked status.</p>
+</div>
+
 <!-- ================================================================== -->
 <h2 id="settings-categories">Settings Reference</h2>
 
@@ -336,6 +395,76 @@ audio:
             </td>
             <td>applies now</td>
         </tr>
+        <tr>
+            <td><code>tools.denied_tools</code></td>
+            <td>list</td>
+            <td><em>empty</em></td>
+            <td>Tool names that are always blocked, regardless of permission mode.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.safe_tools</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Tool names treated as safe under Guardian-style policy.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.approval_required</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Tool names that require approval unless the active policy bypasses prompts.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.blocked_paths</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Glob patterns blocked for file-reading and file-writing tools.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.allowed_paths</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Paths exempt from blocked path rules.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.guardian_safe_commands</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Shell command patterns auto-approved in Guardian mode.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.bash.timeout</code></td>
+            <td>number</td>
+            <td><code>120</code></td>
+            <td>Default timeout, in seconds, for bash tool calls.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.bash.blocked_commands</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Shell command patterns blocked before execution.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.shell.wait_ms</code></td>
+            <td>number</td>
+            <td><code>100</code></td>
+            <td>Polling interval for persistent shell sessions.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.shell.idle_ttl</code></td>
+            <td>number</td>
+            <td><code>300</code></td>
+            <td>Idle timeout, in seconds, before persistent shell sessions are cleaned up.</td>
+            <td>next session</td>
+        </tr>
     </tbody>
 </table>
 
@@ -567,6 +696,20 @@ audio:
             <td>number</td>
             <td><code>20000</code></td>
             <td>Minimum token savings required for a prune pass to be accepted. Prevents thrashing from tiny, repeated prune operations.</td>
+            <td>next turn</td>
+        </tr>
+        <tr>
+            <td><code>context.max_output_lines</code></td>
+            <td>number</td>
+            <td><code>2000</code></td>
+            <td>Maximum lines retained from tool output before truncation.</td>
+            <td>next turn</td>
+        </tr>
+        <tr>
+            <td><code>context.max_output_bytes</code></td>
+            <td>number</td>
+            <td><code>50000</code></td>
+            <td>Maximum bytes retained from tool output before truncation.</td>
             <td>next turn</td>
         </tr>
     </tbody>

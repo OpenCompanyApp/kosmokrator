@@ -10,6 +10,7 @@ use Kosmokrator\Integration\KosmokratorLuaToolInvoker;
 use Kosmokrator\Integration\Runtime\IntegrationCatalog;
 use Kosmokrator\Integration\Runtime\IntegrationDocService;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
+use Kosmokrator\Integration\Runtime\IntegrationRuntimeOptions;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\LuaSandboxService;
 use Kosmokrator\Settings\SettingsManager;
@@ -93,6 +94,58 @@ final class PlaneIntegrationRuntimeTest extends TestCase
         $this->assertSame(['account' => 'work'], $provider->lastContext);
     }
 
+    public function test_runtime_validates_credentials_for_selected_account(): void
+    {
+        $provider = new RuntimeFakePlaneProvider;
+        [, $runtime] = $this->buildRuntime($provider, accounts: ['work']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("missing required credentials for account 'missing'");
+
+        $runtime->call('plane.list_workspaces', [], 'missing');
+    }
+
+    public function test_runtime_follows_integration_write_permissions_unless_forced(): void
+    {
+        $provider = new RuntimeFakePlaneProvider;
+        [, $runtime] = $this->buildRuntime($provider, writePermission: 'ask');
+        RuntimeFakePlaneCreateIssue::$executions = 0;
+
+        $blocked = $runtime->call('plane.create_issue', ['project_id' => 'p1', 'name' => 'Blocked']);
+
+        $this->assertFalse($blocked->success);
+        $this->assertStringContainsString('requires approval', (string) $blocked->error);
+        $this->assertSame(0, RuntimeFakePlaneCreateIssue::$executions);
+
+        $forced = $runtime->call(
+            'plane.create_issue',
+            ['project_id' => 'p1', 'name' => 'Forced'],
+            options: new IntegrationRuntimeOptions(force: true),
+        );
+
+        $this->assertTrue($forced->success);
+        $this->assertTrue($forced->meta['permission_bypassed']);
+        $this->assertSame(1, RuntimeFakePlaneCreateIssue::$executions);
+    }
+
+    public function test_runtime_dry_run_validates_without_executing_provider_tool(): void
+    {
+        $provider = new RuntimeFakePlaneProvider;
+        [, $runtime] = $this->buildRuntime($provider, writePermission: 'allow');
+        RuntimeFakePlaneCreateIssue::$executions = 0;
+        $provider->createToolCalls = 0;
+
+        $result = $runtime->call(
+            'plane.create_issue',
+            ['project_id' => 'p1', 'name' => 'Dry run'],
+            options: new IntegrationRuntimeOptions(dryRun: true),
+        );
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->meta['dry_run']);
+        $this->assertSame(0, RuntimeFakePlaneCreateIssue::$executions);
+    }
+
     public function test_lua_docs_helpers_can_discover_plane_functions_without_calling_api(): void
     {
         [, $runtime] = $this->buildRuntime(new PlaneToolProvider);
@@ -107,7 +160,7 @@ final class PlaneIntegrationRuntimeTest extends TestCase
     /**
      * @return array{IntegrationCatalog, IntegrationRuntime}
      */
-    private function buildRuntime(ToolProvider $provider, array $accounts = []): array
+    private function buildRuntime(ToolProvider $provider, array $accounts = [], string $writePermission = 'allow'): array
     {
         $registry = new ToolProviderRegistry;
         $registry->register($provider);
@@ -120,16 +173,17 @@ final class PlaneIntegrationRuntimeTest extends TestCase
         );
         $settings->setRaw('integrations.plane.enabled', true, 'global');
         $settings->setRaw('integrations.plane.permissions.read', 'allow', 'global');
-        $settings->setRaw('integrations.plane.permissions.write', 'allow', 'global');
+        $settings->setRaw('integrations.plane.permissions.write', $writePermission, 'global');
+
+        $defaultCredentials = [
+            'api_key' => 'test-api-key',
+            'url' => 'https://api.plane.so',
+            'workspace_slug' => 'kosmokrator',
+        ];
+        $accountCredentials = array_fill_keys($accounts, $defaultCredentials);
 
         $credentials = new RuntimeFakeCredentialResolver(
-            values: [
-                'plane' => [
-                    'api_key' => 'test-api-key',
-                    'url' => 'https://api.plane.so',
-                    'workspace_slug' => 'kosmokrator',
-                ],
-            ],
+            values: ['plane' => $defaultCredentials + ['accounts' => $accountCredentials]],
             accounts: ['plane' => $accounts],
         );
 
@@ -172,6 +226,10 @@ final class RuntimeFakeCredentialResolver implements CredentialResolver
 
     public function get(string $integration, string $key, mixed $default = null, ?string $account = null): mixed
     {
+        if ($account !== null) {
+            return $this->values[$integration]['accounts'][$account][$key] ?? $default;
+        }
+
         return $this->values[$integration][$key] ?? $default;
     }
 

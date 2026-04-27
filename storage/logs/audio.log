@@ -1309,3 +1309,47 @@
 [2026-04-13 08:57:02] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1136}
 [2026-04-13 08:57:02] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69dcafde79594.py","instrument":"Fiddle"}
 [2026-04-13 08:57:02] INFO: Worker finished
+[2026-04-21 21:38:31] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-21 21:38:31] INFO: Completion sound worker booted
+[2026-04-21 21:38:31] INFO: Worker starting composition {"instrument":41,"message_preview":"Hey! 👋 What can I help you with today?"}
+[2026-04-21 21:39:26] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":744}
+[2026-04-21 21:39:26] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69e7ee8e84d74.py","instrument":"Violin"}
+[2026-04-21 21:39:26] INFO: Worker finished
+[2026-04-21 21:43:26] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-21 21:43:27] INFO: Completion sound worker booted
+[2026-04-21 21:43:27] INFO: Worker starting composition {"instrument":41,"message_preview":"Why do programmers prefer dark mode?\n\nBecause light attracts bugs. 🪲\n\nNeed help with anything in the"}
+[2026-04-21 21:43:49] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":879}
+[2026-04-21 21:43:49] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69e7ef957046c.py","instrument":"Violin"}
+[2026-04-21 21:43:49] INFO: Worker finished
+[2026-04-21 23:28:59] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-21 23:29:00] INFO: Completion sound worker booted
+[2026-04-21 23:29:00] INFO: Worker starting composition {"instrument":41,"message_preview":"Error: API error (400): The messages parameter is illegal. Please check the documentation."}
+[2026-04-21 23:29:24] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":977}
+[2026-04-21 23:29:24] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69e80854a3aa1.py","instrument":"Violin"}
+[2026-04-21 23:29:24] INFO: Worker finished
+[2026-04-23 01:03:50] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-23 01:03:51] INFO: Completion sound worker booted
+[2026-04-23 01:03:51] INFO: Worker starting composition {"instrument":41,"message_preview":"## French Translation: 100% Complete\n\n**2,649\/2,649 files translated** across all collections:\n\n| Co"}
+[2026-04-23 01:04:12] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1755}
+[2026-04-23 01:04:12] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69e9700c1904a.py","instrument":"Violin"}
+[2026-04-23 01:04:12] INFO: Worker finished
+[2026-04-27 16:05:09] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 16:05:09] INFO: Completion sound worker booted
+[2026-04-27 16:05:09] INFO: Worker starting composition {"instrument":0,"message_preview":"Here's a comprehensive overview of the **Timeless Myths** project:\n\n## Project Overview\n\n**Timeless "}
+[2026-04-27 16:05:32] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":1507}
+[2026-04-27 16:05:32] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69ef894c6946d.py","instrument":"Piano"}
+[2026-04-27 16:05:32] INFO: Worker finished
+[2026-04-27 16:27:38] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 16:27:39] INFO: Completion sound worker booted
+[2026-04-27 16:27:39] INFO: Worker starting composition {"instrument":24,"message_preview":"Here's the current state of **KosmoKrator**:\n\n## Project Overview\n\n**KosmoKrator** — AI coding agent"}
+[2026-04-27 16:28:01] INFO: Completion sound: script composed successfully {"attempt":0,"script_length":888}
+[2026-04-27 16:28:01] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69ef8e9185c2e.py","instrument":"Guitar"}
+[2026-04-27 16:28:01] INFO: Worker finished
+[2026-04-27 17:11:50] INFO: Completion sound worker booting {"timeout_seconds":60}
+[2026-04-27 17:11:50] INFO: Completion sound worker booted
+[2026-04-27 17:11:51] INFO: Worker starting composition {"instrument":0,"message_preview":"Here's the final summary:\n\n## Results\n\n### YAML\/Frontmatter Fixes\n- **76 files** with unquoted colon"}
+[2026-04-27 17:12:51] WARNING: Completion sound: LLM call failed {"attempt":0,"error":"Completion sound LLM timed out after 60s"}
+[2026-04-27 17:12:51] ERROR: Completion sound: all attempts exhausted {"last_error":"Completion sound LLM timed out after 60s","attempts":2}
+[2026-04-27 17:12:51] WARNING: Completion sound: using fallback composition {"reason":"Completion sound LLM timed out after 60s"}
+[2026-04-27 17:12:51] INFO: Completion sound: spawning playback process {"script_path":"\/var\/folders\/xq\/3h5kbr5550l9msblmc16334m0000gn\/T\/kosmokrator_sound_69ef99136c067.py","instrument":"Piano"}
+[2026-04-27 17:12:51] INFO: Worker finished

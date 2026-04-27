@@ -245,6 +245,46 @@ ob_start();
     <code>git pull</code> and <code>composer install</code> commands to run.
 </p>
 
+<h4 id="cmd-shell-setup"><code>kosmokrator setup</code></h4>
+<p>
+    Run the interactive first-time configuration flow. It selects a provider,
+    stores credentials, and writes the default provider/model settings used by
+    future sessions.
+</p>
+
+<h4 id="cmd-shell-config"><code>kosmokrator config</code></h4>
+<p>
+    Inspect and edit resolved settings from the shell. Supports
+    <code>show</code>, <code>get</code>, <code>set</code>, <code>unset</code>,
+    and <code>edit</code>, with <code>--global</code> and <code>--project</code>
+    to choose where overrides are written.
+</p>
+<pre><code>kosmokrator config show
+kosmokrator config get llm.default_model
+kosmokrator config set llm.default_model GLM-5.1 --global
+kosmokrator config edit --project</code></pre>
+
+<h4 id="cmd-shell-auth"><code>kosmokrator auth</code></h4>
+<p>
+    Manage provider authentication. Use <code>status</code> to inspect providers,
+    <code>login</code> to store an API key or run OAuth, and <code>logout</code>
+    to remove stored credentials.
+</p>
+<pre><code>kosmokrator auth status
+kosmokrator auth login openai --api-key="$OPENAI_API_KEY"
+kosmokrator auth login codex --device
+kosmokrator auth logout openai</code></pre>
+
+<h4 id="cmd-shell-codex"><code>kosmokrator codex:*</code></h4>
+<p>
+    Convenience commands for the Codex provider's ChatGPT OAuth flow. These map
+    to the same credential store used by <code>auth login codex</code>.
+</p>
+<pre><code>kosmokrator codex:login
+kosmokrator codex:login --device
+kosmokrator codex:status
+kosmokrator codex:logout</code></pre>
+
 <h4 id="cmd-shell-integrations"><code>kosmokrator integrations:*</code></h4>
 <p>
     Run OpenCompany integrations directly from the shell without starting an
@@ -253,16 +293,21 @@ ob_start();
 </p>
 <pre><code>kosmokrator integrations:list --json
 kosmokrator integrations:status --json
+kosmokrator integrations:doctor plane --json
+kosmokrator integrations:fields plane --json
+kosmokrator integrations:configure plane --set api_key="$PLANE_API_KEY" --enable --json
 kosmokrator integrations:search "plane issue" --json
 kosmokrator integrations:docs plane.create_issue
 kosmokrator integrations:schema plane.create_issue
+kosmokrator integrations:call plane.create_issue --project-id=PROJECT_UUID --name="Check" --dry-run --json
 kosmokrator integrations:call plane.list_issues --project-id=PROJECT_UUID --json
 kosmokrator integrations:plane list_issues --project-id=PROJECT_UUID --json
-kosmokrator integrations:lua workflow.lua --json</code></pre>
+kosmokrator integrations:lua workflow.lua --force --json</code></pre>
 <p>
     See <a href="/docs/integrations">Integrations CLI</a> for the complete
     command reference, argument passing rules, Lua endpoint, JSON result
-    envelopes, permissions, account aliases, and external coding CLI patterns.
+    envelopes, headless configuration, permissions, account aliases, and
+    external coding CLI patterns.
 </p>
 
 <h4 id="cmd-shell-gateway"><code>kosmokrator gateway:telegram</code></h4>
@@ -430,7 +475,7 @@ kosmokrator gateway:telegram</code></pre>
         <tr>
             <td><code>/argus</code></td>
             <td>None</td>
-            <td>Switch to Argus permission mode (approve everything).</td>
+            <td>Switch to Argus permission mode (ask for every governed tool call).</td>
         </tr>
         <tr>
             <td><code>/prometheus</code></td>

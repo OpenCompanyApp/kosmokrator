@@ -11,9 +11,12 @@ ob_start();
 </p>
 
 <div class="tip">
-    Tools requiring approval (file_write, file_edit, bash) depend on your
-    <a href="/docs/permissions">permission mode</a>. In <strong>Prometheus</strong> mode all tools
-    run without prompts; in <strong>Guardian</strong> mode most writes require explicit approval.
+    Tools requiring approval (<code>file_write</code>, <code>file_edit</code>,
+    <code>apply_patch</code>, <code>bash</code>, <code>shell_start</code>,
+    <code>shell_write</code>, and <code>execute_lua</code>) depend on your
+    <a href="/docs/permissions">permission mode</a>. In <strong>Prometheus</strong>
+    mode governed prompts are auto-approved, but blocked paths and explicit deny
+    rules are still enforced.
 </div>
 
 <!-- ================================================================== -->
@@ -719,6 +722,93 @@ subagent task="Design a unified event system based on the auth, payment, and not
 
 <p><strong>Example:</strong> Recall a previous decision about caching:</p>
 <pre><code>memory_search query="caching strategy"</code></pre>
+
+
+<!-- ================================================================== -->
+<h2 id="session-history">Session History</h2>
+<!-- ================================================================== -->
+
+<p>
+    Session tools let the agent browse and search prior KosmoKrator conversations
+    for the current project. They are useful when a user refers to earlier work,
+    asks what happened last time, or wants the agent to reuse decisions from a
+    previous session.
+</p>
+
+<h3 id="session_search">session_search</h3>
+
+<p>
+    Browse recent sessions or search across saved session history. With no query,
+    it returns recent sessions with IDs, titles, dates, message counts, and a
+    preview. With a query, it performs keyword search and groups matches by
+    session.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>query</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td>Search terms, exact phrases in quotes, or file paths. Omit to browse recent sessions.</td>
+        </tr>
+        <tr>
+            <td><code>limit</code></td>
+            <td>integer</td>
+            <td>No</td>
+            <td>Maximum number of sessions or search groups to return. Defaults to 5, max 10.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p><strong>Example:</strong> Find previous work on authentication:</p>
+<pre><code>session_search query="authentication middleware" limit=5</code></pre>
+
+<!-- ------------------------------------------------------------------ -->
+
+<h3 id="session_read">session_read</h3>
+
+<p>
+    Load a prior session transcript by full ID or unique prefix. Use this after
+    <code>session_search</code> when the agent needs the detailed context from a
+    specific past conversation.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>session_id</code></td>
+            <td>string</td>
+            <td>Yes</td>
+            <td>Session ID or unique prefix. <code>session_search</code> shows short prefixes in brackets.</td>
+        </tr>
+        <tr>
+            <td><code>limit</code></td>
+            <td>integer</td>
+            <td>No</td>
+            <td>Maximum messages to return. Defaults to 50, max 200.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p><strong>Example:</strong> Read a matching session:</p>
+<pre><code>session_read session_id="a1b2c3d4" limit=80</code></pre>
 
 
 <!-- ================================================================== -->

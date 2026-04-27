@@ -30,28 +30,64 @@ final class IntegrationRuntime
     /**
      * @param  array<string, mixed>  $args
      */
-    public function call(string $name, array $args, ?string $account = null): IntegrationCallResult
+    public function call(string $name, array $args, ?string $account = null, ?IntegrationRuntimeOptions $options = null): IntegrationCallResult
     {
+        $options ??= new IntegrationRuntimeOptions(account: $account);
+        if ($options->account === null && $account !== null) {
+            $options = new IntegrationRuntimeOptions(account: $account, force: $options->force, dryRun: $options->dryRun);
+        }
+
         $function = $this->catalog->get($name);
         if ($function === null) {
             throw new \RuntimeException("Unknown integration function: {$name}");
         }
 
-        if (! array_key_exists($function->provider, $this->integrationManager->getActiveProviders())) {
-            throw new \RuntimeException("Integration '{$function->provider}' is installed but not active. Enable and configure it in settings first.");
+        $provider = $this->integrationManager->getLocallyRunnableProviders()[$function->provider] ?? null;
+        if ($provider === null) {
+            throw new \RuntimeException("Integration '{$function->provider}' is not locally runnable.");
+        }
+
+        if (! $this->integrationManager->isEnabled($function->provider)) {
+            throw new \RuntimeException("Integration '{$function->provider}' is installed but not active. Enable it in settings first.");
+        }
+
+        if (! $this->integrationManager->isConfiguredForActivation($function->provider, $provider, $options->account)) {
+            $accountLabel = $options->account === null ? 'default' : $options->account;
+            throw new \RuntimeException("Integration '{$function->provider}' is missing required credentials for account '{$accountLabel}'. Configure it in settings first.");
         }
 
         $this->assertRequiredParameters($function, $args);
 
         $start = microtime(true);
         try {
-            $data = $this->invoker->invoke($function->slug, $args, $account);
+            $this->invoker->assertCanInvoke($function->slug, $options->force);
+            if ($options->dryRun) {
+                return new IntegrationCallResult(
+                    function: $function->fullName(),
+                    data: null,
+                    success: true,
+                    meta: [
+                        'dry_run' => true,
+                        'operation' => $function->operation,
+                        'permission_bypassed' => $options->force,
+                        'account' => $options->account,
+                    ],
+                    durationMs: round((microtime(true) - $start) * 1000, 1),
+                );
+            }
+
+            $data = $this->invoker->invoke($function->slug, $args, $options->account, $options->force);
         } catch (\Throwable $e) {
             return new IntegrationCallResult(
                 function: $function->fullName(),
                 data: null,
                 success: false,
                 error: $e->getMessage(),
+                meta: [
+                    'dry_run' => $options->dryRun,
+                    'permission_bypassed' => $options->force,
+                    'account' => $options->account,
+                ],
                 durationMs: round((microtime(true) - $start) * 1000, 1),
             );
         }
@@ -60,6 +96,12 @@ final class IntegrationRuntime
             function: $function->fullName(),
             data: $data,
             success: true,
+            meta: [
+                'dry_run' => false,
+                'operation' => $function->operation,
+                'permission_bypassed' => $options->force,
+                'account' => $options->account,
+            ],
             durationMs: round((microtime(true) - $start) * 1000, 1),
         );
     }
@@ -67,7 +109,7 @@ final class IntegrationRuntime
     /**
      * Execute Lua with integration namespaces and docs helpers.
      *
-     * @param  array{memoryLimit?: int, cpuLimit?: float}  $options
+     * @param  array{memoryLimit?: int, cpuLimit?: float, force?: bool}  $options
      */
     public function executeLua(string $code, array $options = [], ?NativeToolBridge $nativeToolBridge = null): LuaExecutionResult
     {
@@ -90,11 +132,18 @@ final class IntegrationRuntime
             'docs.read' => fn (string $page) => $this->integrationDocs->render($page),
         ];
 
-        $result = $this->lua->execute($code, $options, $bridge, nativeBridge: $nativeToolBridge, phpFunctions: $phpFunctions);
+        $force = (bool) ($options['force'] ?? false);
+        unset($options['force']);
+
+        $result = $this->invoker->runWithForce(
+            $force,
+            fn () => $this->lua->execute($code, $options, $bridge, nativeBridge: $nativeToolBridge, phpFunctions: $phpFunctions),
+        );
 
         return new LuaExecutionResult(
             lua: $result,
             callLog: $bridge?->getCallLog() ?? [],
+            meta: ['permission_bypassed' => $force],
         );
     }
 

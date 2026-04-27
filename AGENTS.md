@@ -19,7 +19,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
                                             ├── StuckDetector → headless loop convergence
                                             ├── LLM client (AsyncLlmClient or PrismService)
                                             ├── UIManager → TuiRenderer | AnsiRenderer
-                                            ├── ToolRegistry → tools (bash, file_read, file_write, file_edit, grep, glob)
+                                            ├── ToolRegistry → coding, shell, task, memory, session, Lua, and subagent tools
                                             └── SubagentOrchestrator → parallel child agents
 ```
 
@@ -36,7 +36,9 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
   - `UI/AgentDisplayFormatter.php` — Shared agent display utilities (used by both renderers)
   - `UI/AgentTreeBuilder.php` — Builds agent tree from orchestrator stats
 - `src/Tool/` — Tool implementations in `Coding/`, permission system in `Permission/`
-- `src/Command/` — AgentCommand (main REPL), SetupCommand, slash commands in `Slash/`
+- `src/Command/` — AgentCommand (main REPL/headless), SetupCommand, ConfigCommand, AuthCommand, gateway/integration commands, slash commands in `Slash/`, power commands in `Power/`
+- `src/Integration/` — OpenCompany integration catalog, runtime, docs, credential resolution, and Lua invocation helpers
+- `src/Lua/` — Lua sandbox, docs service, and native tool bridge
 - `src/Session/` — SQLite persistence: sessions, messages, memories, settings
 - `src/Task/` — Task tracking system with tool integrations
 
@@ -49,15 +51,17 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 - `ConversationRendererInterface` — history clear/replay
 - `SubagentRendererInterface` — subagent status, spawn/batch display, dashboard
 
-Two renderers implement the full interface:
+Four renderers implement the full interface:
 - **TuiRenderer** — Interactive Symfony TUI with widgets, Revolt event loop, EditorWidget for multi-line input. Delegates to TuiModalManager (overlay dialogs), TuiAnimationManager (breathing/spinners/phase), and SubagentDisplayManager (subagent lifecycle).
 - **AnsiRenderer** — Pure ANSI escape codes, readline input, MarkdownToAnsi for response formatting
+- **HeadlessRenderer** — Non-interactive stdout/stderr renderer for `-p`, JSON, and stream-json runs
+- **NullRenderer** — Silent renderer for subagents and tests
 
 Both use `Theme` for colors and `KosmokratorTerminalTheme` for syntax highlighting via tempest/highlight.
 
 ### Agent internals
 
-AgentLoop is a thin orchestrator (~570 lines) that delegates to:
+AgentLoop is a thin orchestrator that delegates to:
 - **ToolExecutor** — permission checking, concurrent tool execution partitioning, subagent spawn/batch UI
 - **ContextManager** — pre-flight context window checks, LLM-based compaction, system prompt refresh
 - **StuckDetector** — rolling-window repetition detection for headless subagent loops (nudge → final notice → force return)
@@ -119,9 +123,9 @@ KosmoKrator includes a subagent system that spawns child agents for parallel wor
 
 | Type | Capabilities | Can Spawn |
 |------|-------------|-----------|
-| **General** | Full tool access: read, write, edit, bash, subagent | General, Explore, Plan |
-| **Explore** | Read-only: file_read, glob, grep, bash, subagent | Explore only |
-| **Plan** | Read-only: file_read, glob, grep, bash, subagent | Explore only |
+| **General** | Full delegated tool access: read, write, edit, patch, bash/shell, subagent, memory/session, Lua | General, Explore, Plan |
+| **Explore** | Read-only plus bash/shell, subagent, memory/session search, Lua integration scripting | Explore only |
+| **Plan** | Read-only plus bash/shell, subagent, memory/session search, Lua integration scripting | Explore only |
 
 Types enforce permission narrowing — a General agent can spawn any type, but an Explore agent can only spawn more Explore agents. This prevents privilege escalation down the tree.
 
@@ -131,9 +135,9 @@ Modes control what the interactive user can do (orthogonal to agent types):
 
 | Mode | Tools Available | Use Case |
 |------|----------------|----------|
-| **Edit** | All tools + task/ask tools | Default — full coding access |
-| **Plan** | Read-only + subagent + task/ask | Research and plan without writes |
-| **Ask** | Read-only + bash + task/ask | Answer questions using file context |
+| **Edit** | All top-level tools + task/ask tools | Default — full coding access |
+| **Plan** | Read-only + bash/shell + subagent + task/ask + memory/session + Lua | Research and plan without writes |
+| **Ask** | Read-only + bash/shell + task/ask + memory/session + Lua docs | Answer questions using file context |
 
 Switch modes with `/edit`, `/plan`, or `/ask`.
 

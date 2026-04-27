@@ -30,6 +30,7 @@ final class IntegrationLuaCommand extends Command
             ->addOption('eval', 'e', InputOption::VALUE_REQUIRED, 'Lua code to execute')
             ->addOption('repl', null, InputOption::VALUE_NONE, 'Run an integration Lua REPL')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Bypass integration read/write permission policy for Lua integration calls')
             ->addOption('memory-limit', null, InputOption::VALUE_REQUIRED, 'Memory limit in bytes')
             ->addOption('cpu-limit', null, InputOption::VALUE_REQUIRED, 'CPU limit in seconds');
     }
@@ -113,7 +114,7 @@ final class IntegrationLuaCommand extends Command
     }
 
     /**
-     * @return array{memoryLimit?: int, cpuLimit?: float}
+     * @return array{memoryLimit?: int, cpuLimit?: float, force?: bool}
      */
     private function options(InputInterface $input): array
     {
@@ -123,6 +124,9 @@ final class IntegrationLuaCommand extends Command
         }
         if ($input->getOption('cpu-limit') !== null) {
             $options['cpuLimit'] = (float) $input->getOption('cpu-limit');
+        }
+        if ($input->getOption('force')) {
+            $options['force'] = true;
         }
 
         return $options;

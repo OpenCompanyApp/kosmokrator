@@ -128,28 +128,37 @@ single calls and Lua for multi-step workflows:
 ```bash
 kosmokrator integrations:list
 kosmokrator integrations:status
+kosmokrator integrations:doctor clickup --json
+kosmokrator integrations:fields clickup --json
+kosmokrator integrations:configure clickup --set api_key="$CLICKUP_API_KEY" --enable --json
 kosmokrator integrations:search "create clickup task"
 kosmokrator integrations:docs clickup
 kosmokrator integrations:docs clickup.create_task
 kosmokrator integrations:schema clickup.create_task
 
-kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it"
+kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --dry-run
+kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --force
 kosmokrator integrations:clickup create_task --list-id=123 --name="Ship it"
 
 kosmokrator integrations:lua --eval 'print(docs.read("clickup.create_task"))'
-kosmokrator integrations:lua workflow.lua --json
+kosmokrator integrations:lua workflow.lua --force --json
 ```
 
 Every docs page shows both direct CLI and Lua forms. Add `--json` to discovery
 commands when another coding CLI or script needs stable machine-readable output.
+Headless calls still follow provider read/write permissions; `--force` bypasses
+only that integration permission policy for trusted automation.
 
 Other commands:
 
 ```bash
 bin/kosmokrator setup                   # First-run provider/model wizard
+bin/kosmokrator config show             # Inspect resolved configuration
+bin/kosmokrator config set <key> <val>  # Persist a setting override
 bin/kosmokrator auth status [provider]  # Check authentication status
 bin/kosmokrator auth login <provider>   # Authenticate (--api-key or --device for OAuth)
 bin/kosmokrator auth logout <provider>  # Clear stored credentials
+bin/kosmokrator codex:login             # ChatGPT OAuth for the Codex provider
 ```
 
 ## Agent Modes
@@ -180,7 +189,7 @@ Type these at the prompt during a session.
 |---------|-------------|
 | `/guardian` | Heuristic auto-approve for safe commands (default) |
 | `/argus` | Ask permission for every tool call |
-| `/prometheus` | Auto-approve all tools until next prompt |
+| `/prometheus` | Auto-approve governed tool prompts until next prompt; hard denies still apply |
 
 **Session Management**
 
@@ -207,7 +216,7 @@ Type these at the prompt during a session.
 | `/agents` | Show the live subagent swarm dashboard |
 | `kosmokrator update` | Check for updates and update based on install method |
 | `/feedback <text>` | Submit feedback or a bug report as a GitHub issue (requires `gh` CLI) |
-| `/tasks clear` | Remove all tasks |
+| `/tasks-clear` | Remove all tasks |
 | `/clear` | Clear the terminal screen |
 | `/theogony` | Replay the mythological intro animation |
 | `/quit` | Exit KosmoKrator |
@@ -255,12 +264,23 @@ KosmoKrator provides the LLM with a set of tools for interacting with your codeb
 | **ask_user** | Ask the user a question and wait for a response. |
 | **ask_choice** | Present a choice to the user with optional visual mockups. |
 
+### Lua
+
+| Tool | Description |
+|------|-------------|
+| **lua_list_docs** | List Lua and integration documentation pages available to the agent. |
+| **lua_search_docs** | Search Lua and integration docs by topic or function name. |
+| **lua_read_doc** | Read a specific Lua docs page before writing a script. |
+| **execute_lua** | Run Lua with `app.integrations.*` and `app.tools.*` access. |
+
 ### Memory & Tasks
 
 | Tool | Description |
 |------|-------------|
 | **memory_search** | Search saved memories by type and text. |
 | **memory_save** | Create or update a persistent memory (project, user, or decision). |
+| **session_search** | Browse recent sessions or search prior session history for this project. |
+| **session_read** | Read a prior session transcript by ID or unique prefix. |
 | **task_create** | Create tasks with status tracking. Supports batch creation. |
 | **task_update** | Update task status, description, or dependencies. |
 | **task_get** | Retrieve a task by ID with full details. |
@@ -268,7 +288,7 @@ KosmoKrator provides the LLM with a set of tools for interacting with your codeb
 
 ## Permission System
 
-Three permission modes control tool approval. Mutating tools (`file_write`, `file_edit`, `apply_patch`, `bash`, `shell_start`, `shell_write`) always go through permission checks.
+Three permission modes control tool approval. Governed tools (`file_write`, `file_edit`, `apply_patch`, `bash`, `shell_start`, `shell_write`, `execute_lua`) go through permission checks.
 
 | Mode | Symbol | Behavior |
 |------|--------|----------|
@@ -542,7 +562,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
                                             ├── ContextManager → compaction, pruning, system prompt
                                             ├── StuckDetector → headless loop convergence
                                             ├── LLM client (AsyncLlmClient or PrismService)
-                                            ├── UIManager → TuiRenderer | AnsiRenderer
+                                            ├── UIManager → TuiRenderer | AnsiRenderer | HeadlessRenderer
                                             ├── ToolRegistry → all tools
                                             └── SubagentOrchestrator → parallel child agents
 ```
@@ -555,11 +575,14 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 | `src/LLM/` | LLM clients — AsyncLlmClient (Amp HTTP, async streaming), PrismService (Prism PHP, sync), RetryableLlmClient (decorator), ModelCatalog, ProviderCatalog |
 | `src/UI/Tui/` | Symfony TUI renderer — TuiRenderer, TuiModalManager, TuiAnimationManager, SubagentDisplayManager, widgets |
 | `src/UI/Ansi/` | ANSI fallback renderer — AnsiRenderer, MarkdownToAnsi, AnsiTableRenderer |
+| `src/UI/HeadlessRenderer.php` | Non-interactive renderer for `-p`, JSON, and stream-json output |
 | `src/UI/Diff/` | Unified diff rendering with word-level highlighting |
 | `src/Tool/Coding/` | Tool implementations — file, bash, shell, grep, glob, subagent |
 | `src/Tool/Permission/` | Permission system — PermissionEvaluator, PermissionMode, Guardian rules |
-| `src/Command/` | CLI commands — AgentCommand, SetupCommand, AuthCommand |
+| `src/Command/` | CLI commands — AgentCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway, integrations |
 | `src/Command/Slash/` | In-session slash commands |
+| `src/Integration/` | Headless OpenCompany integration runtime, catalog, credential resolution, CLI argument mapping |
+| `src/Lua/` | Lua sandbox, documentation service, and native tool bridge |
 | `src/Session/` | SQLite persistence — sessions, messages, memories, settings |
 | `src/Task/` | Task tracking system with tool integrations |
 | `src/Audio/` | Completion sound composition and playback |
@@ -569,8 +592,8 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 
 KosmoKrator uses two LLM client implementations:
 
-- **AsyncLlmClient** — non-blocking HTTP via Amp. Used in TUI mode for providers with OpenAI-compatible APIs. Supports streaming, prompt caching, and tool calling.
-- **PrismService** — synchronous client via Prism PHP SDK. Used in ANSI mode or for providers with native Prism drivers (e.g., Anthropic).
+- **AsyncLlmClient** — non-blocking HTTP via Amp. Used for async-capable runtime paths, including TUI and headless surfaces that need OpenAI-compatible streaming behavior. Supports streaming, prompt caching, and tool calling.
+- **PrismService** — synchronous client via Prism PHP SDK. Used for ANSI mode or providers with native Prism drivers when that path is selected.
 
 Both are wrapped in `RetryableLlmClient` for automatic retry with exponential backoff on transient errors (429, 5xx).
 

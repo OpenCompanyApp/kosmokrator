@@ -1,6 +1,6 @@
 # KosmoKrator Overview
 
-KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
+KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, headless agent execution, a headless integrations CLI, Lua integration scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
 
 This document is the current-state architecture summary. Proposal and roadmap material lives in `docs/proposals/` and is explicitly labeled there.
 
@@ -26,10 +26,11 @@ Key responsibilities:
 
 ### UI
 
-KosmoKrator ships with two renderers behind `RendererInterface`:
+KosmoKrator ships with renderers behind `RendererInterface`:
 
 - `TuiRenderer` for the interactive Symfony TUI experience
 - `AnsiRenderer` for ANSI/readline fallback
+- `HeadlessRenderer` for `-p`, JSON, and stream-json command execution
 - `NullRenderer` for headless subagent loops (auto-approves permissions)
 
 The shared UI layer also includes diff rendering, theming, terminal notifications, subagent tree formatting, and modal/dialog helpers for settings, approvals, and dashboards.
@@ -42,13 +43,14 @@ Built-in tool families:
 - Shell session tools: `shell_start`, `shell_write`, `shell_read`, `shell_kill`
 - Coordination tools: `subagent`, `task_create`, `task_update`, `task_get`, `task_list`
 - Interactive tools: `ask_user`, `ask_choice`
-- Memory tools: `memory_save`, `memory_search`
+- Memory/session tools: `memory_save`, `memory_search`, `session_search`, `session_read`
+- Lua tools: `lua_list_docs`, `lua_search_docs`, `lua_read_doc`, `execute_lua`
 
 Interactive agent modes:
 
 - `Edit`: full tool access
-- `Plan`: read/search/bash/subagent/task/ask tools, but no file mutation tools
-- `Ask`: read/search/bash/task/ask tools, but no file mutation tools and no subagents
+- `Plan`: read/search/bash/shell/subagent/task/ask/session/Lua tools, but no file mutation tools or memory writes
+- `Ask`: read/search/bash/shell/task/ask/session/Lua docs tools, but no file mutation tools, subagents, or Lua execution
 
 Permission modes are separate from agent modes:
 
@@ -95,17 +97,34 @@ KosmoKrator ships with a working subagent system:
 
 See `AGENTS.md` and `docs/architecture/subagent-architecture.md` for implementation details.
 
+### Headless Integrations and Lua
+
+KosmoKrator also exposes OpenCompany integration packages without starting an
+agent session:
+
+- `integrations:list`, `integrations:status`, `integrations:search`, `integrations:docs`, `integrations:schema`, `integrations:examples`
+- `integrations:call provider.function` for direct calls
+- dynamic shortcuts like `integrations:plane list_issues`
+- `integrations:lua` for multi-step Lua workflows over `app.integrations.*`
+
+The same runtime is available inside agent Lua through `execute_lua`, with
+documentation discovery via `lua_list_docs`, `lua_search_docs`, and
+`lua_read_doc`.
+
 ### Key Directories
 
 | Directory | Purpose |
 |-----------|---------|
 | `src/Agent/` | Agent core: AgentLoop, ToolExecutor, ContextManager, StuckDetector, subagent system, events |
 | `src/LLM/` | LLM clients: AsyncLlmClient, PrismService, RetryableLlmClient, model catalog, pricing |
-| `src/UI/` | Rendering: TuiRenderer, AnsiRenderer, NullRenderer, diff rendering, theming |
+| `src/UI/` | Rendering: TuiRenderer, AnsiRenderer, HeadlessRenderer, NullRenderer, diff rendering, theming |
 | `src/Tool/` | Tool implementations and permission system |
-| `src/Command/` | AgentCommand, SetupCommand, AuthCommand, slash commands, power commands |
-| `src/Command/Slash/` | 20 interactive slash commands (`/edit`, `/compact`, `/settings`, etc.) |
-| `src/Command/Power/` | 20 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
+| `src/Command/` | AgentCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway commands, integration commands, slash commands, power commands |
+| `src/Command/Slash/` | 22 interactive slash commands (`/edit`, `/compact`, `/settings`, etc.) |
+| `src/Command/Power/` | 22 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
+| `src/Command/Integration/` | Headless integration CLI commands and dynamic provider shortcuts |
+| `src/Integration/` | Integration catalog, runtime, credential resolution, command argument coercion, Lua invoker |
+| `src/Lua/` | Lua sandbox service, documentation registry, native tool bridge |
 | `src/Session/` | SQLite persistence: sessions, messages, memories, settings |
 | `src/Task/` | Task tracking with tree structure and dependency enforcement |
 | `src/Skill/` | Skill system: YAML-based custom prompts with `$skillname` dispatch |
@@ -118,9 +137,8 @@ See `AGENTS.md` and `docs/architecture/subagent-architecture.md` for implementat
 
 These are still proposal or future-work areas, not shipped runtime features:
 
-- Lua code mode
+- Lua code mode as a dedicated interactive agent mode (Lua integration scripting is shipped)
 - MCP client support
-- external integration loader / hosted integrations
 - desktop app surface
 - provider failover across multiple backends in the main runtime
 

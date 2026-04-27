@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
@@ -317,7 +318,12 @@ final class ToolExecutor
                 'output_length' => strlen($outputStr),
             ]);
 
-            return ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
+            $result = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
+            if ($this->isMutativeFileTool($toolCall->name) && ! ToolCallMapper::isErrorResult($result)) {
+                FileReadTool::resetGlobalCache();
+            }
+
+            return $result;
         } catch (\RuntimeException $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
@@ -490,6 +496,11 @@ final class ToolExecutor
     private function isReadOnlyShellTool(string $name): bool
     {
         return in_array($name, ['bash', 'shell_start', 'shell_write', 'shell_kill'], true);
+    }
+
+    private function isMutativeFileTool(string $name): bool
+    {
+        return in_array($name, ['file_write', 'file_edit', 'apply_patch'], true);
     }
 
     /** Extract the command string from a tool call's arguments (handles both 'command' and 'input' keys). */

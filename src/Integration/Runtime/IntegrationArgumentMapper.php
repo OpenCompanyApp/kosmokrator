@@ -49,7 +49,7 @@ final class IntegrationArgumentMapper
                 $value = $next !== null && ! str_starts_with($next, '--') ? $next : 'true';
             }
 
-            if (in_array($key, ['account', 'timeout', 'permission-mode'], true)) {
+            if (in_array($key, ['account', 'force', 'timeout', 'permission-mode'], true)) {
                 continue;
             }
 

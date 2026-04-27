@@ -20,7 +20,7 @@ Forward-looking design docs. Not shipped — may reference classes or features t
 | [context-management-redesign.md](proposals/context-management-redesign.md) | 17 proposed context pipeline improvements |
 | [context-management-strategies.md](proposals/context-management-strategies.md) | Semantic scoring, dedup tiers, progressive summarization |
 | [context-compaction.md](proposals/context-compaction.md) | Historical plan for the first compaction implementation |
-| [ecosystem-architecture.md](proposals/ecosystem-architecture.md) | Lua code mode, MCP integration, OpenCompany tool ecosystem |
+| [ecosystem-architecture.md](proposals/ecosystem-architecture.md) | Future ecosystem ideas beyond the shipped integrations CLI, including MCP and broader OpenCompany tool architecture |
 | [integration-refactor-plan.md](proposals/integration-refactor-plan.md) | Refactoring tool packages to framework-agnostic contracts |
 | [desktop-app.md](proposals/desktop-app.md) | NativePHP + Electron desktop surface proposal |
 | [hermes-style-gateway.md](proposals/hermes-style-gateway.md) | Hermes-style Telegram-first gateway surface for KosmoKrator |

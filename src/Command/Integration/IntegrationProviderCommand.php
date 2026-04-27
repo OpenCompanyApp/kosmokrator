@@ -8,6 +8,7 @@ use Illuminate\Container\Container;
 use Kosmokrator\Integration\Runtime\IntegrationArgumentMapper;
 use Kosmokrator\Integration\Runtime\IntegrationDocService;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
+use Kosmokrator\Integration\Runtime\IntegrationRuntimeOptions;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -35,7 +36,9 @@ final class IntegrationProviderCommand extends Command
             ->addArgument('payload', InputArgument::OPTIONAL, 'JSON object payload')
             ->addArgument('extra', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Additional loose args')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON')
-            ->addOption('account', null, InputOption::VALUE_REQUIRED, 'Account alias');
+            ->addOption('account', null, InputOption::VALUE_REQUIRED, 'Account alias')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Bypass integration read/write permission policy')
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Validate resolution, arguments, credentials, and permissions without executing');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -53,13 +56,15 @@ final class IntegrationProviderCommand extends Command
         $tokens = $this->tokensAfterFunction($rawTokens, $function, $payload);
         $json = (bool) $input->getOption('json') || $this->rawFlag($rawTokens, 'json');
         $account = is_string($input->getOption('account')) ? $input->getOption('account') : $this->rawOption($rawTokens, 'account');
+        $force = (bool) $input->getOption('force') || $this->rawFlag($rawTokens, 'force');
+        $dryRun = (bool) $input->getOption('dry-run') || $this->rawFlag($rawTokens, 'dry-run');
 
         try {
             $args = $this->container->make(IntegrationArgumentMapper::class)->map($tokens, $payload);
             $result = $this->container->make(IntegrationRuntime::class)->call(
                 name: $name,
                 args: $args,
-                account: $account,
+                options: new IntegrationRuntimeOptions($account, $force, $dryRun),
             );
         } catch (\Throwable $e) {
             if ($json) {

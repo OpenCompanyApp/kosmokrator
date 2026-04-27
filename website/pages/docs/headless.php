@@ -148,6 +148,7 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <tr><td><code>tool_result</code></td><td>Tool execution result with success status</td></tr>
 <tr><td><code>subagent_spawn</code></td><td>A child agent was spawned</td></tr>
 <tr><td><code>subagent_batch</code></td><td>Child agent(s) completed</td></tr>
+<tr><td><code>stream_end</code></td><td>The current text stream completed</td></tr>
 <tr><td><code>error</code></td><td>An error occurred during execution</td></tr>
 <tr><td><code>result</code></td><td>Final result with usage stats and duration</td></tr>
 </tbody>
@@ -169,7 +170,7 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <tr><td><code>--output-format</code></td><td><code>-o</code></td><td>Output format: <code>text</code>, <code>json</code>, <code>stream-json</code></td></tr>
 <tr><td><code>--model</code></td><td><code>-m</code></td><td>Override model for this run</td></tr>
 <tr><td><code>--mode</code></td><td>&mdash;</td><td>Agent mode: <code>edit</code>, <code>plan</code>, <code>ask</code></td></tr>
-<tr><td><code>--yolo</code></td><td>&mdash;</td><td>Skip all permission checks (alias for <code>--permission-mode prometheus</code>)</td></tr>
+<tr><td><code>--yolo</code></td><td>&mdash;</td><td>Auto-approve governed permission prompts (alias for <code>--permission-mode prometheus</code>)</td></tr>
 <tr><td><code>--permission-mode</code></td><td>&mdash;</td><td>Permission mode: <code>guardian</code>, <code>argus</code>, <code>prometheus</code></td></tr>
 <tr><td><code>--max-turns</code></td><td><code>-t</code></td><td>Maximum agentic turns (LLM call cycles)</td></tr>
 <tr><td><code>--timeout</code></td><td>&mdash;</td><td>Maximum runtime in seconds</td></tr>
@@ -186,11 +187,11 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <h2 id="permissions">Permissions in Headless Mode</h2>
 <!-- ================================================================== -->
 
-<p>In headless mode, all tool calls are auto-approved by default &mdash; there's no interactive prompt to ask for permission. This matches the behavior users expect from other coding agents' non-interactive modes.</p>
+<p>In headless mode, tool calls that reach an interactive approval prompt are auto-approved &mdash; there's no terminal dialog to ask for permission. Hard denies still apply first: blocked paths, explicit deny rules, agent-mode tool filtering, and file path validation can still stop a call before it executes.</p>
 
-<p>Use <code>--yolo</code> to explicitly opt into full auto-pilot:</p>
+<p>Use <code>--yolo</code> to explicitly opt into Prometheus-style auto-approval for governed calls:</p>
 
-<pre><code># Skip all permission checks
+<pre><code># Auto-approve governed permission prompts
 kosmokrator -p --yolo "run the full test suite and fix any failures"</code></pre>
 
 <p>Or use <code>--permission-mode</code> for explicit control:</p>
@@ -276,7 +277,7 @@ kosmokrator -p --mode ask "what does the QueueWorker do?"</code></pre>
 <tbody>
 <tr><td><code>edit</code> (default)</td><td>&check;</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
 <tr><td><code>plan</code></td><td>&check;</td><td>&times;</td><td>&check;</td><td>&check;</td></tr>
-<tr><td><code>ask</code></td><td>&check;</td><td>&times;</td><td>&check;</td><td>&check;</td></tr>
+<tr><td><code>ask</code></td><td>&check;</td><td>&times;</td><td>&check;</td><td>&times;</td></tr>
 </tbody>
 </table>
 
@@ -303,7 +304,7 @@ kosmokrator -p --system-prompt "You are a security auditor. Find vulnerabilities
 <tbody>
 <tr><td><code>0</code></td><td>Success &mdash; agent completed the task</td></tr>
 <tr><td><code>1</code></td><td>Error &mdash; agent encountered an error or returned an error response</td></tr>
-<tr><td><code>2</code></td><td>Limit exceeded &mdash; max turns or timeout reached, or invalid option value</td></tr>
+<tr><td><code>2</code></td><td>Limit exceeded &mdash; max turns or timeout reached</td></tr>
 <tr><td><code>130</code></td><td>Cancelled &mdash; interrupted by SIGINT (Ctrl+C)</td></tr>
 <tr><td><code>143</code></td><td>Cancelled &mdash; interrupted by SIGTERM</td></tr>
 </tbody>

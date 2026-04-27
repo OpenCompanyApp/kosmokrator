@@ -3876,12 +3876,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/OpenCompanyApp/prism-relay.git",
-                "reference": "9c3e22d6eaac5f5f13aebd7e7207ced54036f1e6"
+                "reference": "96ef46556ea48daaf7b780a4831fd33f959b2d0d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/OpenCompanyApp/prism-relay/zipball/9c3e22d6eaac5f5f13aebd7e7207ced54036f1e6",
-                "reference": "9c3e22d6eaac5f5f13aebd7e7207ced54036f1e6",
+                "url": "https://api.github.com/repos/OpenCompanyApp/prism-relay/zipball/96ef46556ea48daaf7b780a4831fd33f959b2d0d",
+                "reference": "96ef46556ea48daaf7b780a4831fd33f959b2d0d",
                 "shasum": ""
             },
             "require": {
@@ -3916,7 +3916,7 @@
                 "source": "https://github.com/OpenCompanyApp/prism-relay/tree/main",
                 "issues": "https://github.com/OpenCompanyApp/prism-relay/issues"
             },
-            "time": "2026-04-05T20:20:09+00:00"
+            "time": "2026-04-27T18:24:02+00:00"
         },
         {
             "name": "phpoption/phpoption",

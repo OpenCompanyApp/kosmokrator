@@ -10,6 +10,11 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 final class PromptFrameBuilderTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        PromptFrameBuilder::resetCache();
+    }
+
     public function test_empty_string_returns_empty_array(): void
     {
         $result = PromptFrameBuilder::splitSystemPrompt('');
@@ -75,6 +80,42 @@ final class PromptFrameBuilderTest extends TestCase
         $this->assertCount(2, $result);
         $this->assertSame($stable, $result[0]->content);
         $this->assertSame("## Current Tasks\n".$volatile, $result[1]->content);
+    }
+
+    public function test_parent_brief_marker_splits_before_subagent_context(): void
+    {
+        $stable = 'You are a helpful assistant.';
+        $prompt = $stable."\n\n## Parent Brief\nAudit this subsystem.";
+
+        $result = PromptFrameBuilder::splitSystemPrompt($prompt);
+
+        $this->assertCount(2, $result);
+        $this->assertSame($stable, $result[0]->content);
+        $this->assertSame("## Parent Brief\nAudit this subsystem.", $result[1]->content);
+    }
+
+    public function test_gateway_session_context_marker_splits_before_gateway_context(): void
+    {
+        $stable = 'You are a helpful assistant.';
+        $prompt = $stable."\n\n## Gateway Session Context\nCurrent source:\n- Platform: Telegram";
+
+        $result = PromptFrameBuilder::splitSystemPrompt($prompt);
+
+        $this->assertCount(2, $result);
+        $this->assertSame($stable, $result[0]->content);
+        $this->assertSame("## Gateway Session Context\nCurrent source:\n- Platform: Telegram", $result[1]->content);
+    }
+
+    public function test_earliest_volatile_marker_wins(): void
+    {
+        $stable = 'You are a helpful assistant.';
+        $prompt = $stable."\n\n## Parent Brief\nChild work\n\n## Current Tasks\n- Task one";
+
+        $result = PromptFrameBuilder::splitSystemPrompt($prompt);
+
+        $this->assertCount(2, $result);
+        $this->assertSame($stable, $result[0]->content);
+        $this->assertSame("## Parent Brief\nChild work\n\n## Current Tasks\n- Task one", $result[1]->content);
     }
 
     public function test_marker_at_beginning_of_string_returns_single_message(): void

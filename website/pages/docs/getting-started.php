@@ -299,9 +299,10 @@ kosmokrator</code></pre>
         agent has (read, write, execute). Separately, <em>permission
         modes</em> control how aggressively those capabilities are
         auto-approved. Switch permission modes with
-        <code>/guardian</code> (review every action),
-        <code>/argus</code> (review writes and commands), or
-        <code>/prometheus</code> (auto-approve everything). See
+        <code>/guardian</code> (auto-approve safe operations),
+        <code>/argus</code> (review governed tool calls), or
+        <code>/prometheus</code> (auto-approve governed prompts while hard
+        denies still apply). See
         <a href="/docs/permissions">Permissions</a> for details.
     </p>
 </div>

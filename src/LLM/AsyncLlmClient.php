@@ -469,7 +469,8 @@ class AsyncLlmClient implements LlmClientInterface
      */
     private function buildPayload(array $messages, array $tools, bool $streaming): array
     {
-        $cachePlan = $this->buildPromptCachePlan($messages);
+        $mappedTools = $tools !== [] ? $this->mapTools($tools) : [];
+        $cachePlan = $this->buildPromptCachePlan($messages, $mappedTools);
         $allMessages = [...$cachePlan->systemPrompts, ...$cachePlan->messages];
 
         $payload = [
@@ -490,8 +491,8 @@ class AsyncLlmClient implements LlmClientInterface
             $payload = array_merge($payload, $cachePlan->providerOptions);
         }
 
-        if (! empty($tools)) {
-            $payload['tools'] = $this->mapTools($tools);
+        if ($cachePlan->tools !== []) {
+            $payload['tools'] = $cachePlan->tools;
             $payload['tool_choice'] = 'auto';
         }
 
@@ -654,13 +655,14 @@ class AsyncLlmClient implements LlmClientInterface
      *
      * @param  Message[]  $messages  Conversation history
      */
-    private function buildPromptCachePlan(array $messages): PromptCachePlan
+    private function buildPromptCachePlan(array $messages, array $tools = []): PromptCachePlan
     {
         return $this->relay->planPromptCache(
             provider: $this->provider,
             model: $this->model,
             systemPrompts: PromptFrameBuilder::splitSystemPrompt($this->systemPrompt),
             messages: $messages,
+            tools: $tools,
         );
     }
 

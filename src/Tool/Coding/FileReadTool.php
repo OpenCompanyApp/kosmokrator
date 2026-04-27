@@ -17,6 +17,14 @@ class FileReadTool extends AbstractTool
 {
     private const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
 
+    private const CACHE_LIMIT = 128;
+
+    /** @var array<string, string> */
+    private static array $cache = [];
+
+    /** @var list<string> */
+    private static array $cacheOrder = [];
+
     /**
      * @param  string|null  $projectRoot  Absolute path to project root for boundary enforcement
      * @param  string[]  $allowedPaths  Pre-resolved path prefixes allowed in addition to the project root
@@ -81,9 +89,20 @@ class FileReadTool extends AbstractTool
             return ToolResult::error("Path is a directory, not a file: {$path}");
         }
 
-        $fileSize = filesize($path);
-        if ($fileSize !== false && $fileSize > self::LARGE_FILE_THRESHOLD) {
-            return $this->readLargeFile($path, $offset, $limit);
+        $stat = stat($path);
+        if ($stat === false) {
+            return ToolResult::error("Failed to stat file: {$path}");
+        }
+
+        $cacheKey = $this->cacheKey($path, $stat, $offset, $limit);
+        $cached = self::readCache($cacheKey);
+        if ($cached !== null) {
+            return ToolResult::success($cached);
+        }
+
+        $fileSize = (int) $stat['size'];
+        if ($fileSize > self::LARGE_FILE_THRESHOLD) {
+            return $this->remember($cacheKey, $this->readLargeFile($path, $offset, $limit));
         }
 
         $lines = file($path);
@@ -105,7 +124,18 @@ class FileReadTool extends AbstractTool
             $output .= "\n... {$remaining} more lines";
         }
 
-        return ToolResult::success(rtrim($output));
+        return $this->remember($cacheKey, ToolResult::success(rtrim($output)));
+    }
+
+    public function resetCache(): void
+    {
+        self::resetGlobalCache();
+    }
+
+    public static function resetGlobalCache(): void
+    {
+        self::$cache = [];
+        self::$cacheOrder = [];
     }
 
     /**
@@ -143,5 +173,64 @@ class FileReadTool extends AbstractTool
         }
 
         return ToolResult::success(rtrim($output));
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $stat
+     */
+    private function cacheKey(string $path, array $stat, int $offset, int $limit): string
+    {
+        $resolved = realpath($path) ?: $path;
+        $fingerprint = [
+            'path' => $resolved,
+            'size' => (int) ($stat['size'] ?? 0),
+            'mtime' => (int) ($stat['mtime'] ?? 0),
+            'ctime' => (int) ($stat['ctime'] ?? 0),
+            'inode' => (int) ($stat['ino'] ?? 0),
+            'offset' => $offset,
+            'limit' => $limit,
+        ];
+
+        return hash('sha256', json_encode($fingerprint, JSON_THROW_ON_ERROR));
+    }
+
+    private static function readCache(string $key): ?string
+    {
+        if (! isset(self::$cache[$key])) {
+            return null;
+        }
+
+        self::touchCacheKey($key);
+
+        return self::$cache[$key];
+    }
+
+    private function remember(string $key, ToolResult $result): ToolResult
+    {
+        if (! $result->success) {
+            return $result;
+        }
+
+        self::$cache[$key] = $result->output;
+        self::touchCacheKey($key);
+
+        while (count(self::$cacheOrder) > self::CACHE_LIMIT) {
+            $oldest = array_shift(self::$cacheOrder);
+            if ($oldest !== null) {
+                unset(self::$cache[$oldest]);
+            }
+        }
+
+        return $result;
+    }
+
+    private static function touchCacheKey(string $key): void
+    {
+        $index = array_search($key, self::$cacheOrder, true);
+        if ($index !== false) {
+            array_splice(self::$cacheOrder, $index, 1);
+        }
+
+        self::$cacheOrder[] = $key;
     }
 }

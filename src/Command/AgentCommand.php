@@ -61,7 +61,7 @@ class AgentCommand extends Command
             ->addOption('output-format', 'o', InputOption::VALUE_REQUIRED, 'Output format: text, json, stream-json', 'text')
             ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Override model')
             ->addOption('mode', null, InputOption::VALUE_REQUIRED, 'Agent mode: edit, plan, ask')
-            ->addOption('yolo', null, InputOption::VALUE_NONE, 'Skip all permission checks (alias for --permission-mode prometheus)')
+            ->addOption('yolo', null, InputOption::VALUE_NONE, 'Auto-approve governed permission prompts (alias for --permission-mode prometheus)')
             ->addOption('permission-mode', null, InputOption::VALUE_REQUIRED, 'Permission mode: guardian, argus, prometheus')
             ->addOption('max-turns', 't', InputOption::VALUE_REQUIRED, 'Maximum agentic turns')
             ->addOption('timeout', null, InputOption::VALUE_REQUIRED, 'Maximum runtime in seconds')

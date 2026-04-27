@@ -40,9 +40,13 @@ final class IntegrationDocService
         $lines[] = '';
         $lines[] = 'Commands:';
         $lines[] = '  kosmokrator integrations:list';
+        $lines[] = '  kosmokrator integrations:doctor clickup --json';
+        $lines[] = '  kosmokrator integrations:fields clickup --json';
+        $lines[] = '  kosmokrator integrations:configure clickup --set api_key=... --enable --read=allow --write=ask --json';
         $lines[] = '  kosmokrator integrations:search "clickup task"';
         $lines[] = '  kosmokrator integrations:docs clickup.create_task';
-        $lines[] = '  kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it"';
+        $lines[] = '  kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --dry-run --json';
+        $lines[] = '  kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --force --json';
         $lines[] = '  kosmokrator integrations:lua workflow.lua';
         $lines[] = '';
         $lines[] = 'Providers: '.implode(', ', $this->catalog->providers());

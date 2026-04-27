@@ -10,10 +10,12 @@ final readonly class LuaExecutionResult
 {
     /**
      * @param  list<array<string, mixed>>  $callLog
+     * @param  array<string, mixed>  $meta
      */
     public function __construct(
         public LuaResult $lua,
         public array $callLog = [],
+        public array $meta = [],
     ) {}
 
     public function succeeded(): bool
@@ -34,6 +36,7 @@ final readonly class LuaExecutionResult
             'execution_time_ms' => $this->lua->executionTime,
             'memory_usage' => $this->lua->memoryUsage,
             'integration_calls' => $this->callLog,
+            'meta' => $this->meta,
         ];
     }
 }

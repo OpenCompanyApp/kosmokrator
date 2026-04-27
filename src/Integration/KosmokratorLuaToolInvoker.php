@@ -13,6 +13,8 @@ use OpenCompany\IntegrationCore\Support\ToolProviderRegistry;
 
 class KosmokratorLuaToolInvoker implements LuaToolInvoker
 {
+    private int $forceDepth = 0;
+
     public function __construct(
         private readonly ToolProviderRegistry $providers,
         private readonly CredentialResolver $credentials,
@@ -20,9 +22,45 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
         private readonly PermissionEvaluator $permissions,
     ) {}
 
-    public function invoke(string $toolSlug, array $args, ?string $account = null): mixed
+    public function invoke(string $toolSlug, array $args, ?string $account = null, bool $force = false): mixed
     {
-        // 1. Find which provider owns this tool
+        $provider = $this->assertCanInvoke($toolSlug, $force || $this->forceDepth > 0);
+
+        $toolMeta = $provider->tools()[$toolSlug] ?? null;
+        if ($toolMeta === null) {
+            throw new \RuntimeException("Tool not found: {$toolSlug}");
+        }
+
+        // Create tool instance via provider, passing account context for multi-credential resolution
+        $context = array_filter(['account' => $account]);
+        $tool = $provider->createTool($toolMeta['class'], $context);
+
+        // Execute and convert result
+        $result = $tool->execute($args);
+
+        if (! $result->succeeded()) {
+            throw new \RuntimeException($result->error ?? "Tool failed: {$toolSlug}");
+        }
+
+        return $result->data;
+    }
+
+    public function runWithForce(bool $force, \Closure $callback): mixed
+    {
+        if (! $force) {
+            return $callback();
+        }
+
+        $this->forceDepth++;
+        try {
+            return $callback();
+        } finally {
+            $this->forceDepth--;
+        }
+    }
+
+    public function assertCanInvoke(string $toolSlug, bool $force = false): ToolProvider
+    {
         $provider = $this->findProviderForTool($toolSlug);
 
         if ($provider === null) {
@@ -30,8 +68,6 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
         }
 
         $appName = $provider->appName();
-
-        // 2. Check integration permissions
         $toolMeta = $provider->tools()[$toolSlug] ?? null;
 
         if ($toolMeta === null) {
@@ -41,26 +77,15 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
         $operation = $toolMeta['type'] ?? 'read';
         $permission = $this->integrationManager->getPermission($appName, $operation);
 
-        if ($permission === 'deny') {
+        if ($permission === 'deny' && ! $force) {
             throw new \RuntimeException("Integration '{$appName}' {$operation} access denied. Enable it in /settings → Integrations");
         }
 
-        if ($permission === 'ask' && $this->permissions->getPermissionMode() !== PermissionMode::Prometheus) {
+        if ($permission === 'ask' && ! $force && $this->permissions->getPermissionMode() !== PermissionMode::Prometheus) {
             throw new \RuntimeException("Integration '{$appName}' {$operation} requires approval. Ask the user to change the permission in /settings → Integrations");
         }
 
-        // 3. Create tool instance via provider, passing account context for multi-credential resolution
-        $context = array_filter(['account' => $account]);
-        $tool = $provider->createTool($toolMeta['class'], $context);
-
-        // 4. Execute and convert result
-        $result = $tool->execute($args);
-
-        if (! $result->succeeded()) {
-            throw new \RuntimeException($result->error ?? "Tool failed: {$toolSlug}");
-        }
-
-        return $result->data;
+        return $provider;
     }
 
     public function getToolMeta(string $toolSlug): array

@@ -98,7 +98,9 @@ ob_start();
             <td>
                 Terminal rendering: <code>TuiRenderer</code> (Symfony TUI + Revolt
                 event loop), <code>AnsiRenderer</code> (pure ANSI + readline),
-                <code>Theme</code> for colors, diff rendering, conversation display
+                <code>HeadlessRenderer</code> for non-interactive output,
+                <code>NullRenderer</code> for subagents, <code>Theme</code> for
+                colors, diff rendering, conversation display
             </td>
         </tr>
         <tr>
@@ -113,8 +115,10 @@ ob_start();
             <td><code>src/Command/</code></td>
             <td>
                 Console commands: <code>AgentCommand</code>,
-                <code>SetupCommand</code>, slash commands in <code>Slash/</code>,
-                power commands in <code>Power/</code>
+                <code>SetupCommand</code>, <code>ConfigCommand</code>,
+                <code>AuthCommand</code>, update/gateway/integration commands,
+                slash commands in <code>Slash/</code>, power commands in
+                <code>Power/</code>
             </td>
         </tr>
         <tr>
@@ -175,9 +179,11 @@ ob_start();
         <tr>
             <td><code>src/Integration/</code></td>
             <td>
-                External integration management: <code>IntegrationManager</code>,
-                <code>KosmokratorFileStorage</code>,
-                <code>KosmokratorLuaToolInvoker</code>
+                Integration management and headless runtime:
+                <code>IntegrationManager</code>, <code>IntegrationCatalog</code>,
+                <code>IntegrationRuntime</code>, <code>IntegrationArgumentMapper</code>,
+                <code>IntegrationDocService</code>, credential resolution, and
+                Lua invocation helpers
             </td>
         </tr>
         <tr>
@@ -635,9 +641,10 @@ AgentSessionBuilder
 <p>
     This approach keeps the object graph simple and testable. Each component
     has a clear interface and can be replaced or mocked independently. The
-    <code>NullRenderer</code>, for example, implements the full
-    <code>RendererInterface</code> while producing no output &mdash; used
-    for headless subagents and testing.
+    <code>HeadlessRenderer</code>, for example, implements the full
+    <code>RendererInterface</code> while emitting text, JSON, or NDJSON for
+    non-interactive runs. <code>NullRenderer</code> implements the same
+    interface while producing no output for subagents and tests.
 </p>
 
 <?php

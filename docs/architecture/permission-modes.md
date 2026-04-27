@@ -9,14 +9,14 @@ KosmoKrator has two orthogonal control axes:
 
 | Mode | Available tool families | Purpose |
 |------|-------------------------|---------|
-| **Edit** | read, write, edit, search, bash, subagent, task, ask-user tools | Full coding access |
-| **Plan** | read, search, bash, subagent, task, ask-user tools | Research and planning without file edits |
-| **Ask** | read, search, bash, task, ask-user tools | Q&A without file edits or subagents |
+| **Edit** | read, write, edit, search, bash, shell sessions, subagent, task, ask-user, memory, session, Lua tools | Full coding access |
+| **Plan** | read, search, bash, shell sessions, subagent, task, ask-user, memory search, session, Lua tools | Research and planning without file edits |
+| **Ask** | read, search, bash, shell sessions, task, ask-user, memory search, session, Lua docs tools | Q&A without file edits, subagents, or Lua execution |
 
 Important behavior:
 
-- `file_write` and `file_edit` are unavailable outside `Edit`
-- `subagent` is unavailable in `Ask`
+- `file_write`, `file_edit`, and `apply_patch` are unavailable outside `Edit`
+- `subagent` and `execute_lua` are unavailable in `Ask`
 - `bash` is available in all three interactive modes
 - `Ask` adds an extra read-only guard: mutative bash commands are blocked even if permission mode is permissive
 
@@ -28,7 +28,7 @@ Important behavior:
 | **Argus** | ◉ | Ask for every governed call |
 | **Prometheus** | ⚡ | Auto-approve governed calls unless an absolute deny rule matches |
 
-Governed calls come from the configured approval rules. By default that includes `file_write`, `file_edit`, and `bash`.
+Governed calls come from the configured approval rules. By default that includes `file_write`, `file_edit`, `apply_patch`, `bash`, `shell_start`, `shell_write`, and `execute_lua`.
 
 ## How They Compose
 
@@ -46,8 +46,13 @@ Guardian uses static checks only. Current auto-approve rules are:
 |------|------------------------|
 | `file_read`, `glob`, `grep` | always auto-approved |
 | `task_*` | always auto-approved |
+| `shell_read`, `shell_kill` | always auto-approved |
+| `memory_search`, `memory_save`, `session_search`, `session_read` | always auto-approved |
+| `lua_list_docs`, `lua_search_docs`, `lua_read_doc` | always auto-approved |
 | `file_write`, `file_edit` | auto-approved only when the resolved path is inside the project root |
 | `bash` | auto-approved only when the command matches the safe-command whitelist and contains no shell operators |
+| `shell_start`, `shell_write` | auto-approved only when the command/input matches the safe-command whitelist and contains no shell operators |
+| `execute_lua` | auto-approved in Guardian after absolute denies and boundary checks; inner integration permissions still apply |
 
 Blocked paths and blocked command patterns always win, regardless of permission mode.
 
@@ -87,14 +92,15 @@ The permission evaluator applies rules in this order:
 
 1. blocked paths
 2. blocked command patterns
-3. session grants for the tool name
-4. rule evaluation for `ask` or `deny`
-5. permission-mode override (`Guardian`, `Argus`, `Prometheus`)
+3. project boundary checks
+4. session grants for the tool name
+5. rule evaluation for `allow`, `ask`, or `deny`
+6. permission-mode override (`Guardian`, `Argus`, `Prometheus`)
 
 Implications:
 
 - session grants can bypass future `ask` results for the same tool
-- session grants do not bypass absolute deny rules
+- session grants do not bypass absolute deny rules or project boundary prompts
 - `Prometheus` only upgrades `ask` to `allow`; it does not override denies
 
 ## Approval Flow

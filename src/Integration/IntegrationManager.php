@@ -197,7 +197,7 @@ class IntegrationManager
     /**
      * Check whether an integration has all required local credentials.
      */
-    public function isConfiguredForActivation(string $integration, ToolProvider $provider): bool
+    public function isConfiguredForActivation(string $integration, ToolProvider $provider, ?string $account = null): bool
     {
         $requiredFields = array_filter(
             $provider->credentialFields(),
@@ -214,7 +214,7 @@ class IntegrationManager
                 continue;
             }
 
-            $value = $this->credentials->get($integration, $key, null);
+            $value = $this->credentials->get($integration, $key, null, $account);
             if ($value === null) {
                 return false;
             }
@@ -237,5 +237,10 @@ class IntegrationManager
     public function getAccounts(string $integration): array
     {
         return $this->credentials->getAccounts($integration);
+    }
+
+    public function credentialValue(string $integration, string $key, ?string $account = null): mixed
+    {
+        return $this->credentials->get($integration, $key, null, $account);
     }
 }

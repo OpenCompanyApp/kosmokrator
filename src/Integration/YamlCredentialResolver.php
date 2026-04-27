@@ -75,6 +75,15 @@ class YamlCredentialResolver implements CredentialResolver
         $this->settingsRepo->set('global', $prefix, $value);
     }
 
+    public function delete(string $integration, string $key, ?string $account = null): void
+    {
+        $prefix = $account !== null
+            ? "integration.{$integration}.accounts.{$account}.{$key}"
+            : "integration.{$integration}.accounts.default.{$key}";
+
+        $this->settingsRepo->delete('global', $prefix);
+    }
+
     /**
      * Remove all credentials for an integration.
      */

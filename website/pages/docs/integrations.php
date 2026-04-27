@@ -148,6 +148,14 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
     fail.
 </p>
 
+<p>
+    By default, headless calls still follow each provider's read/write permission policy. Add
+    <code>--force</code> only when the caller deliberately wants to bypass that integration
+    read/write policy for a trusted automation run. Force does not bypass missing credentials,
+    disabled providers, unknown functions, required argument validation, Lua resource limits, or
+    provider API failures.
+</p>
+
 <!-- ================================================================== -->
 <h2 id="command-reference">Command Reference</h2>
 <!-- ================================================================== -->
@@ -172,6 +180,21 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
             <td><code>--json</code></td>
         </tr>
         <tr>
+            <td><code>integrations:doctor [provider]</code></td>
+            <td>Diagnose activation, credentials, permissions, functions, and exact next commands.</td>
+            <td><code>--json</code></td>
+        </tr>
+        <tr>
+            <td><code>integrations:fields &lt;provider&gt;</code></td>
+            <td>Show required/optional credential fields and whether each field is configured.</td>
+            <td><code>--json</code></td>
+        </tr>
+        <tr>
+            <td><code>integrations:configure &lt;provider&gt;</code></td>
+            <td>Configure credentials, account aliases, activation, and read/write permissions without opening the TUI.</td>
+            <td><code>--json</code>, <code>--stdin-json</code></td>
+        </tr>
+        <tr>
             <td><code>integrations:search &lt;query&gt;</code></td>
             <td>Search all provider functions by name, title, and description.</td>
             <td><code>--json</code></td>
@@ -193,17 +216,17 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
         </tr>
         <tr>
             <td><code>integrations:call &lt;function&gt;</code></td>
-            <td>Call any function by full name.</td>
+            <td>Call any function by full name. Supports <code>--dry-run</code> and <code>--force</code>.</td>
             <td><code>--json</code></td>
         </tr>
         <tr>
             <td><code>integrations:&lt;provider&gt; [function]</code></td>
-            <td>Provider shortcut. With no function, prints provider docs. With a function, calls <code>provider.function</code>.</td>
+            <td>Provider shortcut. With no function, prints provider docs. With a function, calls <code>provider.function</code>. Supports <code>--dry-run</code> and <code>--force</code>.</td>
             <td><code>--json</code></td>
         </tr>
         <tr>
             <td><code>integrations:lua</code></td>
-            <td>Execute a Lua workflow against configured integrations.</td>
+            <td>Execute a Lua workflow against configured integrations. Supports <code>--force</code>.</td>
             <td><code>--json</code></td>
         </tr>
     </tbody>
@@ -308,6 +331,37 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
 </p>
 
 <!-- ================================================================== -->
+<h2 id="validation-and-force">Validation, Dry Runs, and Force</h2>
+<!-- ================================================================== -->
+
+<p>
+    Use <code>--dry-run</code> before write operations when another agent or script needs to check
+    whether a call is well-formed without touching the provider API. Dry runs resolve the function,
+    parse arguments, check provider activation, verify credentials, validate required parameters,
+    and enforce read/write permissions. They do not execute the provider tool.
+</p>
+
+<pre><code>kosmokrator integrations:call plane.create_issue \
+  --project-id=PROJECT_UUID \
+  --name="Check payload only" \
+  --dry-run \
+  --json</code></pre>
+
+<p>
+    Use <code>--force</code> to bypass only the integration read/write permission policy. This is
+    intentionally narrower than Prometheus mode in the coding agent. It does not bypass credential
+    checks, provider activation, argument validation, Lua resource limits, or provider API errors.
+</p>
+
+<pre><code>kosmokrator integrations:plane create_issue \
+  --project-id=PROJECT_UUID \
+  --name="Trusted automation write" \
+  --force \
+  --json
+
+kosmokrator integrations:lua workflow.lua --force --json</code></pre>
+
+<!-- ================================================================== -->
 <h2 id="json-output">JSON Output</h2>
 <!-- ================================================================== -->
 
@@ -341,7 +395,7 @@ printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
         <tr><td><code>success</code></td><td>Boolean success flag from validation, permissions, and provider execution.</td></tr>
         <tr><td><code>data</code></td><td>Provider-specific result data. Shape depends on the function schema and package implementation.</td></tr>
         <tr><td><code>error</code></td><td>Error message when <code>success</code> is false.</td></tr>
-        <tr><td><code>meta</code></td><td>Reserved metadata for future provider/runtime details.</td></tr>
+        <tr><td><code>meta</code></td><td>Runtime metadata such as dry-run state, selected account, operation type, and force state.</td></tr>
         <tr><td><code>duration_ms</code></td><td>Runtime duration for the integration function call.</td></tr>
     </tbody>
 </table>
@@ -565,7 +619,12 @@ kosmokrator integrations:lua workflow.lua \
         <tr>
             <td>Inactive provider</td>
             <td><code>Integration 'provider' is installed but not active...</code></td>
-            <td>Enable the provider and configure credentials in <code>/settings</code>.</td>
+            <td>Run <code>integrations:doctor provider --json</code>, then configure with <code>integrations:configure</code> or <code>/settings</code>.</td>
+        </tr>
+        <tr>
+            <td>Missing account credentials</td>
+            <td><code>Integration 'provider' is missing required credentials for account 'work'...</code></td>
+            <td>Run <code>integrations:fields provider --account work --json</code>, then configure that account.</td>
         </tr>
         <tr>
             <td>Missing required parameters</td>
@@ -575,12 +634,12 @@ kosmokrator integrations:lua workflow.lua \
         <tr>
             <td>Permission denied</td>
             <td><code>Integration 'provider' write access denied...</code></td>
-            <td>Change provider read/write permission in <code>/settings</code>.</td>
+            <td>Change provider read/write permission with <code>integrations:configure provider --read/--write</code> or <code>/settings</code>.</td>
         </tr>
         <tr>
             <td>Permission requires approval</td>
             <td><code>Integration 'provider' write requires approval...</code></td>
-            <td>For non-interactive use, set that operation to <code>allow</code> or avoid the write.</td>
+            <td>For non-interactive use, set that operation to <code>allow</code>, avoid the write, or pass <code>--force</code> only for trusted automation.</td>
         </tr>
         <tr>
             <td>Provider API error</td>
@@ -602,23 +661,45 @@ kosmokrator integrations:lua workflow.lua \
 <!-- ================================================================== -->
 
 <p>
-    The recommended configuration flow is:
+    The recommended headless configuration flow is discoverable and scriptable:
 </p>
 
-<ol>
-    <li>Open <code>/settings</code> in an interactive KosmoKrator session.</li>
-    <li>Go to <strong>Integrations</strong>.</li>
-    <li>Select the provider.</li>
-    <li>Store required credentials such as API keys, base URLs, and default workspace slugs.</li>
-    <li>Enable the provider.</li>
-    <li>Set read/write permission defaults for the workflows you want to run headlessly.</li>
-    <li>Verify with <code>kosmokrator integrations:status --json</code>.</li>
-</ol>
+<pre><code>kosmokrator integrations:doctor plane --json
+kosmokrator integrations:fields plane --json
+
+kosmokrator integrations:configure plane \
+  --set api_key="$PLANE_API_KEY" \
+  --set url="$PLANE_URL" \
+  --enable \
+  --read=allow \
+  --write=ask \
+  --json</code></pre>
 
 <p>
-    Credentials are local secret settings, not command-line arguments. Avoid putting API keys in
-    shell history or checked-in config files. Once stored, provider functions can be called by
-    name without passing secrets to the CLI.
+    <code>integrations:configure</code> stores credentials through the same local secret settings
+    path used by <code>/settings</code>. Activation and read/write permissions are written globally
+    by default; pass <code>--project</code> when the current repository should override those
+    settings.
+</p>
+
+<p>
+    Avoid putting literal API keys in shell history or checked-in config files. Prefer environment
+    variables or stdin JSON from a secret-aware process:
+</p>
+
+<pre><code>jq -n \
+  --arg api_key "$PLANE_API_KEY" \
+  --arg url "$PLANE_URL" \
+  '{
+    set: {api_key: $api_key, url: $url},
+    enabled: true,
+    permissions: {read: "allow", write: "ask"}
+  }' | kosmokrator integrations:configure plane --stdin-json --json</code></pre>
+
+<p>
+    Interactive setup is still available: open <code>/settings</code>, go to
+    <strong>Integrations</strong>, select the provider, store credentials, enable it, and set the
+    read/write defaults for the workflows you want to run headlessly.
 </p>
 
 <p>
@@ -627,6 +708,13 @@ kosmokrator integrations:lua workflow.lua \
 
 <pre><code># Default account
 kosmokrator integrations:call plane.list_projects --json
+
+# Configure a named account
+kosmokrator integrations:configure plane \
+  --account work \
+  --set api_key="$PLANE_WORK_API_KEY" \
+  --set url="$PLANE_WORK_URL" \
+  --json
 
 # Named account alias
 kosmokrator integrations:call plane.list_projects --account work --json
@@ -642,13 +730,15 @@ kosmokrator integrations:plane list_projects --account work --json</code></pre>
 </p>
 
 <ol>
-    <li>Run <code>kosmokrator integrations:status --json</code> to see active providers.</li>
+    <li>Run <code>kosmokrator integrations:doctor provider --json</code> to check activation, credentials, permissions, functions, and next commands.</li>
+    <li>Run <code>kosmokrator integrations:fields provider --json</code> when credentials are missing or the agent needs field names.</li>
+    <li>Use <code>kosmokrator integrations:configure provider ... --json</code> to set credentials, activation, accounts, and permissions headlessly when policy allows it.</li>
     <li>Run <code>kosmokrator integrations:search "terms" --json</code> to find candidate functions.</li>
     <li>Run <code>kosmokrator integrations:schema provider.function</code> before constructing arguments.</li>
     <li>Prefer JSON payloads over flags for anything non-trivial.</li>
-    <li>Always pass <code>--json</code> for machine parsing.</li>
-    <li>Check both process exit code and the returned <code>success</code> field.</li>
-    <li>For write operations, ask the human or require an explicit workflow policy before calling.</li>
+    <li>Dry-run writes with <code>--dry-run --json</code> before executing them.</li>
+    <li>Use <code>--force</code> only when a trusted workflow explicitly bypasses the integration read/write permission policy.</li>
+    <li>Always pass <code>--json</code>, check the process exit code, and check the returned <code>success</code> field.</li>
 </ol>
 
 <h3 id="coding-cli-read">Read-Only Lookup</h3>
@@ -686,7 +776,15 @@ jq -n '{
   description_html: "&lt;p&gt;Created by a scripted workflow.&lt;/p&gt;"
 }'
 
-# 3. Only call after policy or user approval allows it
+# 3. Validate without executing
+jq -n '{
+  workspace_slug: "kosmokrator",
+  project_id: "PROJECT_UUID",
+  name: "Issue title from external CLI",
+  description_html: "&lt;p&gt;Created by a scripted workflow.&lt;/p&gt;"
+}' | kosmokrator integrations:call plane.create_issue --dry-run --json
+
+# 4. Only call after policy or user approval allows it
 jq -n '{
   workspace_slug: "kosmokrator",
   project_id: "PROJECT_UUID",
@@ -771,11 +869,14 @@ kosmokrator integrations:plane list_issues \
 <!-- ================================================================== -->
 
 <ul>
-    <li>Use <code>integrations:status --json</code> as a health check before automation.</li>
+    <li>Use <code>integrations:doctor provider --json</code> as the first health check before automation.</li>
+    <li>Use <code>integrations:fields provider --json</code> to discover credential keys before headless setup.</li>
     <li>Use <code>integrations:schema</code> as the source of truth for required arguments.</li>
     <li>Use JSON payloads for arrays, objects, HTML, multiline text, or generated input.</li>
+    <li>Use <code>--dry-run</code> to validate write payloads before execution.</li>
     <li>Use provider shortcuts for humans and <code>integrations:call</code> for reusable scripts.</li>
     <li>Keep read operations broadly available and restrict write operations per provider.</li>
+    <li>Reserve <code>--force</code> for trusted automation that intentionally bypasses integration read/write policy.</li>
     <li>Check exit codes. Do not parse human table output in automation.</li>
     <li>Keep secrets in KosmoKrator's settings store. Do not pass API keys as shell flags.</li>
     <li>For multi-step workflows, prefer <code>integrations:lua</code> over long chains of fragile shell parsing.</li>
@@ -798,7 +899,7 @@ kosmokrator integrations:plane list_issues \
         <tr>
             <td>Provider appears but <code>active</code> is false.</td>
             <td>The package is installed, but it is disabled or missing required credentials.</td>
-            <td>Open <code>/settings</code>, enable the provider, and configure credentials.</td>
+            <td>Run <code>integrations:doctor provider --json</code>, then <code>integrations:fields</code> and <code>integrations:configure</code>.</td>
         </tr>
         <tr>
             <td><code>Missing required parameter(s)</code>.</td>

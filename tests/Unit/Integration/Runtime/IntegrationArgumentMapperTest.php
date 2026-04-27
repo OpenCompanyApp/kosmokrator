@@ -56,4 +56,19 @@ final class IntegrationArgumentMapperTest extends TestCase
             'name' => 'Ship it',
         ], $args);
     }
+
+    public function test_ignores_runtime_control_flags(): void
+    {
+        $mapper = new IntegrationArgumentMapper;
+
+        $args = $mapper->map([
+            '--name=Ship it',
+            '--json',
+            '--dry-run',
+            '--force',
+            '--account=work',
+        ]);
+
+        $this->assertSame(['name' => 'Ship it'], $args);
+    }
 }

@@ -24,11 +24,7 @@ class EnvironmentContext
         $lines[] = 'Shell: '.(getenv('SHELL') ?: getenv('COMSPEC') ?: 'unknown');
         $lines[] = "Today's date: ".date('Y-m-d');
 
-        // Git info — cached to avoid repeated shell_exec calls
-        static $gitInfo = null;
-        if ($gitInfo === null) {
-            $gitInfo = self::collectGitInfo();
-        }
+        $gitInfo = self::collectGitInfo();
 
         if ($gitInfo['branch'] !== '') {
             $lines[] = 'Git branch: '.$gitInfo['branch'];
@@ -191,13 +187,19 @@ class EnvironmentContext
     }
 
     /**
-     * Collect git branch and root in a single cached call.
+     * Collect git branch and root for the current working directory.
+     *
+     * This intentionally avoids a static cache: Kosmo sessions may switch
+     * branches or working directories within the same PHP process.
      *
      * @return array{branch: string, root: string}
      */
     private static function collectGitInfo(): array
     {
         $branch = self::exec('git rev-parse --abbrev-ref HEAD 2>/dev/null');
+        if ($branch === 'HEAD') {
+            $branch = self::exec('git symbolic-ref --short HEAD 2>/dev/null');
+        }
         $root = $branch !== '' ? self::exec('git rev-parse --show-toplevel 2>/dev/null') : '';
 
         return ['branch' => $branch, 'root' => $root];

@@ -27,9 +27,9 @@ Interactive modes shape the parent session tool set. Subagent types shape delega
 
 Current subagent tool sets:
 
-- `general`: `file_read`, `file_write`, `file_edit`, `glob`, `grep`, `bash`, `subagent`
-- `explore`: `file_read`, `glob`, `grep`, `bash`, `subagent`
-- `plan`: `file_read`, `glob`, `grep`, `bash`, `subagent`
+- `general`: `file_read`, `file_write`, `file_edit`, `apply_patch`, `glob`, `grep`, `bash`, `shell_start`, `shell_write`, `shell_read`, `shell_kill`, `subagent`, `memory_search`, `session_search`, `session_read`, `memory_save`, `lua_list_docs`, `lua_search_docs`, `lua_read_doc`, `execute_lua`
+- `explore`: `file_read`, `glob`, `grep`, `bash`, `shell_start`, `shell_write`, `shell_read`, `shell_kill`, `subagent`, `memory_search`, `session_search`, `session_read`, `lua_list_docs`, `lua_search_docs`, `lua_read_doc`, `execute_lua`
+- `plan`: `file_read`, `glob`, `grep`, `bash`, `shell_start`, `shell_write`, `shell_read`, `shell_kill`, `subagent`, `memory_search`, `session_search`, `session_read`, `lua_list_docs`, `lua_search_docs`, `lua_read_doc`, `execute_lua`
 
 The `subagent` tool is removed automatically once the max depth is reached.
 

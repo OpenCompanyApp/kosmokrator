@@ -248,6 +248,7 @@ class PrismService implements LlmClientInterface
             model: $this->model,
             systemPrompts: PromptFrameBuilder::splitSystemPrompt($this->systemPrompt),
             messages: $messages,
+            tools: $tools,
         );
 
         $request = (new Prism)->text()
@@ -264,8 +265,8 @@ class PrismService implements LlmClientInterface
             $request->usingTemperature($this->temperature);
         }
 
-        if (! empty($tools)) {
-            $request->withTools($tools);
+        if (! empty($cachePlan->tools)) {
+            $request->withTools($cachePlan->tools);
         }
 
         return $request;

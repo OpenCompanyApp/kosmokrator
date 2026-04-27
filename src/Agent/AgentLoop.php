@@ -71,6 +71,9 @@ class AgentLoop
 
     private readonly ContextManager $contextManager;
 
+    /** @var array{cache_read: int, prompt_tokens: int, round: int}|null */
+    private ?array $lastCacheObservation = null;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -253,6 +256,7 @@ class AgentLoop
 
                     // Accumulate session-level token usage
                     $this->tokens->accumulate($tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
+                    $this->recordCacheObservation($tokensIn, $cacheReadInputTokens, $cacheWriteInputTokens, $round);
 
                     $this->events?->dispatch(new LlmResponseReceived(
                         $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens,
@@ -455,6 +459,7 @@ class AgentLoop
                     $finishReason = $responseData->finishReason;
 
                     $this->tokens->accumulate($responseData->tokensIn, $responseData->tokensOut, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens);
+                    $this->recordCacheObservation($responseData->tokensIn, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens, $round);
                     $this->stats?->addTokens($responseData->tokensIn, $responseData->tokensOut);
                     $this->stats?->touchActivity();
 
@@ -656,6 +661,44 @@ class AgentLoop
         return str_starts_with($message, 'watchdog:') ? $message : null;
     }
 
+    private function recordCacheObservation(int $promptTokens, int $cacheReadTokens, int $cacheWriteTokens, int $round): void
+    {
+        $previous = $this->lastCacheObservation;
+        $this->lastCacheObservation = [
+            'cache_read' => $cacheReadTokens,
+            'prompt_tokens' => $promptTokens,
+            'round' => $round,
+        ];
+
+        if ($previous === null || $previous['cache_read'] < 1000) {
+            return;
+        }
+
+        $promptDelta = abs($promptTokens - $previous['prompt_tokens']);
+        $promptStable = $promptDelta <= max(1000, (int) round($previous['prompt_tokens'] * 0.15));
+        $cacheDropped = $cacheReadTokens < (int) floor($previous['cache_read'] * 0.25);
+
+        if (! $promptStable || ! $cacheDropped) {
+            return;
+        }
+
+        $this->log->warning('Provider prompt cache read dropped sharply', [
+            'round' => $round,
+            'previous_round' => $previous['round'],
+            'prompt_tokens' => $promptTokens,
+            'previous_prompt_tokens' => $previous['prompt_tokens'],
+            'cache_read_tokens' => $cacheReadTokens,
+            'previous_cache_read_tokens' => $previous['cache_read'],
+            'cache_write_tokens' => $cacheWriteTokens,
+            'model' => $this->contextManager->getModelName(),
+            'likely_causes' => [
+                'provider evicted cache entry',
+                'stable system prompt or tool schema changed',
+                'provider cache TTL expired',
+            ],
+        ]);
+    }
+
     public function getPruner(): ?ContextPruner
     {
         return $this->contextManager->getPruner();
@@ -672,6 +715,7 @@ class AgentLoop
     public function resetSessionCost(): void
     {
         $this->tokens->reset();
+        $this->lastCacheObservation = null;
     }
 
     /**

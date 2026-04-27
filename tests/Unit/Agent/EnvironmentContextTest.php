@@ -53,4 +53,48 @@ class EnvironmentContextTest extends TestCase
 
         $this->assertStringContainsString('Git branch:', $context);
     }
+
+    public function test_gather_refreshes_git_info_when_working_directory_changes(): void
+    {
+        $originalCwd = getcwd();
+        $repo = sys_get_temp_dir().'/kosmokrator_env_repo_'.uniqid();
+        $plain = sys_get_temp_dir().'/kosmokrator_env_plain_'.uniqid();
+        mkdir($repo, 0755, true);
+        mkdir($plain, 0755, true);
+
+        try {
+            chdir($repo);
+            shell_exec('git init 2>/dev/null');
+            shell_exec('git symbolic-ref HEAD refs/heads/cache-test 2>/dev/null');
+            $repoContext = EnvironmentContext::gather();
+
+            chdir($plain);
+            $plainContext = EnvironmentContext::gather();
+
+            $this->assertStringContainsString('Git branch: cache-test', $repoContext);
+            $this->assertStringContainsString('Git: not a repository', $plainContext);
+        } finally {
+            chdir($originalCwd);
+            $this->removeDir($repo);
+            $this->removeDir($plain);
+        }
+    }
+
+    private function removeDir(string $dir): void
+    {
+        if (! is_dir($dir)) {
+            return;
+        }
+
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($items as $item) {
+            $item->isDir() ? rmdir($item->getRealPath()) : unlink($item->getRealPath());
+        }
+
+        rmdir($dir);
+    }
 }

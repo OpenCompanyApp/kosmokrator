@@ -318,13 +318,20 @@ class AgentCommand extends Command
         $nextInputShown = false;
 
         // Dispatch immediate slash commands (e.g. /guardian) even while the agent is mid-run.
-        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx): bool {
+        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx, $session): bool {
             $command = $registry->resolve($input);
             if ($command === null || ! $command->immediate()) {
                 return false;
             }
             $args = $registry->extractArgs($input, $command);
-            $command->execute($args, $ctx);
+            $result = $command->execute($args, $ctx);
+
+            if ($result->action === SlashCommandAction::Quit) {
+                $session->orchestrator?->cancelAll();
+                $this->container->make(ShellSessionManager::class)->killAll();
+                $session->ui->teardown();
+                exit(0);
+            }
 
             return true;
         });
@@ -422,11 +429,22 @@ class AgentCommand extends Command
             // Auto-continue: if background subagents are running, wait for them
             // to finish, then feed their results back to the LLM automatically
             // so it can synthesize without requiring the user to type anything.
+            $backgroundWaitInterrupted = false;
             if ($session->agentLoop->hasRunningBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
                 while ($session->agentLoop->hasRunningBackgroundAgents()) {
-                    \Amp\delay(1.0);
+                    \Amp\delay(0.25);
+
+                    $queued = $session->ui->consumeQueuedMessage();
+                    if ($queued !== null) {
+                        $nextInput = $queued;
+                        $nextInputShown = true;
+                        $backgroundWaitInterrupted = true;
+
+                        break;
+                    }
                 }
-                if ($session->agentLoop->hasPendingBackgroundResults()) {
+
+                if (! $backgroundWaitInterrupted && $session->agentLoop->hasPendingBackgroundResults()) {
                     $session->agentLoop->run('[system: all background agents have completed — their results follow]');
                 }
             }
@@ -486,8 +504,10 @@ class AgentCommand extends Command
                 }
             }
 
-            $nextInput = $session->ui->consumeQueuedMessage();
-            $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
+            if ($nextInput === null) {
+                $nextInput = $session->ui->consumeQueuedMessage();
+                $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
+            }
         }
 
         $session->orchestrator?->cancelAll();

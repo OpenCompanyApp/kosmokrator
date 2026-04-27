@@ -14,6 +14,7 @@ $topics = [
     'termux' => ['Termux (Android)',   'Running on Android via Termux'],
     'configuration' => ['Configuration',       'Settings and config files'],
     'headless' => ['Headless Mode',       'CI/CD and non-interactive execution'],
+    'integrations' => ['Integrations CLI',    'Headless integrations for scripts and coding CLIs'],
     'tools' => ['Tools',               'Built-in tool reference'],
     'lua' => ['Lua',                 'Lua runtime, namespaces, and app.tools reference'],
     'providers' => ['Providers',           'LLM providers and models'],

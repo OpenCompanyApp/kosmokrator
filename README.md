@@ -31,6 +31,7 @@ Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streamin
 
 - [Installation](#installation)
 - [CLI Usage](#cli-usage)
+- [Integration CLI](#integration-cli)
 - [Agent Modes](#agent-modes)
 - [Slash Commands](#slash-commands)
 - [Tools](#tools)
@@ -118,6 +119,29 @@ bin/kosmokrator --no-animation          # Skip the animated intro
 bin/kosmokrator --resume                # Resume the last session for the current project
 bin/kosmokrator --session <id>          # Resume a specific session by ID or prefix
 ```
+
+## Integration CLI
+
+KosmoKrator can also run as a headless integration CLI. Use direct commands for
+single calls and Lua for multi-step workflows:
+
+```bash
+kosmokrator integrations:list
+kosmokrator integrations:status
+kosmokrator integrations:search "create clickup task"
+kosmokrator integrations:docs clickup
+kosmokrator integrations:docs clickup.create_task
+kosmokrator integrations:schema clickup.create_task
+
+kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it"
+kosmokrator integrations:clickup create_task --list-id=123 --name="Ship it"
+
+kosmokrator integrations:lua --eval 'print(docs.read("clickup.create_task"))'
+kosmokrator integrations:lua workflow.lua --json
+```
+
+Every docs page shows both direct CLI and Lua forms. Add `--json` to discovery
+commands when another coding CLI or script needs stable machine-readable output.
 
 Other commands:
 

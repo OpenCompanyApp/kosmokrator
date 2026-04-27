@@ -34,8 +34,6 @@ parameters:
         - '#Variable \$arg[vc] might not be defined#'
         # Vendor API type mismatches (Container vs Application)
         - '#Parameter.*expects Illuminate\\Contracts\\Foundation\\Application.*Illuminate\\Container\\Container given#'
-        # By-ref type widening for subagent batch (mixed from Prism ToolResult)
-        - '#Parameter &\$subagentBatch by-ref type#'
         # Offset in isset() always exists
         - '#Offset.*in isset\(\) always exists#'
         # @param references unknown parameter
@@ -44,17 +42,11 @@ parameters:
         - '#unknown class LlmClientInterface#'
         # Audio scripts passing wrong type to constructor
         - '#Parameter \$llm.*expects.*LlmClientInterface.*LlmClientInterface given#'
-        # Vendor classes that may not be present in all composer.lock versions
-        - '#Call to static method.*on an unknown class OpenCompany#'
         # Variable always null in loop (false positive for SSE stream parsing)
         - '#Variable \$lastFinishReason on left side of \?\? always exists and is always null#'
-        # Integration account type widening
-        - "#Offset 'accounts'.*does not accept type#"
         - '#Method.*IntegrationManager::getToolCatalog\(\) should return#'
         # Native tool bridge return shape (dynamic tool parameter shapes)
         - '#Method.*NativeToolBridge::listTools\(\) should return#'
-        # Lua tool invoker interface variance
-        - '#Parameter.*\$invoker.*ExecuteLuaTool constructor#'
         # LlmStreamingEvent PHPDoc type drift
         - '#PHPDoc tag @param for parameter \$finishReason#'
         - '#PHPDoc type for property.*LlmStreamingEvent.*finishReason#'
@@ -64,6 +56,4 @@ parameters:
         - '#Parameter.*\$arguments of static method.*LlmStreamingEvent::toolCall\(\)#'
         # ExecuteLuaTool empty() on known-defined variable
         - '#Variable \$lines in empty\(\) always exists#'
-        # TUI closure type mismatch for queueMessageSilent
-        - '#Parameter \$queueMessageSilent.*expects Closure\(string\): void.*Closure\(string\): string#'
-    reportUnmatchedIgnoredErrors: false
+    reportUnmatchedIgnoredErrors: true

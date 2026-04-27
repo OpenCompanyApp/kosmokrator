@@ -44,12 +44,17 @@ final class LlmClientFactory
         $this->validateAuth($provider);
 
         $registry = $this->container->make(RelayRegistry::class);
-        $useAsync = $rendererType === 'tui' && $registry->supportsAsync($provider);
+        $useAsync = $rendererType === 'tui'
+            && ($registry->supportsAsync($provider) || AsyncLlmClient::supportsProvider($provider));
 
         /** @var LlmClientInterface $llm */
         $llm = $useAsync
             ? $this->container->make(AsyncLlmClient::class)
             : $this->container->make(PrismService::class);
+
+        if ($rendererType === 'tui' && ! $useAsync) {
+            $ui->showNotice("Provider '{$provider}' uses the synchronous Prism transport; live input and animations may pause during model calls.");
+        }
 
         if ($llm instanceof RetryableLlmClient) {
             $llm->setOnRetry(function (int $attempt, float $delay, string $reason) use ($ui) {

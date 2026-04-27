@@ -91,7 +91,7 @@ final class IntegrationManagerTest extends TestCase
         $this->assertArrayNotHasKey('plane', $manager->getActiveProviders());
     }
 
-    public function test_default_write_permission_is_allow(): void
+    public function test_default_permission_comes_from_config(): void
     {
         $registry = new ToolProviderRegistry;
         $previousHome = getenv('HOME');
@@ -101,7 +101,7 @@ final class IntegrationManagerTest extends TestCase
 
         try {
             $settings = new SettingsManager(
-                config: new Repository([]),
+                config: new Repository(['kosmokrator' => ['integrations' => ['permissions_default' => 'deny']]]),
                 schema: new SettingsSchema,
                 store: new YamlConfigStore,
                 baseConfigPath: dirname(__DIR__, 4).'/config',
@@ -111,8 +111,8 @@ final class IntegrationManagerTest extends TestCase
 
             $manager = new IntegrationManager($registry, $settings, $credentials);
 
-            $this->assertSame('allow', $manager->getPermission('plane', 'write'));
-            $this->assertSame('allow', $manager->getPermission('plane', 'read'));
+            $this->assertSame('deny', $manager->getPermission('plane', 'write'));
+            $this->assertSame('deny', $manager->getPermission('plane', 'read'));
         } finally {
             putenv($previousHome === false ? 'HOME' : "HOME={$previousHome}");
         }

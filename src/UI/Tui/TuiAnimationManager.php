@@ -80,7 +80,9 @@ final class TuiAnimationManager
      */
     public function getCurrentPhase(): AgentPhase
     {
-        return AgentPhase::from($this->state->getPhase());
+        $phase = $this->state->getPhase();
+
+        return $phase === 'compacting' ? AgentPhase::Idle : AgentPhase::from($phase);
     }
 
     /**
@@ -126,6 +128,7 @@ final class TuiAnimationManager
     public function showCompacting(): void
     {
         $phrase = self::COMPACTION_PHRASES[array_rand(self::COMPACTION_PHRASES)];
+        $this->state->setPhase('compacting');
         $this->state->setThinkingPhrase($phrase);
         $this->state->setCompactingStartTime(microtime(true));
         $this->state->setCompactingBreathTick(0);
@@ -140,6 +143,9 @@ final class TuiAnimationManager
     public function clearCompacting(): void
     {
         $this->state->setHasCompactingLoader(false);
+        if ($this->state->getPhase() === 'compacting') {
+            $this->state->setPhase('idle');
+        }
         if (! $this->state->getHasThinkingLoader()) {
             $this->breathingDriver->stop();
         }

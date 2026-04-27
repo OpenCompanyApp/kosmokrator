@@ -37,7 +37,7 @@ class UpdateCommand implements SlashCommand
 
     public function immediate(): bool
     {
-        return true;
+        return false;
     }
 
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult

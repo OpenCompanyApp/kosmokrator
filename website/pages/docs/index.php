@@ -7,6 +7,7 @@ $topics = [
     'installation' => ['Installation',     'Get up and running with static binaries, PHAR, or from source. First-run setup and CLI options.', '&#x1F4E5;'],
     'configuration' => ['Configuration',    'Config file layering, all settings categories, environment variables, and YAML examples.', '&#x2699;&#xFE0F;'],
     'headless' => ['Headless Mode',    'Non-interactive execution for CI/CD, scripts, and automated workflows with JSON and streaming output.', '&#x1F916;'],
+    'integrations' => ['Integrations CLI', 'Headless OpenCompany integrations for scripts, coding CLIs, and Lua workflows.', '&#x1F517;'],
     'tools' => ['Tools',            'Complete reference for all built-in tools: file ops, search, bash, shell sessions, and more.', '&#x1F6E0;&#xFE0F;'],
     'lua' => ['Lua',              'Lua runtime guide: namespaces, app.tools, docs flow, and integration scripting patterns.', '&#x1F40D;'],
     'providers' => ['Providers',        '40+ LLM providers, authentication setup, custom endpoints, and per-depth model overrides.', '&#x1F50C;'],

@@ -29,6 +29,35 @@ echo "explain this error" | kosmokrator</code></pre>
 
 <pre><code>cat error.log | kosmokrator -p "explain this error and suggest a fix"</code></pre>
 
+<!-- ------------------------------------------------------------------ -->
+<h3 id="headless-integrations">Headless Integrations</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    If you do not need an agent turn and only want to call external tools such as Plane, ClickUp,
+    or other OpenCompany integration packages, use the dedicated integrations CLI instead:
+</p>
+
+<pre><code># Discover configured providers
+kosmokrator integrations:status --json
+
+# Read the schema for one integration function
+kosmokrator integrations:schema plane.list_issues
+
+# Call an integration directly
+kosmokrator integrations:call plane.list_issues \
+  --workspace-slug=kosmokrator \
+  --project-id=PROJECT_UUID \
+  --json
+
+# Run a multi-step Lua workflow against configured integrations
+kosmokrator integrations:lua workflow.lua --json</code></pre>
+
+<p>
+    This integration surface is designed for scripts and other coding CLIs. It is documented in
+    detail in <a href="/docs/integrations">Integrations CLI</a>.
+</p>
+
 <!-- ================================================================== -->
 <h2 id="output-formats">Output Formats</h2>
 <!-- ================================================================== -->

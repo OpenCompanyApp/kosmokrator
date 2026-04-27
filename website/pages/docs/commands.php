@@ -245,6 +245,26 @@ ob_start();
     <code>git pull</code> and <code>composer install</code> commands to run.
 </p>
 
+<h4 id="cmd-shell-integrations"><code>kosmokrator integrations:*</code></h4>
+<p>
+    Run OpenCompany integrations directly from the shell without starting an
+    agent session. This surface is intended for scripts, CI jobs, and other
+    coding CLIs that need a unified local integration layer.
+</p>
+<pre><code>kosmokrator integrations:list --json
+kosmokrator integrations:status --json
+kosmokrator integrations:search "plane issue" --json
+kosmokrator integrations:docs plane.create_issue
+kosmokrator integrations:schema plane.create_issue
+kosmokrator integrations:call plane.list_issues --project-id=PROJECT_UUID --json
+kosmokrator integrations:plane list_issues --project-id=PROJECT_UUID --json
+kosmokrator integrations:lua workflow.lua --json</code></pre>
+<p>
+    See <a href="/docs/integrations">Integrations CLI</a> for the complete
+    command reference, argument passing rules, Lua endpoint, JSON result
+    envelopes, permissions, account aliases, and external coding CLI patterns.
+</p>
+
 <h4 id="cmd-shell-gateway"><code>kosmokrator gateway:telegram</code></h4>
 <p>
     Start the Telegram gateway worker. This turns KosmoKrator into a Telegram

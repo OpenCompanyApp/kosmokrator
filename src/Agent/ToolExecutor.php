@@ -297,11 +297,14 @@ final class ToolExecutor
     private function executeSingleTool(ToolCall $toolCall, array $args, Tool $tool, ?SubagentStats $stats, AgentMode $mode): ToolResult
     {
         try {
+            \Amp\delay(0);
+
             if ($toolCall->name === 'shell_start') {
                 $args['read_only'] = $mode !== AgentMode::Edit;
             }
 
             $output = $tool->handle(...$args);
+            \Amp\delay(0);
             $stats?->incrementToolCalls();
             $outputStr = ToolCallMapper::normalizeToolOutput($output);
 

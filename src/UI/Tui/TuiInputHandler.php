@@ -26,6 +26,8 @@ final class TuiInputHandler
 {
     private ?SelectListWidget $slashCompletion = null;
 
+    private bool $bound = false;
+
     /** @var array<array{value: string, label: string, description: string}> */
     private array $skillCompletions = [];
 
@@ -142,10 +144,15 @@ final class TuiInputHandler
      */
     public function bind(): void
     {
+        if ($this->bound) {
+            return;
+        }
+
         $this->input->onInput($this->handleInput(...));
         $this->input->onCancel($this->handleCancel(...));
         $this->input->onChange($this->handleChange(...));
         $this->input->onSubmit($this->handleSubmit(...));
+        $this->bound = true;
     }
 
     private function handleInput(string $data): bool

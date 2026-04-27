@@ -70,7 +70,8 @@ class IntegrationManager
      */
     public function isEnabled(string $integration): bool
     {
-        $enabled = $this->settings->getRaw("integrations.{$integration}.enabled");
+        $enabled = $this->settings->getRaw("integrations.{$integration}.enabled")
+            ?? $this->settings->getRaw("kosmokrator.integrations.{$integration}.enabled");
 
         return $enabled === true || $enabled === 'on';
     }
@@ -82,14 +83,17 @@ class IntegrationManager
      */
     public function getPermission(string $integration, string $operation): string
     {
-        $permission = $this->settings->getRaw("integrations.{$integration}.permissions.{$operation}");
+        $permission = $this->settings->getRaw("integrations.{$integration}.permissions.{$operation}")
+            ?? $this->settings->getRaw("kosmokrator.integrations.{$integration}.permissions.{$operation}");
 
         if (in_array($permission, ['allow', 'ask', 'deny'], true)) {
             return $permission;
         }
 
-        // Default: auto-allow both reads and writes unless explicitly overridden.
-        return 'allow';
+        $default = $this->settings->getRaw('integrations.permissions_default')
+            ?? $this->settings->getRaw('kosmokrator.integrations.permissions_default');
+
+        return in_array($default, ['allow', 'ask', 'deny'], true) ? $default : 'ask';
     }
 
     /**
@@ -190,7 +194,10 @@ class IntegrationManager
         return $this->providers->all();
     }
 
-    private function isConfiguredForActivation(string $integration, ToolProvider $provider): bool
+    /**
+     * Check whether an integration has all required local credentials.
+     */
+    public function isConfiguredForActivation(string $integration, ToolProvider $provider): bool
     {
         $requiredFields = array_filter(
             $provider->credentialFields(),
@@ -222,5 +229,13 @@ class IntegrationManager
         }
 
         return true;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getAccounts(string $integration): array
+    {
+        return $this->credentials->getAccounts($integration);
     }
 }

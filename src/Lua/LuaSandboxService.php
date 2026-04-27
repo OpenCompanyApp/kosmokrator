@@ -15,8 +15,9 @@ class LuaSandboxService
      *
      * @param  array{memoryLimit?: int, cpuLimit?: float}  $options
      * @param  array<string, mixed>  $globals  Named globals to inject as Lua tables
+     * @param  array<string, callable>  $phpFunctions  Dotted helper names exposed as Lua functions
      */
-    public function execute(string $code, array $options = [], ?LuaBridge $bridge = null, array $globals = [], ?NativeToolBridge $nativeBridge = null): LuaResult
+    public function execute(string $code, array $options = [], ?LuaBridge $bridge = null, array $globals = [], ?NativeToolBridge $nativeBridge = null, array $phpFunctions = []): LuaResult
     {
         $memoryLimit = $options['memoryLimit'] ?? 32 * 1024 * 1024; // 32 MB
         $cpuLimit = $options['cpuLimit'] ?? 30.0; // 30 seconds
@@ -35,6 +36,10 @@ class LuaSandboxService
 
         if ($nativeBridge !== null) {
             $nativeBridge->register($sandbox);
+        }
+
+        if ($phpFunctions !== []) {
+            $this->registerPhpFunctions($sandbox, $phpFunctions);
         }
 
         foreach ($globals as $name => $value) {
@@ -67,6 +72,48 @@ class LuaSandboxService
                 executionTime: $elapsed,
                 memoryUsage: null,
             );
+        }
+    }
+
+    /**
+     * Register simple dotted PHP functions as Lua functions, e.g.
+     * `docs.read = function(...) return __php_globals.call("docs.read", ...) end`.
+     *
+     * @param  array<string, callable>  $phpFunctions
+     */
+    private function registerPhpFunctions(Sandbox $sandbox, array $phpFunctions): void
+    {
+        $sandbox->register('__php_globals', [
+            'call' => function (string $name, mixed ...$args) use ($phpFunctions): mixed {
+                if (! isset($phpFunctions[$name])) {
+                    throw new \RuntimeException("Unknown PHP-backed Lua helper: {$name}");
+                }
+
+                return $phpFunctions[$name](...$args);
+            },
+        ]);
+
+        $lines = [];
+        foreach (array_keys($phpFunctions) as $name) {
+            $parts = explode('.', $name);
+            if (count($parts) !== 2) {
+                continue;
+            }
+
+            [$table, $function] = $parts;
+            $table = preg_replace('/[^A-Za-z0-9_]/', '', $table) ?? '';
+            $function = preg_replace('/[^A-Za-z0-9_]/', '', $function) ?? '';
+            if ($table === '' || $function === '') {
+                continue;
+            }
+
+            $escaped = addcslashes($name, '"\\');
+            $lines[] = "{$table} = {$table} or {}";
+            $lines[] = "{$table}.{$function} = function(...) return __php_globals.call(\"{$escaped}\", ...) end";
+        }
+
+        if ($lines !== []) {
+            $sandbox->load(implode("\n", $lines))->call();
         }
     }
 

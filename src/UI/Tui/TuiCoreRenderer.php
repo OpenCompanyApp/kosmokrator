@@ -93,6 +93,8 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     private ?TaskStore $taskStore = null;
 
+    private ?string $renderDeferId = null;
+
     public function __construct()
     {
         $this->state = new TuiStateStore;
@@ -264,6 +266,16 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
         // Phase transitions drive the animation manager
         $this->phaseMachine->onAny(function ($transition, Phase $from, Phase $to): void {
+            if ($to === Phase::Compacting) {
+                $this->animationManager->showCompacting();
+
+                return;
+            }
+
+            if ($from === Phase::Compacting) {
+                $this->animationManager->clearCompacting();
+            }
+
             $agentPhase = $this->tuiPhaseToAgentPhase($to);
             $this->animationManager->setPhase($agentPhase, $this->state->getRequestCancellation());
         });
@@ -425,11 +437,32 @@ HELP;
 
     public function showCompacting(): void
     {
+        $current = $this->phaseMachine->current();
+        if ($current === Phase::Compacting) {
+            return;
+        }
+
+        if ($current !== Phase::Idle && $this->phaseMachine->canTransition(Phase::Idle)) {
+            $this->phaseMachine->transition(Phase::Idle);
+        }
+
+        if ($this->phaseMachine->canTransition(Phase::Compacting)) {
+            $this->phaseMachine->transition(Phase::Compacting);
+
+            return;
+        }
+
         $this->animationManager->showCompacting();
     }
 
     public function clearCompacting(): void
     {
+        if ($this->phaseMachine->current() === Phase::Compacting) {
+            $this->phaseMachine->transition(Phase::Idle);
+
+            return;
+        }
+
         $this->animationManager->clearCompacting();
     }
 
@@ -565,6 +598,11 @@ HELP;
 
     public function teardown(): void
     {
+        if ($this->renderDeferId !== null) {
+            EventLoop::cancel($this->renderDeferId);
+            $this->renderDeferId = null;
+        }
+
         $this->reactiveBridge?->stop();
 
         if ($this->tui->isRunning()) {
@@ -620,14 +658,12 @@ HELP;
 
     public function flushRender(): void
     {
-        $this->tui->requestRender();
-        $this->tui->processRender();
+        $this->scheduleRender();
     }
 
     public function forceRender(): void
     {
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->scheduleRender(force: true);
     }
 
     public function addConversationWidget(AbstractWidget $widget): void
@@ -812,6 +848,10 @@ HELP;
 
     public function bindInputHandlers(): void
     {
+        if ($this->inputHandler !== null) {
+            return;
+        }
+
         $state = $this->state;
 
         $this->inputHandler = new TuiInputHandler(
@@ -837,5 +877,24 @@ HELP;
             clearRequestCancellation: fn () => $state->setRequestCancellation(null),
         );
         $this->inputHandler->bind();
+    }
+
+    private function scheduleRender(bool $force = false): void
+    {
+        $this->tui->requestRender(force: $force);
+
+        if ($this->renderDeferId !== null) {
+            return;
+        }
+
+        $this->renderDeferId = EventLoop::defer(function (): void {
+            $this->renderDeferId = null;
+
+            if (! $this->tui->isRunning()) {
+                return;
+            }
+
+            $this->tui->processRender();
+        });
     }
 }

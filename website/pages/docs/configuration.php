@@ -343,7 +343,7 @@ audio:
 <h3 id="integrations">Integrations</h3>
 
 <p>
-    KosmoKrator discovers installed OpenCompany integration packages from your <code>composer.lock</code>. Current packages may use either the newer <code>opencompanyapp/integration-*</code> prefix or the legacy <code>opencompanyapp/ai-tool-*</code> prefix. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category.
+    KosmoKrator discovers installed OpenCompany integration packages from your <code>composer.lock</code>. Current packages may use either the newer <code>opencompanyapp/integration-*</code> prefix or the legacy <code>opencompanyapp/ai-tool-*</code> prefix. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code> and headless shell commands via <code>kosmokrator integrations:*</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category. See <a href="/docs/integrations">Integrations CLI</a> for the full headless command and Lua reference.
 </p>
 
 <table>

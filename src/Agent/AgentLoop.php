@@ -41,6 +41,10 @@ use Psr\Log\LoggerInterface;
  */
 class AgentLoop
 {
+    private const STREAM_PARTIAL_FLUSH_BYTES = 240;
+
+    private const STREAM_PARTIAL_FLUSH_SECONDS = 0.08;
+
     private ConversationHistory $history;
 
     /** @var Tool[] Full set of tools from registry */
@@ -1019,6 +1023,7 @@ class AgentLoop
 
         // Buffer for line-by-line rendering: accumulate partial lines, flush on \n
         $lineBuffer = '';
+        $lastPartialFlushAt = microtime(true);
 
         foreach ($this->llm->stream($messages, $tools, $cancellation) as $event) {
             if ($event->type === 'text_delta') {
@@ -1030,6 +1035,16 @@ class AgentLoop
                     $line = substr($lineBuffer, 0, $nl + 1);
                     $lineBuffer = substr($lineBuffer, $nl + 1);
                     SafeDisplay::call(fn () => $this->ui->streamChunk($line), $this->log);
+                    $lastPartialFlushAt = microtime(true);
+                }
+
+                if ($lineBuffer !== ''
+                    && (strlen($lineBuffer) >= self::STREAM_PARTIAL_FLUSH_BYTES
+                        || (microtime(true) - $lastPartialFlushAt) >= self::STREAM_PARTIAL_FLUSH_SECONDS)) {
+                    $partial = $lineBuffer;
+                    $lineBuffer = '';
+                    $lastPartialFlushAt = microtime(true);
+                    SafeDisplay::call(fn () => $this->ui->streamChunk($partial), $this->log);
                 }
             } elseif ($event->type === 'thinking_delta') {
                 // Accumulate reasoning silently — displayed once after stream completes

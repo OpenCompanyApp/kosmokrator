@@ -16,6 +16,13 @@ ob_start();
     <code>execute_lua</code> to run code. Do not guess function names or response shapes.
 </div>
 
+<div class="tip">
+    For scripts and other coding CLIs, use <code>kosmokrator integrations:lua</code>. That
+    headless endpoint exposes integration namespaces and <code>docs.list</code>,
+    <code>docs.search</code>, and <code>docs.read</code> helpers without starting an agent
+    session. See <a href="/docs/integrations">Integrations CLI</a> for the full reference.
+</div>
+
 <!-- ================================================================== -->
 <h2 id="how-it-works">How Lua Works</h2>
 <!-- ================================================================== -->
@@ -34,6 +41,13 @@ ob_start();
     <li><code>app.integrations.*</code> &mdash; enabled integrations exposed as callable Lua namespaces</li>
     <li><code>app.tools.*</code> &mdash; KosmoKrator's built-in native tools, callable from Lua</li>
 </ul>
+
+<p>
+    In the standalone <code>integrations:lua</code> command, the runtime exposes
+    <code>app.integrations.*</code> plus docs helpers. The native coding tools under
+    <code>app.tools.*</code> are only available when Lua is executed from inside a KosmoKrator
+    agent session.
+</p>
 
 <p>
     Lua also exposes helper namespaces:

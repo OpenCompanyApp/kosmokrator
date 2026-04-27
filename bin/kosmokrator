@@ -9,10 +9,20 @@ use Kosmokrator\Command\CodexLoginCommand;
 use Kosmokrator\Command\CodexLogoutCommand;
 use Kosmokrator\Command\CodexStatusCommand;
 use Kosmokrator\Command\ConfigCommand;
+use Kosmokrator\Command\Integration\IntegrationCallCommand;
+use Kosmokrator\Command\Integration\IntegrationDocsCommand;
+use Kosmokrator\Command\Integration\IntegrationExamplesCommand;
+use Kosmokrator\Command\Integration\IntegrationListCommand;
+use Kosmokrator\Command\Integration\IntegrationLuaCommand;
+use Kosmokrator\Command\Integration\IntegrationProviderCommand;
+use Kosmokrator\Command\Integration\IntegrationSchemaCommand;
+use Kosmokrator\Command\Integration\IntegrationSearchCommand;
+use Kosmokrator\Command\Integration\IntegrationStatusCommand;
 use Kosmokrator\Command\SetupCommand;
 use Kosmokrator\Command\TelegramGatewayCommand;
 use Kosmokrator\Command\TelegramGatewayWorkerCommand;
 use Kosmokrator\Command\UpdateCommand;
+use Kosmokrator\Integration\Runtime\IntegrationCatalog;
 use Kosmokrator\Kernel;
 use NunoMaduro\Collision\Provider;
 
@@ -44,6 +54,18 @@ $console->addCommand(new AuthCommand($kernel->getContainer()));
 $console->addCommand(new UpdateCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
 $console->addCommand(new TelegramGatewayCommand($kernel->getContainer()));
 $console->addCommand(new TelegramGatewayWorkerCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationListCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationStatusCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationSearchCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationDocsCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationSchemaCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationExamplesCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationCallCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationLuaCommand($kernel->getContainer()));
+
+foreach ($kernel->getContainer()->make(IntegrationCatalog::class)->locallyRunnableProviderNames() as $provider) {
+    $console->addCommand(new IntegrationProviderCommand($kernel->getContainer(), $provider));
+}
 
 // Default to agent in single-command mode unless another explicit command is requested.
 // 'agent' is removed from the explicit list so that `kosmokrator agent "prompt"`
@@ -51,7 +73,9 @@ $console->addCommand(new TelegramGatewayWorkerCommand($kernel->getContainer()));
 $args = $_SERVER['argv'] ?? [];
 $explicitCommands = ['setup', 'config', 'auth', 'update', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
 $requestedCommand = $args[1] ?? null;
-$isExplicitCommand = is_string($requestedCommand) && ! str_starts_with($requestedCommand, '-') && in_array($requestedCommand, $explicitCommands, true);
+$isExplicitCommand = is_string($requestedCommand)
+    && ! str_starts_with($requestedCommand, '-')
+    && (in_array($requestedCommand, $explicitCommands, true) || str_starts_with($requestedCommand, 'integrations:'));
 
 if (! $isExplicitCommand) {
     $console->setDefaultCommand('agent', true);

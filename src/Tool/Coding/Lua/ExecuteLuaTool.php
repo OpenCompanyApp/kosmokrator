@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding\Lua;
 
-use Kosmokrator\Integration\IntegrationManager;
-use Kosmokrator\Integration\KosmokratorLuaToolInvoker;
-use Kosmokrator\Lua\LuaDocService;
-use Kosmokrator\Lua\LuaSandboxService;
+use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
-use OpenCompany\IntegrationCore\Lua\LuaBridge;
 
 class ExecuteLuaTool extends AbstractTool
 {
@@ -19,10 +15,7 @@ class ExecuteLuaTool extends AbstractTool
     private static ?\Closure $nativeBridgeResolver = null;
 
     public function __construct(
-        private readonly LuaSandboxService $lua,
-        private readonly IntegrationManager $integrationManager,
-        private readonly LuaDocService $docService,
-        private readonly KosmokratorLuaToolInvoker $invoker,
+        private readonly IntegrationRuntime $runtime,
     ) {}
 
     /**
@@ -73,25 +66,13 @@ class ExecuteLuaTool extends AbstractTool
             $options['cpuLimit'] = (float) $args['cpuLimit'];
         }
 
-        // Only build bridge if there are active integrations
-        $bridge = null;
-        $activeProviders = $this->integrationManager->getActiveProviders();
-
-        if ($activeProviders !== []) {
-            $bridge = new LuaBridge(
-                $this->docService->buildFunctionMap(),
-                $this->docService->buildParameterMap(),
-                $this->invoker,
-                $this->docService->buildAccountMap(),
-            );
-        }
-
         $nativeBridge = null;
         if (self::$nativeBridgeResolver !== null) {
             $nativeBridge = (self::$nativeBridgeResolver)();
         }
 
-        $result = $this->lua->execute($code, $options, $bridge, [], $nativeBridge);
+        $execution = $this->runtime->executeLua($code, $options, $nativeBridge);
+        $result = $execution->lua;
 
         $lines = [];
 
@@ -113,11 +94,8 @@ class ExecuteLuaTool extends AbstractTool
             $lines[] = 'Memory: '.$this->formatBytes($result->memoryUsage);
         }
 
-        if ($bridge !== null) {
-            $callLog = $bridge->getCallLog();
-            if ($callLog !== []) {
-                $lines[] = 'Integration calls: '.count($callLog);
-            }
+        if ($execution->callLog !== []) {
+            $lines[] = 'Integration calls: '.count($execution->callLog);
         }
 
         $output = empty($lines)

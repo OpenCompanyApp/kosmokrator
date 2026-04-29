@@ -18,6 +18,7 @@ use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\SessionGrants;
+use Lua\Sandbox;
 use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
 use OpenCompany\IntegrationCore\Contracts\Tool;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
@@ -158,6 +159,10 @@ final class PlaneIntegrationRuntimeTest extends TestCase
 
     public function test_lua_docs_helpers_can_discover_plane_functions_without_calling_api(): void
     {
+        if (! class_exists(Sandbox::class)) {
+            $this->markTestSkipped('Lua sandbox extension is not available.');
+        }
+
         [, $runtime] = $this->buildRuntime(new PlaneToolProvider);
 
         $result = $runtime->executeLua('print(string.find(docs.read("plane.create_issue"), "plane.create_issue") ~= nil)');

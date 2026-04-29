@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Command;
 
+use Lua\Sandbox;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
@@ -64,6 +65,10 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(0, $dynamic['exit']);
         $this->assertSame('dynamic', $dynamic['json']['data']);
 
+        if (! class_exists(Sandbox::class)) {
+            $this->markTestSkipped('Lua sandbox extension is not available.');
+        }
+
         $lua = $this->runKosmo(['mcp:lua', '--eval', 'dump(app.mcp.fake.echo({message="lua"}))', '--json']);
         $this->assertSame(0, $lua['exit']);
         $this->assertSame('lua', $lua['json']['output']);
@@ -90,6 +95,10 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(0, $forced['exit']);
         $this->assertSame('ok', $forced['json']['data']);
         $this->assertTrue($forced['json']['meta']['permission_bypassed']);
+
+        if (! class_exists(Sandbox::class)) {
+            $this->markTestSkipped('Lua sandbox extension is not available.');
+        }
 
         $luaBlocked = $this->runKosmo(['mcp:lua', '--eval', 'dump(mcp.schema("fake.echo"))', '--json']);
         $this->assertSame(1, $luaBlocked['exit']);

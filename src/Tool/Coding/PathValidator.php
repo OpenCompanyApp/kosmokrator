@@ -50,7 +50,7 @@ final class PathValidator
             throw new \RuntimeException("Path escapes project root: {$path}");
         }
 
-        if (str_starts_with($resolved, $resolvedRoot)) {
+        if ($resolved === $resolvedRoot || str_starts_with($resolved, $resolvedRoot.'/')) {
             return $resolved;
         }
 

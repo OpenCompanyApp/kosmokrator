@@ -11,11 +11,11 @@ use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\BashCommandWidget;
 use Kosmokrator\UI\Tui\Widget\CollapsibleWidget;
 use Kosmokrator\UI\Tui\Widget\DiscoveryBatchWidget;
+use Kosmokrator\UI\Tui\Widget\KosmokratorMarkdownWidget;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -95,7 +95,7 @@ final class TuiConversationRenderer implements ConversationRendererInterface
                         $widget = new AnsiArtWidget($msg->content);
                         $widget->addStyleClass('ansi-art');
                     } else {
-                        $widget = new MarkdownWidget($msg->content);
+                        $widget = new KosmokratorMarkdownWidget($msg->content);
                         $widget->addStyleClass('response');
                     }
                     $this->core->addConversationWidget($widget);

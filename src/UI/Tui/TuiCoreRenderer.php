@@ -25,9 +25,12 @@ use Kosmokrator\UI\Tui\Phase\Phase;
 use Kosmokrator\UI\Tui\Phase\PhaseStateMachine;
 use Kosmokrator\UI\Tui\Primitive\ReactiveBridge;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
+use Kosmokrator\UI\Tui\Toast\ToastManager;
 use Kosmokrator\UI\Tui\Widget\AnsiArtWidget;
 use Kosmokrator\UI\Tui\Widget\AnsweredQuestionsWidget;
 use Kosmokrator\UI\Tui\Widget\HistoryStatusWidget;
+use Kosmokrator\UI\Tui\Widget\KosmokratorEditorWidget;
+use Kosmokrator\UI\Tui\Widget\KosmokratorMarkdownWidget;
 use Revolt\EventLoop;
 use Revolt\EventLoop\Suspension;
 use Symfony\Component\Tui\Ansi\AnsiUtils;
@@ -37,7 +40,6 @@ use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\EditorWidget;
-use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
 
 /**
@@ -52,6 +54,10 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class TuiCoreRenderer implements CoreRendererInterface
 {
+    private const RETAIN_CONVERSATION_WIDGETS = 260;
+
+    private const COMPACT_CONVERSATION_AFTER_WIDGETS = 340;
+
     private Tui $tui;
 
     private ContainerWidget $session;
@@ -92,6 +98,12 @@ final class TuiCoreRenderer implements CoreRendererInterface
     private ?TuiInputHandler $inputHandler = null;
 
     private ?TaskStore $taskStore = null;
+
+    private ?TuiScheduler $scheduler = null;
+
+    private ?TuiEventBridge $eventBridge = null;
+
+    private int $compactedConversationWidgets = 0;
 
     public function __construct()
     {
@@ -165,6 +177,11 @@ final class TuiCoreRenderer implements CoreRendererInterface
         return $this->state;
     }
 
+    public function getScheduler(): TuiScheduler
+    {
+        return $this->scheduler ??= TuiScheduler::fallback();
+    }
+
     // ── CoreRendererInterface ───────────────────────────────────────────
 
     public function setTaskStore(TaskStore $store): void
@@ -176,7 +193,9 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
     public function initialize(): void
     {
-        $this->tui = new Tui(KosmokratorStyleSheet::create());
+        $this->tui = new Tui(KosmokratorStyleSheet::create(), terminal: new KosmokratorTerminal);
+        $this->scheduler = TuiScheduler::fromTui($this->tui);
+        ToastManager::useScheduler($this->scheduler);
 
         $this->session = new ContainerWidget;
         $this->session->setId('session');
@@ -207,6 +226,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
             state: $this->state,
             conversation: $this->conversation,
             ensureSpinners: fn () => ThinkingLoaderWidget::registerSpinners(),
+            scheduler: $this->scheduler,
         );
 
         // Animation manager — signal-only. Sets phase/breathColor/thinkingPhrase.
@@ -217,9 +237,10 @@ final class TuiCoreRenderer implements CoreRendererInterface
             subagentCleanupCallback: fn () => $this->subagentDisplay->cleanup(),
             renderCallback: fn () => $this->flushRender(),
             forceRenderCallback: fn () => $this->forceRender(),
+            scheduler: $this->scheduler,
         );
 
-        $this->input = new EditorWidget;
+        $this->input = new KosmokratorEditorWidget;
         $this->input->setId('prompt');
         $this->input->setMinVisibleLines(1);
         $this->input->setMaxVisibleLines(2);
@@ -240,9 +261,12 @@ final class TuiCoreRenderer implements CoreRendererInterface
             input: $this->input,
             renderCallback: fn () => $this->flushRender(),
             forceRenderCallback: fn () => $this->forceRender(),
+            scheduler: $this->scheduler,
         );
 
         $this->bindInputHandlers();
+        $this->eventBridge = new TuiEventBridge($this->tui, $this->state, fn () => $this->forceRender());
+        $this->eventBridge->bind();
 
         // ── Layout ───
         $this->session->add($this->conversation);
@@ -264,6 +288,16 @@ final class TuiCoreRenderer implements CoreRendererInterface
 
         // Phase transitions drive the animation manager
         $this->phaseMachine->onAny(function ($transition, Phase $from, Phase $to): void {
+            if ($to === Phase::Compacting) {
+                $this->animationManager->showCompacting();
+
+                return;
+            }
+
+            if ($from === Phase::Compacting) {
+                $this->animationManager->clearCompacting();
+            }
+
             $agentPhase = $this->tuiPhaseToAgentPhase($to);
             $this->animationManager->setPhase($agentPhase, $this->state->getRequestCancellation());
         });
@@ -425,11 +459,32 @@ HELP;
 
     public function showCompacting(): void
     {
+        $current = $this->phaseMachine->current();
+        if ($current === Phase::Compacting) {
+            return;
+        }
+
+        if ($current !== Phase::Idle && $this->phaseMachine->canTransition(Phase::Idle)) {
+            $this->phaseMachine->transition(Phase::Idle);
+        }
+
+        if ($this->phaseMachine->canTransition(Phase::Compacting)) {
+            $this->phaseMachine->transition(Phase::Compacting);
+
+            return;
+        }
+
         $this->animationManager->showCompacting();
     }
 
     public function clearCompacting(): void
     {
+        if ($this->phaseMachine->current() === Phase::Compacting) {
+            $this->phaseMachine->transition(Phase::Idle);
+
+            return;
+        }
+
         $this->animationManager->clearCompacting();
     }
 
@@ -480,7 +535,7 @@ HELP;
                 $activeResponse->addStyleClass('ansi-art');
                 $this->state->setActiveResponseIsAnsi(true);
             } else {
-                $activeResponse = new MarkdownWidget('');
+                $activeResponse = new KosmokratorMarkdownWidget('');
                 $activeResponse->addStyleClass('response');
                 $this->state->setActiveResponseIsAnsi(false);
             }
@@ -498,8 +553,12 @@ HELP;
             $this->addConversationWidget($activeResponse);
         }
 
-        $current = $activeResponse->getText();
-        $activeResponse->setText($current.$text);
+        if (method_exists($activeResponse, 'appendText')) {
+            $activeResponse->appendText($text);
+        } else {
+            $current = $activeResponse->getText();
+            $activeResponse->setText($current.$text);
+        }
         $this->markHiddenConversationActivity();
     }
 
@@ -620,19 +679,18 @@ HELP;
 
     public function flushRender(): void
     {
-        $this->tui->requestRender();
-        $this->tui->processRender();
+        $this->scheduleRender();
     }
 
     public function forceRender(): void
     {
-        $this->tui->requestRender(force: true);
-        $this->tui->processRender();
+        $this->scheduleRender(force: true);
     }
 
     public function addConversationWidget(AbstractWidget $widget): void
     {
         $this->conversation->add($widget);
+        $this->compactConversationWidgetsIfNeeded();
         $this->state->triggerRender();
     }
 
@@ -672,9 +730,57 @@ HELP;
         $this->state->setScrollOffset(0);
         $this->state->setHasHiddenActivityBelow(false);
         $this->tui->setScrollOffset(0);
+        $this->compactedConversationWidgets = 0;
 
         if ($this->toolStateResetCallback !== null) {
             ($this->toolStateResetCallback)();
+        }
+    }
+
+    private function compactConversationWidgetsIfNeeded(): void
+    {
+        $children = $this->conversation->all();
+        $count = count($children);
+        if ($count <= self::COMPACT_CONVERSATION_AFTER_WIDGETS) {
+            return;
+        }
+
+        $activeResponse = $this->state->getActiveResponse();
+        $removeCount = max(0, $count - self::RETAIN_CONVERSATION_WIDGETS);
+        if ($removeCount === 0) {
+            return;
+        }
+
+        $removed = 0;
+        $remaining = [];
+        foreach ($children as $child) {
+            if ($removed < $removeCount && $child !== $activeResponse) {
+                $removed++;
+
+                continue;
+            }
+
+            $remaining[] = $child;
+        }
+
+        if ($removed === 0) {
+            return;
+        }
+
+        $this->compactedConversationWidgets += $removed;
+
+        $summary = new TextWidget(
+            Theme::dim().'⊛ '
+            .$this->compactedConversationWidgets
+            .' earlier conversation items compacted to reduce memory use'
+            .Theme::reset(),
+        );
+        $summary->addStyleClass('subtitle');
+
+        $this->conversation->clear();
+        $this->conversation->add($summary);
+        foreach ($remaining as $child) {
+            $this->conversation->add($child);
         }
     }
 
@@ -812,6 +918,10 @@ HELP;
 
     public function bindInputHandlers(): void
     {
+        if ($this->inputHandler !== null) {
+            return;
+        }
+
         $state = $this->state;
 
         $this->inputHandler = new TuiInputHandler(
@@ -837,5 +947,10 @@ HELP;
             clearRequestCancellation: fn () => $state->setRequestCancellation(null),
         );
         $this->inputHandler->bind();
+    }
+
+    private function scheduleRender(bool $force = false): void
+    {
+        $this->tui->requestRender(force: $force);
     }
 }

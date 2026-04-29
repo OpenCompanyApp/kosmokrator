@@ -61,7 +61,16 @@ final class SubagentPipelineFactory
             ?? $agentConfig['subagent_max_retries'] ?? 2);
         $subagentIdleWatchdogSeconds = (int) ($this->sessionManager->getSetting('subagent_idle_watchdog_seconds')
             ?? $agentConfig['subagent_idle_watchdog_seconds'] ?? 900);
-        $orchestrator = new SubagentOrchestrator($this->log, $maxDepth, $concurrency, $subagentMaxRetries, $subagentIdleWatchdogSeconds);
+        $orchestrator = new SubagentOrchestrator(
+            $this->log,
+            $maxDepth,
+            $concurrency,
+            $subagentMaxRetries,
+            $subagentIdleWatchdogSeconds,
+            metadataStore: $this->sessionManager->swarmMetadata(),
+            outputStore: $this->sessionManager->subagentOutputs(),
+            rootSessionIdProvider: fn () => $this->sessionManager->currentSessionId(),
+        );
 
         // Root context
         $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');

@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Kosmokrator\Agent\InstructionLoader;
-use Kosmokrator\Integration\IntegrationManager;
+use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\LuaDocService;
-use Kosmokrator\Lua\LuaSandboxService;
 use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\Tool\MemorySaveTool;
@@ -50,7 +49,6 @@ use Kosmokrator\Tool\Web\WebSearchTool;
 use Kosmokrator\Web\Provider\WebFetchProviderManager;
 use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use Lua\Sandbox;
-use OpenCompany\IntegrationCore\Contracts\LuaToolInvoker;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -172,10 +170,7 @@ class ToolServiceProvider extends ServiceProvider
                 $registry->register(new SearchDocsTool($luaDocService));
                 $registry->register(new ReadDocTool($luaDocService));
                 $registry->register(new ExecuteLuaTool(
-                    $this->container->make(LuaSandboxService::class),
-                    $this->container->make(IntegrationManager::class),
-                    $luaDocService,
-                    $this->container->make(LuaToolInvoker::class),
+                    $this->container->make(IntegrationRuntime::class),
                 ));
 
                 // Set lazy resolver for native tool bridge (app.tools.* in Lua)

@@ -1,6 +1,6 @@
 agent:
   default_provider: z
-  default_model: GLM-5.1
+  default_model: glm-5.1
   temperature: 0.0
   max_retries: 0              # 0 = unlimited (retry forever), positive int = cap
   subagent_max_depth: 3
@@ -125,6 +125,106 @@ ui:
 integrations:
   permissions_default: ask  # Default for operations not explicitly set
 
+# Model Context Protocol servers discovered from .mcp.json and compatibility files.
+# Per-server trust and read/write permissions are managed with mcp:* commands.
+mcp:
+  permissions_default: ask  # Default for MCP operations not explicitly set
+
+web:
+  cache:
+    keep_turns: 2
+    max_entries: 128
+  search:
+    enabled: false
+    provider: null
+    default_provider: tavily
+    fallback_providers: []
+    max_results: 8
+    timeout: 20
+    timeout_seconds: 30
+    output_limit_chars: 60000
+    providers:
+      tavily:
+        api_key: ${TAVILY_API_KEY}
+      zai:
+        api_key: ${ZAI_API_KEY}
+        remote_url: https://api.z.ai/api/mcp/web_search_prime/mcp
+      exa:
+        api_key: ${EXA_API_KEY}
+  fetch:
+    provider: native
+    default_provider: direct
+    allow_external: false
+    fallback_providers: []
+    timeout: 20
+    timeout_seconds: 30
+    max_bytes: 10485760
+    max_chars: 12000
+    output_limit_chars: 100000
+    providers:
+      direct:
+        user_agent_mode: browser_like
+      zai:
+        api_key: ${ZAI_API_KEY}
+        base_url: https://api.z.ai/api/coding/paas/v4
+      firecrawl:
+        api_key: ${FIRECRAWL_API_KEY}
+        api_url: ${FIRECRAWL_API_URL}
+  crawl:
+    enabled: false
+    provider: null
+    max_pages: 20
+    timeout_seconds: 60
+    output_limit_chars: 100000
+  native:
+    enabled: false
+    provider: null
+    mode: cached
+    max_uses: 5
+    openai:
+      model: gpt-5
+    anthropic:
+      model: claude-sonnet-4-20250514
+  providers:
+    tavily:
+      enabled: false
+      api_key_env: TAVILY_API_KEY
+      api_url: https://api.tavily.com
+    firecrawl:
+      enabled: false
+      api_key_env: FIRECRAWL_API_KEY
+      api_url: https://api.firecrawl.dev
+    exa:
+      enabled: false
+      api_key_env: EXA_API_KEY
+      api_url: https://api.exa.ai
+    brave:
+      enabled: false
+      api_key_env: BRAVE_SEARCH_API_KEY
+      api_url: https://api.search.brave.com
+    parallel:
+      enabled: false
+      api_key_env: PARALLEL_API_KEY
+      api_url: https://api.parallel.ai
+    jina:
+      enabled: false
+      api_key_env: JINA_API_KEY
+    searxng:
+      enabled: false
+      base_url: null
+    perplexity:
+      enabled: false
+      api_key_env: PERPLEXITY_API_KEY
+      api_url: https://api.perplexity.ai
+    openai_native:
+      enabled: false
+      api_key_env: OPENAI_API_KEY
+      api_url: https://api.openai.com/v1
+    anthropic_native:
+      enabled: false
+      api_key_env: ANTHROPIC_API_KEY
+      api_url: https://api.anthropic.com
+
 gateway:
   telegram:
     enabled: false
@@ -135,42 +235,6 @@ gateway:
     require_mention: true
     free_response_chats: []
     poll_timeout_seconds: 20
-
-web:
-  cache:
-    keep_turns: 2
-    max_entries: 128
-  search:
-    default_provider: tavily
-    fallback_providers: []
-    max_results: 5
-    timeout: 20
-    providers:
-      tavily:
-        api_key: ${TAVILY_API_KEY}
-      zai:
-        api_key: ${ZAI_API_KEY}
-        remote_url: https://api.z.ai/api/mcp/web_search_prime/mcp
-      exa:
-        api_key: ${EXA_API_KEY}
-      google_custom_search:
-        api_key: ${GOOGLE_API_KEY}
-        search_engine_id: ${GOOGLE_SEARCH_ENGINE_ID}
-  fetch:
-    default_provider: direct
-    fallback_providers: []
-    timeout: 20
-    max_bytes: 10485760
-    max_chars: 12000
-    providers:
-      direct:
-        user_agent_mode: browser_like
-      zai:
-        api_key: ${ZAI_API_KEY}
-        base_url: https://api.z.ai/api/coding/paas/v4
-      firecrawl:
-        api_key: ${FIRECRAWL_API_KEY}
-        api_url: ${FIRECRAWL_API_URL}
 
 tools:
   # Tools that are always denied, overriding all modes (including Prometheus).

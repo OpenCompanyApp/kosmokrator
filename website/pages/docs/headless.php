@@ -25,9 +25,165 @@ echo "explain this error" | kosmokrator</code></pre>
 
 <p>All three produce the same result: the agent runs to completion, writes the final response to <strong>stdout</strong>, and exits with code <code>0</code> on success. Progress and diagnostics go to <strong>stderr</strong>, so <code>result=$(kosmokrator -p "task")</code> captures only the response.</p>
 
+<p>
+    This CLI path is backed by the same <a href="/docs/sdk">Agent SDK</a> runtime exposed to PHP
+    applications through <code>Kosmokrator\Sdk\AgentBuilder</code>. Use the SDK when you want
+    headless execution inside a web app, worker, daemon, or another PHP automation surface.
+</p>
+
 <div class="tip"><p><strong>Tip:</strong> Combine stdin with a positional prompt — stdin is appended after the prompt. Great for injecting file contents into a task:</p></div>
 
 <pre><code>cat error.log | kosmokrator -p "explain this error and suggest a fix"</code></pre>
+
+<!-- ------------------------------------------------------------------ -->
+<h3 id="headless-integrations">Headless Integrations</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    If you do not need an agent turn and only want to call external tools such as Plane, ClickUp,
+    or other OpenCompany integration packages, use the dedicated integrations CLI instead:
+</p>
+
+<pre><code># Discover configured providers
+kosmokrator integrations:status --json
+
+# Read the schema for one integration function
+kosmokrator integrations:schema plane.list_issues
+
+# Call an integration directly
+kosmokrator integrations:call plane.list_issues \
+  --workspace-slug=kosmokrator \
+  --project-id=PROJECT_UUID \
+  --json
+
+# Run a multi-step Lua workflow against configured integrations
+kosmokrator integrations:lua workflow.lua --json</code></pre>
+
+<p>
+    This integration surface is designed for scripts and other coding CLIs. It is documented in
+    detail in <a href="/docs/integrations">Integrations CLI</a>.
+</p>
+
+<p>
+    Integration calls remain governed in headless mode. Read/write permissions configured with
+    <code>integrations:configure --read=...</code>, <code>--write=...</code>, or
+    <code>integrations.permissions_default</code> are checked before execution. A trusted automation
+    job can pass <code>--force</code> to bypass only that integration read/write policy.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
+<h3 id="headless-mcp">Headless MCP</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    MCP servers can also be used without an agent turn. KosmoKrator reads the common project
+    <code>.mcp.json</code> shape, plus VS Code/Cursor <code>servers</code> files, then exposes the
+    servers through <code>mcp:*</code> commands and Lua as <code>app.mcp.*</code>.
+</p>
+
+<pre><code># Add a portable project server
+kosmokrator mcp:add github --project --type=stdio \
+  --command=github-mcp-server --env GITHUB_TOKEN --json
+
+# Review and trust project server command before discovery/execution
+kosmokrator mcp:list --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+
+# Call directly or through a per-server shortcut
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+
+# Run a Lua workflow against MCP servers
+kosmokrator mcp:lua workflow.lua --json</code></pre>
+
+<p>
+    Headless MCP keeps project trust and read/write policy checks. Project MCP config can start
+    local processes, so normal execution requires <code>mcp:trust</code>. Tool calls also check
+    <code>mcp.servers.SERVER.permissions.read</code> or <code>.write</code>; <code>ask</code>
+    fails in pure headless mode because there is no approval modal. Use <code>--force</code> only
+    for trusted automation that should bypass both MCP trust and MCP read/write policy for that
+    single invocation.
+</p>
+
+<p>
+    See <a href="/docs/mcp">MCP</a> for config compatibility, secrets, resources, prompts, Lua
+    helpers, and the full command reference.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
+<h3 id="headless-web">Headless Web Providers</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    External web providers can be configured and tested without opening a TUI. They are opt-in
+    and do not replace native <code>web_fetch</code>; external fetch and crawl remain separate
+    provider-backed tools.
+</p>
+
+<pre><code># Inspect available providers and effective configuration
+kosmokrator web:providers --json
+kosmokrator web:doctor --json
+
+# Configure provider keys from environment variables
+kosmokrator web:configure tavily --api-key-env=TAVILY_API_KEY \
+  --enable --search --global --json
+kosmokrator web:configure firecrawl --api-key-env=FIRECRAWL_API_KEY \
+  --enable --fetch --crawl --project --json
+
+# Call providers directly from scripts
+kosmokrator web:search "latest Symfony TUI changes" --provider=tavily --json
+kosmokrator web:fetch https://symfony.com/blog/ --provider=firecrawl --json
+kosmokrator web:crawl https://docs.example.com --provider=tavily --max-pages=10 --json</code></pre>
+
+<p>
+    Supported providers are Tavily, Firecrawl, Exa, Brave Search, Parallel, Jina Reader/Search,
+    SearXNG, Perplexity, OpenAI native web search, and Anthropic native web search. Provider API
+    keys can also be stored with <code>web:configure --api-key-stdin</code> or
+    <code>secrets:set provider.PROVIDER.api_key</code>.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
+<h3 id="headless-configuration">Headless Configuration</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    You can bootstrap KosmoKrator itself without opening the setup wizard or settings TUI:
+</p>
+
+<pre><code># Configure an LLM provider and credentials
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# Discover and set normal settings
+kosmokrator settings:list --json
+kosmokrator settings:set tools.default_permission_mode guardian --global --json
+
+# Batch apply settings from JSON
+jq -n '{settings:{"agent.mode":"plan","context.max_output_lines":1200}}' | \
+  kosmokrator settings:apply --stdin-json --global --json
+
+# Store managed secrets without echoing raw values
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+# Store MCP server secrets without committing tokens to .mcp.json
+printf %s "$GITHUB_TOKEN" | \
+  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
+
+# Configure Telegram gateway without the TUI
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmokrator gateway:telegram:configure --token-stdin \
+  --enabled on --session-mode thread_user --global --json</code></pre>
+
+<p>
+    Use <code>settings:doctor --json</code>, <code>providers:list --json</code>, and
+    <code>secrets:list --json</code> as the agent-friendly discovery path. See
+    <a href="/docs/configuration">Configuration</a> and <a href="/docs/providers">Providers</a>
+    for the full command reference.
+</p>
 
 <!-- ================================================================== -->
 <h2 id="output-formats">Output Formats</h2>
@@ -119,6 +275,7 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <tr><td><code>tool_result</code></td><td>Tool execution result with success status</td></tr>
 <tr><td><code>subagent_spawn</code></td><td>A child agent was spawned</td></tr>
 <tr><td><code>subagent_batch</code></td><td>Child agent(s) completed</td></tr>
+<tr><td><code>stream_end</code></td><td>The current text stream completed</td></tr>
 <tr><td><code>error</code></td><td>An error occurred during execution</td></tr>
 <tr><td><code>result</code></td><td>Final result with usage stats and duration</td></tr>
 </tbody>
@@ -140,7 +297,7 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <tr><td><code>--output-format</code></td><td><code>-o</code></td><td>Output format: <code>text</code>, <code>json</code>, <code>stream-json</code></td></tr>
 <tr><td><code>--model</code></td><td><code>-m</code></td><td>Override model for this run</td></tr>
 <tr><td><code>--mode</code></td><td>&mdash;</td><td>Agent mode: <code>edit</code>, <code>plan</code>, <code>ask</code></td></tr>
-<tr><td><code>--yolo</code></td><td>&mdash;</td><td>Skip all permission checks (alias for <code>--permission-mode prometheus</code>)</td></tr>
+<tr><td><code>--yolo</code></td><td>&mdash;</td><td>Auto-approve governed permission prompts (alias for <code>--permission-mode prometheus</code>)</td></tr>
 <tr><td><code>--permission-mode</code></td><td>&mdash;</td><td>Permission mode: <code>guardian</code>, <code>argus</code>, <code>prometheus</code></td></tr>
 <tr><td><code>--max-turns</code></td><td><code>-t</code></td><td>Maximum agentic turns (LLM call cycles)</td></tr>
 <tr><td><code>--timeout</code></td><td>&mdash;</td><td>Maximum runtime in seconds</td></tr>
@@ -157,20 +314,24 @@ kosmokrator -p "run the test suite" 2>/dev/null</code></pre>
 <h2 id="permissions">Permissions in Headless Mode</h2>
 <!-- ================================================================== -->
 
-<p>In headless mode, all tool calls are auto-approved by default &mdash; there's no interactive prompt to ask for permission. This matches the behavior users expect from other coding agents' non-interactive modes.</p>
+<p>In headless mode, there is no terminal dialog for approval. KosmoKrator still evaluates the configured permission mode, denied tools, blocked paths, agent mode, integration read/write policy, and file path validation before executing work. Calls that would require an unavailable prompt fail with a structured error unless you explicitly choose an auto-approval policy.</p>
 
-<p>Use <code>--yolo</code> to explicitly opt into full auto-pilot:</p>
+<p>Use <code>--yolo</code> to explicitly opt into Prometheus-style auto-approval for agent tool calls:</p>
 
-<pre><code># Skip all permission checks
+<pre><code># Auto-approve governed permission prompts
 kosmokrator -p --yolo "run the full test suite and fix any failures"</code></pre>
 
-<p>Or use <code>--permission-mode</code> for explicit control:</p>
+<p>Or use <code>--permission-mode</code> for explicit control. For direct integration commands, use
+    <code>--force</code> when a trusted automation job should bypass integration read/write policy:</p>
 
 <pre><code># Use Guardian mode (auto-approve safe tools, deny risky ones)
 kosmokrator -p --permission-mode guardian "add type hints to src/Utils.php"
 
 # Use Argus mode (deny tools that would normally ask)
-kosmokrator -p --permission-mode argus "what files are in the project?"</code></pre>
+kosmokrator -p --permission-mode argus "what files are in the project?"
+
+# Bypass integration read/write policy for this direct call only
+kosmokrator integrations:call plane.create_issue --force --json</code></pre>
 
 <p>See <a href="/docs/permissions">Permissions</a> for details on each mode.</p>
 
@@ -247,7 +408,7 @@ kosmokrator -p --mode ask "what does the QueueWorker do?"</code></pre>
 <tbody>
 <tr><td><code>edit</code> (default)</td><td>&check;</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
 <tr><td><code>plan</code></td><td>&check;</td><td>&times;</td><td>&check;</td><td>&check;</td></tr>
-<tr><td><code>ask</code></td><td>&check;</td><td>&times;</td><td>&check;</td><td>&check;</td></tr>
+<tr><td><code>ask</code></td><td>&check;</td><td>&times;</td><td>&check;</td><td>&times;</td></tr>
 </tbody>
 </table>
 
@@ -274,7 +435,7 @@ kosmokrator -p --system-prompt "You are a security auditor. Find vulnerabilities
 <tbody>
 <tr><td><code>0</code></td><td>Success &mdash; agent completed the task</td></tr>
 <tr><td><code>1</code></td><td>Error &mdash; agent encountered an error or returned an error response</td></tr>
-<tr><td><code>2</code></td><td>Limit exceeded &mdash; max turns or timeout reached, or invalid option value</td></tr>
+<tr><td><code>2</code></td><td>Limit exceeded &mdash; max turns or timeout reached</td></tr>
 <tr><td><code>130</code></td><td>Cancelled &mdash; interrupted by SIGINT (Ctrl+C)</td></tr>
 <tr><td><code>143</code></td><td>Cancelled &mdash; interrupted by SIGTERM</td></tr>
 </tbody>
@@ -307,7 +468,8 @@ jobs:
       - name: Setup KosmoKrator
         run: |
           curl -sSL https://kosmokrator.dev/install.sh | bash
-          kosmokrator setup --provider anthropic --api-key ${{ secrets.ANTHROPIC_API_KEY }}
+          printf %s "${{ secrets.ANTHROPIC_API_KEY }}" | \
+            kosmokrator setup --provider anthropic --api-key-stdin --global --json
 
       - name: Run AI Review
         run: |
@@ -446,7 +608,7 @@ sys.exit(proc.returncode)</code></pre>
 <tbody>
 <tr><td>Input method</td><td>REPL prompt</td><td>CLI arg, stdin, or <code>-p</code></td></tr>
 <tr><td>Output</td><td>TUI / ANSI renderer</td><td>stdout (text, JSON, stream-json)</td></tr>
-<tr><td>Tool permissions</td><td>Interactive prompts</td><td>Auto-approved</td></tr>
+<tr><td>Tool permissions</td><td>Interactive prompts</td><td>Policy evaluated; use <code>--yolo</code> for agent auto-approval</td></tr>
 <tr><td>Plan approval</td><td>Interactive dialog</td><td>Plans output but not auto-implemented</td></tr>
 <tr><td>Ask user/choice</td><td>Interactive prompts</td><td>Returns empty/dismissed</td></tr>
 <tr><td>Slash commands</td><td>Available</td><td>Not available</td></tr>
@@ -488,4 +650,4 @@ sys.exit(proc.returncode)</code></pre>
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

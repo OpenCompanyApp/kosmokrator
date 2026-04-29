@@ -13,8 +13,10 @@ use Kosmokrator\Command\SlashCommandAction;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
+use Kosmokrator\Session\SwarmMetadataStore;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\UIManager;
@@ -84,6 +86,41 @@ class AgentsCommandTest extends TestCase
             ->with('No agents have been spawned yet.');
 
         $ctx = $this->makeContext(ui: $ui, orchestrator: $orchestrator);
+
+        $result = $this->command->execute('', $ctx);
+
+        $this->assertSame(SlashCommandAction::Continue, $result->action);
+    }
+
+    public function test_execute_with_no_live_stats_uses_persisted_swarm_snapshot(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('session-1', '/tmp/project', 'test/model', '2026-04-29T00:00:00+00:00', '2026-04-29T00:00:00+00:00')");
+        $store = new SwarmMetadataStore($db);
+        $stored = $this->makeStat('persisted-1', status: 'done');
+        $stored->parentId = 'root';
+        $store->upsertAgent($stored, 'session-1');
+
+        $orchestrator = $this->createMock(SubagentOrchestrator::class);
+        $orchestrator->method('allStats')->willReturn([]);
+
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->method('currentSessionId')->willReturn('session-1');
+        $sessionManager->method('swarmMetadata')->willReturn($store);
+
+        $llm = $this->createStub(LlmClientInterface::class);
+        $llm->method('getModel')->willReturn('test-model');
+
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->once())
+            ->method('showAgentsDashboard')
+            ->with(
+                $this->callback(fn (array $summary) => $summary['total'] === 1 && $summary['stale'] === true),
+                $this->callback(fn (array $stats) => isset($stats['persisted-1'])),
+                $this->isCallable(),
+            );
+
+        $ctx = $this->makeContext(ui: $ui, orchestrator: $orchestrator, llm: $llm, sessionManager: $sessionManager);
 
         $result = $this->command->execute('', $ctx);
 
@@ -640,12 +677,13 @@ class AgentsCommandTest extends TestCase
         ?UIManager $ui = null,
         ?SubagentOrchestrator $orchestrator = null,
         ?LlmClientInterface $llm = null,
+        ?SessionManager $sessionManager = null,
     ): SlashCommandContext {
         return new SlashCommandContext(
             ui: $ui ?? $this->createStub(UIManager::class),
             agentLoop: $this->createStub(AgentLoop::class),
             permissions: $this->createStub(PermissionEvaluator::class),
-            sessionManager: $this->createStub(SessionManager::class),
+            sessionManager: $sessionManager ?? $this->createStub(SessionManager::class),
             llm: $llm ?? $this->createStub(LlmClientInterface::class),
             taskStore: $this->createStub(TaskStore::class),
             config: $this->createStub(Repository::class),

@@ -5,15 +5,21 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Integration\IntegrationCapabilityResolver;
 use Kosmokrator\Integration\IntegrationManager;
 use Kosmokrator\Integration\KosmokratorFileStorage;
 use Kosmokrator\Integration\KosmokratorLuaToolInvoker;
+use Kosmokrator\Integration\Runtime\IntegrationArgumentMapper;
+use Kosmokrator\Integration\Runtime\IntegrationCatalog;
+use Kosmokrator\Integration\Runtime\IntegrationDocService;
+use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Integration\YamlCredentialResolver;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\LuaSandboxService;
 use Kosmokrator\Lua\NativeToolBridge;
+use Kosmokrator\Mcp\McpCatalog;
+use Kosmokrator\Mcp\McpPermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
-use Lua\Sandbox;
 use OpenCompany\IntegrationCore\Contracts\AgentFileStorage;
 use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
 use OpenCompany\IntegrationCore\Contracts\LuaToolInvoker;
@@ -61,10 +67,8 @@ class IntegrationServiceProvider extends ServiceProvider
         // File storage for rendering integrations (mermaid, plantuml, etc.)
         $this->container->singleton(AgentFileStorage::class, KosmokratorFileStorage::class);
 
-        // Lua sandbox (only functional if the Lua extension is loaded)
-        if (class_exists(Sandbox::class)) {
-            $this->container->singleton(LuaSandboxService::class);
-        }
+        // Lua sandbox (execute fails later if the Lua extension is unavailable).
+        $this->container->singleton(LuaSandboxService::class);
 
         // Lua doc rendering pipeline
         $this->container->singleton(LuaCatalogBuilder::class);
@@ -76,14 +80,22 @@ class IntegrationServiceProvider extends ServiceProvider
                 catalogBuilder: $c->make(LuaCatalogBuilder::class),
                 docRenderer: $c->make(LuaDocRenderer::class),
                 nativeToolBridge: new NativeToolBridge(fn () => $c->make(ToolRegistry::class)),
+                mcpCatalog: $c->bound(McpCatalog::class) ? $c->make(McpCatalog::class) : null,
+                mcpPermissions: $c->bound(McpPermissionEvaluator::class) ? $c->make(McpPermissionEvaluator::class) : null,
             );
         });
 
         // Integration manager — orchestrates providers, credentials, permissions
+        $this->container->singleton(IntegrationCapabilityResolver::class);
         $this->container->singleton(IntegrationManager::class);
+
+        $this->container->singleton(IntegrationCatalog::class);
+        $this->container->singleton(IntegrationArgumentMapper::class);
+        $this->container->singleton(IntegrationDocService::class);
 
         // Lua tool invoker — bridges LuaBridge calls to integration Tool::execute()
         $this->container->singleton(LuaToolInvoker::class, KosmokratorLuaToolInvoker::class);
+        $this->container->singleton(IntegrationRuntime::class);
     }
 
     public function boot(): void

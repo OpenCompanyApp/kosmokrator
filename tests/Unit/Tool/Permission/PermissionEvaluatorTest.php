@@ -531,7 +531,7 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertStringContainsString('outside the project root', $result->reason);
     }
 
-    public function test_session_grant_bypasses_boundary(): void
+    public function test_session_grant_does_not_bypass_boundary(): void
     {
         $projectRoot = realpath(getcwd());
         $rules = [
@@ -549,9 +549,10 @@ class PermissionEvaluatorTest extends TestCase
         $evaluator->setPermissionMode(PermissionMode::Guardian);
         $evaluator->grantSession('file_write');
 
-        // Session grant runs before boundary → Allow
+        // Session grant is broad by tool name, so boundary must run before it.
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
-        $this->assertSame(PermissionAction::Allow, $result->action);
+        $this->assertSame(PermissionAction::Ask, $result->action);
+        $this->assertStringContainsString('outside the project root', $result->reason);
     }
 
     public function test_boundary_allows_within_project(): void

@@ -34,6 +34,20 @@ class SubagentStatsTest extends TestCase
         $this->assertSame(130, $stats->tokensOut);
     }
 
+    public function test_message_preview_is_normalized_and_truncated(): void
+    {
+        $stats = new SubagentStats('x');
+
+        $stats->markMessagePreview("  First line\n\nSecond\tline  ".str_repeat('a', 140));
+
+        $this->assertStringStartsWith('First line Second line ', $stats->lastMessagePreview);
+        $this->assertSame(120, strlen($stats->lastMessagePreview));
+        $this->assertStringEndsWith('...', $stats->lastMessagePreview);
+
+        $stats->markMessagePreview(" \n\t ");
+        $this->assertNull($stats->lastMessagePreview);
+    }
+
     public function test_elapsed_zero_when_not_started(): void
     {
         $stats = new SubagentStats('x');

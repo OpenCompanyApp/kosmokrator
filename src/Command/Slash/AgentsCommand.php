@@ -53,6 +53,15 @@ class AgentsCommand implements SlashCommand
         }
 
         $allStats = $orchestrator->allStats();
+        $staleSnapshot = false;
+        if ($allStats === []) {
+            $sessionId = $ctx->sessionManager->currentSessionId();
+            $allStats = $sessionId !== null
+                ? ($ctx->sessionManager->swarmMetadata()?->latestForSession($sessionId) ?? [])
+                : [];
+            $staleSnapshot = $allStats !== [];
+        }
+
         if ($allStats === []) {
             $ctx->ui->showNotice('No agents have been spawned yet.');
 
@@ -60,13 +69,21 @@ class AgentsCommand implements SlashCommand
         }
 
         $model = $ctx->llm->getModel();
-        $summary = self::buildSummary($allStats, $ctx->models, $model);
+        $summary = self::buildSummary($allStats, $ctx->models, $model, $staleSnapshot);
 
         $refresh = function () use ($orchestrator, $ctx, $model) {
             $stats = $orchestrator->allStats();
+            $stale = false;
+            if ($stats === []) {
+                $sessionId = $ctx->sessionManager->currentSessionId();
+                $stats = $sessionId !== null
+                    ? ($ctx->sessionManager->swarmMetadata()?->latestForSession($sessionId) ?? [])
+                    : [];
+                $stale = $stats !== [];
+            }
 
             return [
-                'summary' => self::buildSummary($stats, $ctx->models, $model),
+                'summary' => self::buildSummary($stats, $ctx->models, $model, $stale),
                 'stats' => $stats,
             ];
         };
@@ -82,7 +99,7 @@ class AgentsCommand implements SlashCommand
      * @param  array<string, SubagentStats>  $stats
      * @return array<string, mixed>
      */
-    public static function buildSummary(array $stats, ?ModelCatalog $models, string $model): array
+    public static function buildSummary(array $stats, ?ModelCatalog $models, string $model, bool $stale = false): array
     {
         $done = $running = $queued = $failed = $cancelled = $retrying = 0;
         $totalIn = $totalOut = $totalTools = $totalRetries = 0;
@@ -178,6 +195,7 @@ class AgentsCommand implements SlashCommand
             'failures' => $failures,
             'byType' => $byType,
             'model' => $model,
+            'stale' => $stale,
         ];
     }
 }

@@ -111,7 +111,9 @@ class PrismService implements LlmClientInterface
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
+        $cancellation?->throwIfRequested();
         $response = $this->text($messages, $tools);
+        $cancellation?->throwIfRequested();
 
         // Extract reasoning/thinking content from Prism's additionalContent
         $reasoningContent = '';
@@ -145,7 +147,8 @@ class PrismService implements LlmClientInterface
      */
     public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
     {
-        return (function () use ($messages, $tools): \Generator {
+        return (function () use ($messages, $tools, $cancellation): \Generator {
+            $cancellation?->throwIfRequested();
             $this->relay->beforeRequest($this->provider, $this->model);
 
             $reasoningBuffer = '';
@@ -153,6 +156,8 @@ class PrismService implements LlmClientInterface
             try {
                 /** @var StreamEvent $event */
                 foreach ($this->buildRequest($messages, $tools)->asStream() as $event) {
+                    $cancellation?->throwIfRequested();
+
                     if ($event instanceof TextDeltaEvent) {
                         // Flush accumulated reasoning before text starts
                         if ($reasoningBuffer !== '') {
@@ -243,6 +248,7 @@ class PrismService implements LlmClientInterface
             model: $this->model,
             systemPrompts: PromptFrameBuilder::splitSystemPrompt($this->systemPrompt),
             messages: $messages,
+            tools: $tools,
         );
 
         $request = (new Prism)->text()
@@ -259,8 +265,8 @@ class PrismService implements LlmClientInterface
             $request->usingTemperature($this->temperature);
         }
 
-        if (! empty($tools)) {
-            $request->withTools($tools);
+        if (! empty($cachePlan->tools)) {
+            $request->withTools($cachePlan->tools);
         }
 
         return $request;

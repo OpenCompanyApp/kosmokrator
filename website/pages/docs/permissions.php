@@ -17,7 +17,8 @@ ob_start();
 <p>
     Every KosmoKrator session operates in one of three permission modes. The mode
     determines how the agent handles tool calls that require approval &mdash;
-    whether it asks the user, auto-approves via heuristics, or runs unrestricted.
+    whether it asks the user, auto-approves via heuristics, or auto-approves
+    governed prompts while still enforcing hard denies.
 </p>
 
 <h3 id="guardian">Guardian (Default)</h3>
@@ -63,15 +64,15 @@ ob_start();
 <h3 id="prometheus">Prometheus</h3>
 
 <p>
-    Prometheus mode auto-approves everything. The agent executes all tool calls
-    without pausing for user confirmation, providing maximum speed and autonomy.
-    Explicit deny rules and blocked paths are still enforced &mdash; Prometheus
-    removes the "ask" step, not the safety rails.
+    Prometheus mode auto-approves governed tool calls that would otherwise ask.
+    The agent executes without pausing for user confirmation, providing maximum
+    speed and autonomy. Explicit deny rules and blocked paths are still enforced
+    &mdash; Prometheus removes the "ask" step, not the safety rails.
 </p>
 
 <ul>
     <li><strong>Symbol:</strong> <code>&#x26A1;</code> (lightning)</li>
-    <li>Unrestricted execution, no approval prompts</li>
+    <li>No approval prompts for governed tool calls</li>
     <li>Maximum speed and autonomy</li>
     <li>Blocked paths and explicit deny rules still enforced</li>
     <li>Project boundary check is bypassed</li>
@@ -166,12 +167,6 @@ ob_start();
         unconditional deny that overrides even Prometheus mode.
     </li>
     <li>
-        <strong>Session Grant Check</strong> &mdash; Checks whether the user
-        has previously approved this tool for the current session. If so,
-        the call is allowed without prompting. Session grants are per-tool
-        (not per-path or per-command).
-    </li>
-    <li>
         <strong>Project Boundary Check</strong> &mdash; For file tools
         (<code>file_write</code>, <code>file_edit</code>, <code>file_read</code>,
         <code>glob</code>, <code>grep</code>), checks whether the target path
@@ -181,6 +176,13 @@ ob_start();
         to both read and write tools &mdash; even <code>file_read</code>,
         <code>glob</code>, and <code>grep</code> trigger a prompt when
         accessing files outside the project root.
+    </li>
+    <li>
+        <strong>Session Grant Check</strong> &mdash; Checks whether the user
+        has previously approved this tool for the current session. If so,
+        the call is allowed without prompting. Session grants are per-tool
+        (not per-path or per-command) and do not bypass blocked paths, deny
+        patterns, or project boundary checks.
     </li>
     <li>
         <strong>Rule Check</strong> &mdash; Matches against the permission
@@ -223,6 +225,45 @@ ob_start();
 </div>
 
 <!-- ------------------------------------------------------------------ -->
+<h2 id="mcp-and-integrations">MCP And Integration Permissions</h2>
+
+<p>
+    Headless integrations and MCP servers have their own read/write policies in addition to native
+    tool permissions. This keeps external API calls governed even when they are invoked from
+    <code>integrations:call</code>, <code>mcp:call</code>, <code>integrations:lua</code>,
+    <code>mcp:lua</code>, or agent-side <code>execute_lua</code>.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Surface</th>
+            <th>Policy Keys</th>
+            <th>Force Behavior</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Integrations</td>
+            <td><code>integrations.permissions_default</code> and provider/account read/write config</td>
+            <td><code>--force</code> bypasses integration read/write policy for the one headless call.</td>
+        </tr>
+        <tr>
+            <td>MCP</td>
+            <td><code>mcp.permissions_default</code>, <code>mcp.servers.SERVER.permissions.read</code>, <code>.write</code>, and <code>mcp.trust.SERVER.fingerprint</code></td>
+            <td><code>--force</code> bypasses MCP project trust and MCP read/write policy for the one headless call.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>
+    In pure headless mode, <code>ask</code> cannot open an approval modal. Configure the relevant
+    operation as <code>allow</code> or run trusted automation with <code>--force</code>. MCP tools
+    marked with MCP <code>readOnlyHint</code> are treated as read operations; other MCP tools are
+    conservatively treated as write operations.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
 <h2 id="guardian-heuristics">Guardian Heuristics</h2>
 
 <p>
@@ -248,8 +289,9 @@ ob_start();
     <li><code>task_create</code>, <code>task_update</code>, <code>task_list</code>, <code>task_get</code> &mdash; Task management</li>
     <li><code>shell_read</code>, <code>shell_kill</code> &mdash; Reading shell output and killing sessions</li>
     <li><code>memory_save</code>, <code>memory_search</code> &mdash; Persistent memory operations</li>
+    <li><code>session_search</code>, <code>session_read</code> &mdash; Prior session discovery and transcript reads</li>
     <li><code>lua_list_docs</code>, <code>lua_search_docs</code>, <code>lua_read_doc</code> &mdash; Lua API documentation</li>
-    <li><code>execute_lua</code> &mdash; Lua script execution (inner integration permissions enforce per-tool granularity)</li>
+    <li><code>execute_lua</code> &mdash; Lua script execution (inner integration and MCP permissions enforce per-call granularity)</li>
 </ul>
 
 <h3 id="file-operation-heuristics">File Operation Heuristics</h3>
@@ -264,7 +306,7 @@ ob_start();
 <ul>
     <li><code>file_write</code> &mdash; Auto-approved if the path is inside the project root</li>
     <li><code>file_edit</code> &mdash; Auto-approved if the path is inside the project root</li>
-    <li>Paths outside the project &mdash; Always ask, regardless of mode</li>
+    <li>Paths outside the project &mdash; Ask in Guardian/Argus unless covered by <code>allowed_paths</code>; Prometheus bypasses this boundary prompt, but blocked paths still deny</li>
 </ul>
 
 <h3 id="safe-bash-commands">Safe Bash Commands</h3>
@@ -665,8 +707,9 @@ ob_start();
     <p>
         <strong>Tip:</strong> Safe command patterns only apply in Guardian
         mode. In Argus mode, every Ask-ruled tool call asks regardless of
-        the safe list. In Prometheus mode, everything is auto-approved
-        regardless of the safe list.
+        the safe list. In Prometheus mode, Ask-ruled tool calls are
+        auto-approved regardless of the safe list, while hard denies still
+        apply.
     </p>
 </div>
 

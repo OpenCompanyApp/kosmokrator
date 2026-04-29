@@ -72,6 +72,65 @@ audio:
     <p><strong>Tip:</strong> Settings saved via <code>/settings</code> are written to your YAML config files, using the same priority chain as manual edits. To revert a runtime setting, clear it in <code>/settings</code> and the bundled defaults take over again.</p>
 </div>
 
+<h3 id="headless-settings-cli">Headless Settings CLI</h3>
+
+<p>
+    Every setting exposed in <code>/settings</code> is also available from a non-interactive shell API.
+    This is the preferred surface for CI images, bootstrap scripts, remote servers, and other coding
+    agents that need to configure KosmoKrator without a TUI.
+</p>
+
+<pre><code># Discover categories, keys, current values, sources, effects, and YAML paths
+kosmokrator settings:list --json
+kosmokrator settings:list --category permissions --json
+
+# Inspect one setting and enumerate valid options
+kosmokrator settings:get agent.default_provider --json
+kosmokrator settings:options agent.default_provider --json
+kosmokrator settings:options agent.default_model --provider openai --json
+
+# Write one value to global or project config
+kosmokrator settings:set agent.mode plan --global --json
+kosmokrator settings:set tools.denied_tools "bash,file_write" --project --json
+kosmokrator settings:set agent.default_model gpt-5.4-mini --provider openai --global --json
+
+# Apply multiple settings atomically from JSON
+jq -n '{
+  scope: "global",
+  settings: {
+    "agent.default_provider": "openai",
+    "agent.default_model": "gpt-5.4-mini",
+    "tools.default_permission_mode": "guardian"
+  }
+}' | kosmokrator settings:apply --stdin-json --json
+
+# Remove an override so lower-priority config/defaults take over
+kosmokrator settings:unset agent.mode --project --json
+
+# Diagnose whether headless runs are ready
+kosmokrator settings:doctor --json
+kosmokrator settings:examples --json</code></pre>
+
+<p>
+    Write responses include both the value written to the requested scope and the effective value
+    after the normal project/global/default priority chain is applied. This matters when, for
+    example, a global write is masked by a project override.
+</p>
+
+<p>
+    Values are parsed by setting type: toggles accept <code>on</code>/<code>off</code>,
+    <code>true</code>/<code>false</code>, or <code>1</code>/<code>0</code>; list settings accept comma,
+    newline, or JSON-array input; JSON/YAML settings are parsed structurally instead of by string
+    splitting. Machine-readable commands return the resolved value, display value, source
+    (<code>default</code>, <code>global</code>, or <code>project</code>), effect timing, and valid options.
+</p>
+
+<div class="tip">
+    <p><strong>Secrets:</strong> API keys and tokens are not written through <code>settings:set</code>.
+    Use <code>providers:configure</code>, <code>secrets:set</code>, or the gateway-specific configure
+    command so secret values stay in the managed secret store and are only reported as masked status.</p>
+</div>
+
 <!-- ================================================================== -->
 <h2 id="settings-categories">Settings Reference</h2>
 
@@ -336,6 +395,76 @@ audio:
             </td>
             <td>applies now</td>
         </tr>
+        <tr>
+            <td><code>tools.denied_tools</code></td>
+            <td>list</td>
+            <td><em>empty</em></td>
+            <td>Tool names that are always blocked, regardless of permission mode.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.safe_tools</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Tool names treated as safe under Guardian-style policy.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.approval_required</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Tool names that require approval unless the active policy bypasses prompts.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.blocked_paths</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Glob patterns blocked for file-reading and file-writing tools.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.allowed_paths</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Paths exempt from blocked path rules.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.guardian_safe_commands</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Shell command patterns auto-approved in Guardian mode.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.bash.timeout</code></td>
+            <td>number</td>
+            <td><code>120</code></td>
+            <td>Default timeout, in seconds, for bash tool calls.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.bash.blocked_commands</code></td>
+            <td>list</td>
+            <td><em>configured defaults</em></td>
+            <td>Shell command patterns blocked before execution.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.shell.wait_ms</code></td>
+            <td>number</td>
+            <td><code>100</code></td>
+            <td>Polling interval for persistent shell sessions.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>tools.shell.idle_ttl</code></td>
+            <td>number</td>
+            <td><code>300</code></td>
+            <td>Idle timeout, in seconds, before persistent shell sessions are cleaned up.</td>
+            <td>next session</td>
+        </tr>
     </tbody>
 </table>
 
@@ -343,7 +472,7 @@ audio:
 <h3 id="integrations">Integrations</h3>
 
 <p>
-    KosmoKrator discovers installed OpenCompany integration packages from your <code>composer.lock</code>. Current packages may use either the newer <code>opencompanyapp/integration-*</code> prefix or the legacy <code>opencompanyapp/ai-tool-*</code> prefix. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category.
+    KosmoKrator discovers installed OpenCompany integration packages from your <code>composer.lock</code>. Current packages may use either the newer <code>opencompanyapp/integration-*</code> prefix or the legacy <code>opencompanyapp/ai-tool-*</code> prefix. Each integration exposes Lua-callable API functions via <code>app.integrations.{name}</code> and headless shell commands via <code>kosmokrator integrations:*</code>. Integration settings are managed at runtime through <code>/settings</code> under the <strong>Integrations</strong> category. See <a href="/docs/integrations">Integrations CLI</a> for the full headless command and Lua reference.
 </p>
 
 <table>
@@ -373,6 +502,188 @@ audio:
         </tr>
     </tbody>
 </table>
+
+<!-- ---------------------------------------- MCP ---------------------------------------- -->
+<h3 id="mcp">MCP</h3>
+
+<p>
+    MCP server definitions intentionally live in JSON so projects can share config with other
+    coding agents. KosmoKrator reads global <code>~/.kosmokrator/mcp.json</code>, project
+    <code>.vscode/mcp.json</code>, project <code>.cursor/mcp.json</code>, and project
+    <code>.mcp.json</code>. The portable shape is a top-level <code>mcpServers</code> object;
+    VS Code/Cursor compatibility files may use top-level <code>servers</code>.
+</p>
+
+<pre><code>{
+  "mcpServers": {
+    "github": {
+      "command": "github-mcp-server",
+      "args": [],
+      "env": {
+        "GITHUB_TOKEN": "${KOSMO_SECRET:mcp.github.env.GITHUB_TOKEN}"
+      }
+    }
+  }
+}</code></pre>
+
+<p>
+    Kosmo-only policy stays in YAML config because trust and permissions should not be committed
+    into a shared portable MCP file unless the project intentionally owns that policy.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>mcp.permissions_default</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><code>ask</code></td>
+            <td>Default read/write policy for MCP tool operations not explicitly configured.</td>
+            <td>applies now</td>
+        </tr>
+        <tr>
+            <td><code>mcp.servers.SERVER.permissions.read</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><em>inherits default</em></td>
+            <td>Read policy for one MCP server. Also applies to resources and prompts.</td>
+            <td>applies now</td>
+        </tr>
+        <tr>
+            <td><code>mcp.servers.SERVER.permissions.write</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><em>inherits default</em></td>
+            <td>Write policy for one MCP server. Tools without MCP <code>readOnlyHint</code> are treated as write.</td>
+            <td>applies now</td>
+        </tr>
+        <tr>
+            <td><code>mcp.trust.SERVER.fingerprint</code></td>
+            <td>string</td>
+            <td><em>unset</em></td>
+            <td>Fingerprint written by <code>mcp:trust</code> after reviewing a project MCP command.</td>
+            <td>applies now</td>
+        </tr>
+    </tbody>
+</table>
+
+<pre><code>mcp:
+  permissions_default: ask
+  servers:
+    github:
+      permissions:
+        read: allow
+        write: ask</code></pre>
+
+<p>
+    Configure headlessly with <code>mcp:add</code>, <code>mcp:trust</code>,
+    <code>mcp:secret:set</code>, and <code>settings:set</code>. See
+    <a href="/docs/mcp">MCP</a> for the full command reference.
+</p>
+
+<!-- ---------------------------------------- Web ---------------------------------------- -->
+<h3 id="web">Web</h3>
+
+<p>
+    Optional external web providers are configured under <code>web.*</code>. They are not default-on:
+    native <code>web_fetch</code> remains the normal fetch path, while <code>web_search</code>,
+    <code>web_fetch_external</code>, <code>web_extract</code>, and <code>web_crawl</code> require
+    explicit provider enablement.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>web.search.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable the optional <code>web_search</code> tool.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.search.provider</code></td>
+            <td>choice</td>
+            <td><em>unset</em></td>
+            <td>Default search provider: Tavily, Firecrawl, Exa, Brave, Parallel, Jina, SearXNG, Perplexity, OpenAI native, or Anthropic native.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.fetch.provider</code></td>
+            <td>choice</td>
+            <td><code>native</code></td>
+            <td>Default fetch provider. Keep <code>native</code> for built-in web fetch; select an external provider for <code>web_fetch_external</code>.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.fetch.allow_external</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Allow external extract/fetch tools. These tools still require approval by default.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.crawl.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable <code>web_crawl</code>.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.crawl.provider</code></td>
+            <td>choice</td>
+            <td><em>unset</em></td>
+            <td>Default crawl provider, currently Tavily or Firecrawl.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.providers.PROVIDER.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable one provider. API keys can come from managed settings, provider-specific env vars, or provider config.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.providers.searxng.base_url</code></td>
+            <td>string</td>
+            <td><em>unset</em></td>
+            <td>Base URL for a trusted SearXNG instance.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.native.mode</code></td>
+            <td>choice: <code>cached</code>, <code>live</code></td>
+            <td><code>cached</code></td>
+            <td>Provider-native search hint for OpenAI and Anthropic adapters.</td>
+            <td>next session</td>
+        </tr>
+    </tbody>
+</table>
+
+<pre><code># Enable Tavily search globally without putting a key in YAML
+kosmokrator web:configure tavily --api-key-env=TAVILY_API_KEY \
+  --enable --search --global --json
+
+# Enable Firecrawl extract/fetch for one project
+kosmokrator web:configure firecrawl --api-key-env=FIRECRAWL_API_KEY \
+  --enable --fetch --project --json
+
+# Diagnose the effective web setup
+kosmokrator web:doctor --json</code></pre>
 
 <!-- ---------------------------------------- Gateway ---------------------------------------- -->
 <h3 id="gateway">Gateway</h3>
@@ -567,6 +878,20 @@ audio:
             <td>number</td>
             <td><code>20000</code></td>
             <td>Minimum token savings required for a prune pass to be accepted. Prevents thrashing from tiny, repeated prune operations.</td>
+            <td>next turn</td>
+        </tr>
+        <tr>
+            <td><code>context.max_output_lines</code></td>
+            <td>number</td>
+            <td><code>2000</code></td>
+            <td>Maximum lines retained from tool output before truncation.</td>
+            <td>next turn</td>
+        </tr>
+        <tr>
+            <td><code>context.max_output_bytes</code></td>
+            <td>number</td>
+            <td><code>50000</code></td>
+            <td>Maximum bytes retained from tool output before truncation.</td>
             <td>next turn</td>
         </tr>
     </tbody>
@@ -897,6 +1222,14 @@ codex:
 
 integrations:
   permissions_default: ask    # allow | ask | deny (default for integration ops)
+
+mcp:
+  permissions_default: ask    # allow | ask | deny (default for MCP ops)
+  servers:
+    github:
+      permissions:
+        read: allow
+        write: ask
 
 tools:
   approval_required:          # Tools requiring explicit approval

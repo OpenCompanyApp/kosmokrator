@@ -11,9 +11,12 @@ ob_start();
 </p>
 
 <div class="tip">
-    Tools requiring approval (file_write, file_edit, bash) depend on your
-    <a href="/docs/permissions">permission mode</a>. In <strong>Prometheus</strong> mode all tools
-    run without prompts; in <strong>Guardian</strong> mode most writes require explicit approval.
+    Tools requiring approval (<code>file_write</code>, <code>file_edit</code>,
+    <code>apply_patch</code>, <code>bash</code>, <code>shell_start</code>,
+    <code>shell_write</code>, and <code>execute_lua</code>) depend on your
+    <a href="/docs/permissions">permission mode</a>. In <strong>Prometheus</strong>
+    mode governed prompts are auto-approved, but blocked paths and explicit deny
+    rules are still enforced.
 </div>
 
 <!-- ================================================================== -->
@@ -302,6 +305,74 @@ ob_start();
     <code>glob</code> to discover which files exist, then <code>grep</code> to find specific
     patterns inside them.
 </div>
+
+<!-- ================================================================== -->
+<h2 id="web">Web</h2>
+<!-- ================================================================== -->
+
+<p>
+    KosmoKrator keeps native <code>web_fetch</code> separate from optional external web providers.
+    External search, extract, and crawl tools are disabled by default and only run after you enable
+    the related <code>web.*</code> settings or configure a provider with <code>web:configure</code>.
+</p>
+
+<h3 id="web_search">web_search</h3>
+
+<p>
+    Search the web through Tavily, Firecrawl, Exa, Brave Search, Parallel, Jina, SearXNG,
+    Perplexity, OpenAI native web search, or Anthropic native web search.
+</p>
+
+<table>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+        <tr><td><code>query</code></td><td>string</td><td>Yes</td><td>Search query.</td></tr>
+        <tr><td><code>provider</code></td><td>enum</td><td>No</td><td>Override <code>web.search.provider</code>.</td></tr>
+        <tr><td><code>max_results</code></td><td>int</td><td>No</td><td>Defaults to <code>web.search.max_results</code>.</td></tr>
+        <tr><td><code>mode</code></td><td>enum</td><td>No</td><td>Provider hint such as <code>fast</code>, <code>deep</code>, <code>cached</code>, or <code>live</code>.</td></tr>
+        <tr><td><code>allowed_domains</code>, <code>blocked_domains</code></td><td>array</td><td>No</td><td>Domain filters when supported.</td></tr>
+    </tbody>
+</table>
+
+<pre><code>web_search query="Symfony TUI latest release" provider="tavily" max_results=5</code></pre>
+
+<h3 id="web_fetch_external">web_fetch_external / web_extract</h3>
+
+<p>
+    Fetch or extract a specific URL through an external provider. This does not replace native
+    <code>web_fetch</code>; native fetch remains the default for providers that expose it directly.
+    External fetch is approval-gated by default.
+</p>
+
+<table>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+        <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>URL to fetch.</td></tr>
+        <tr><td><code>provider</code></td><td>enum</td><td>No</td><td>Override <code>web.fetch.provider</code>.</td></tr>
+        <tr><td><code>format</code></td><td>enum</td><td>No</td><td><code>markdown</code>, <code>text</code>, or <code>html</code>.</td></tr>
+    </tbody>
+</table>
+
+<pre><code>web_fetch_external url="https://symfony.com/blog/" provider="firecrawl" format="markdown"</code></pre>
+
+<h3 id="web_crawl">web_crawl</h3>
+
+<p>
+    Crawl multiple pages from a site with Tavily or Firecrawl. Crawling is disabled by default
+    and approval-gated because it can expand one user request into many external fetches.
+</p>
+
+<table>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+        <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>Starting URL.</td></tr>
+        <tr><td><code>provider</code></td><td>enum</td><td>No</td><td>Override <code>web.crawl.provider</code>.</td></tr>
+        <tr><td><code>max_pages</code></td><td>int</td><td>No</td><td>Defaults to <code>web.crawl.max_pages</code>.</td></tr>
+        <tr><td><code>instructions</code></td><td>string</td><td>No</td><td>Optional provider-specific crawl instructions.</td></tr>
+    </tbody>
+</table>
+
+<pre><code>web_crawl url="https://docs.example.com" provider="tavily" max_pages=10</code></pre>
 
 
 <!-- ================================================================== -->
@@ -722,6 +793,93 @@ subagent task="Design a unified event system based on the auth, payment, and not
 
 
 <!-- ================================================================== -->
+<h2 id="session-history">Session History</h2>
+<!-- ================================================================== -->
+
+<p>
+    Session tools let the agent browse and search prior KosmoKrator conversations
+    for the current project. They are useful when a user refers to earlier work,
+    asks what happened last time, or wants the agent to reuse decisions from a
+    previous session.
+</p>
+
+<h3 id="session_search">session_search</h3>
+
+<p>
+    Browse recent sessions or search across saved session history. With no query,
+    it returns recent sessions with IDs, titles, dates, message counts, and a
+    preview. With a query, it performs keyword search and groups matches by
+    session.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>query</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td>Search terms, exact phrases in quotes, or file paths. Omit to browse recent sessions.</td>
+        </tr>
+        <tr>
+            <td><code>limit</code></td>
+            <td>integer</td>
+            <td>No</td>
+            <td>Maximum number of sessions or search groups to return. Defaults to 5, max 10.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p><strong>Example:</strong> Find previous work on authentication:</p>
+<pre><code>session_search query="authentication middleware" limit=5</code></pre>
+
+<!-- ------------------------------------------------------------------ -->
+
+<h3 id="session_read">session_read</h3>
+
+<p>
+    Load a prior session transcript by full ID or unique prefix. Use this after
+    <code>session_search</code> when the agent needs the detailed context from a
+    specific past conversation.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>session_id</code></td>
+            <td>string</td>
+            <td>Yes</td>
+            <td>Session ID or unique prefix. <code>session_search</code> shows short prefixes in brackets.</td>
+        </tr>
+        <tr>
+            <td><code>limit</code></td>
+            <td>integer</td>
+            <td>No</td>
+            <td>Maximum messages to return. Defaults to 50, max 200.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p><strong>Example:</strong> Read a matching session:</p>
+<pre><code>session_read session_id="a1b2c3d4" limit=80</code></pre>
+
+
+<!-- ================================================================== -->
 <h2 id="tasks">Tasks</h2>
 <!-- ================================================================== -->
 
@@ -934,7 +1092,7 @@ subagent task="Design a unified event system based on the auth, payment, and not
 
 <div class="tip">
     For the full Lua model &mdash; host-side Lua tools, <code>app.integrations.*</code>,
-    <code>app.tools.*</code>, multi-account namespaces, and discovery workflow &mdash; see
+    <code>app.mcp.*</code>, <code>app.tools.*</code>, multi-account namespaces, and discovery workflow &mdash; see
     <a href="/docs/lua">Lua</a>.
 </div>
 
@@ -942,8 +1100,9 @@ subagent task="Design a unified event system based on the auth, payment, and not
 
 <p>
     Execute Lua code with <code>app.*</code> namespace access. Use <code>app.integrations.*</code>
-    for API calls, <code>app.tools.*</code> for native tools (file_read, glob, grep, bash, subagent,
-    etc.). Always use <code>lua_read_doc</code> first to look up function names and parameters. Use
+    for OpenCompany integration calls, <code>app.mcp.*</code> for configured MCP server calls, and
+    <code>app.tools.*</code> for native tools (file_read, glob, grep, bash, subagent, etc.). Always
+    use <code>lua_read_doc</code> first to look up function names and parameters. Use
     <code>print()</code> or <code>dump()</code> for output.
 </p>
 
@@ -963,7 +1122,8 @@ subagent task="Design a unified event system based on the auth, payment, and not
             <td>Yes</td>
             <td>
                 Lua code to execute. Use <code>print()</code>/<code>dump()</code> for output.
-                Access integrations via <code>app.integrations.{name}.{function}()</code>.
+                Access integrations via <code>app.integrations.{name}.{function}()</code> and MCP
+                tools via <code>app.mcp.{server}.{tool}()</code>.
             </td>
         </tr>
         <tr>
@@ -985,14 +1145,19 @@ subagent task="Design a unified event system based on the auth, payment, and not
 <pre><code>execute_lua code="local stats = app.integrations.plausible.query_stats({site_id='example.com'})
 print(stats.visitors)"</code></pre>
 
+<p><strong>Example:</strong> Call an MCP server tool from Lua:</p>
+<pre><code>lua_read_doc page="mcp.github"
+execute_lua code="local repos = app.mcp.github.search_repositories({query='kosmokrator'})
+dump(repos)"</code></pre>
+
 <!-- ------------------------------------------------------------------ -->
 
 <h3 id="lua_list_docs">lua_list_docs</h3>
 
 <p>
     List available Lua API namespaces and functions. Each namespace maps to an integration
-    (plausible, coingecko, celestial, etc.). Shows function signatures with parameter names.
-    Use this first to discover what integrations are available.
+    (plausible, coingecko, celestial, etc.), MCP server, or native Lua tool namespace. Shows
+    function signatures with parameter names. Use this first to discover what is available.
 </p>
 
 <table>
@@ -1009,7 +1174,7 @@ print(stats.visitors)"</code></pre>
             <td><code>namespace</code></td>
             <td>string</td>
             <td>No</td>
-            <td>Filter to a specific namespace (e.g. <code>"integrations.plausible"</code>). Omit to list all.</td>
+            <td>Filter to a specific namespace (e.g. <code>"integrations.plausible"</code> or <code>"mcp.github"</code>). Omit to list all.</td>
         </tr>
     </tbody>
 </table>
@@ -1019,6 +1184,9 @@ print(stats.visitors)"</code></pre>
 
 <p><strong>Example:</strong> Show functions in a specific integration:</p>
 <pre><code>lua_list_docs namespace="integrations.plausible"</code></pre>
+
+<p><strong>Example:</strong> Show functions in a specific MCP server:</p>
+<pre><code>lua_list_docs namespace="mcp.github"</code></pre>
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -1066,8 +1234,8 @@ print(stats.visitors)"</code></pre>
 </p>
 
 <ul>
-    <li><strong>Namespace</strong> (e.g. <code>"integrations.plausible"</code>) &rarr; full API reference with all functions and parameters</li>
-    <li><strong>Function</strong> (e.g. <code>"integrations.plausible.query_stats"</code>) &rarr; detailed single-function docs</li>
+    <li><strong>Namespace</strong> (e.g. <code>"integrations.plausible"</code> or <code>"mcp.github"</code>) &rarr; full API reference with all functions and parameters</li>
+    <li><strong>Function</strong> (e.g. <code>"integrations.plausible.query_stats"</code> or <code>"mcp.github.search_repositories"</code>) &rarr; detailed single-function docs</li>
     <li><strong>Guide</strong> (e.g. <code>"overview"</code>, <code>"examples"</code>) &rarr; supplementary documentation</li>
 </ul>
 
@@ -1091,7 +1259,7 @@ print(stats.visitors)"</code></pre>
             <td>Yes</td>
             <td>
                 Page to read: namespace (e.g. <code>"integrations.plausible"</code>), function path
-                (e.g. <code>"integrations.plausible.query_stats"</code>), or guide name
+                (e.g. <code>"integrations.plausible.query_stats"</code> or <code>"mcp.github.search_repositories"</code>), or guide name
                 (e.g. <code>"overview"</code>, <code>"examples"</code>).
             </td>
         </tr>
@@ -1100,6 +1268,9 @@ print(stats.visitors)"</code></pre>
 
 <p><strong>Example:</strong></p>
 <pre><code>lua_read_doc page="integrations.plausible.query_stats"</code></pre>
+
+<p><strong>Example:</strong></p>
+<pre><code>lua_read_doc page="mcp.github.search_repositories"</code></pre>
 
 
 <!-- ================================================================== -->

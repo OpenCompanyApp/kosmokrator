@@ -126,19 +126,19 @@ ob_start();
     <tbody>
         <tr>
             <td><strong>General</strong></td>
-            <td>file_read, file_write, file_edit, apply_patch, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, memory_save, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
+            <td>file_read, file_write, file_edit, apply_patch, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, session_search, session_read, memory_save, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
             <td>General, Explore, Plan</td>
             <td>Autonomous coding tasks</td>
         </tr>
         <tr>
             <td><strong>Explore</strong></td>
-            <td>file_read, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
+            <td>file_read, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, session_search, session_read, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
             <td>Explore only</td>
             <td>Research and investigation</td>
         </tr>
         <tr>
             <td><strong>Plan</strong></td>
-            <td>file_read, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
+            <td>file_read, glob, grep, bash, shell_start, shell_write, shell_read, shell_kill, subagent, memory_search, session_search, session_read, lua_list_docs, lua_search_docs, lua_read_doc, execute_lua</td>
             <td>Explore only</td>
             <td>Planning and architecture</td>
         </tr>

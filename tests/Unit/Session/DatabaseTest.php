@@ -28,6 +28,7 @@ class DatabaseTest extends TestCase
         $this->assertContains('gateway_approvals', $tableNames);
         $this->assertContains('gateway_checkpoints', $tableNames);
         $this->assertContains('gateway_pending_inputs', $tableNames);
+        $this->assertContains('swarm_agents', $tableNames);
         $this->assertContains('schema_version', $tableNames);
     }
 
@@ -38,7 +39,20 @@ class DatabaseTest extends TestCase
 
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
         $this->assertNotFalse($version);
-        $this->assertEquals(7, $version['version']);
+        $this->assertEquals(9, $version['version']);
+    }
+
+    public function test_swarm_agents_schema_tracks_spooled_output_metadata(): void
+    {
+        $db = new Database(':memory:');
+        $pdo = $db->connection();
+
+        $columns = $pdo->query('PRAGMA table_info(swarm_agents)')->fetchAll();
+        $columnNames = array_column($columns, 'name');
+
+        $this->assertContains('output_ref', $columnNames);
+        $this->assertContains('output_bytes', $columnNames);
+        $this->assertContains('output_preview', $columnNames);
     }
 
     public function test_idempotent_schema_creation(): void
@@ -48,7 +62,7 @@ class DatabaseTest extends TestCase
 
         // Creating a second Database on the same connection shouldn't fail
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
-        $this->assertEquals(7, $version['version']);
+        $this->assertEquals(9, $version['version']);
     }
 
     public function test_foreign_keys_enabled(): void

@@ -4,6 +4,7 @@ namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\AsyncLlmClient;
 use PHPUnit\Framework\TestCase;
+use Prism\Prism\Tool;
 
 class AsyncLlmClientTest extends TestCase
 {
@@ -37,5 +38,24 @@ class AsyncLlmClientTest extends TestCase
         $client->setProvider('openai');
 
         $this->assertTrue($supportsTemperature->invoke($client));
+    }
+
+    public function test_build_payload_uses_cache_planned_tool_schema(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'anthropic/claude-sonnet-4',
+            systemPrompt: 'prompt',
+            provider: 'openrouter',
+        );
+        $tool = (new Tool)->as('file_read')->for('Read files')->using(fn () => '');
+
+        $buildPayload = new \ReflectionMethod($client, 'buildPayload');
+        $buildPayload->setAccessible(true);
+        $payload = $buildPayload->invoke($client, [], [$tool], false);
+
+        $this->assertSame('auto', $payload['tool_choice']);
+        $this->assertSame(['type' => 'ephemeral'], $payload['tools'][0]['cache_control']);
     }
 }

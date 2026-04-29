@@ -11,8 +11,6 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Revolt\EventLoop;
 
-use function Amp\ByteStream\buffer;
-
 /**
  * Executes shell commands via `sh -c` and returns combined stdout/stderr with the exit code.
  * Use for running tests, git operations, package installs, and other CLI tasks.
@@ -20,6 +18,8 @@ use function Amp\ByteStream\buffer;
  */
 class BashTool extends AbstractTool
 {
+    private const MAX_CAPTURE_BYTES = 50_000;
+
     /** @var (\Closure(string): void)|null */
     public ?\Closure $progressCallback = null;
 
@@ -31,10 +31,17 @@ class BashTool extends AbstractTool
      * @param  int  $timeout  Default per-command timeout in seconds
      * @param  LoggerInterface|null  $log  Optional PSR-3 logger
      */
-    public function __construct(int $timeout = 120, ?LoggerInterface $log = null)
-    {
+    public function __construct(
+        int $timeout = 120,
+        ?LoggerInterface $log = null,
+        private ?string $storagePath = null,
+    ) {
         $this->timeout = $timeout;
         $this->log = $log ?? new NullLogger;
+        if ($this->storagePath === null) {
+            $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
+            $this->storagePath = $home.'/.kosmokrator/data/truncations';
+        }
     }
 
     public function name(): string
@@ -93,24 +100,22 @@ class BashTool extends AbstractTool
                 }
             });
 
-            // Read stdout/stderr concurrently, streaming chunks via progress callback
+            // Read stdout/stderr concurrently, keeping only a bounded preview in memory.
             $progressCb = $this->progressCallback;
-            $stdoutFuture = \Amp\async(function () use ($process, $progressCb): string {
-                $buf = '';
-                $stream = $process->getStdout();
-                while (($chunk = $stream->read()) !== null) {
-                    $buf .= $chunk;
-                    if ($progressCb !== null) {
-                        $progressCb($buf);
-                    }
-                }
-
-                return $buf;
-            });
-            $stderrFuture = \Amp\async(fn () => buffer($process->getStderr()));
+            $stdoutFuture = \Amp\async(fn (): array => $this->readBoundedStream(
+                $process->getStdout(),
+                'stdout',
+                $progressCb,
+            ));
+            $stderrFuture = \Amp\async(fn (): array => $this->readBoundedStream(
+                $process->getStderr(),
+                'stderr',
+            ));
             $exitCode = $process->join();
-            $output = $stdoutFuture->await();
-            $errorOutput = $stderrFuture->await();
+            $stdout = $stdoutFuture->await();
+            $stderr = $stderrFuture->await();
+            $output = $stdout['preview'];
+            $errorOutput = $stderr['preview'];
 
             if ($timedOut) {
                 EventLoop::cancel($timerId);
@@ -137,7 +142,7 @@ class BashTool extends AbstractTool
             'command' => mb_substr($command, 0, 100),
             'exit_code' => $exitCode,
             'elapsed' => round(microtime(true) - $startTime, 2),
-            'output_length' => strlen($output) + strlen($errorOutput),
+            'output_length' => $stdout['bytes'] + $stderr['bytes'],
         ]);
 
         $result = '';
@@ -151,12 +156,105 @@ class BashTool extends AbstractTool
             $result = '(no output)';
         }
 
+        $truncationNotes = [];
+        if ($stdout['truncated']) {
+            $truncationNotes[] = 'stdout saved to '.$stdout['path'];
+        }
+        if ($stderr['truncated']) {
+            $truncationNotes[] = 'stderr saved to '.$stderr['path'];
+        }
+        if ($truncationNotes !== []) {
+            $result .= "\n\n[truncated - full ".implode('; ', $truncationNotes).'; inspect with targeted grep/file_read rather than pasting it back into context]';
+        }
+
         $result .= "\nExit code: {$exitCode}";
 
         return new ToolResult($result, $exitCode === 0, [
             'stdout' => $output,
             'stderr' => $errorOutput,
             'exit_code' => $exitCode,
+            'stdout_bytes' => $stdout['bytes'],
+            'stderr_bytes' => $stderr['bytes'],
+            'stdout_path' => $stdout['path'],
+            'stderr_path' => $stderr['path'],
         ]);
+    }
+
+    /**
+     * @return array{preview: string, bytes: int, truncated: bool, path: ?string}
+     */
+    private function readBoundedStream(object $stream, string $name, ?\Closure $progressCb = null): array
+    {
+        $preview = '';
+        $bytes = 0;
+        $path = null;
+        $handle = null;
+
+        try {
+            while (($chunk = $stream->read()) !== null) {
+                $bytes += strlen($chunk);
+
+                if ($handle !== null) {
+                    fwrite($handle, $chunk);
+                }
+
+                $remaining = self::MAX_CAPTURE_BYTES - strlen($preview);
+                if ($remaining > 0) {
+                    $preview .= strlen($chunk) <= $remaining
+                        ? $chunk
+                        : substr($chunk, 0, $remaining);
+                }
+
+                if ($bytes > self::MAX_CAPTURE_BYTES && $handle === null) {
+                    [$path, $handle] = $this->openSpoolFile($name);
+                    fwrite($handle, $preview);
+                    if (strlen($chunk) > $remaining) {
+                        fwrite($handle, substr($chunk, $remaining));
+                    }
+                }
+
+                if ($progressCb !== null) {
+                    $progressCb($preview);
+                }
+            }
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
+
+        return [
+            'preview' => $this->sanitizePreview($preview),
+            'bytes' => $bytes,
+            'truncated' => $path !== null,
+            'path' => $path,
+        ];
+    }
+
+    /**
+     * @return array{string, resource}
+     */
+    private function openSpoolFile(string $name): array
+    {
+        if (! is_dir($this->storagePath)) {
+            mkdir($this->storagePath, 0755, true);
+        }
+
+        $path = $this->storagePath.'/bash_'.$name.'_'.date('Ymd_His').'_'.bin2hex(random_bytes(4)).'.txt';
+        $handle = fopen($path, 'wb');
+        if ($handle === false) {
+            throw new \RuntimeException("Unable to open output spool file: {$path}");
+        }
+
+        return [$path, $handle];
+    }
+
+    private function sanitizePreview(string $preview): string
+    {
+        if ($preview === '' || mb_check_encoding($preview, 'UTF-8')) {
+            return $preview;
+        }
+
+        return mb_convert_encoding($preview, 'UTF-8', 'UTF-8');
     }
 }

@@ -15,10 +15,21 @@ use Prism\Prism\ValueObjects\Messages\SystemMessage;
  */
 final class PromptFrameBuilder
 {
+    private const CACHE_LIMIT = 128;
+
     /** Section headers that mark the start of per-turn (volatile) content. */
     private const VOLATILE_SECTION_MARKERS = [
+        "\n\n## Gateway Session Context\n",
+        "\n\n## Parent Brief\n",
+        "\n\n## Protected Context\n",
         "\n\n## Current Tasks\n",
     ];
+
+    /** @var array<string, SystemMessage[]> */
+    private static array $cache = [];
+
+    /** @var list<string> */
+    private static array $cacheOrder = [];
 
     /**
      * Split a system prompt string into one or two SystemMessage objects.
@@ -34,16 +45,16 @@ final class PromptFrameBuilder
             return [];
         }
 
-        // Cache by content hash — avoids re-splitting identical prompts across retries
-        static $cache = [];
-        $key = crc32($systemPrompt);
-        if (isset($cache[$key])) {
-            return $cache[$key];
+        $key = hash('sha256', $systemPrompt);
+        if (isset(self::$cache[$key])) {
+            self::touchCacheKey($key);
+
+            return self::$cache[$key];
         }
 
         $splitOffset = self::findVolatileSectionOffset($systemPrompt);
         if ($splitOffset === null || $splitOffset <= 0) {
-            return $cache[$key] = [new SystemMessage($systemPrompt)];
+            return self::remember($key, [new SystemMessage($systemPrompt)]);
         }
 
         $stablePrefix = substr($systemPrompt, 0, $splitOffset);
@@ -56,7 +67,7 @@ final class PromptFrameBuilder
             $prompts[] = new SystemMessage($volatileTail);
         }
 
-        return $cache[$key] = $prompts;
+        return self::remember($key, $prompts);
     }
 
     /**
@@ -78,5 +89,40 @@ final class PromptFrameBuilder
         }
 
         return min($offsets);
+    }
+
+    /**
+     * @param  SystemMessage[]  $prompts
+     * @return SystemMessage[]
+     */
+    private static function remember(string $key, array $prompts): array
+    {
+        self::$cache[$key] = $prompts;
+        self::touchCacheKey($key);
+
+        while (count(self::$cacheOrder) > self::CACHE_LIMIT) {
+            $oldest = array_shift(self::$cacheOrder);
+            if ($oldest !== null) {
+                unset(self::$cache[$oldest]);
+            }
+        }
+
+        return $prompts;
+    }
+
+    private static function touchCacheKey(string $key): void
+    {
+        $index = array_search($key, self::$cacheOrder, true);
+        if ($index !== false) {
+            array_splice(self::$cacheOrder, $index, 1);
+        }
+
+        self::$cacheOrder[] = $key;
+    }
+
+    public static function resetCache(): void
+    {
+        self::$cache = [];
+        self::$cacheOrder = [];
     }
 }

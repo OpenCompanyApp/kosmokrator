@@ -12,7 +12,7 @@ class Database
 {
     private \PDO $pdo;
 
-    private const SCHEMA_VERSION = 7;
+    private const SCHEMA_VERSION = 9;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -20,27 +20,42 @@ class Database
      */
     public function __construct(?string $path = null)
     {
+        $initLock = null;
         if ($path === null) {
             $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
             $dir = $home.'/.kosmokrator/data';
-            if (! is_dir($dir)) {
-                mkdir($dir, 0700, true);
+            if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
+                throw new \RuntimeException("Unable to create data directory: {$dir}");
             }
             $path = $dir.'/kosmokrator.db';
         }
 
         $isMemory = $path === ':memory:';
-        $this->pdo = new \PDO("sqlite:{$path}");
-        $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
-
         if (! $isMemory) {
-            $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
-            $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
+            $initLock = fopen($path.'.init.lock', 'c');
+            if ($initLock === false || ! flock($initLock, LOCK_EX)) {
+                throw new \RuntimeException("Unable to lock database initialization: {$path}");
+            }
         }
-        $this->pdo->exec('PRAGMA foreign_keys=ON'); // Enforce referential integrity
 
-        $this->ensureSchema();
+        try {
+            $this->pdo = new \PDO("sqlite:{$path}");
+            $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+
+            if (! $isMemory) {
+                $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
+                $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
+            }
+            $this->pdo->exec('PRAGMA foreign_keys=ON'); // Enforce referential integrity
+
+            $this->ensureSchema();
+        } finally {
+            if (is_resource($initLock)) {
+                flock($initLock, LOCK_UN);
+                fclose($initLock);
+            }
+        }
     }
 
     /** @return \PDO The raw PDO connection for direct queries. */
@@ -238,6 +253,8 @@ class Database
         ');
 
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_gateway_pending_inputs_route ON gateway_pending_inputs(platform, route_key, id)');
+
+        $this->createSwarmMetadataSchema();
     }
 
     /** Runs incremental schema migrations starting from the given version. */
@@ -338,6 +355,16 @@ class Database
             ');
             $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_gateway_pending_inputs_route ON gateway_pending_inputs(platform, route_key, id)');
         }
+
+        if ($from < 8) {
+            $this->createSwarmMetadataSchema();
+        }
+
+        if ($from < 9) {
+            $this->addColumnIfMissing('swarm_agents', 'output_ref', 'TEXT');
+            $this->addColumnIfMissing('swarm_agents', 'output_bytes', 'INTEGER NOT NULL DEFAULT 0');
+            $this->addColumnIfMissing('swarm_agents', 'output_preview', 'TEXT');
+        }
     }
 
     /** Adds a column to a table only if it does not already exist. */
@@ -392,6 +419,45 @@ class Database
             END
             SQL
         );
+    }
+
+    private function createSwarmMetadataSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS swarm_agents (
+                root_session_id       TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                agent_id              TEXT NOT NULL,
+                parent_id             TEXT,
+                type                  TEXT,
+                mode                  TEXT,
+                status                TEXT NOT NULL,
+                group_name            TEXT,
+                depends_on_json       TEXT,
+                task_preview          TEXT,
+                tool_calls            INTEGER NOT NULL DEFAULT 0,
+                tokens_in             INTEGER NOT NULL DEFAULT 0,
+                tokens_out            INTEGER NOT NULL DEFAULT 0,
+                retries               INTEGER NOT NULL DEFAULT 0,
+                queue_reason          TEXT,
+                last_tool             TEXT,
+                last_message_preview  TEXT,
+                next_retry_at         TEXT,
+                output_ref            TEXT,
+                output_bytes          INTEGER NOT NULL DEFAULT 0,
+                output_preview        TEXT,
+                error                 TEXT,
+                created_at            TEXT,
+                started_at            TEXT,
+                last_activity_at      TEXT,
+                ended_at              TEXT,
+                updated_at            TEXT NOT NULL,
+                PRIMARY KEY (root_session_id, agent_id)
+            )
+            SQL
+        );
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_agents_session_status ON swarm_agents(root_session_id, status, updated_at DESC)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_agents_session_parent ON swarm_agents(root_session_id, parent_id)');
     }
 
     private function rebuildMessagesFtsIndex(): void

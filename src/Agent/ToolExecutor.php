@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
@@ -80,6 +81,10 @@ final class ToolExecutor
                 $denied[$toolCall->id] = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, [], $output);
 
                 continue;
+            }
+
+            if ($toolCall->name === 'subagent') {
+                $args = $this->normalizeSubagentArgs($args, $agentContext);
             }
 
             $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $args]);
@@ -171,6 +176,7 @@ final class ToolExecutor
                 }
 
                 $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode);
+                $agentContext?->orchestrator->persistStats($stats);
 
                 if ($toolCall->name !== 'subagent') {
                     SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
@@ -199,6 +205,7 @@ final class ToolExecutor
                 // Await and display each header+result pair in original order
                 foreach ($group as [$toolCall, $tool, $args]) {
                     $outcome = $futures[$toolCall->id]->await();
+                    $agentContext?->orchestrator->persistStats($stats);
 
                     if ($toolCall->name !== 'subagent') {
                         SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
@@ -297,11 +304,15 @@ final class ToolExecutor
     private function executeSingleTool(ToolCall $toolCall, array $args, Tool $tool, ?SubagentStats $stats, AgentMode $mode): ToolResult
     {
         try {
+            \Amp\delay(0);
+
             if ($toolCall->name === 'shell_start') {
                 $args['read_only'] = $mode !== AgentMode::Edit;
             }
 
+            $stats?->markTool($toolCall->name);
             $output = $tool->handle(...$args);
+            \Amp\delay(0);
             $stats?->incrementToolCalls();
             $outputStr = ToolCallMapper::normalizeToolOutput($output);
 
@@ -314,7 +325,12 @@ final class ToolExecutor
                 'output_length' => strlen($outputStr),
             ]);
 
-            return ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
+            $result = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
+            if ($this->isMutativeFileTool($toolCall->name) && ! ToolCallMapper::isErrorResult($result)) {
+                FileReadTool::resetGlobalCache();
+            }
+
+            return $result;
         } catch (\RuntimeException $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
@@ -477,6 +493,42 @@ final class ToolExecutor
         return null;
     }
 
+    /**
+     * Assign final subagent IDs before UI spawn/running display and execution.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function normalizeSubagentArgs(array $args, ?AgentContext $agentContext): array
+    {
+        $orchestrator = $agentContext?->orchestrator;
+        if ($orchestrator === null) {
+            return $args;
+        }
+
+        if (isset($args['agents']) && is_array($args['agents']) && $args['agents'] !== []) {
+            foreach ($args['agents'] as $i => $spec) {
+                if (! is_array($spec)) {
+                    continue;
+                }
+
+                if (! isset($spec['id']) || $spec['id'] === '') {
+                    $spec['id'] = $orchestrator->generateId();
+                }
+
+                $args['agents'][$i] = $spec;
+            }
+
+            return $args;
+        }
+
+        if (isset($args['task']) && trim((string) $args['task']) !== '' && (! isset($args['id']) || $args['id'] === '')) {
+            $args['id'] = $orchestrator->generateId();
+        }
+
+        return $args;
+    }
+
     /** Whether the tool is an interactive question tool (ask_user / ask_choice). */
     private function isAskTool(string $name): bool
     {
@@ -487,6 +539,11 @@ final class ToolExecutor
     private function isReadOnlyShellTool(string $name): bool
     {
         return in_array($name, ['bash', 'shell_start', 'shell_write', 'shell_kill'], true);
+    }
+
+    private function isMutativeFileTool(string $name): bool
+    {
+        return in_array($name, ['file_write', 'file_edit', 'apply_patch'], true);
     }
 
     /** Extract the command string from a tool call's arguments (handles both 'command' and 'input' keys). */

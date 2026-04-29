@@ -114,6 +114,27 @@ class AgentDisplayFormatterTest extends TestCase
         $this->assertStringContainsString('5s', $result);
     }
 
+    public function test_render_child_tree_shows_summary_nodes_neutrally(): void
+    {
+        $children = [
+            [
+                'status' => 'summary',
+                'type' => 'summary',
+                'task' => '12 more agents (10 done, 2 queued)',
+                'success' => true,
+                'elapsed' => 0.0,
+                'hiddenCount' => 12,
+                'hiddenStatuses' => ['done' => 10, 'queued' => 2],
+            ],
+        ];
+
+        $result = $this->formatter->renderChildTree($children, '');
+
+        $this->assertStringContainsString('12 more agents', $result);
+        $this->assertStringContainsString('…', $result);
+        $this->assertStringNotContainsString('✗', $result);
+    }
+
     public function test_render_child_tree_multiple_uses_branch_connectors(): void
     {
         $children = [
@@ -397,6 +418,16 @@ class AgentDisplayFormatterTest extends TestCase
         $this->assertSame(5, $this->formatter->countNodes($nodes));
     }
 
+    public function test_count_nodes_includes_summary_hidden_count(): void
+    {
+        $nodes = [
+            ['type' => 'a'],
+            ['status' => 'summary', 'hiddenCount' => 9],
+        ];
+
+        $this->assertSame(10, $this->formatter->countNodes($nodes));
+    }
+
     // ── countByStatus ────────────────────────────────────────────────
 
     public function test_count_by_status_matching_flat(): void
@@ -426,6 +457,18 @@ class AgentDisplayFormatterTest extends TestCase
 
         $this->assertSame(3, $this->formatter->countByStatus($nodes, 'completed'));
         $this->assertSame(2, $this->formatter->countByStatus($nodes, 'failed'));
+    }
+
+    public function test_count_by_status_includes_summary_hidden_statuses(): void
+    {
+        $nodes = [
+            ['status' => 'running'],
+            ['status' => 'summary', 'hiddenStatuses' => ['done' => 7, 'queued' => 3]],
+        ];
+
+        $this->assertSame(1, $this->formatter->countByStatus($nodes, 'running'));
+        $this->assertSame(7, $this->formatter->countByStatus($nodes, 'done'));
+        $this->assertSame(3, $this->formatter->countByStatus($nodes, 'queued'));
     }
 
     public function test_count_by_status_empty_nodes(): void

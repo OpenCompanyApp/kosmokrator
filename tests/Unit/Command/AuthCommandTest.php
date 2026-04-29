@@ -42,8 +42,13 @@ class AuthCommandTest extends TestCase
         $tokenStore = $this->createTokenStore();
         $config = new Repository;
 
-        // ProviderMeta with codex (oauth) and ollama (none) so authMode returns correctly
+        // ProviderMeta with representative auth modes so authMode returns correctly
         $meta = new ProviderMeta([
+            'anthropic' => [
+                'default_model' => 'claude-sonnet-4-5-20250929',
+                'url' => 'https://api.anthropic.com',
+                'models' => ['claude-sonnet-4-5-20250929' => ['display_name' => 'Claude Sonnet 4.5']],
+            ],
             'codex' => [
                 'default_model' => 'gpt-5-codex',
                 'url' => 'https://chatgpt.com/backend-api/codex',
@@ -117,6 +122,26 @@ class AuthCommandTest extends TestCase
         $this->assertStringContainsString('Not authenticated', $this->tester->getDisplay());
     }
 
+    public function test_status_for_unknown_provider_fails_json(): void
+    {
+        $exit = $this->tester->execute(['action' => 'status', 'provider' => 'nope', '--json' => true]);
+
+        $this->assertSame(1, $exit);
+        $payload = json_decode($this->tester->getDisplay(), true);
+        $this->assertSame(false, $payload['success']);
+        $this->assertSame('Unknown provider [nope].', $payload['error']);
+    }
+
+    public function test_status_json_lists_providers(): void
+    {
+        $exit = $this->tester->execute(['action' => 'status', '--json' => true]);
+
+        $this->assertSame(0, $exit);
+        $payload = json_decode($this->tester->getDisplay(), true);
+        $this->assertSame(true, $payload['success']);
+        $this->assertNotEmpty($payload['providers']);
+    }
+
     public function test_status_without_provider_shows_table(): void
     {
         $exit = $this->tester->execute(['action' => 'status']);
@@ -144,6 +169,16 @@ class AuthCommandTest extends TestCase
         $this->assertSame(2, $exit);
     }
 
+    public function test_invalid_action_returns_json_error(): void
+    {
+        $exit = $this->tester->execute(['action' => 'bogus', '--json' => true]);
+
+        $this->assertSame(2, $exit);
+        $payload = json_decode($this->tester->getDisplay(), true);
+        $this->assertSame(false, $payload['success']);
+        $this->assertSame('Unknown auth action [bogus].', $payload['error']);
+    }
+
     // ── Login action ──────────────────────────────────────────────────
 
     public function test_login_without_provider_returns_error(): void
@@ -156,7 +191,6 @@ class AuthCommandTest extends TestCase
 
     public function test_login_with_api_key_provider_stores_key(): void
     {
-        // 'anthropic' is not in meta, so authMode defaults to 'api_key'
         $exit = $this->tester->execute(
             ['action' => 'login', 'provider' => 'anthropic', '--api-key' => 'sk-test-123'],
         );
@@ -167,6 +201,36 @@ class AuthCommandTest extends TestCase
         // Verify key was actually persisted
         $stored = $this->settings->get('global', 'provider.anthropic.api_key');
         $this->assertSame('sk-test-123', $stored);
+    }
+
+    public function test_login_can_read_api_key_from_env_json(): void
+    {
+        putenv('KOSMO_TEST_API_KEY=sk-env-123');
+
+        try {
+            $exit = $this->tester->execute(
+                ['action' => 'login', 'provider' => 'anthropic', '--api-key-env' => 'KOSMO_TEST_API_KEY', '--json' => true],
+            );
+        } finally {
+            putenv('KOSMO_TEST_API_KEY');
+        }
+
+        $this->assertSame(0, $exit);
+        $payload = json_decode($this->tester->getDisplay(), true);
+        $this->assertSame(true, $payload['success']);
+        $this->assertSame('anthropic', $payload['provider']);
+        $this->assertStringNotContainsString('sk-env-123', $this->tester->getDisplay());
+        $this->assertSame('sk-env-123', $this->settings->get('global', 'provider.anthropic.api_key'));
+    }
+
+    public function test_login_for_unknown_provider_fails_json(): void
+    {
+        $exit = $this->tester->execute(['action' => 'login', 'provider' => 'nope', '--api-key' => 'sk-test', '--json' => true]);
+
+        $this->assertSame(1, $exit);
+        $payload = json_decode($this->tester->getDisplay(), true);
+        $this->assertSame(false, $payload['success']);
+        $this->assertSame('Unknown provider [nope].', $payload['error']);
     }
 
     public function test_login_with_none_auth_returns_comment(): void
@@ -198,6 +262,16 @@ class AuthCommandTest extends TestCase
         $this->assertSame(0, $exit);
         $this->assertStringContainsString('Removed API key for anthropic', $this->tester->getDisplay());
         $this->assertNull($this->settings->get('global', 'provider.anthropic.api_key'));
+    }
+
+    public function test_logout_for_unknown_provider_fails_json(): void
+    {
+        $exit = $this->tester->execute(['action' => 'logout', 'provider' => 'nope', '--json' => true]);
+
+        $this->assertSame(1, $exit);
+        $payload = json_decode($this->tester->getDisplay(), true);
+        $this->assertSame(false, $payload['success']);
+        $this->assertSame('Unknown provider [nope].', $payload['error']);
     }
 
     public function test_logout_with_oauth_provider_calls_codex_logout(): void

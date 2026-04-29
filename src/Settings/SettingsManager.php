@@ -97,9 +97,13 @@ final class SettingsManager
         }
 
         $paths = new SettingsPaths($this->projectRoot);
-        [$path, $data] = $this->configTarget($paths, $scope);
-        $this->store->set($data, $definition->path, $this->normalizeValue($definition, $value));
-        $this->store->save($path, $data);
+        [$path] = $this->configTarget($paths, $scope);
+        $normalized = $this->normalizeValue($definition, $value);
+        $this->store->update($path, function (array $data) use ($definition, $normalized): array {
+            $this->store->set($data, $definition->path, $normalized);
+
+            return $data;
+        });
         $this->reloadRepository();
     }
 
@@ -115,9 +119,12 @@ final class SettingsManager
         }
 
         $paths = new SettingsPaths($this->projectRoot);
-        [$path, $data] = $this->configTarget($paths, $scope);
-        $this->store->unset($data, $definition->path);
-        $this->store->save($path, $data);
+        [$path] = $this->configTarget($paths, $scope);
+        $this->store->update($path, function (array $data) use ($definition): array {
+            $this->store->unset($data, $definition->path);
+
+            return $data;
+        });
         $this->reloadRepository();
     }
 
@@ -227,9 +234,12 @@ final class SettingsManager
     public function setRaw(string $path, mixed $value, string $scope = 'project'): void
     {
         $paths = new SettingsPaths($this->projectRoot);
-        [$targetPath, $data] = $this->configTarget($paths, $scope);
-        $this->store->set($data, $path, $value);
-        $this->store->save($targetPath, $data);
+        [$targetPath] = $this->configTarget($paths, $scope);
+        $this->store->update($targetPath, function (array $data) use ($path, $value): array {
+            $this->store->set($data, $path, $value);
+
+            return $data;
+        });
         $this->reloadRepository();
     }
 
@@ -242,9 +252,12 @@ final class SettingsManager
     public function unsetRaw(string $path, string $scope = 'project'): void
     {
         $paths = new SettingsPaths($this->projectRoot);
-        [$targetPath, $data] = $this->configTarget($paths, $scope);
-        $this->store->unset($data, $path);
-        $this->store->save($targetPath, $data);
+        [$targetPath] = $this->configTarget($paths, $scope);
+        $this->store->update($targetPath, function (array $data) use ($path): array {
+            $this->store->unset($data, $path);
+
+            return $data;
+        });
         $this->reloadRepository();
     }
 
@@ -324,7 +337,8 @@ final class SettingsManager
 
         return match ($definition->type) {
             'number' => is_numeric($value) ? (str_contains((string) $value, '.') ? (float) $value : (int) $value) : $value,
-            'toggle' => in_array((string) $value, ['1', 'true', 'on', 'yes'], true) ? 'on' : (in_array((string) $value, ['0', 'false', 'off', 'no'], true) ? 'off' : (string) $value),
+            'toggle' => in_array(strtolower((string) $value), ['1', 'true', 'on', 'yes'], true) ? 'on' : (in_array(strtolower((string) $value), ['0', 'false', 'off', 'no'], true) ? 'off' : (string) $value),
+            'string_list', 'json', 'yaml' => (new SettingValueParser)->parse($definition, $value),
             default => $value,
         };
     }

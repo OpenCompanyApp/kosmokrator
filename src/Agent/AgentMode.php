@@ -36,9 +36,9 @@ enum AgentMode: string
 
     private const MEMORY_WRITE_TOOLS = ['memory_save'];
 
-    private const WEB_TOOLS = ['web_search', 'web_fetch'];
-
     private const LUA_TOOLS = ['lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'execute_lua'];
+
+    private const WEB_TOOLS = ['web_search', 'web_fetch'];
 
     /**
      * Tool names permitted in this mode. Used by AgentLoop::applyModeFilter().

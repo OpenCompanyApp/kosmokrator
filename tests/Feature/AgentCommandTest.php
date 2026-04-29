@@ -10,6 +10,7 @@ use Kosmokrator\Setup\SetupFlowInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Tester\CommandTester;
 
 final class AgentCommandTest extends TestCase
 {
@@ -56,5 +57,18 @@ final class AgentCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertTrue($flow->opened);
+    }
+
+    public function test_agent_command_rejects_invalid_headless_mode_cleanly(): void
+    {
+        $kernel = new Kernel(dirname(__DIR__, 2));
+        $kernel->boot();
+
+        $command = new AgentCommand($kernel->getContainer());
+        $tester = new CommandTester($command);
+
+        $tester->execute(['prompt' => 'hello', '--mode' => 'invalid']);
+
+        $this->assertSame(1, $tester->getStatusCode());
     }
 }

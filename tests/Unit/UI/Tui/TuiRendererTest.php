@@ -8,9 +8,12 @@ use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\TuiConversationRenderer;
 use Kosmokrator\UI\Tui\TuiCoreRenderer;
 use Kosmokrator\UI\Tui\TuiInputHandler;
+use Kosmokrator\UI\Tui\TuiModalManager;
 use Kosmokrator\UI\Tui\TuiRenderer;
 use Kosmokrator\UI\Tui\TuiToolRenderer;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Tui\Widget\ContainerWidget;
+use Symfony\Component\Tui\Widget\EditorWidget;
 
 /**
  * Tests for the pure-logic private methods of the TUI sub-renderers.
@@ -577,6 +580,46 @@ final class TuiRendererTest extends TestCase
         $tool = new TuiToolRenderer(new TuiCoreRenderer, $state);
         $tool->updateToolExecuting('');
         $this->assertNull($state->getToolExecutingPreview());
+    }
+
+    public function test_input_handler_bind_is_idempotent_for_submit_callbacks(): void
+    {
+        $input = new EditorWidget;
+        $queued = [];
+        $modalManager = (new \ReflectionClass(TuiModalManager::class))->newInstanceWithoutConstructor();
+
+        $handler = new TuiInputHandler(
+            input: $input,
+            conversation: new ContainerWidget,
+            overlay: new ContainerWidget,
+            modalManager: $modalManager,
+            flushRender: fn () => null,
+            forceRender: fn () => null,
+            scrollHistoryUp: fn () => null,
+            scrollHistoryDown: fn () => null,
+            jumpToLiveOutput: fn () => null,
+            isBrowsingHistory: fn () => false,
+            cycleMode: fn () => 'plan',
+            showMode: fn () => null,
+            queueMessage: function (string $message) use (&$queued): void {
+                $queued[] = $message;
+            },
+            queueMessageSilent: fn () => null,
+            getImmediateCommandHandler: fn () => null,
+            getPromptSuspension: fn () => null,
+            clearPromptSuspension: fn () => null,
+            setPendingEditorRestore: fn () => null,
+            getRequestCancellation: fn () => null,
+            clearRequestCancellation: fn () => null,
+        );
+
+        $handler->bind();
+        $handler->bind();
+
+        $input->setText('hello');
+        $input->handleInput("\r");
+
+        $this->assertSame(['hello'], $queued);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

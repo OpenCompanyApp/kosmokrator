@@ -40,6 +40,8 @@ final class TuiModalManager
 {
     private ?Suspension $askSuspension = null;
 
+    private readonly TuiScheduler $scheduler;
+
     public function __construct(
         private readonly TuiStateStore $state,
         private readonly ContainerWidget $overlay,
@@ -48,8 +50,11 @@ final class TuiModalManager
         private readonly EditorWidget $input,
         private readonly \Closure $renderCallback,
         private readonly \Closure $forceRenderCallback,
+        ?TuiScheduler $scheduler = null,
         private readonly LoggerInterface $log = new NullLogger,
-    ) {}
+    ) {
+        $this->scheduler = $scheduler ?? TuiScheduler::fallback();
+    }
 
     /**
      * Show a tool permission prompt and block until the user decides.
@@ -402,7 +407,7 @@ final class TuiModalManager
         // Auto-refresh every 2s if refresh callback provided
         $timerId = null;
         if ($refresh !== null) {
-            $timerId = EventLoop::repeat(2.0, function () use ($widget, $refresh) {
+            $timerId = $this->scheduler->every(2.0, function () use ($widget, $refresh) {
                 try {
                     $data = $refresh();
                     $widget->setData($data['summary'], $data['stats']);
@@ -420,7 +425,7 @@ final class TuiModalManager
         }
 
         if ($timerId !== null) {
-            EventLoop::cancel($timerId);
+            $this->scheduler->cancel($timerId);
         }
 
         $this->overlay->remove($widget);

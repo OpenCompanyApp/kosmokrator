@@ -12,6 +12,8 @@ class SubagentStats
 {
     public string $status = 'queued';
 
+    public string $mode = 'await';
+
     public int $toolCalls = 0;
 
     public int $tokensIn = 0;
@@ -41,6 +43,20 @@ class SubagentStats
 
     public int $retries = 0;
 
+    public ?string $queueReason = null;
+
+    public ?string $lastTool = null;
+
+    public ?string $lastMessagePreview = null;
+
+    public ?float $nextRetryAt = null;
+
+    public ?string $outputRef = null;
+
+    public int $outputBytes = 0;
+
+    public ?string $outputPreview = null;
+
     public function __construct(public readonly string $id) {}
 
     /** Returns elapsed seconds since start, or 0 if not yet started. */
@@ -58,6 +74,60 @@ class SubagentStats
     public function incrementToolCalls(): void
     {
         $this->toolCalls++;
+    }
+
+    public function markQueueReason(?string $reason): void
+    {
+        $this->queueReason = $reason;
+        $this->touchActivity();
+    }
+
+    public function markTool(string $tool): void
+    {
+        $this->lastTool = $tool;
+        $this->touchActivity();
+    }
+
+    public function markMessagePreview(?string $preview): void
+    {
+        $normalized = $preview === null
+            ? null
+            : trim((string) preg_replace('/\s+/', ' ', $preview));
+
+        if ($normalized === '') {
+            $normalized = null;
+        }
+
+        $this->lastMessagePreview = $normalized !== null && mb_strlen($normalized) > 120
+            ? mb_substr($normalized, 0, 117).'...'
+            : $normalized;
+        $this->touchActivity();
+    }
+
+    public function markRetryDelay(float $seconds): void
+    {
+        $this->nextRetryAt = microtime(true) + $seconds;
+        $this->queueReason = 'retry backoff';
+        $this->touchActivity();
+    }
+
+    public function clearRetryDelay(): void
+    {
+        $this->nextRetryAt = null;
+    }
+
+    public function clearQueueState(): void
+    {
+        $this->queueReason = null;
+        $this->nextRetryAt = null;
+    }
+
+    public function markOutput(string $ref, int $bytes, ?string $preview): void
+    {
+        $this->outputRef = $ref;
+        $this->outputBytes = $bytes;
+        $this->outputPreview = $preview;
+        $this->touchActivity();
     }
 
     public function addTokens(int $in, int $out): void

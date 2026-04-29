@@ -58,7 +58,7 @@ class TheogonyCommandTest extends TestCase
     {
         $command = new TheogonyCommand;
 
-        $this->assertTrue($command->immediate());
+        $this->assertFalse($command->immediate());
     }
 
     public function test_execute_plays_theogony(): void

@@ -17,7 +17,8 @@ ob_start();
 
 <p>
     You need a terminal and an API key from at least one LLM provider
-    (Anthropic, OpenAI, Google, Mistral, or any of the 40+ supported providers).
+    (Anthropic, OpenAI, Google, Mistral, local endpoints, or any configured
+    OpenAI-compatible provider).
     That's it.
 </p>
 
@@ -48,6 +49,7 @@ ob_start();
     <button class="install-tab active" onclick="switchInstallTab(event, 'binary')">Static Binary</button>
     <button class="install-tab" onclick="switchInstallTab(event, 'phar')">PHAR</button>
     <button class="install-tab" onclick="switchInstallTab(event, 'source')">From Source</button>
+    <button class="install-tab" onclick="switchInstallTab(event, 'termux')">Termux</button>
 </div>
 
 <div id="install-binary" class="install-panel active">
@@ -83,6 +85,23 @@ composer install</code></pre>
     <p>Then run with <code>bin/kosmokrator</code>.</p>
 </div>
 
+<div id="install-termux" class="install-panel">
+    <p>
+        Android via Termux. Use the PHAR path when you want the smallest
+        install, or clone from source when you want a development checkout.
+    </p>
+    <pre><code>pkg update
+pkg install php composer git curl
+
+curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o $PREFIX/bin/kosmokrator \
+  && chmod +x $PREFIX/bin/kosmokrator</code></pre>
+    <p>
+        See <a href="/docs/termux">Termux</a> for renderer, storage, and
+        Android battery-management notes.
+    </p>
+</div>
+
 <div class="tip">
     <p>
         <strong>Verify:</strong> Run <code>kosmokrator --version</code> to
@@ -105,8 +124,9 @@ composer install</code></pre>
 
 <ol>
     <li>
-        <strong>Pick a provider</strong> &mdash; Choose from 40+ supported
-        providers (Anthropic, OpenAI, Google, Mistral, local endpoints, and more).
+        <strong>Pick a provider</strong> &mdash; Choose from the configured
+        provider catalog, including Anthropic, OpenAI, Google, Mistral, local
+        endpoints, and custom OpenAI-compatible providers.
     </li>
     <li>
         <strong>Authenticate</strong> &mdash; Most providers accept an API key
@@ -299,9 +319,10 @@ kosmokrator</code></pre>
         agent has (read, write, execute). Separately, <em>permission
         modes</em> control how aggressively those capabilities are
         auto-approved. Switch permission modes with
-        <code>/guardian</code> (review every action),
-        <code>/argus</code> (review writes and commands), or
-        <code>/prometheus</code> (auto-approve everything). See
+        <code>/guardian</code> (auto-approve safe operations),
+        <code>/argus</code> (review governed tool calls), or
+        <code>/prometheus</code> (auto-approve governed prompts while hard
+        denies still apply). See
         <a href="/docs/permissions">Permissions</a> for details.
     </p>
 </div>

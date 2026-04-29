@@ -6,7 +6,7 @@ These docs describe shipped behavior. They must be updated when the codebase cha
 
 | Document | Description |
 |----------|-------------|
-| [overview.md](architecture/overview.md) | Architecture overview: runtime, UI, tools, context pipeline, subagents, config |
+| [overview.md](architecture/overview.md) | Architecture overview: runtime, UI, SDK, tools, context pipeline, subagents, ACP, integrations, MCP, config |
 | [permission-modes.md](architecture/permission-modes.md) | Agent modes (Edit/Plan/Ask), permission modes (Guardian/Argus/Prometheus), evaluation order |
 | [subagent-architecture.md](architecture/subagent-architecture.md) | Subagent types, tool scoping, orchestration, dependency resolution, concurrency |
 
@@ -20,13 +20,21 @@ Forward-looking design docs. Not shipped — may reference classes or features t
 | [context-management-redesign.md](proposals/context-management-redesign.md) | 17 proposed context pipeline improvements |
 | [context-management-strategies.md](proposals/context-management-strategies.md) | Semantic scoring, dedup tiers, progressive summarization |
 | [context-compaction.md](proposals/context-compaction.md) | Historical plan for the first compaction implementation |
-| [ecosystem-architecture.md](proposals/ecosystem-architecture.md) | Lua code mode, MCP integration, OpenCompany tool ecosystem |
+| [ecosystem-architecture.md](proposals/ecosystem-architecture.md) | Future ecosystem ideas beyond the shipped integrations CLI, including MCP and broader OpenCompany tool architecture |
 | [integration-refactor-plan.md](proposals/integration-refactor-plan.md) | Refactoring tool packages to framework-agnostic contracts |
 | [desktop-app.md](proposals/desktop-app.md) | NativePHP + Electron desktop surface proposal |
 | [hermes-style-gateway.md](proposals/hermes-style-gateway.md) | Hermes-style Telegram-first gateway surface for KosmoKrator |
 | [tui-ux-improvements.md](proposals/tui-ux-improvements.md) | 10 ranked UX improvements with mockups |
 | [command-inspiration.md](proposals/command-inspiration.md) | Slash/power command ideas from competitive analysis |
 | [laravel-ai-patterns.md](proposals/laravel-ai-patterns.md) | Patterns from Laravel AI SDK worth borrowing |
+
+## Plans
+
+Implementation plans for reviewed but not-yet-shipped work.
+
+| Document | Description |
+|----------|-------------|
+| [swarm-ux-fix-plan.md](plans/swarm-ux-fix-plan.md) | Phased plan for smoother long-running subagent swarm UX, observability, and durability |
 
 ## Audits (Historical)
 

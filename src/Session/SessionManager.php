@@ -38,9 +38,21 @@ class SessionManager
         private readonly MemoryRepositoryInterface $memories,
         private readonly LoggerInterface $log,
         private readonly ?SettingsManager $configSettings = null,
+        private readonly ?SwarmMetadataStore $swarmMetadata = null,
+        private readonly ?SubagentOutputStore $subagentOutputs = null,
     ) {
         $this->serializer = new MessageSerializer;
         $this->memoryManager = new MemoryManager($this->memories, log: $this->log);
+    }
+
+    public function swarmMetadata(): ?SwarmMetadataStore
+    {
+        return $this->swarmMetadata;
+    }
+
+    public function subagentOutputs(): ?SubagentOutputStore
+    {
+        return $this->subagentOutputs;
     }
 
     /**

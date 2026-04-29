@@ -6,6 +6,7 @@ namespace Kosmokrator\UI\Tui\Primitive\Display;
 
 use Athanor\Signal;
 use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
+use Symfony\Component\Tui\Ansi\TextWrapper;
 use Symfony\Component\Tui\Render\RenderContext;
 
 /**
@@ -138,6 +139,6 @@ final class Text extends ReactiveWidget
             return [];
         }
 
-        return [$line];
+        return TextWrapper::wrapTextWithAnsi($line, max(1, $context->getColumns()));
     }
 }

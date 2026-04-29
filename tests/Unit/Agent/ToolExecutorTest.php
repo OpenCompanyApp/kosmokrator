@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentMode;
+use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\OutputTruncator;
+use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\Agent\ToolExecutor;
 use Kosmokrator\Tool\Permission\PermissionAction;
@@ -18,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 #[AllowMockObjectsWithoutExpectations]
 class ToolExecutorTest extends TestCase
@@ -131,6 +135,7 @@ class ToolExecutorTest extends TestCase
         );
 
         $this->assertSame(1, $stats->toolCalls);
+        $this->assertSame('file_read', $stats->lastTool);
     }
 
     public function test_malformed_tool_call_arguments_return_error_result_without_crashing(): void
@@ -1108,6 +1113,75 @@ class ToolExecutorTest extends TestCase
         $this->assertSame('subagent result', $results[0]->result);
     }
 
+    public function test_subagent_tool_call_without_id_is_normalized_before_display_and_execution(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'parent', '');
+        $seenId = null;
+
+        $subagentTool = $this->makeToolWithCallback('subagent', function (string $task, string $id) use (&$seenId): string {
+            $seenId = $id;
+
+            return "subagent {$id}: {$task}";
+        });
+        $toolCall = new ToolCall(id: 'tc_1', name: 'subagent', arguments: ['task' => 'do stuff']);
+
+        $this->ui->expects($this->once())
+            ->method('showSubagentSpawn')
+            ->with($this->callback(fn (array $entries): bool => ($entries[0]['args']['id'] ?? null) === 'agent-1'));
+        $this->ui->expects($this->once())
+            ->method('showSubagentRunning')
+            ->with($this->callback(fn (array $entries): bool => ($entries[0]['args']['id'] ?? null) === 'agent-1'));
+
+        $executor = $this->createExecutor();
+
+        $results = $executor->executeToolCalls(
+            toolCalls: [$toolCall],
+            tools: [$subagentTool],
+            allTools: [$subagentTool],
+            mode: AgentMode::Edit,
+            agentContext: $context,
+            stats: null,
+        );
+
+        $this->assertSame('agent-1', $seenId);
+        $this->assertCount(1, $results);
+        $this->assertSame('subagent agent-1: do stuff', $results[0]->result);
+    }
+
+    public function test_subagent_batch_tool_call_without_ids_is_normalized_before_execution(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'parent', '');
+        $seenIds = [];
+
+        $subagentTool = $this->makeToolWithCallback('subagent', function (array $agents) use (&$seenIds): string {
+            $seenIds = array_column($agents, 'id');
+
+            return implode(', ', $seenIds);
+        });
+        $toolCall = new ToolCall(id: 'tc_1', name: 'subagent', arguments: [
+            'agents' => [
+                ['task' => 'A'],
+                ['task' => 'B'],
+            ],
+        ]);
+
+        $executor = $this->createExecutor();
+
+        $results = $executor->executeToolCalls(
+            toolCalls: [$toolCall],
+            tools: [$subagentTool],
+            allTools: [$subagentTool],
+            mode: AgentMode::Edit,
+            agentContext: $context,
+            stats: null,
+        );
+
+        $this->assertSame(['agent-1', 'agent-2'], $seenIds);
+        $this->assertSame('agent-1, agent-2', $results[0]->result);
+    }
+
     // ── Multiple stats increments ────────────────────────────────────────
 
     public function test_multiple_tool_calls_increment_stats_individually(): void
@@ -1131,6 +1205,7 @@ class ToolExecutorTest extends TestCase
         );
 
         $this->assertSame(2, $stats->toolCalls);
+        $this->assertSame('grep', $stats->lastTool);
     }
 
     // ── Shell read-only mode with shell_start ────────────────────────────

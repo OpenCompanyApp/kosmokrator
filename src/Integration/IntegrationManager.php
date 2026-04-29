@@ -15,18 +15,51 @@ class IntegrationManager
         private readonly ToolProviderRegistry $providers,
         private readonly SettingsManager $settings,
         private readonly CredentialResolver $credentials,
+        private readonly ?IntegrationCapabilityResolver $capabilityResolver = null,
     ) {}
 
+    private function capabilities(): IntegrationCapabilityResolver
+    {
+        return $this->capabilityResolver ?? new IntegrationCapabilityResolver;
+    }
+
     /**
-     * Get all registered providers that can run in a CLI context (no OAuth).
+     * Get all registered providers that can execute in the local CLI runtime.
      *
      * @return array<string, ToolProvider>
      */
     public function getLocallyRunnableProviders(): array
     {
         $result = [];
-        foreach ($this->providers->all() as $name => $provider) {
+        foreach ($this->getDiscoverableProviders() as $name => $provider) {
             if ($this->isLocallyRunnable($provider)) {
+                $result[$name] = $provider;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get all integration providers that should be shown in catalog/docs.
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getDiscoverableProviders(): array
+    {
+        return $this->providers->all();
+    }
+
+    /**
+     * Get providers that can be configured from the headless CLI.
+     *
+     * @return array<string, ToolProvider>
+     */
+    public function getCliConfigurableProviders(): array
+    {
+        $result = [];
+        foreach ($this->getDiscoverableProviders() as $name => $provider) {
+            if ($this->isCliSetupSupported($provider)) {
                 $result[$name] = $provider;
             }
         }
@@ -52,17 +85,29 @@ class IntegrationManager
     }
 
     /**
-     * Check if a provider can run locally (no OAuth dependency).
+     * Check if a provider can execute in the local CLI runtime.
      */
     public function isLocallyRunnable(ToolProvider $provider): bool
     {
-        foreach ($provider->credentialFields() as $field) {
-            if (($field['type'] ?? '') === 'oauth_connect') {
-                return false;
-            }
-        }
+        return $this->isCliRuntimeSupported($provider);
+    }
 
-        return true;
+    public function isCliSetupSupported(ToolProvider $provider): bool
+    {
+        return $this->capabilities()->cliSetupSupported($provider);
+    }
+
+    public function isCliRuntimeSupported(ToolProvider $provider): bool
+    {
+        return $this->capabilities()->cliRuntimeSupported($provider);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function capabilityMetadata(ToolProvider $provider): array
+    {
+        return $this->capabilities()->resolve($provider);
     }
 
     /**
@@ -70,7 +115,8 @@ class IntegrationManager
      */
     public function isEnabled(string $integration): bool
     {
-        $enabled = $this->settings->getRaw("integrations.{$integration}.enabled");
+        $enabled = $this->settings->getRaw("integrations.{$integration}.enabled")
+            ?? $this->settings->getRaw("kosmokrator.integrations.{$integration}.enabled");
 
         return $enabled === true || $enabled === 'on';
     }
@@ -82,14 +128,17 @@ class IntegrationManager
      */
     public function getPermission(string $integration, string $operation): string
     {
-        $permission = $this->settings->getRaw("integrations.{$integration}.permissions.{$operation}");
+        $permission = $this->settings->getRaw("integrations.{$integration}.permissions.{$operation}")
+            ?? $this->settings->getRaw("kosmokrator.integrations.{$integration}.permissions.{$operation}");
 
         if (in_array($permission, ['allow', 'ask', 'deny'], true)) {
             return $permission;
         }
 
-        // Default: auto-allow both reads and writes unless explicitly overridden.
-        return 'allow';
+        $default = $this->settings->getRaw('integrations.permissions_default')
+            ?? $this->settings->getRaw('kosmokrator.integrations.permissions_default');
+
+        return in_array($default, ['allow', 'ask', 'deny'], true) ? $default : 'ask';
     }
 
     /**
@@ -181,7 +230,7 @@ class IntegrationManager
     }
 
     /**
-     * Get all installed providers (including OAuth-only ones).
+     * Get all installed providers that should be visible in settings and catalogs.
      *
      * @return array<string, ToolProvider>
      */
@@ -190,7 +239,10 @@ class IntegrationManager
         return $this->providers->all();
     }
 
-    private function isConfiguredForActivation(string $integration, ToolProvider $provider): bool
+    /**
+     * Check whether an integration has all required local credentials.
+     */
+    public function isConfiguredForActivation(string $integration, ToolProvider $provider, ?string $account = null): bool
     {
         $requiredFields = array_filter(
             $provider->credentialFields(),
@@ -207,7 +259,7 @@ class IntegrationManager
                 continue;
             }
 
-            $value = $this->credentials->get($integration, $key, null);
+            $value = $this->credentials->get($integration, $key, null, $account);
             if ($value === null) {
                 return false;
             }
@@ -222,5 +274,18 @@ class IntegrationManager
         }
 
         return true;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getAccounts(string $integration): array
+    {
+        return $this->credentials->getAccounts($integration);
+    }
+
+    public function credentialValue(string $integration, string $key, ?string $account = null): mixed
+    {
+        return $this->credentials->get($integration, $key, null, $account);
     }
 }

@@ -15,8 +15,8 @@ use Kosmokrator\Tool\Permission\Check\SessionGrantCheck;
  * Central permission decision engine: evaluates every tool call against a chain
  * of PermissionCheck stages to produce a PermissionResult (Allow / Ask / Deny).
  *
- * The chain order is: blocked paths -> deny patterns -> session grants ->
- * project boundary -> rules -> mode overrides.
+ * The chain order is: blocked paths -> deny patterns -> project boundary ->
+ * session grants -> rules -> mode overrides.
  * The first check that returns a non-null result halts the chain.
  *
  * Lives in the tool-call hot path — called before every tool execution.
@@ -43,8 +43,8 @@ class PermissionEvaluator
         $this->chain = array_values(array_filter([
             new BlockedPathCheck($this->blockedPaths),
             new DenyPatternCheck($this->rules),
-            new SessionGrantCheck($this->grants),
             $boundaryCheck,
+            new SessionGrantCheck($this->grants),
             new RuleCheck($this->rules),
             new ModeOverrideCheck(
                 $this->rules,

@@ -99,6 +99,9 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
         $lines[] = "{$border}┌{$hr}┐{$r}";
         $lines[] = $blank;
         $lines[] = $pad("{$gold}⏺  S W A R M   C O N T R O L{$r}");
+        if (($s['stale'] ?? false) === true) {
+            $lines[] = $pad("{$dim}offline snapshot from last persisted swarm state{$r}");
+        }
         $lines[] = $blank;
 
         // Progress bar
@@ -173,7 +176,8 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
                 $be = $bw - $bf;
                 $el = str_pad((int) $agent->elapsed().'s', 5);
                 $tools = $agent->toolCalls.' tools';
-                $lines[] = $pad("{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $bf)."{$dim}".str_repeat('░', $be)."{$r}  {$dim}{$el} {$tools}{$r}");
+                $activity = $this->formatAgentActivity($agent);
+                $lines[] = $pad("{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $bf)."{$dim}".str_repeat('░', $be)."{$r}  {$dim}{$el} {$tools}{$activity}{$r}");
                 $shown++;
             }
             $lines[] = $blank;
@@ -230,6 +234,35 @@ class SwarmDashboardWidget extends AbstractWidget implements FocusableInterface
             fn (string $line) => AnsiUtils::truncateToWidth($line, $columns),
             $lines,
         );
+    }
+
+    private function formatAgentActivity(object $agent): string
+    {
+        if (($agent->status ?? '') === 'retrying') {
+            $nextRetryAt = $agent->nextRetryAt ?? null;
+            if (is_float($nextRetryAt) || is_int($nextRetryAt)) {
+                $seconds = max(0.0, (float) $nextRetryAt - microtime(true));
+
+                return ' · retry in '.$this->formatter->formatElapsed($seconds);
+            }
+        }
+
+        $lastTool = $agent->lastTool ?? null;
+        if (is_string($lastTool) && $lastTool !== '') {
+            return ' · last '.$lastTool;
+        }
+
+        $lastMessagePreview = $agent->lastMessagePreview ?? null;
+        if (is_string($lastMessagePreview) && $lastMessagePreview !== '') {
+            return ' · msg '.$lastMessagePreview;
+        }
+
+        $outputPreview = $agent->outputPreview ?? null;
+        if (is_string($outputPreview) && $outputPreview !== '') {
+            return ' · output '.$outputPreview;
+        }
+
+        return '';
     }
 
     /** Pad content with spaces and border pipes to a fixed visible width. */

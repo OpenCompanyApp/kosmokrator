@@ -145,8 +145,17 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
         $cyan = Theme::agentDefault();
         $border = Theme::borderTask();
 
-        // Filter out background acks — show remaining (failures, awaited results)
-        $entries = array_values(array_filter($entries, fn ($e) => ! str_contains($e['result'], 'spawned in background')));
+        // Filter out background spawn acks, but keep completed background results.
+        $entries = array_values(array_filter($entries, function ($entry): bool {
+            if (($entry['kind'] ?? null) === 'completion') {
+                return true;
+            }
+
+            $mode = $entry['args']['mode'] ?? 'await';
+            $result = $entry['result'] ?? '';
+
+            return $mode !== 'background' && ! str_contains($result, 'spawned in background');
+        }));
         if (empty($entries)) {
             return;
         }
@@ -241,6 +250,9 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
 
         // Title
         $out .= $pad("{$gold}⏺  S W A R M   C O N T R O L{$r}");
+        if (($s['stale'] ?? false) === true) {
+            $out .= $pad("{$dim}offline snapshot from last persisted swarm state{$r}");
+        }
         $out .= $blank;
 
         // Progress bar
@@ -378,8 +390,35 @@ final class AnsiSubagentRenderer implements SubagentRendererInterface
 
         $elapsed = str_pad((int) $agent->elapsed().'s', 5);
         $tools = $agent->toolCalls.' tool'.($agent->toolCalls !== 1 ? 's' : '');
-        $retryNote = $agent->status === 'retrying' ? "  retry #{$agent->retries}" : '';
+        $activity = $this->formatAgentActivity($agent);
 
-        return "{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $filled)."{$dim}".str_repeat('░', $empty)."{$r}  {$dim}{$elapsed} {$tools}{$retryNote}{$r}";
+        return "{$gold}{$icon}{$r} {$dim}{$type}{$r}  {$text}{$task}{$r}  {$gold}".str_repeat('━', $filled)."{$dim}".str_repeat('░', $empty)."{$r}  {$dim}{$elapsed} {$tools}{$activity}{$r}";
+    }
+
+    private function formatAgentActivity(SubagentStats $agent): string
+    {
+        if ($agent->status === 'retrying') {
+            if ($agent->nextRetryAt !== null) {
+                $seconds = max(0.0, $agent->nextRetryAt - microtime(true));
+
+                return '  retry in '.$this->formatter->formatElapsed($seconds);
+            }
+
+            return "  retry #{$agent->retries}";
+        }
+
+        if ($agent->lastTool !== null && $agent->lastTool !== '') {
+            return "  last {$agent->lastTool}";
+        }
+
+        if ($agent->lastMessagePreview !== null && $agent->lastMessagePreview !== '') {
+            return "  msg {$agent->lastMessagePreview}";
+        }
+
+        if ($agent->outputPreview !== null && $agent->outputPreview !== '') {
+            return "  output {$agent->outputPreview}";
+        }
+
+        return '';
     }
 }

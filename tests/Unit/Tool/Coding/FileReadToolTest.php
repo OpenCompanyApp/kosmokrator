@@ -13,6 +13,7 @@ class FileReadToolTest extends TestCase
 
     protected function setUp(): void
     {
+        FileReadTool::resetGlobalCache();
         $this->tempDir = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
         $this->tool = new FileReadTool($this->tempDir);
@@ -20,6 +21,7 @@ class FileReadToolTest extends TestCase
 
     protected function tearDown(): void
     {
+        FileReadTool::resetGlobalCache();
         $this->removeDir($this->tempDir);
     }
 
@@ -194,12 +196,48 @@ class FileReadToolTest extends TestCase
         $this->assertStringContainsString("1\tline1", $second->output);
     }
 
+    public function test_cache_can_be_reset_after_file_mutation(): void
+    {
+        $path = $this->createFile("alpha\nbeta");
+
+        $first = $this->tool->execute(['path' => $path]);
+        $this->assertTrue($first->success);
+        $this->assertStringContainsString('alpha', $first->output);
+        $this->assertSame(1, $this->cacheEntryCount());
+
+        file_put_contents($path, "omega\nbeta");
+        FileReadTool::resetGlobalCache();
+
+        $second = $this->tool->execute(['path' => $path]);
+        $this->assertTrue($second->success);
+        $this->assertStringContainsString('omega', $second->output);
+        $this->assertStringNotContainsString('alpha', $second->output);
+    }
+
+    public function test_cache_is_bounded(): void
+    {
+        for ($i = 1; $i <= 140; $i++) {
+            $path = $this->createFile("line {$i}", "file-{$i}.txt");
+            $this->tool->execute(['path' => $path]);
+        }
+
+        $this->assertSame(128, $this->cacheEntryCount());
+    }
+
     private function createFile(string $content, string $name = 'test.txt'): string
     {
         $path = $this->tempDir.'/'.$name;
         file_put_contents($path, $content);
 
         return $path;
+    }
+
+    private function cacheEntryCount(): int
+    {
+        $property = new \ReflectionProperty(FileReadTool::class, 'cache');
+        $property->setAccessible(true);
+
+        return count($property->getValue());
     }
 
     private function removeDir(string $dir): void

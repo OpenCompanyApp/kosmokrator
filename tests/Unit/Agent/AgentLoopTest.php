@@ -2,12 +2,14 @@
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Amp\Cancellation;
 use Amp\CancelledException;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\LlmStreamingEvent;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\MemoryRepository;
 use Kosmokrator\Session\MessageRepository;
@@ -127,6 +129,93 @@ class AgentLoopTest extends TestCase
         $this->ui->expects($this->once())->method('showToolResult');
 
         $this->loop->run('Do something');
+    }
+
+    public function test_streaming_flushes_long_partial_text_before_stream_end(): void
+    {
+        $flushedBeforeStreamEnd = false;
+        $text = str_repeat('x', 300);
+
+        $llm = new class($text, function () use (&$flushedBeforeStreamEnd): bool {
+            return $flushedBeforeStreamEnd;
+        }) implements LlmClientInterface
+        {
+
+            public function __construct(
+                private readonly string $text,
+                private readonly \Closure $wasFlushed,
+            ) {}
+
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+            {
+                throw new \LogicException('chat should not be called');
+            }
+
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                yield LlmStreamingEvent::textDelta($this->text);
+
+                if (! ($this->wasFlushed)()) {
+                    throw new \RuntimeException('partial text was not flushed before stream end');
+                }
+
+                yield LlmStreamingEvent::streamEnd(10, 5, 0, 0, 0, FinishReason::Stop);
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return true;
+            }
+
+            public function setSystemPrompt(string $prompt): void {}
+
+            public function getProvider(): string
+            {
+                return 'test';
+            }
+
+            public function setProvider(string $provider): void {}
+
+            public function getModel(): string
+            {
+                return 'model';
+            }
+
+            public function setModel(string $model): void {}
+
+            public function getTemperature(): int|float|null
+            {
+                return null;
+            }
+
+            public function setTemperature(int|float|null $temperature): void {}
+
+            public function getMaxTokens(): ?int
+            {
+                return null;
+            }
+
+            public function setMaxTokens(?int $maxTokens): void {}
+
+            public function getReasoningEffort(): string
+            {
+                return 'off';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+        };
+
+        $ui = $this->createMock(RendererInterface::class);
+        $ui->expects($this->once())
+            ->method('streamChunk')
+            ->with($text)
+            ->willReturnCallback(function () use (&$flushedBeforeStreamEnd): void {
+                $flushedBeforeStreamEnd = true;
+            });
+        $ui->expects($this->once())->method('streamComplete');
+
+        $loop = new AgentLoop($llm, $ui, new NullLogger, 'You are a test assistant.');
+        $loop->run('Hi');
     }
 
     public function test_tool_not_found(): void

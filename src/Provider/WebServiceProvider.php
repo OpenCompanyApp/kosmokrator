@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Kosmokrator\LLM\ProviderAuthService;
+use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Web\Cache\WebTransientCache;
 use Kosmokrator\Web\Contracts\WebFetchProvider;
@@ -20,6 +22,7 @@ use Kosmokrator\Web\Provider\Search\ZaiMcpSearchProvider;
 use Kosmokrator\Web\Provider\WebFetchProviderManager;
 use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use Kosmokrator\Web\Safety\WebRequestGuard;
+use Kosmokrator\Web\WebProviderRegistry;
 
 final class WebServiceProvider extends ServiceProvider
 {
@@ -27,6 +30,11 @@ final class WebServiceProvider extends ServiceProvider
     {
         $config = $this->container->make('config');
 
+        $this->container->singleton(WebProviderRegistry::class, fn () => new WebProviderRegistry(
+            $config,
+            $this->container->make(SettingsRepositoryInterface::class),
+            $this->container->bound(ProviderCatalog::class) ? $this->container->make(ProviderCatalog::class) : null,
+        ));
         $this->container->singleton(WebTransientCache::class, fn () => new WebTransientCache(
             keepTurns: max(1, (int) $config->get('kosmokrator.web.cache.keep_turns', 2)),
             maxEntries: max(16, (int) $config->get('kosmokrator.web.cache.max_entries', 128)),

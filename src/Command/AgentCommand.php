@@ -6,11 +6,10 @@ use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
-use Kosmokrator\Agent\Exception\MaxTurnsExceededException;
-use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\Sdk\AgentBuilder as SdkAgentBuilder;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Setup\SetupFlowInterface;
 use Kosmokrator\Skill\SkillDispatcher;
@@ -62,7 +61,7 @@ class AgentCommand extends Command
             ->addOption('output-format', 'o', InputOption::VALUE_REQUIRED, 'Output format: text, json, stream-json', 'text')
             ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Override model')
             ->addOption('mode', null, InputOption::VALUE_REQUIRED, 'Agent mode: edit, plan, ask')
-            ->addOption('yolo', null, InputOption::VALUE_NONE, 'Skip all permission checks (alias for --permission-mode prometheus)')
+            ->addOption('yolo', null, InputOption::VALUE_NONE, 'Auto-approve governed permission prompts (alias for --permission-mode prometheus)')
             ->addOption('permission-mode', null, InputOption::VALUE_REQUIRED, 'Permission mode: guardian, argus, prometheus')
             ->addOption('max-turns', 't', InputOption::VALUE_REQUIRED, 'Maximum agentic turns')
             ->addOption('timeout', null, InputOption::VALUE_REQUIRED, 'Maximum runtime in seconds')
@@ -125,97 +124,80 @@ class AgentCommand extends Command
             $permissionMode = 'prometheus';
         }
 
-        // 4. Build headless session
-        $builder = new AgentSessionBuilder($this->container);
-        try {
-            $session = $builder->buildHeadless($format, [
-                'model' => $input->getOption('model'),
-                'permission_mode' => $permissionMode,
-                'agent_mode' => $input->getOption('mode'),
-                'persist_session' => ! $input->getOption('no-session'),
-                'system_prompt' => $input->getOption('system-prompt'),
-                'append_system_prompt' => $input->getOption('append-system-prompt'),
-                'max_turns' => $input->getOption('max-turns'),
-                'timeout' => $input->getOption('timeout'),
-            ]);
-        } catch (\RuntimeException $e) {
-            fwrite(STDERR, "Error: {$e->getMessage()}\n");
-            fwrite(STDERR, "Run kosmokrator setup to configure your provider and API key.\n");
+        // 4. Build SDK-backed headless agent
+        $renderer = new HeadlessRenderer($format);
+        $builder = SdkAgentBuilder::fromContainer($this->container)
+            ->withRenderer($renderer)
+            ->withOutputFormat($format);
+
+        if ($input->getOption('model') !== null) {
+            $builder->withModel((string) $input->getOption('model'));
+        }
+        if ($permissionMode !== null && PermissionMode::tryFrom((string) $permissionMode) === null) {
+            fwrite(STDERR, "Error: Invalid permission mode. Use: guardian, argus, prometheus\n");
 
             return 1;
         }
+        if ($permissionMode !== null) {
+            $builder->withPermissionMode((string) $permissionMode);
+        }
+        if ($input->getOption('mode') !== null && AgentMode::tryFrom((string) $input->getOption('mode')) === null) {
+            fwrite(STDERR, "Error: Invalid agent mode. Use: edit, plan, ask\n");
 
-        /** @var HeadlessRenderer $renderer */
-        $renderer = $session->ui;
-
-        // 5. Session resume for headless (--continue or --session)
-        $resumeId = $input->getOption('session');
-        if ($resumeId === null && ($input->getOption('continue') || $input->getOption('resume'))) {
-            $resumeId = $session->sessionManager->latestSession();
+            return 1;
+        }
+        if ($input->getOption('mode') !== null) {
+            $builder->withMode((string) $input->getOption('mode'));
+        }
+        if ($input->getOption('no-session')) {
+            $builder->withoutSessionPersistence();
+        }
+        if ($input->getOption('system-prompt') !== null) {
+            $builder->withSystemPrompt((string) $input->getOption('system-prompt'));
+        }
+        if ($input->getOption('append-system-prompt') !== null) {
+            $builder->appendSystemPrompt((string) $input->getOption('append-system-prompt'));
+        }
+        if ($input->getOption('max-turns') !== null) {
+            $builder->withMaxTurns((int) $input->getOption('max-turns'));
+        }
+        if ($input->getOption('timeout') !== null) {
+            $builder->withTimeout((int) $input->getOption('timeout'));
+        }
+        if ($input->getOption('session') !== null) {
+            $builder->resumeSession((string) $input->getOption('session'));
+        } elseif ($input->getOption('continue') || $input->getOption('resume')) {
+            $builder->resumeLatestSession();
         }
 
-        if ($resumeId !== null) {
-            $session->sessionManager->setCurrentSession($resumeId);
-            $history = $session->sessionManager->loadHistory($resumeId);
-            if ($history->count() > 0) {
-                $session->agentLoop->setHistory($history);
-            }
-        } elseif (! $input->getOption('no-session')) {
-            $modelName = $session->llm->getProvider().'/'.$session->llm->getModel();
-            $session->sessionManager->createSession($modelName);
-        }
+        $agent = $builder->build();
 
-        // 6. Install SIGINT handler for graceful cancellation
+        // 5. Install SIGINT handler for graceful cancellation
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
-            pcntl_signal(SIGINT, function () use ($session) {
-                $session->orchestrator?->cancelAll();
+            pcntl_signal(SIGINT, function () use ($agent) {
+                $agent->cancel('Interrupted by SIGINT');
                 $this->container->make(ShellSessionManager::class)->killAll();
                 exit(130);
             });
-            pcntl_signal(SIGTERM, function () use ($session) {
-                $session->orchestrator?->cancelAll();
+            pcntl_signal(SIGTERM, function () use ($agent) {
+                $agent->cancel('Interrupted by SIGTERM');
                 $this->container->make(ShellSessionManager::class)->killAll();
                 exit(143);
             });
         }
 
-        // 7. Run the agent
-        $renderer->showUserMessage($prompt);
-        try {
-            $result = $session->agentLoop->runHeadless($prompt);
-        } catch (MaxTurnsExceededException $e) {
-            $renderer->emitError("Agent exceeded maximum of {$e->maxTurns} turns.");
-            if ($e->partialResult !== '') {
-                $renderer->emitResult($e->partialResult, (int) $input->getOption('max-turns'), 0, 0);
+        // 6. Run and emit result
+        $result = $agent->collect($prompt);
+        if ($result->error !== null && $result->text === 'Error: '.$result->error) {
+            if ($format === OutputFormat::Json) {
+                $renderer->emitError($result->error, $result->exitCode);
             }
-
-            return 2;
-        } catch (TimeoutExceededException $e) {
-            $renderer->emitError("Agent timed out after {$e->timeoutSeconds} seconds.");
-            if ($e->partialResult !== '') {
-                $renderer->emitResult($e->partialResult, 0, 0, 0);
-            }
-
-            return 2;
-        } catch (\Throwable $e) {
-            $renderer->emitError($e->getMessage());
-
-            return 1;
+        } else {
+            $renderer->emitResult($result->text, $result->turns, $result->tokensIn, $result->tokensOut);
         }
 
-        // 8. Output the result
-        // runHeadless() returns "Error: ..." on recoverable errors — treat as failure
-        $isError = str_starts_with($result, 'Error: ');
-        $tokensIn = $session->agentLoop->getSessionTokensIn();
-        $tokensOut = $session->agentLoop->getSessionTokensOut();
-        $renderer->emitResult($result, 0, $tokensIn, $tokensOut);
-
-        // 9. Cleanup
-        $session->orchestrator?->cancelAll();
-        $this->container->make(ShellSessionManager::class)->killAll();
-
-        return $isError ? 1 : 0;
+        return $result->exitCode;
     }
 
     /**
@@ -333,13 +315,20 @@ class AgentCommand extends Command
         $nextInputShown = false;
 
         // Dispatch immediate slash commands (e.g. /guardian) even while the agent is mid-run.
-        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx): bool {
+        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx, $session): bool {
             $command = $registry->resolve($input);
             if ($command === null || ! $command->immediate()) {
                 return false;
             }
             $args = $registry->extractArgs($input, $command);
-            $command->execute($args, $ctx);
+            $result = $command->execute($args, $ctx);
+
+            if ($result->action === SlashCommandAction::Quit) {
+                $session->orchestrator?->cancelAll();
+                $this->container->make(ShellSessionManager::class)->killAll();
+                $session->ui->teardown();
+                exit(0);
+            }
 
             return true;
         });
@@ -437,11 +426,22 @@ class AgentCommand extends Command
             // Auto-continue: if background subagents are running, wait for them
             // to finish, then feed their results back to the LLM automatically
             // so it can synthesize without requiring the user to type anything.
-            if ($session->agentLoop->hasRunningBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
-                while ($session->agentLoop->hasRunningBackgroundAgents()) {
-                    \Amp\delay(1.0);
+            $backgroundWaitInterrupted = false;
+            if ($session->agentLoop->hasActiveBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
+                while ($session->agentLoop->hasActiveBackgroundAgents()) {
+                    \Amp\delay(0.25);
+
+                    $queued = $session->ui->consumeQueuedMessage();
+                    if ($queued !== null) {
+                        $nextInput = $queued;
+                        $nextInputShown = true;
+                        $backgroundWaitInterrupted = true;
+
+                        break;
+                    }
                 }
-                if ($session->agentLoop->hasPendingBackgroundResults()) {
+
+                if (! $backgroundWaitInterrupted && $session->agentLoop->hasPendingBackgroundResults()) {
                     $session->agentLoop->run('[system: all background agents have completed — their results follow]');
                 }
             }
@@ -501,8 +501,10 @@ class AgentCommand extends Command
                 }
             }
 
-            $nextInput = $session->ui->consumeQueuedMessage();
-            $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
+            if ($nextInput === null) {
+                $nextInput = $session->ui->consumeQueuedMessage();
+                $nextInputShown = $nextInput !== null; // queue messages are pre-displayed
+            }
         }
 
         $session->orchestrator?->cancelAll();

@@ -78,7 +78,7 @@ final class TuiStateStore
 
     // ── Streaming ──────────────────────────────────────────────────────
 
-    /** @var Signal<mixed> MarkdownWidget|AnsiArtWidget|null */
+    /** @var Signal<mixed> KosmokratorMarkdownWidget|AnsiArtWidget|null */
     private Signal $activeResponse;
 
     /** @var Signal<bool> */
@@ -91,6 +91,9 @@ final class TuiStateStore
 
     /** @var Signal<?DeferredCancellation> */
     private Signal $requestCancellation;
+
+    /** @var Signal<?string> */
+    private Signal $focusedWidgetId;
 
     /** @var Signal<list<string>> */
     private Signal $messageQueue;
@@ -227,6 +230,7 @@ final class TuiStateStore
         // Input / Prompt
         $this->pendingEditorRestore = self::nullable();
         $this->requestCancellation = self::nullable();
+        $this->focusedWidgetId = self::nullable();
         $this->messageQueue = self::arrayOf();
         $this->pendingQuestionRecap = self::arrayOf();
 
@@ -590,6 +594,21 @@ final class TuiStateStore
     public function requestCancellationSignal(): Signal
     {
         return $this->requestCancellation;
+    }
+
+    public function getFocusedWidgetId(): ?string
+    {
+        return $this->focusedWidgetId->get();
+    }
+
+    public function setFocusedWidgetId(?string $v): void
+    {
+        $this->focusedWidgetId->set($v);
+    }
+
+    public function focusedWidgetIdSignal(): Signal
+    {
+        return $this->focusedWidgetId;
     }
 
     public function getMessageQueue(): array

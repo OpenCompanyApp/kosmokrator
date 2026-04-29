@@ -67,6 +67,149 @@ final class IntegrationManagerTest extends TestCase
         $this->assertArrayHasKey('github', $manager->getActiveProviders());
     }
 
+    public function test_redirect_oauth_provider_is_discoverable_but_not_locally_runnable_by_default(): void
+    {
+        $registry = new ToolProviderRegistry;
+        $registry->register($this->fakeProvider('google_docs', [
+            ['key' => 'oauth', 'type' => 'oauth_connect', 'required' => true],
+        ]));
+
+        $settings = $this->settingsManagerWithEnabledIntegration('google_docs');
+        $credentials = $this->createStub(CredentialResolver::class);
+        $manager = new IntegrationManager($registry, $settings, $credentials);
+
+        $this->assertArrayHasKey('google_docs', $manager->getDiscoverableProviders());
+        $this->assertArrayNotHasKey('google_docs', $manager->getLocallyRunnableProviders());
+        $this->assertFalse($manager->capabilityMetadata($registry->get('google_docs'))['cli_setup_supported']);
+    }
+
+    public function test_explicit_capabilities_override_legacy_credential_heuristics(): void
+    {
+        $registry = new ToolProviderRegistry;
+        $registry->register(new class implements ToolProvider
+        {
+            public function appName(): string
+            {
+                return 'ticktick';
+            }
+
+            public function appMeta(): array
+            {
+                return ['label' => 'TickTick'];
+            }
+
+            public function tools(): array
+            {
+                return [];
+            }
+
+            public function isIntegration(): bool
+            {
+                return true;
+            }
+
+            public function createTool(string $class, array $context = []): Tool
+            {
+                throw new \RuntimeException('not used');
+            }
+
+            public function luaDocsPath(): ?string
+            {
+                return null;
+            }
+
+            public function credentialFields(): array
+            {
+                return [
+                    ['key' => 'oauth', 'type' => 'oauth_connect', 'required' => true],
+                ];
+            }
+
+            public function capabilities(): array
+            {
+                return [
+                    'auth_strategy' => 'oauth2_authorization_code',
+                    'compatibility' => [
+                        'cli_setup_supported' => false,
+                        'cli_runtime_supported' => true,
+                    ],
+                    'compatibility_summary' => 'Runtime supported with brokered credentials.',
+                ];
+            }
+        });
+
+        $settings = $this->settingsManagerWithEnabledIntegration('ticktick');
+        $credentials = $this->createStub(CredentialResolver::class);
+        $manager = new IntegrationManager($registry, $settings, $credentials);
+
+        $this->assertArrayHasKey('ticktick', $manager->getDiscoverableProviders());
+        $this->assertArrayHasKey('ticktick', $manager->getLocallyRunnableProviders());
+        $this->assertFalse($manager->capabilityMetadata($registry->get('ticktick'))['cli_setup_supported']);
+        $this->assertTrue($manager->capabilityMetadata($registry->get('ticktick'))['cli_runtime_supported']);
+    }
+
+    public function test_seo_capability_metadata_overrides_legacy_credential_heuristics(): void
+    {
+        $registry = new ToolProviderRegistry;
+        $registry->register(new class implements ToolProvider
+        {
+            public function appName(): string
+            {
+                return 'google_sheets';
+            }
+
+            public function appMeta(): array
+            {
+                return [
+                    'label' => 'Google Sheets',
+                    'seo' => [
+                        'auth_strategy' => 'oauth2_authorization_code',
+                        'auth_summary' => 'OAuth browser setup required; proxy support planned.',
+                        'cli_setup_supported' => false,
+                        'cli_runtime_supported' => true,
+                    ],
+                ];
+            }
+
+            public function tools(): array
+            {
+                return [];
+            }
+
+            public function isIntegration(): bool
+            {
+                return true;
+            }
+
+            public function createTool(string $class, array $context = []): Tool
+            {
+                throw new \RuntimeException('not used');
+            }
+
+            public function luaDocsPath(): ?string
+            {
+                return null;
+            }
+
+            public function credentialFields(): array
+            {
+                return [
+                    ['key' => 'token', 'type' => 'secret', 'required' => true],
+                ];
+            }
+        });
+
+        $settings = $this->settingsManagerWithEnabledIntegration('google_sheets');
+        $credentials = $this->createStub(CredentialResolver::class);
+        $manager = new IntegrationManager($registry, $settings, $credentials);
+        $capabilities = $manager->capabilityMetadata($registry->get('google_sheets'));
+
+        $this->assertSame('oauth2_authorization_code', $capabilities['auth_strategy']);
+        $this->assertSame('OAuth browser setup required; proxy support planned.', $capabilities['compatibility_summary']);
+        $this->assertFalse($capabilities['cli_setup_supported']);
+        $this->assertTrue($capabilities['cli_runtime_supported']);
+    }
+
     public function test_enabled_provider_with_multiple_required_credentials_stays_inactive_until_all_are_present(): void
     {
         $registry = new ToolProviderRegistry;
@@ -91,7 +234,7 @@ final class IntegrationManagerTest extends TestCase
         $this->assertArrayNotHasKey('plane', $manager->getActiveProviders());
     }
 
-    public function test_default_write_permission_is_allow(): void
+    public function test_default_permission_comes_from_config(): void
     {
         $registry = new ToolProviderRegistry;
         $previousHome = getenv('HOME');
@@ -101,7 +244,7 @@ final class IntegrationManagerTest extends TestCase
 
         try {
             $settings = new SettingsManager(
-                config: new Repository([]),
+                config: new Repository(['kosmokrator' => ['integrations' => ['permissions_default' => 'deny']]]),
                 schema: new SettingsSchema,
                 store: new YamlConfigStore,
                 baseConfigPath: dirname(__DIR__, 4).'/config',
@@ -111,8 +254,8 @@ final class IntegrationManagerTest extends TestCase
 
             $manager = new IntegrationManager($registry, $settings, $credentials);
 
-            $this->assertSame('allow', $manager->getPermission('plane', 'write'));
-            $this->assertSame('allow', $manager->getPermission('plane', 'read'));
+            $this->assertSame('deny', $manager->getPermission('plane', 'write'));
+            $this->assertSame('deny', $manager->getPermission('plane', 'read'));
         } finally {
             putenv($previousHome === false ? 'HOME' : "HOME={$previousHome}");
         }

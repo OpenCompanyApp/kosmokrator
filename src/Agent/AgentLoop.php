@@ -42,6 +42,12 @@ use Psr\Log\LoggerInterface;
  */
 class AgentLoop
 {
+    private const STREAM_PARTIAL_FLUSH_BYTES = 240;
+
+    private const STREAM_PARTIAL_FLUSH_SECONDS = 0.08;
+
+    private const MAX_REASONING_CONTENT_BYTES = 65_536;
+
     private ConversationHistory $history;
 
     /** @var Tool[] Full set of tools from registry */
@@ -67,6 +73,11 @@ class AgentLoop
     private readonly ToolExecutor $toolExecutor;
 
     private readonly ContextManager $contextManager;
+
+    /** @var array{cache_read: int, prompt_tokens: int, round: int}|null */
+    private ?array $lastCacheObservation = null;
+
+    private int $lastHeadlessTurns = 0;
 
     public function __construct(
         private readonly LlmClientInterface $llm,
@@ -131,6 +142,19 @@ class AgentLoop
         }
 
         return $this->agentContext->orchestrator->hasRunningBackgroundAgents($this->agentContext->id);
+    }
+
+    /**
+     * Whether background subagents are queued, waiting, retrying, or running.
+     * Used by the REPL to keep watching long-running swarms until terminal.
+     */
+    public function hasActiveBackgroundAgents(): bool
+    {
+        if ($this->agentContext === null) {
+            return false;
+        }
+
+        return $this->agentContext->orchestrator->hasActiveBackgroundAgents($this->agentContext->id);
     }
 
     /**
@@ -249,9 +273,11 @@ class AgentLoop
                     $tokensOut = $responseData->tokensOut;
                     $cacheReadInputTokens = $responseData->cacheReadInputTokens;
                     $cacheWriteInputTokens = $responseData->cacheWriteInputTokens;
+                    $this->stats?->markMessagePreview($fullText);
 
                     // Accumulate session-level token usage
                     $this->tokens->accumulate($tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
+                    $this->recordCacheObservation($tokensIn, $cacheReadInputTokens, $cacheWriteInputTokens, $round);
 
                     $this->events?->dispatch(new LlmResponseReceived(
                         $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens,
@@ -402,6 +428,7 @@ class AgentLoop
         $this->history->addUser($task);
 
         $this->stuckDetector->reset();
+        $this->lastHeadlessTurns = 0;
 
         $round = 0;
         $trimAttempts = 0;
@@ -410,6 +437,7 @@ class AgentLoop
         try {
             while (true) {
                 $round++;
+                $this->lastHeadlessTurns = $round;
                 $this->stats?->touchActivity();
 
                 // Yield to the event loop so cancellation signals, background
@@ -452,8 +480,10 @@ class AgentLoop
                     $fullText = $responseData->text;
                     $toolCalls = $responseData->toolCalls;
                     $finishReason = $responseData->finishReason;
+                    $this->stats?->markMessagePreview($fullText);
 
                     $this->tokens->accumulate($responseData->tokensIn, $responseData->tokensOut, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens);
+                    $this->recordCacheObservation($responseData->tokensIn, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens, $round);
                     $this->stats?->addTokens($responseData->tokensIn, $responseData->tokensOut);
                     $this->stats?->touchActivity();
 
@@ -596,6 +626,11 @@ class AgentLoop
         return $this->history;
     }
 
+    public function getLastHeadlessTurns(): int
+    {
+        return $this->lastHeadlessTurns;
+    }
+
     public function getSessionCost(): float
     {
         return $this->calculateSessionCost(display: false);
@@ -655,6 +690,44 @@ class AgentLoop
         return str_starts_with($message, 'watchdog:') ? $message : null;
     }
 
+    private function recordCacheObservation(int $promptTokens, int $cacheReadTokens, int $cacheWriteTokens, int $round): void
+    {
+        $previous = $this->lastCacheObservation;
+        $this->lastCacheObservation = [
+            'cache_read' => $cacheReadTokens,
+            'prompt_tokens' => $promptTokens,
+            'round' => $round,
+        ];
+
+        if ($previous === null || $previous['cache_read'] < 1000) {
+            return;
+        }
+
+        $promptDelta = abs($promptTokens - $previous['prompt_tokens']);
+        $promptStable = $promptDelta <= max(1000, (int) round($previous['prompt_tokens'] * 0.15));
+        $cacheDropped = $cacheReadTokens < (int) floor($previous['cache_read'] * 0.25);
+
+        if (! $promptStable || ! $cacheDropped) {
+            return;
+        }
+
+        $this->log->warning('Provider prompt cache read dropped sharply', [
+            'round' => $round,
+            'previous_round' => $previous['round'],
+            'prompt_tokens' => $promptTokens,
+            'previous_prompt_tokens' => $previous['prompt_tokens'],
+            'cache_read_tokens' => $cacheReadTokens,
+            'previous_cache_read_tokens' => $previous['cache_read'],
+            'cache_write_tokens' => $cacheWriteTokens,
+            'model' => $this->contextManager->getModelName(),
+            'likely_causes' => [
+                'provider evicted cache entry',
+                'stable system prompt or tool schema changed',
+                'provider cache TTL expired',
+            ],
+        ]);
+    }
+
     public function getPruner(): ?ContextPruner
     {
         return $this->contextManager->getPruner();
@@ -671,6 +744,7 @@ class AgentLoop
     public function resetSessionCost(): void
     {
         $this->tokens->reset();
+        $this->lastCacheObservation = null;
     }
 
     /**
@@ -762,6 +836,9 @@ class AgentLoop
         }
 
         $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+        $reasoningContent = $this->shouldRetainReasoning()
+            ? $this->capReasoningContent($response->reasoningContent)
+            : '';
 
         return new ResponseData(
             $response->text,
@@ -771,7 +848,7 @@ class AgentLoop
             $response->completionTokens,
             $response->cacheReadInputTokens,
             $response->cacheWriteInputTokens,
-            $response->reasoningContent,
+            $reasoningContent,
         );
     }
 
@@ -925,6 +1002,7 @@ class AgentLoop
         foreach ($results as $id => $result) {
             $stats = $this->agentContext->orchestrator->getStats($id);
             $batchEntries[] = [
+                'kind' => 'completion',
                 'args' => [
                     'type' => $stats->agentType ?? 'explore',
                     'id' => $id,
@@ -932,7 +1010,8 @@ class AgentLoop
                     'mode' => 'background',
                 ],
                 'result' => $result,
-                'success' => $stats->status !== 'failed',
+                'success' => ($stats?->status ?? 'done') !== 'failed',
+                'stats' => $stats,
             ];
         }
         $this->ui->showSubagentBatch($batchEntries);
@@ -1013,6 +1092,8 @@ class AgentLoop
     {
         $fullText = '';
         $reasoningContent = '';
+        $retainReasoning = $this->shouldRetainReasoning();
+        $reasoningTruncated = false;
         $toolCalls = [];
         $tokensIn = 0;
         $tokensOut = 0;
@@ -1022,6 +1103,7 @@ class AgentLoop
 
         // Buffer for line-by-line rendering: accumulate partial lines, flush on \n
         $lineBuffer = '';
+        $lastPartialFlushAt = microtime(true);
 
         foreach ($this->llm->stream($messages, $tools, $cancellation) as $event) {
             if ($event->type === 'text_delta') {
@@ -1033,10 +1115,24 @@ class AgentLoop
                     $line = substr($lineBuffer, 0, $nl + 1);
                     $lineBuffer = substr($lineBuffer, $nl + 1);
                     SafeDisplay::call(fn () => $this->ui->streamChunk($line), $this->log);
+                    $lastPartialFlushAt = microtime(true);
+                }
+
+                if ($lineBuffer !== ''
+                    && (strlen($lineBuffer) >= self::STREAM_PARTIAL_FLUSH_BYTES
+                        || (microtime(true) - $lastPartialFlushAt) >= self::STREAM_PARTIAL_FLUSH_SECONDS)) {
+                    $partial = $lineBuffer;
+                    $lineBuffer = '';
+                    $lastPartialFlushAt = microtime(true);
+                    SafeDisplay::call(fn () => $this->ui->streamChunk($partial), $this->log);
                 }
             } elseif ($event->type === 'thinking_delta') {
-                // Accumulate reasoning silently — displayed once after stream completes
-                $reasoningContent .= $event->delta;
+                if ($retainReasoning && ! $reasoningTruncated) {
+                    [$reasoningContent, $reasoningTruncated] = $this->appendReasoningContent(
+                        $reasoningContent,
+                        $event->delta,
+                    );
+                }
             } elseif ($event->type === 'tool_call') {
                 $toolCalls[] = new ToolCall(
                     id: $event->toolCall['id'],
@@ -1066,6 +1162,42 @@ class AgentLoop
         ]);
 
         return [$fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent];
+    }
+
+    private function shouldRetainReasoning(): bool
+    {
+        return ($this->sessionManager?->getSetting('show_reasoning') ?? 'off') === 'on';
+    }
+
+    /**
+     * @return array{string, bool} [reasoning content, whether the cap was reached]
+     */
+    private function appendReasoningContent(string $current, string $delta): array
+    {
+        $remaining = self::MAX_REASONING_CONTENT_BYTES - strlen($current);
+        if ($remaining <= 0) {
+            return [$this->capReasoningContent($current), true];
+        }
+
+        if (strlen($delta) <= $remaining) {
+            return [$current.$delta, false];
+        }
+
+        return [
+            $current.mb_strcut($delta, 0, $remaining, 'UTF-8')
+                ."\n\n[reasoning truncated at ".self::MAX_REASONING_CONTENT_BYTES.' bytes]',
+            true,
+        ];
+    }
+
+    private function capReasoningContent(string $content): string
+    {
+        if (strlen($content) <= self::MAX_REASONING_CONTENT_BYTES) {
+            return $content;
+        }
+
+        return mb_strcut($content, 0, self::MAX_REASONING_CONTENT_BYTES, 'UTF-8')
+            ."\n\n[reasoning truncated at ".self::MAX_REASONING_CONTENT_BYTES.' bytes]';
     }
 
     public function performCompaction(): void

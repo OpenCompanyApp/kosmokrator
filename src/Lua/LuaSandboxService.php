@@ -15,8 +15,9 @@ class LuaSandboxService
      *
      * @param  array{memoryLimit?: int, cpuLimit?: float}  $options
      * @param  array<string, mixed>  $globals  Named globals to inject as Lua tables
+     * @param  array<string, callable>  $phpFunctions  Dotted helper names exposed as Lua functions
      */
-    public function execute(string $code, array $options = [], ?LuaBridge $bridge = null, array $globals = [], ?NativeToolBridge $nativeBridge = null): LuaResult
+    public function execute(string $code, array $options = [], ?LuaBridge $bridge = null, array $globals = [], ?NativeToolBridge $nativeBridge = null, array $phpFunctions = []): LuaResult
     {
         $memoryLimit = $options['memoryLimit'] ?? 32 * 1024 * 1024; // 32 MB
         $cpuLimit = $options['cpuLimit'] ?? 30.0; // 30 seconds
@@ -37,8 +38,12 @@ class LuaSandboxService
             $nativeBridge->register($sandbox);
         }
 
+        if ($phpFunctions !== []) {
+            $this->registerPhpFunctions($sandbox, $phpFunctions);
+        }
+
         foreach ($globals as $name => $value) {
-            $sandbox->load("{$name} = ".$this->phpToLua($value))->call();
+            $this->runChunk($sandbox, "{$name} = ".$this->phpToLua($value));
         }
 
         $this->registerJsonGlobals($sandbox);
@@ -46,8 +51,7 @@ class LuaSandboxService
         $start = microtime(true);
 
         try {
-            $fn = $sandbox->load($code);
-            $result = $fn();
+            $result = $this->runLoadedChunk($sandbox->load($code));
             $elapsed = round((microtime(true) - $start) * 1000, 1);
 
             return new LuaResult(
@@ -71,6 +75,58 @@ class LuaSandboxService
     }
 
     /**
+     * Register simple dotted PHP functions as Lua functions, e.g.
+     * `docs.read = function(...) return __php_globals.call("docs.read", ...) end`.
+     *
+     * @param  array<string, callable>  $phpFunctions
+     */
+    private function registerPhpFunctions(Sandbox $sandbox, array $phpFunctions): void
+    {
+        $sandbox->register('__php_globals', [
+            'call' => function (string $name, mixed ...$args) use ($phpFunctions): mixed {
+                try {
+                    if (! isset($phpFunctions[$name])) {
+                        throw new \RuntimeException("Unknown PHP-backed Lua helper: {$name}");
+                    }
+
+                    return $phpFunctions[$name](...$args);
+                } catch (\Throwable $e) {
+                    return ['__error' => $e->getMessage()];
+                }
+            },
+        ]);
+
+        $lines = [];
+        foreach (array_keys($phpFunctions) as $name) {
+            $parts = explode('.', $name);
+            if (count($parts) !== 2) {
+                continue;
+            }
+
+            [$table, $function] = $parts;
+            $table = preg_replace('/[^A-Za-z0-9_]/', '', $table) ?? '';
+            $function = preg_replace('/[^A-Za-z0-9_]/', '', $function) ?? '';
+            if ($table === '' || $function === '') {
+                continue;
+            }
+
+            $escaped = addcslashes($name, '"\\');
+            $lines[] = "{$table} = {$table} or {}";
+            $lines[] = "{$table}.{$function} = function(...)
+                local result = __php_globals.call(\"{$escaped}\", ...)
+                if type(result) == \"table\" and result.__error then
+                    error(result.__error, 2)
+                end
+                return result
+            end";
+        }
+
+        if ($lines !== []) {
+            $this->runChunk($sandbox, implode("\n", $lines));
+        }
+    }
+
+    /**
      * Override Lua's print() and add dump() with table-aware serialization.
      *
      * Standard Lua's tostring() outputs "table: 0x..." for tables, which is
@@ -84,10 +140,12 @@ class LuaSandboxService
         $sandbox->register('__php', [
             'capture' => function ($line) use (&$output) {
                 $output[] = (string) $line;
+
+                return [];
             },
         ]);
 
-        $sandbox->load('
+        $this->runChunk($sandbox, '
             local _tostring = tostring
 
             local function __serialize(val, indent, seen)
@@ -138,7 +196,7 @@ class LuaSandboxService
                 __php.capture(s)
                 return val
             end
-        ')->call();
+        ');
     }
 
     /**
@@ -159,7 +217,7 @@ class LuaSandboxService
             },
         ]);
 
-        $sandbox->load('
+        $this->runChunk($sandbox, '
             local function make_namespace(path)
                 return setmetatable({}, {
                     __index = function(self, key)
@@ -178,7 +236,7 @@ class LuaSandboxService
                 })
             end
             app = make_namespace("")
-        ')->call();
+        ');
     }
 
     /**
@@ -274,7 +332,7 @@ class LuaSandboxService
             },
         ]);
 
-        $sandbox->load('
+        $this->runChunk($sandbox, '
             json = {
                 decode = function(s)
                     if type(s) ~= "string" then
@@ -319,6 +377,28 @@ class LuaSandboxService
                     return __regex.gsub(subject, pattern, replacement, limit or -1)
                 end,
             }
-        ')->call();
+        ');
+    }
+
+    private function runChunk(Sandbox $sandbox, string $code): mixed
+    {
+        return $this->runLoadedChunk($sandbox->load($code));
+    }
+
+    private function runLoadedChunk(mixed $chunk): mixed
+    {
+        if ($chunk instanceof \Closure) {
+            return $chunk();
+        }
+
+        if (is_object($chunk) && method_exists($chunk, 'call')) {
+            return $chunk->call();
+        }
+
+        if (is_callable($chunk)) {
+            return $chunk();
+        }
+
+        throw new \RuntimeException('Lua chunk is not callable.');
     }
 }

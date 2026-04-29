@@ -57,6 +57,8 @@ class AgentModeTest extends TestCase
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
+        $this->assertContains('web_search', $tools);
+        $this->assertContains('web_fetch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);
@@ -83,6 +85,8 @@ class AgentModeTest extends TestCase
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
+        $this->assertContains('web_search', $tools);
+        $this->assertContains('web_fetch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);

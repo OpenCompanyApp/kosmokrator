@@ -13,9 +13,10 @@ use Kosmokrator\Tool\Permission\PermissionResult;
 /**
  * Prompts the user before file tools access paths outside the project root.
  *
- * Positioned after SessionGrantCheck — session grants and Prometheus mode bypass
- * this check. In Guardian and Argus modes, outside-project paths trigger an Ask
- * prompt so the user can approve or deny.
+ * Positioned before SessionGrantCheck so a session-wide tool grant cannot
+ * silently approve newly requested paths outside the project root. Prometheus
+ * mode still bypasses this check. In Guardian and Argus modes, outside-project
+ * paths trigger an Ask prompt so the user can approve or deny.
  */
 class ProjectBoundaryCheck implements PermissionCheck
 {

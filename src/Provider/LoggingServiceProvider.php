@@ -27,8 +27,8 @@ class LoggingServiceProvider extends ServiceProvider
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
         $logDir = $home.'/.kosmokrator/logs';
 
-        if (! is_dir($logDir)) {
-            mkdir($logDir, 0700, true);
+        if (! is_dir($logDir) && ! @mkdir($logDir, 0700, true) && ! is_dir($logDir)) {
+            throw new \RuntimeException("Unable to create log directory: {$logDir}");
         }
 
         $logger = new Logger('kosmokrator');

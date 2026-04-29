@@ -155,7 +155,7 @@ final class AgentSessionBuilder
      * and optionally skips session persistence.
      *
      * @param  OutputFormat  $format  Output format (text, json, stream-json)
-     * @param  array{model?: string, permission_mode?: string, agent_mode?: string, persist_session?: bool, system_prompt?: string, append_system_prompt?: string, max_turns?: int, timeout?: int}  $options  Headless options
+     * @param  array{model?: string, permission_mode?: string, agent_mode?: string, persist_session?: bool, system_prompt?: string, append_system_prompt?: string, max_turns?: int, timeout?: int, renderer?: RendererInterface}  $options  Headless options
      * @return AgentSession All components needed for headless execution
      *
      * @throws \RuntimeException If API key is not configured
@@ -164,8 +164,11 @@ final class AgentSessionBuilder
     {
         $config = $this->container->make('config');
 
-        // Create headless renderer
-        $ui = new HeadlessRenderer($format);
+        // Create headless renderer. SDK callers can supply an event/callback
+        // renderer while keeping the same headless agent wiring as the CLI.
+        $ui = ($options['renderer'] ?? null) instanceof RendererInterface
+            ? $options['renderer']
+            : new HeadlessRenderer($format);
 
         // Create LLM client (always use sync/prism for headless)
         $llmFactory = new LlmClientFactory($this->container);

@@ -79,6 +79,8 @@ final class SettingsSchemaTest extends TestCase
             'permissions',
             'gateway',
             'integrations',
+            'mcp',
+            'web',
             'subagents',
             'advanced',
             'audio',

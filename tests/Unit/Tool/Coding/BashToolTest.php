@@ -176,4 +176,31 @@ class BashToolTest extends TestCase
         $this->assertArrayHasKey('timeout', $params);
         $this->assertSame('integer', $params['timeout']['type']);
     }
+
+    public function test_large_stdout_is_spooled_and_preview_is_bounded(): void
+    {
+        $tmpDir = sys_get_temp_dir().'/kosmokrator_bash_spool_test_'.uniqid();
+        mkdir($tmpDir, 0755, true);
+
+        try {
+            $tool = new BashTool(storagePath: $tmpDir);
+            $result = \Amp\async(fn () => $tool->execute([
+                'command' => 'php -r '.escapeshellarg('echo str_repeat("x", 70000);'),
+            ]))->await();
+
+            $this->assertTrue($result->success);
+            $this->assertLessThan(55_000, strlen($result->output));
+            $this->assertStringContainsString('[truncated - full stdout saved to ', $result->output);
+            $this->assertSame(1, preg_match('/stdout saved to ([^;]+);/', $result->output, $matches));
+            $this->assertFileExists($matches[1]);
+            $this->assertGreaterThanOrEqual(70_000, filesize($matches[1]));
+        } finally {
+            foreach (glob($tmpDir.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+            if (is_dir($tmpDir)) {
+                rmdir($tmpDir);
+            }
+        }
+    }
 }

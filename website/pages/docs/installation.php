@@ -4,11 +4,34 @@ $docSlug = 'installation';
 ob_start();
 ?>
 <p class="lead">
-    KosmoKrator is distributed in three forms: a self-contained static binary
-    (no dependencies at all), a PHAR package (requires PHP 8.4+), and as a
-    Composer-based source checkout. Choose the method that fits your environment
-    and workflow.
+    KosmoKrator is distributed in four practical forms: a self-contained static
+    binary (no dependencies at all), a PHAR package (requires PHP 8.4+), a
+    Composer-based source checkout, and Android via Termux. Choose the method
+    that fits your environment and workflow.
 </p>
+
+<div class="docs-index-grid">
+    <a class="docs-card" href="#quick-install">
+        <span class="card-icon">&#x26A1;</span>
+        <h3>Quick install</h3>
+        <p>Auto-detected static binary for macOS and Linux.</p>
+    </a>
+    <a class="docs-card" href="#phar-package">
+        <span class="card-icon">&#x1F4E6;</span>
+        <h3>PHAR</h3>
+        <p>Small single-file package for PHP 8.4+ systems.</p>
+    </a>
+    <a class="docs-card" href="#from-source">
+        <span class="card-icon">&#x1F527;</span>
+        <h3>Source</h3>
+        <p>Development checkout with tests, Pint, and PHAR builds.</p>
+    </a>
+    <a class="docs-card" href="/docs/termux">
+        <span class="card-icon">&#x1F4F1;</span>
+        <h3>Termux</h3>
+        <p>Android install notes, renderer tips, and storage setup.</p>
+    </a>
+</div>
 
 <!-- ------------------------------------------------------------------ -->
 <h2 id="quick-install">Quick Install (Recommended)</h2>
@@ -169,10 +192,10 @@ composer install</code></pre>
 
 <ol>
     <li>
-        <strong>Provider selection</strong> &mdash; Choose from 20+ supported
-        LLM providers (Anthropic, OpenAI, Google, Mistral, local endpoints,
-        and many more). You can configure multiple providers and switch between
-        them later.
+        <strong>Provider selection</strong> &mdash; Choose from the configured
+        provider catalog, including Anthropic, OpenAI, Google, Mistral, local
+        endpoints, and custom OpenAI-compatible providers. You can configure
+        multiple providers and switch between them later.
     </li>
     <li>
         <strong>Model selection</strong> &mdash; Pick a default model from the

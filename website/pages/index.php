@@ -52,6 +52,29 @@ ob_start();
             margin-bottom: 1.25rem;
         }
 
+        .homepage h1.hero-title-fallback {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+
+        .homepage .ascii-logo {
+            animation: none;
+            opacity: 0.95;
+            font-size: clamp(0.28rem, 0.72vw, 0.5rem);
+            line-height: 1.18;
+            margin: 0 0 1.25rem;
+            max-width: 100%;
+            position: relative;
+            z-index: 2;
+        }
+
         .hero-lead {
             color: var(--text-muted);
             font-size: clamp(1.05rem, 1.8vw, 1.28rem);
@@ -195,6 +218,13 @@ ob_start();
             align-items: stretch;
         }
 
+        .install-method-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1.25rem;
+            align-items: stretch;
+        }
+
         .command-box {
             background: var(--space-dark);
             border: 1px solid var(--border);
@@ -202,10 +232,30 @@ ob_start();
             padding: 1.25rem;
         }
 
+        .method-label {
+            display: inline-flex;
+            align-items: center;
+            color: var(--crimson-light);
+            background: var(--crimson-dim);
+            border: 1px solid rgba(220, 20, 60, 0.16);
+            border-radius: 6px;
+            padding: 0.2rem 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            margin-bottom: 0.75rem;
+        }
+
         .command-box h3 {
             color: var(--star-white);
             font-size: 1rem;
             margin-bottom: 0.85rem;
+        }
+
+        .command-box p {
+            color: var(--text-muted);
+            font-size: 0.86rem;
+            line-height: 1.55;
+            margin-bottom: 1rem;
         }
 
         .command-box pre {
@@ -237,7 +287,8 @@ ob_start();
         @media (max-width: 991.98px) {
             .hero-grid,
             .surface-grid,
-            .command-grid {
+            .command-grid,
+            .install-method-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -291,7 +342,14 @@ ob_start();
             <div class="hero-grid">
                 <div class="hero-copy">
                     <div class="eyebrow">PHP 8.4 agent runtime for terminal, CI, editors, and apps</div>
-                    <h1>KosmoKrator</h1>
+                    <pre class="ascii-logo"
+>&#x2588;&#x2588;&#x2557;  &#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2588;&#x2557;   &#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2557;  &#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;  &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;
+&#x2588;&#x2588;&#x2551; &#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2551; &#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x255A;&#x2550;&#x2550;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x255D;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;
+&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D; &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D;
+&#x2588;&#x2588;&#x2554;&#x2550;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;&#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2551;&#x255A;&#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2554;&#x2550;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;
+&#x2588;&#x2588;&#x2551;  &#x2588;&#x2588;&#x2557;&#x255A;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2551; &#x255A;&#x2550;&#x255D; &#x2588;&#x2588;&#x2551;&#x255A;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2551;  &#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2551;  &#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2551;  &#x2588;&#x2588;&#x2551;   &#x2588;&#x2588;&#x2551;   &#x255A;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2551;  &#x2588;&#x2588;&#x2551;
+&#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D; &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D; &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D;&#x255A;&#x2550;&#x255D;     &#x255A;&#x2550;&#x255D; &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D; &#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;&#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;&#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;   &#x255A;&#x2550;&#x255D;    &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D; &#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;</pre>
+                    <h1 class="hero-title-fallback">KosmoKrator</h1>
                     <p class="hero-lead">
                         A terminal-first coding agent with the same runtime available headlessly through
                         CLI commands, Lua, MCP, ACP, and an embeddable PHP SDK.
@@ -388,21 +446,57 @@ $agent = AgentBuilder::create()
             <section id="quickstart">
                 <div class="section-header reveal">
                     <span class="section-label">Install</span>
-                    <h2>Start from a binary, PHAR, or source checkout</h2>
-                    <p class="section-desc">Use the interactive setup for humans, or configure providers, integrations, MCP servers, and settings headlessly for automation.</p>
+                    <h2>Install the way your environment expects</h2>
+                    <p class="section-desc">Use a zero-dependency binary, a small PHAR, a source checkout, or Termux on Android. Every path lands on the same CLI and headless runtime.</p>
                 </div>
 
-                <div class="command-grid reveal-stagger">
+                <div class="install-method-grid reveal-stagger">
                     <div class="command-box reveal-child">
-                        <h3>Install and run</h3>
-<pre><code># Static binary
+                        <span class="method-label">Recommended</span>
+                        <h3>Static binary</h3>
+                        <p>Self-contained release binary. No local PHP, Composer, Node, or Python runtime required.</p>
+<pre><code># macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash
 
 kosmokrator setup
 kosmokrator</code></pre>
                     </div>
                     <div class="command-box reveal-child">
-                        <h3>Headless automation</h3>
+                        <span class="method-label">Small package</span>
+                        <h3>PHAR</h3>
+                        <p>Single PHP archive for machines that already have PHP 8.4+ installed.</p>
+<pre><code>sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o /usr/local/bin/kosmokrator
+sudo chmod +x /usr/local/bin/kosmokrator
+
+kosmokrator setup</code></pre>
+                    </div>
+                    <div class="command-box reveal-child">
+                        <span class="method-label">Development</span>
+                        <h3>Source checkout</h3>
+                        <p>Best when contributing, testing branches, or building a custom PHAR.</p>
+<pre><code>git clone https://github.com/OpenCompanyApp/kosmokrator.git
+cd kosmokrator
+composer install
+
+bin/kosmokrator setup</code></pre>
+                    </div>
+                    <div class="command-box reveal-child">
+                        <span class="method-label">Android</span>
+                        <h3>Termux</h3>
+                        <p>Run KosmoKrator on Android with Termux. Use ANSI renderer for the most predictable mobile terminal UX.</p>
+<pre><code>pkg update
+pkg install php composer git curl
+
+curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o $PREFIX/bin/kosmokrator
+chmod +x $PREFIX/bin/kosmokrator</code></pre>
+                    </div>
+                </div>
+
+                <div class="command-grid reveal-stagger" style="margin-top: 1.25rem;">
+                    <div class="command-box reveal-child">
+                        <h3>Headless provider setup</h3>
 <pre><code>kosmokrator providers:configure openai \
   --api-key-env OPENAI_API_KEY \
   --model gpt-5.4-mini \
@@ -410,7 +504,16 @@ kosmokrator</code></pre>
 
 kosmokrator -p "Summarize this repo" \
   --mode ask \
-  --output json</code></pre>
+  -o json</code></pre>
+                    </div>
+                    <div class="command-box reveal-child">
+                        <h3>Full installation docs</h3>
+                        <p>Manual platform binaries, PHP extension requirements, update paths, PHAR builds, and troubleshooting live in the installation guides.</p>
+<pre><code>kosmokrator --version
+kosmokrator setup
+kosmokrator</code></pre>
+                        <a href="/docs/installation" class="btn btn-secondary" style="margin-top: 1rem;">Installation Docs</a>
+                        <a href="/docs/termux" class="btn btn-secondary" style="margin-top: 1rem;">Termux Docs</a>
                     </div>
                 </div>
             </section>

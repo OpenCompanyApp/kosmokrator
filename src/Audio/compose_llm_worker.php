@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-if ($argc < 2) {
+$argv = $_SERVER['argv'] ?? [];
+
+if (count($argv) < 2) {
     fwrite(STDERR, "Missing payload\n");
     exit(1);
 }

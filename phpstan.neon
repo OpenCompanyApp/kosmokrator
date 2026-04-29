@@ -30,8 +30,6 @@ parameters:
         - '#Method.*is unused#'
         # API mismatches with vendor code (extra parameters)
         - '#(Static )?[Mm]ethod.*invoked with .* parameters, .* required#'
-        # CLI script variables ($argc/$argv)
-        - '#Variable \$arg[vc] might not be defined#'
         # Vendor API type mismatches (Container vs Application)
         - '#Parameter.*expects Illuminate\\Contracts\\Foundation\\Application.*Illuminate\\Container\\Container given#'
         # Offset in isset() always exists

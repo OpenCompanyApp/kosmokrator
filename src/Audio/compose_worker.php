@@ -15,8 +15,10 @@
 
 declare(strict_types=1);
 
+$argv = $_SERVER['argv'] ?? [];
+
 // Silently exit if no payload
-if ($argc < 2) {
+if (count($argv) < 2) {
     error_log('[CompletionSound Worker] No payload argument');
     exit(1);
 }

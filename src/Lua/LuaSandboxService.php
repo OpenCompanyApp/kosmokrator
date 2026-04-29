@@ -43,7 +43,7 @@ class LuaSandboxService
         }
 
         foreach ($globals as $name => $value) {
-            $sandbox->load("{$name} = ".$this->phpToLua($value))->call();
+            $this->runChunk($sandbox, "{$name} = ".$this->phpToLua($value));
         }
 
         $this->registerJsonGlobals($sandbox);
@@ -123,7 +123,7 @@ class LuaSandboxService
         }
 
         if ($lines !== []) {
-            $sandbox->load(implode("\n", $lines))->call();
+            $this->runChunk($sandbox, implode("\n", $lines));
         }
     }
 
@@ -144,7 +144,7 @@ class LuaSandboxService
             },
         ]);
 
-        $sandbox->load('
+        $this->runChunk($sandbox, '
             local _tostring = tostring
 
             local function __serialize(val, indent, seen)
@@ -195,7 +195,7 @@ class LuaSandboxService
                 __php.capture(s)
                 return val
             end
-        ')->call();
+        ');
     }
 
     /**
@@ -216,7 +216,7 @@ class LuaSandboxService
             },
         ]);
 
-        $sandbox->load('
+        $this->runChunk($sandbox, '
             local function make_namespace(path)
                 return setmetatable({}, {
                     __index = function(self, key)
@@ -235,7 +235,7 @@ class LuaSandboxService
                 })
             end
             app = make_namespace("")
-        ')->call();
+        ');
     }
 
     /**
@@ -331,7 +331,7 @@ class LuaSandboxService
             },
         ]);
 
-        $sandbox->load('
+        $this->runChunk($sandbox, '
             json = {
                 decode = function(s)
                     if type(s) ~= "string" then
@@ -376,6 +376,24 @@ class LuaSandboxService
                     return __regex.gsub(subject, pattern, replacement, limit or -1)
                 end,
             }
-        ')->call();
+        ');
+    }
+
+    private function runChunk(Sandbox $sandbox, string $code): mixed
+    {
+        return $this->runLoadedChunk($sandbox->load($code));
+    }
+
+    private function runLoadedChunk(mixed $chunk): mixed
+    {
+        if ($chunk instanceof \Closure || is_callable($chunk)) {
+            return $chunk();
+        }
+
+        if (is_object($chunk) && method_exists($chunk, 'call')) {
+            return $chunk->call();
+        }
+
+        throw new \RuntimeException('Lua chunk is not callable.');
     }
 }

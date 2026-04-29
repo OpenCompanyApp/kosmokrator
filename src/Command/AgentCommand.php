@@ -430,8 +430,8 @@ class AgentCommand extends Command
             // to finish, then feed their results back to the LLM automatically
             // so it can synthesize without requiring the user to type anything.
             $backgroundWaitInterrupted = false;
-            if ($session->agentLoop->hasRunningBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
-                while ($session->agentLoop->hasRunningBackgroundAgents()) {
+            if ($session->agentLoop->hasActiveBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
+                while ($session->agentLoop->hasActiveBackgroundAgents()) {
                     \Amp\delay(0.25);
 
                     $queued = $session->ui->consumeQueuedMessage();

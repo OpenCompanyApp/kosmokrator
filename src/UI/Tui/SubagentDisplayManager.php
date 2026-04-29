@@ -271,7 +271,7 @@ final class SubagentDisplayManager
     /**
      * Show completed batch results. Stops the elapsed timer and cleans up loader/tree.
      *
-     * @param  array<int, array{args: array, result: string, success: bool, children?: array, stats?: mixed}>  $entries
+     * @param  array<int, array{args: array, result: string, success: bool, kind?: string, children?: array, stats?: mixed}>  $entries
      */
     public function showBatch(array $entries): void
     {
@@ -279,8 +279,17 @@ final class SubagentDisplayManager
             return;
         }
 
-        // Filter out background acks — show remaining (failures, awaited results)
-        $entries = array_values(array_filter($entries, fn ($e) => ($e['args']['mode'] ?? 'await') !== 'background' && ! str_contains($e['result'] ?? '', 'spawned in background')));
+        // Filter out background spawn acks, but keep completed background results.
+        $entries = array_values(array_filter($entries, function ($entry): bool {
+            if (($entry['kind'] ?? null) === 'completion') {
+                return true;
+            }
+
+            $mode = $entry['args']['mode'] ?? 'await';
+            $result = $entry['result'] ?? '';
+
+            return $mode !== 'background' && ! str_contains($result, 'spawned in background');
+        }));
         if (empty($entries)) {
             // All background — keep loader and tree running
             return;
@@ -471,6 +480,13 @@ final class SubagentDisplayManager
             $connector = $i === $last ? '└─' : '├─';
             $continuation = $i === $last ? '   ' : '│  ';
 
+            if (($node['status'] ?? '') === 'summary') {
+                $task = (string) ($node['task'] ?? 'more agents hidden');
+                $output .= "{$indent}{$connector} {$dim}… {$task}{$r}\n";
+
+                continue;
+            }
+
             $icon = match ($node['status']) {
                 'done' => "{$green}✓{$r}",
                 'failed', 'cancelled' => "{$red}✗{$r}",
@@ -500,7 +516,8 @@ final class SubagentDisplayManager
                 // Running/waiting: amber with task visible
                 $elapsedStr = $elapsed !== '' ? " {$dim}({$elapsed}){$r}" : '';
                 $taskSnippet = $task !== '' ? " {$dim}· {$task}{$r}" : '';
-                $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$taskSnippet}{$elapsedStr}\n";
+                $activity = $this->formatNodeActivity($node, $dim, $r);
+                $output .= "{$indent}{$connector} {$icon} {$dim}{$type}{$r} {$id}{$activity}{$taskSnippet}{$elapsedStr}\n";
             }
 
             $children = $node['children'] ?? [];
@@ -510,6 +527,35 @@ final class SubagentDisplayManager
         }
 
         return $output;
+    }
+
+    private function formatNodeActivity(array $node, string $dim, string $r): string
+    {
+        if (($node['status'] ?? '') === 'retrying') {
+            $nextRetryAt = $node['nextRetryAt'] ?? null;
+            if (is_float($nextRetryAt) || is_int($nextRetryAt)) {
+                $seconds = max(0.0, (float) $nextRetryAt - microtime(true));
+
+                return " {$dim}· retry in ".$this->formatter->formatElapsed($seconds)."{$r}";
+            }
+        }
+
+        $queueReason = $node['queueReason'] ?? null;
+        if (is_string($queueReason) && $queueReason !== '') {
+            return " {$dim}· {$queueReason}{$r}";
+        }
+
+        $lastTool = $node['lastTool'] ?? null;
+        if (is_string($lastTool) && $lastTool !== '') {
+            return " {$dim}· last {$lastTool}{$r}";
+        }
+
+        $lastMessagePreview = $node['lastMessagePreview'] ?? null;
+        if (is_string($lastMessagePreview) && $lastMessagePreview !== '') {
+            return " {$dim}· msg {$lastMessagePreview}{$r}";
+        }
+
+        return '';
     }
 
     /**

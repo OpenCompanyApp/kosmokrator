@@ -18,6 +18,12 @@ class SubagentToolTest extends TestCase
         $this->orchestrator = new SubagentOrchestrator(new NullLogger, 3);
     }
 
+    protected function tearDown(): void
+    {
+        $this->orchestrator->cancelAll();
+        $this->orchestrator->ignorePendingFutures();
+    }
+
     private function makeContext(AgentType $type = AgentType::General, int $depth = 0): AgentContext
     {
         return new AgentContext($type, $depth, 3, $this->orchestrator, 'parent', '');
@@ -94,6 +100,20 @@ class SubagentToolTest extends TestCase
         $this->assertStringContainsString('executed: find files', $result->output);
     }
 
+    public function test_single_await_without_id_uses_generated_id(): void
+    {
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute(['task' => 'find files', 'type' => 'explore', 'mode' => 'await']);
+        })->await();
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString("Agent 'agent-1' completed", $result->output);
+        $this->assertStringContainsString('executed: find files', $result->output);
+        $this->assertNotNull($this->orchestrator->getStats('agent-1'));
+    }
+
     public function test_background_returns_ack(): void
     {
         $result = \Amp\async(function () {
@@ -104,6 +124,19 @@ class SubagentToolTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertStringContainsString('spawned in background', $result->output);
+    }
+
+    public function test_single_background_without_id_returns_generated_id(): void
+    {
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute(['task' => 'background work', 'type' => 'explore', 'mode' => 'background']);
+        })->await();
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString("Agent 'agent-1' spawned in background", $result->output);
+        $this->assertNotNull($this->orchestrator->getStats('agent-1'));
     }
 
     public function test_defaults_type_explore_mode_await(): void
@@ -226,6 +259,48 @@ class SubagentToolTest extends TestCase
         $this->assertStringContainsString('Batch spawned 2 agents in background', $result->output);
         $this->assertStringContainsString("'a' (explore)", $result->output);
         $this->assertStringContainsString("'b' (explore)", $result->output);
+    }
+
+    public function test_batch_background_without_ids_returns_generated_ids(): void
+    {
+        $result = \Amp\async(function () {
+            $tool = $this->makeTool($this->makeContext());
+
+            return $tool->execute([
+                'mode' => 'background',
+                'agents' => [
+                    ['task' => 'task A'],
+                    ['task' => 'task B'],
+                ],
+            ]);
+        })->await();
+
+        $this->assertTrue($result->success);
+        $this->assertStringContainsString("'agent-1' (explore)", $result->output);
+        $this->assertStringContainsString("'agent-2' (explore)", $result->output);
+        $this->assertNotNull($this->orchestrator->getStats('agent-1'));
+        $this->assertNotNull($this->orchestrator->getStats('agent-2'));
+    }
+
+    public function test_batch_rejects_duplicate_generated_ids_before_spawning(): void
+    {
+        $ran = 0;
+        $ctx = $this->makeContext();
+        $tool = new SubagentTool($ctx, function () use (&$ran): string {
+            $ran++;
+
+            return 'should not run';
+        });
+
+        $result = $tool->execute(['agents' => [
+            ['task' => 'explicit collision', 'id' => 'agent-1'],
+            ['task' => 'generated collision'],
+        ]]);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString("Duplicate agent id 'agent-1'", $result->output);
+        $this->assertSame(0, $ran);
+        $this->assertNull($this->orchestrator->getStats('agent-1'));
     }
 
     public function test_batch_rejects_spawn_at_max_depth(): void

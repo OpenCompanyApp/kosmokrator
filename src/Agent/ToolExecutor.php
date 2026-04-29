@@ -83,6 +83,10 @@ final class ToolExecutor
                 continue;
             }
 
+            if ($toolCall->name === 'subagent') {
+                $args = $this->normalizeSubagentArgs($args, $agentContext);
+            }
+
             $this->log->info('Tool call', ['tool' => $toolCall->name, 'args' => $args]);
 
             if ($this->isAskTool($toolCall->name)) {
@@ -172,6 +176,7 @@ final class ToolExecutor
                 }
 
                 $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode);
+                $agentContext?->orchestrator->persistStats($stats);
 
                 if ($toolCall->name !== 'subagent') {
                     SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
@@ -200,6 +205,7 @@ final class ToolExecutor
                 // Await and display each header+result pair in original order
                 foreach ($group as [$toolCall, $tool, $args]) {
                     $outcome = $futures[$toolCall->id]->await();
+                    $agentContext?->orchestrator->persistStats($stats);
 
                     if ($toolCall->name !== 'subagent') {
                         SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
@@ -304,6 +310,7 @@ final class ToolExecutor
                 $args['read_only'] = $mode !== AgentMode::Edit;
             }
 
+            $stats?->markTool($toolCall->name);
             $output = $tool->handle(...$args);
             \Amp\delay(0);
             $stats?->incrementToolCalls();
@@ -484,6 +491,42 @@ final class ToolExecutor
         }
 
         return null;
+    }
+
+    /**
+     * Assign final subagent IDs before UI spawn/running display and execution.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function normalizeSubagentArgs(array $args, ?AgentContext $agentContext): array
+    {
+        $orchestrator = $agentContext?->orchestrator;
+        if ($orchestrator === null) {
+            return $args;
+        }
+
+        if (isset($args['agents']) && is_array($args['agents']) && $args['agents'] !== []) {
+            foreach ($args['agents'] as $i => $spec) {
+                if (! is_array($spec)) {
+                    continue;
+                }
+
+                if (! isset($spec['id']) || $spec['id'] === '') {
+                    $spec['id'] = $orchestrator->generateId();
+                }
+
+                $args['agents'][$i] = $spec;
+            }
+
+            return $args;
+        }
+
+        if (isset($args['task']) && trim((string) $args['task']) !== '' && (! isset($args['id']) || $args['id'] === '')) {
+            $args['id'] = $orchestrator->generateId();
+        }
+
+        return $args;
     }
 
     /** Whether the tool is an interactive question tool (ask_user / ask_choice). */

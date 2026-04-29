@@ -86,6 +86,13 @@ final class AgentDisplayFormatter
         foreach ($children as $i => $child) {
             $connector = $i === $last ? '└─' : '├─';
             $continuation = $i === $last ? '   ' : '│  ';
+            if (($child['status'] ?? '') === 'summary') {
+                $task = (string) ($child['task'] ?? 'more agents hidden');
+                $output .= "{$indent}{$connector} {$dim}… {$task}{$r}\n";
+
+                continue;
+            }
+
             $icon = $child['success'] ? "{$green}✓{$r}" : "{$red}✗{$r}";
             $type = ucfirst($child['type']);
             $task = mb_strlen($child['task']) > 40 ? mb_substr($child['task'], 0, 40).'…' : $child['task'];
@@ -203,6 +210,12 @@ final class AgentDisplayFormatter
     {
         $count = count($nodes);
         foreach ($nodes as $node) {
+            if (($node['status'] ?? '') === 'summary') {
+                $count += max(0, (int) ($node['hiddenCount'] ?? 0) - 1);
+
+                continue;
+            }
+
             $count += $this->countNodes($node['children'] ?? []);
         }
 
@@ -218,6 +231,12 @@ final class AgentDisplayFormatter
     {
         $count = 0;
         foreach ($nodes as $node) {
+            if (($node['status'] ?? '') === 'summary') {
+                $count += (int) (($node['hiddenStatuses'] ?? [])[$status] ?? 0);
+
+                continue;
+            }
+
             if ($node['status'] === $status) {
                 $count++;
             }

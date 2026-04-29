@@ -379,6 +379,21 @@ class AnsiRendererTest extends TestCase
         $this->assertSame('', $output);
     }
 
+    public function test_show_subagent_batch_shows_background_completion(): void
+    {
+        $output = $this->captureOutput(fn () => $this->renderer->showSubagentBatch([
+            [
+                'kind' => 'completion',
+                'success' => true,
+                'result' => 'Background research finished.',
+                'args' => ['type' => 'explore', 'task' => 'Search', 'id' => 'agent-1', 'mode' => 'background'],
+            ],
+        ]));
+
+        $this->assertStringContainsString('agent-1', $output);
+        $this->assertStringContainsString('Background research finished.', $output);
+    }
+
     public function test_show_subagent_batch_shows_success(): void
     {
         $output = $this->captureOutput(fn () => $this->renderer->showSubagentBatch([
@@ -796,6 +811,38 @@ class AnsiRendererTest extends TestCase
         $this->assertStringContainsString('100.0%', $plain);
     }
 
+    public function test_format_dashboard_marks_stale_snapshots(): void
+    {
+        $subagentRenderer = new AnsiSubagentRenderer;
+        $method = new \ReflectionMethod(AnsiSubagentRenderer::class, 'formatDashboard');
+
+        $summary = [
+            'total' => 1,
+            'done' => 1,
+            'running' => 0,
+            'queued' => 0,
+            'failed' => 0,
+            'retrying' => 0,
+            'tokensIn' => 100,
+            'tokensOut' => 50,
+            'cost' => 0.01,
+            'avgCost' => 0.01,
+            'elapsed' => 5.0,
+            'rate' => 12.0,
+            'eta' => 0,
+            'active' => [],
+            'failures' => [],
+            'byType' => [],
+            'retriedAndRecovered' => 0,
+            'stale' => true,
+        ];
+
+        $result = $method->invoke($subagentRenderer, $summary, []);
+        $plain = $this->stripAnsi($result);
+
+        $this->assertStringContainsString('offline snapshot', $plain);
+    }
+
     public function test_format_dashboard_with_failures(): void
     {
         $subagentRenderer = new AnsiSubagentRenderer;
@@ -869,6 +916,47 @@ class AnsiRendererTest extends TestCase
         $this->assertStringContainsString('By Type', $plain);
         $this->assertStringContainsString('General', $plain);
         $this->assertStringContainsString('Explore', $plain);
+    }
+
+    public function test_format_dashboard_shows_active_agent_activity(): void
+    {
+        $subagentRenderer = new AnsiSubagentRenderer;
+        $method = new \ReflectionMethod(AnsiSubagentRenderer::class, 'formatDashboard');
+
+        $stats = new SubagentStats('active-1');
+        $stats->status = 'running';
+        $stats->agentType = 'explore';
+        $stats->task = 'Inspect worker logs';
+        $stats->toolCalls = 3;
+        $stats->startTime = microtime(true) - 10.0;
+        $stats->markTool('grep');
+
+        $summary = [
+            'total' => 1,
+            'done' => 0,
+            'running' => 1,
+            'queued' => 0,
+            'failed' => 0,
+            'retrying' => 0,
+            'tokensIn' => 0,
+            'tokensOut' => 0,
+            'cost' => 0.0,
+            'avgCost' => 0.0,
+            'elapsed' => 10.0,
+            'rate' => 1.0,
+            'eta' => 0,
+            'active' => [$stats],
+            'failures' => [],
+            'byType' => [],
+            'retriedAndRecovered' => 0,
+        ];
+
+        $result = $method->invoke($subagentRenderer, $summary, []);
+        $plain = $this->stripAnsi($result);
+
+        $this->assertStringContainsString('Active', $plain);
+        $this->assertStringContainsString('Inspect worker logs', $plain);
+        $this->assertStringContainsString('last grep', $plain);
     }
 
     // ── Question recap system ────────────────────────────────────────────

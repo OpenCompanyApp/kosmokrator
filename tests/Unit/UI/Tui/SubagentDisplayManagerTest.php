@@ -151,6 +151,26 @@ final class SubagentDisplayManagerTest extends TestCase
         $this->assertTrue($manager->hasRunningAgents());
     }
 
+    public function test_show_batch_with_background_completion_stops_loader(): void
+    {
+        $manager = $this->createManager();
+        $manager->showRunning([
+            ['args' => ['type' => 'explore', 'task' => 'Search'], 'id' => 'agent-1'],
+        ]);
+        $this->assertTrue($manager->hasRunningAgents());
+
+        $manager->showBatch([
+            [
+                'kind' => 'completion',
+                'args' => ['type' => 'explore', 'task' => 'Search', 'id' => 'agent-1', 'mode' => 'background'],
+                'result' => 'Background research finished.',
+                'success' => true,
+            ],
+        ]);
+
+        $this->assertFalse($manager->hasRunningAgents());
+    }
+
     public function test_show_batch_with_single_success_result(): void
     {
         $manager = $this->createManager();

@@ -15,6 +15,8 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SessionRepositoryInterface;
 use Kosmokrator\Session\SettingsRepositoryInterface;
+use Kosmokrator\Session\SubagentOutputStore;
+use Kosmokrator\Session\SwarmMetadataStore;
 use Kosmokrator\Settings\SettingsManager;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
@@ -40,6 +42,10 @@ class SessionServiceProvider extends ServiceProvider
             $this->container->make(SessionDatabase::class),
         ));
         $this->container->alias(MemoryRepository::class, MemoryRepositoryInterface::class);
+        $this->container->singleton(SwarmMetadataStore::class, fn () => new SwarmMetadataStore(
+            $this->container->make(SessionDatabase::class),
+        ));
+        $this->container->singleton(SubagentOutputStore::class, fn () => new SubagentOutputStore);
         $this->container->singleton(SessionManager::class, fn () => new SessionManager(
             sessions: $this->container->make(SessionRepositoryInterface::class),
             messages: $this->container->make(MessageRepositoryInterface::class),
@@ -47,6 +53,8 @@ class SessionServiceProvider extends ServiceProvider
             memories: $this->container->make(MemoryRepositoryInterface::class),
             log: $this->container->make(LoggerInterface::class),
             configSettings: $this->container->make(SettingsManager::class),
+            swarmMetadata: $this->container->make(SwarmMetadataStore::class),
+            subagentOutputs: $this->container->make(SubagentOutputStore::class),
         ));
 
         // Completion sound — compose music via LLM after each agent response

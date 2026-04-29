@@ -68,6 +68,16 @@ final class SwarmDashboardWidgetTest extends TestCase
         $this->assertStringContainsString('S W A R M', $content);
     }
 
+    public function test_render_shows_offline_snapshot_marker(): void
+    {
+        $widget = new SwarmDashboardWidget($this->makeSummary(['stale' => true]), []);
+
+        $lines = $widget->render(new RenderContext(80, 24));
+        $content = implode("\n", $lines);
+
+        $this->assertStringContainsString('offline snapshot', $content);
+    }
+
     public function test_render_shows_progress_bar(): void
     {
         $summary = $this->makeSummary(['total' => 10, 'done' => 5]);
@@ -220,6 +230,10 @@ final class SwarmDashboardWidgetTest extends TestCase
 
             public int $toolCalls = 5;
 
+            public ?string $lastTool = 'grep';
+
+            public ?float $nextRetryAt = null;
+
             public function elapsed(): float
             {
                 return 45.0;
@@ -238,6 +252,47 @@ final class SwarmDashboardWidgetTest extends TestCase
 
         $this->assertStringContainsString('Active', $content);
         $this->assertStringContainsString('Explore codebase', $content);
+        $this->assertStringContainsString('last grep', $content);
+    }
+
+    public function test_render_shows_retry_countdown_for_retrying_agent(): void
+    {
+        $agent = new class
+        {
+            public string $status = 'retrying';
+
+            public string $agentType = 'explore';
+
+            public string $task = 'Retry provider request';
+
+            public int $toolCalls = 2;
+
+            public ?string $lastTool = null;
+
+            public ?float $nextRetryAt;
+
+            public function __construct()
+            {
+                $this->nextRetryAt = microtime(true) + 30.0;
+            }
+
+            public function elapsed(): float
+            {
+                return 12.0;
+            }
+        };
+
+        $summary = $this->makeSummary([
+            'retrying' => 1,
+            'active' => [$agent],
+        ]);
+
+        $widget = new SwarmDashboardWidget($summary, []);
+
+        $lines = $widget->render(new RenderContext(80, 24));
+        $content = implode("\n", $lines);
+
+        $this->assertStringContainsString('retry in', $content);
     }
 
     public function test_render_shows_failures_section(): void

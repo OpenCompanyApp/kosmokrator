@@ -165,7 +165,7 @@ class SubagentTool extends AbstractTool
                 $orchestrator->reclaimSlot($this->parentContext->id);
             }
 
-            return ToolResult::success($result);
+            return ToolResult::success("Agent '{$id}' completed:\n{$result}");
         }
 
         return ToolResult::success(
@@ -227,6 +227,11 @@ class SubagentTool extends AbstractTool
                 'depends_on' => $dependsOn,
                 'group' => $group,
             ];
+        }
+
+        $duplicateIds = $this->duplicateIds(array_map(fn (array $spec) => $spec['id'], $specs));
+        foreach ($duplicateIds as $duplicateId) {
+            $errors[] = "Duplicate agent id '{$duplicateId}'. Agent IDs must be unique within a batch.";
         }
 
         if ($errors !== []) {
@@ -316,5 +321,27 @@ class SubagentTool extends AbstractTool
         }
 
         return [];
+    }
+
+    /**
+     * @param  string[]  $ids
+     * @return string[]
+     */
+    private function duplicateIds(array $ids): array
+    {
+        $seen = [];
+        $duplicates = [];
+
+        foreach ($ids as $id) {
+            if (isset($seen[$id])) {
+                $duplicates[$id] = $id;
+
+                continue;
+            }
+
+            $seen[$id] = true;
+        }
+
+        return array_values($duplicates);
     }
 }

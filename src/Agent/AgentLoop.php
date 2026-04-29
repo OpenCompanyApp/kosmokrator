@@ -141,6 +141,19 @@ class AgentLoop
     }
 
     /**
+     * Whether background subagents are queued, waiting, retrying, or running.
+     * Used by the REPL to keep watching long-running swarms until terminal.
+     */
+    public function hasActiveBackgroundAgents(): bool
+    {
+        if ($this->agentContext === null) {
+            return false;
+        }
+
+        return $this->agentContext->orchestrator->hasActiveBackgroundAgents($this->agentContext->id);
+    }
+
+    /**
      * Whether completed background agents have uncollected results.
      * Used by the REPL to decide whether to auto-continue after all agents finish.
      */
@@ -255,6 +268,7 @@ class AgentLoop
                     $tokensOut = $responseData->tokensOut;
                     $cacheReadInputTokens = $responseData->cacheReadInputTokens;
                     $cacheWriteInputTokens = $responseData->cacheWriteInputTokens;
+                    $this->stats?->markMessagePreview($fullText);
 
                     // Accumulate session-level token usage
                     $this->tokens->accumulate($tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens);
@@ -459,6 +473,7 @@ class AgentLoop
                     $fullText = $responseData->text;
                     $toolCalls = $responseData->toolCalls;
                     $finishReason = $responseData->finishReason;
+                    $this->stats?->markMessagePreview($fullText);
 
                     $this->tokens->accumulate($responseData->tokensIn, $responseData->tokensOut, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens);
                     $this->recordCacheObservation($responseData->tokensIn, $responseData->cacheReadInputTokens, $responseData->cacheWriteInputTokens, $round);
@@ -975,6 +990,7 @@ class AgentLoop
         foreach ($results as $id => $result) {
             $stats = $this->agentContext->orchestrator->getStats($id);
             $batchEntries[] = [
+                'kind' => 'completion',
                 'args' => [
                     'type' => $stats->agentType ?? 'explore',
                     'id' => $id,
@@ -982,7 +998,8 @@ class AgentLoop
                     'mode' => 'background',
                 ],
                 'result' => $result,
-                'success' => $stats->status !== 'failed',
+                'success' => ($stats?->status ?? 'done') !== 'failed',
+                'stats' => $stats,
             ];
         }
         $this->ui->showSubagentBatch($batchEntries);

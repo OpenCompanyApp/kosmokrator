@@ -12,6 +12,8 @@ use Amp\Sync\LocalSemaphore;
 use Amp\Sync\Lock;
 use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\Session\SubagentOutputStore;
+use Kosmokrator\Session\SwarmMetadataStore;
 use Psr\Log\LoggerInterface;
 use Revolt\EventLoop;
 
@@ -23,6 +25,15 @@ use function Amp\async;
  */
 class SubagentOrchestrator
 {
+    /** @var array<string, true> */
+    private const ACTIVE_STATUSES = [
+        'queued' => true,
+        'queued_global' => true,
+        'retrying' => true,
+        'running' => true,
+        'waiting' => true,
+    ];
+
     /** @var array<string, Future<string>> */
     private array $agents = [];
 
@@ -40,6 +51,12 @@ class SubagentOrchestrator
 
     /** @var array<string, Lock> Active global semaphore locks keyed by agent ID (for slot yielding) */
     private array $globalLocks = [];
+
+    /** @var array<string, true> Agents that yielded their global slot and may reclaim it */
+    private array $yieldedGlobalSlots = [];
+
+    /** @var callable(): ?string|null */
+    private $rootSessionIdProvider;
 
     private int $autoIdCounter = 0;
 
@@ -60,9 +77,13 @@ class SubagentOrchestrator
         private readonly int $maxRetries = 2,
         private readonly int|float $watchdogSeconds = 600,
         private readonly ?\Closure $retryDelayFunction = null,
+        private readonly ?SwarmMetadataStore $metadataStore = null,
+        private readonly ?SubagentOutputStore $outputStore = null,
+        ?callable $rootSessionIdProvider = null,
     ) {
         // LocalSemaphore requires maxLocks >= 1, so 0 = unlimited (no semaphore)
         $this->globalSemaphore = $concurrency > 0 ? new LocalSemaphore($concurrency) : null;
+        $this->rootSessionIdProvider = $rootSessionIdProvider;
     }
 
     public function __destruct()
@@ -111,6 +132,7 @@ class SubagentOrchestrator
         $childContext = $parentContext->childContext($childType, $id, $task, $agentCancellation);
 
         $stats = new SubagentStats($id);
+        $stats->mode = $mode;
         $stats->task = mb_substr($task, 0, 200);
         $stats->agentType = $childType->value;
         $stats->group = $group;
@@ -118,6 +140,7 @@ class SubagentOrchestrator
         $stats->parentId = $parentContext->id;
         $stats->depth = $childContext->depth;
         $this->stats[$id] = $stats;
+        $this->persistStats($stats);
 
         // Auto-prune completed agents when stats grow beyond threshold to prevent unbounded RAM usage
         if (count($this->stats) > 50) {
@@ -145,13 +168,14 @@ class SubagentOrchestrator
 
         $future = async(function () use ($childContext, $task, $id, $dependsOn, $group, $mode, $stats, $agentFactory) {
             $lock = null;
-            $globalLock = null;
             $watchdogId = null;
 
             try {
                 // 1. Wait for dependencies
                 if ($dependsOn !== []) {
                     $stats->status = 'waiting';
+                    $stats->markQueueReason('depends on '.implode(', ', $dependsOn));
+                    $this->persistStats($stats);
                     $this->log->debug("Agent '{$id}' waiting for dependencies", ['depends_on' => $dependsOn]);
                     $depResults = [];
 
@@ -163,11 +187,13 @@ class SubagentOrchestrator
 
                         $depStart = microtime(true);
                         try {
-                            $depResults[$depId] = $depFuture->await();
+                            $rawDepResult = $depFuture->await();
+                            $depResults[$depId] = $this->compactOutputForContext($depId, $rawDepResult);
                             $this->log->debug("Dependency resolved for agent '{$id}'", [
                                 'dependency' => $depId,
                                 'wait_seconds' => round(microtime(true) - $depStart, 2),
-                                'result_length' => strlen($depResults[$depId]),
+                                'result_length' => strlen($rawDepResult),
+                                'injected_length' => strlen($depResults[$depId]),
                             ]);
                         } catch (\Throwable $depError) {
                             // Dependency failed — inject error as result, don't kill this agent
@@ -195,24 +221,29 @@ class SubagentOrchestrator
                 // 2. Acquire global concurrency semaphore
                 if ($this->globalSemaphore !== null) {
                     $stats->status = 'queued_global';
+                    $stats->markQueueReason('global concurrency limit');
+                    $this->persistStats($stats);
                     $this->log->debug("Agent '{$id}' waiting for global semaphore", ['concurrency' => $this->concurrency]);
-                    $globalLock = $this->globalSemaphore->acquire();
-                    $this->globalLocks[$id] = $globalLock;
+                    $this->globalLocks[$id] = $this->globalSemaphore->acquire();
                     $this->log->debug("Agent '{$id}' acquired global semaphore");
                 }
 
                 // 3. Acquire group semaphore (sequential within group)
                 if ($group !== null) {
                     $stats->status = 'queued';
+                    $stats->markQueueReason("group: {$group}");
+                    $this->persistStats($stats);
                     $this->log->debug("Agent '{$id}' waiting for group semaphore", ['group' => $group]);
                     $lock = $this->getGroupSemaphore($group)->acquire();
                     $this->log->debug("Agent '{$id}' acquired group semaphore", ['group' => $group]);
                 }
 
                 $stats->status = 'running';
+                $stats->clearQueueState();
                 $stats->startTime = microtime(true);
 
                 $stats->touchActivity();
+                $this->persistStats($stats);
 
                 if ($this->watchdogSeconds > 0) {
                     $watchdogId = EventLoop::repeat(min(5.0, max(1.0, $this->watchdogSeconds / 6)), function () use ($id): void {
@@ -252,12 +283,16 @@ class SubagentOrchestrator
                         $stats->status = 'retrying';
                         $stats->retries = $attempt;
                         $delay = $this->retryDelay($attempt);
+                        $stats->markRetryDelay($delay);
+                        $this->persistStats($stats);
                         $this->log->warning("Retrying agent '{$id}' (attempt {$attempt}/{$this->maxRetries})", [
                             'delay' => round($delay, 1),
                             'last_error' => $lastError,
                         ]);
                         \Amp\delay($delay);
                         $stats->status = 'running';
+                        $stats->clearQueueState();
+                        $this->persistStats($stats);
                     }
 
                     try {
@@ -292,15 +327,22 @@ class SubagentOrchestrator
                 // Detect cancelled agents — they return '(cancelled)' without throwing
                 if ($result === '(cancelled)') {
                     $stats->status = 'cancelled';
+                    $stats->clearQueueState();
                     $stats->endTime = microtime(true);
+                    $this->persistStats($stats);
                     $this->log->info('Subagent cancelled', [
                         'id' => $id,
                         'depth' => $stats->depth,
                         'elapsed' => round($stats->elapsed(), 2),
                     ]);
                 } else {
+                    if ($result !== null && $this->shouldSpoolOutput($result)) {
+                        $this->spoolOutput($stats, $result);
+                    }
                     $stats->status = 'done';
+                    $stats->clearQueueState();
                     $stats->endTime = microtime(true);
+                    $this->persistStats($stats);
                 }
 
                 $this->log->info('Subagent completed', [
@@ -316,14 +358,16 @@ class SubagentOrchestrator
                 ]);
 
                 if ($mode === 'background') {
-                    $this->pendingResults[$stats->parentId][$id] = $result;
+                    $this->pendingResults[$stats->parentId][$id] = $this->compactOutputForContext($id, $result);
                 }
 
                 return $result;
             } catch (\Throwable $e) {
                 $stats->status = 'failed';
+                $stats->clearQueueState();
                 $stats->error = $this->extractFailureMessage($e);
                 $stats->endTime = microtime(true);
+                $this->persistStats($stats);
 
                 $this->log->error('Subagent failed', [
                     'id' => $id,
@@ -351,11 +395,13 @@ class SubagentOrchestrator
                     $lock->release();
                     $this->log->debug("Agent '{$id}' released group semaphore", ['group' => $group]);
                 }
-                if ($globalLock !== null) {
-                    $globalLock->release();
+                $heldGlobalLock = $this->globalLocks[$id] ?? null;
+                if ($heldGlobalLock !== null) {
+                    $heldGlobalLock->release();
                     unset($this->globalLocks[$id]);
                     $this->log->debug("Agent '{$id}' released global semaphore");
                 }
+                unset($this->yieldedGlobalSlots[$id]);
                 unset($this->cancellations[$id]);
             }
         });
@@ -460,7 +506,32 @@ class SubagentOrchestrator
     public function hasRunningBackgroundAgents(?string $parentId = null): bool
     {
         foreach ($this->stats as $stats) {
+            if ($stats->mode !== 'background') {
+                continue;
+            }
             if ($stats->status !== 'running') {
+                continue;
+            }
+            if ($parentId !== null && $stats->parentId !== $parentId) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check whether any background agents are still active for a given parent.
+     */
+    public function hasActiveBackgroundAgents(?string $parentId = null): bool
+    {
+        foreach ($this->stats as $stats) {
+            if ($stats->mode !== 'background') {
+                continue;
+            }
+            if (! isset(self::ACTIVE_STATUSES[$stats->status])) {
                 continue;
             }
             if ($parentId !== null && $stats->parentId !== $parentId) {
@@ -505,6 +576,7 @@ class SubagentOrchestrator
 
         $lock->release();
         unset($this->globalLocks[$agentId]);
+        $this->yieldedGlobalSlots[$agentId] = true;
         $this->log->debug("Agent '{$agentId}' yielded global semaphore slot");
     }
 
@@ -517,14 +589,19 @@ class SubagentOrchestrator
             return;
         }
 
-        // Root agents never yield slots — don't reclaim one for them
-        if (! isset($this->globalLocks[$agentId])) {
+        if (! isset($this->yieldedGlobalSlots[$agentId])) {
+            return;
+        }
+
+        if (isset($this->globalLocks[$agentId])) {
+            unset($this->yieldedGlobalSlots[$agentId]);
+
             return;
         }
 
         $this->log->debug("Agent '{$agentId}' reclaiming global semaphore slot");
-        $lock = $this->globalSemaphore->acquire();
-        $this->globalLocks[$agentId] = $lock;
+        $this->globalLocks[$agentId] = $this->globalSemaphore->acquire();
+        unset($this->yieldedGlobalSlots[$agentId]);
         $this->log->debug("Agent '{$agentId}' reclaimed global semaphore slot");
     }
 
@@ -539,6 +616,92 @@ class SubagentOrchestrator
     public function getStats(string $id): ?SubagentStats
     {
         return $this->stats[$id] ?? null;
+    }
+
+    public function persistStats(?SubagentStats $stats): void
+    {
+        if ($stats === null || $this->metadataStore === null || $this->rootSessionIdProvider === null) {
+            return;
+        }
+
+        try {
+            $rootSessionId = $this->currentRootSessionId();
+            if ($rootSessionId === null) {
+                return;
+            }
+
+            $this->metadataStore->upsertAgent($stats, $rootSessionId);
+        } catch (\Throwable $e) {
+            $this->log->debug('Failed to persist subagent metadata', [
+                'agent_id' => $stats->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function currentRootSessionId(): ?string
+    {
+        if ($this->rootSessionIdProvider === null) {
+            return null;
+        }
+
+        $rootSessionId = ($this->rootSessionIdProvider)();
+
+        return is_string($rootSessionId) && $rootSessionId !== '' ? $rootSessionId : null;
+    }
+
+    private function shouldSpoolOutput(string $result): bool
+    {
+        $trimmed = trim($result);
+
+        return $trimmed !== ''
+            && ! str_starts_with($trimmed, '(cancelled)')
+            && ! str_starts_with($trimmed, ToolCallMapper::ERROR_PREFIX);
+    }
+
+    private function spoolOutput(SubagentStats $stats, string $result): void
+    {
+        if ($this->outputStore === null) {
+            return;
+        }
+
+        $rootSessionId = $this->currentRootSessionId();
+        if ($rootSessionId === null) {
+            return;
+        }
+
+        try {
+            $written = $this->outputStore->write($rootSessionId, $stats->id, $result);
+            $stats->markOutput($written['ref'], $written['bytes'], $written['preview']);
+        } catch (\Throwable $e) {
+            $this->log->debug('Failed to spool subagent output', [
+                'agent_id' => $stats->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function compactOutputForContext(string $agentId, string $result): string
+    {
+        if (! $this->shouldSpoolOutput($result)) {
+            return $result;
+        }
+
+        $stats = $this->stats[$agentId] ?? null;
+        if ($stats?->outputRef !== null) {
+            $preview = $stats->outputPreview;
+            if ($preview === null || $preview === '') {
+                $preview = '(no preview)';
+            }
+
+            return "Full output spooled to {$stats->outputRef} ({$stats->outputBytes} bytes).\nPreview:\n{$preview}";
+        }
+
+        if (strlen($result) <= 4000) {
+            return $result;
+        }
+
+        return 'Output truncated for parent context ('.strlen($result)." bytes).\nPreview:\n".mb_substr($result, 0, 4000);
     }
 
     /**

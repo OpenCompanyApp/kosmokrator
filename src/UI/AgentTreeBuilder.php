@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\UI;
 
 use Kosmokrator\Agent\SubagentOrchestrator;
+use Kosmokrator\Agent\SubagentStats;
 
 /**
  * Builds hierarchical tree arrays from SubagentOrchestrator stats.
@@ -14,6 +15,8 @@ use Kosmokrator\Agent\SubagentOrchestrator;
  */
 final class AgentTreeBuilder
 {
+    public const DEFAULT_SIBLING_LIMIT = 40;
+
     /**
      * Build a provisional tree directly from subagent tool-call entries.
      *
@@ -52,9 +55,9 @@ final class AgentTreeBuilder
      *
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
      */
-    public function buildTree(SubagentOrchestrator $orchestrator): array
+    public function buildTree(SubagentOrchestrator $orchestrator, ?int $siblingLimit = self::DEFAULT_SIBLING_LIMIT): array
     {
-        return $this->buildSubtree($orchestrator, 'root');
+        return $this->buildSubtree($orchestrator, 'root', $siblingLimit);
     }
 
     /**
@@ -62,25 +65,186 @@ final class AgentTreeBuilder
      *
      * @return array<int, array{id: string, type: string, task: string, status: string, elapsed: float, success: bool, error: ?string, children: array}>
      */
-    public function buildSubtree(SubagentOrchestrator $orchestrator, string $parentId): array
+    public function buildSubtree(SubagentOrchestrator $orchestrator, string $parentId, ?int $siblingLimit = self::DEFAULT_SIBLING_LIMIT): array
     {
-        $children = [];
-        foreach ($orchestrator->allStats() as $stats) {
-            if ($stats->parentId === $parentId) {
-                $children[] = [
-                    'id' => $stats->id,
-                    'type' => $stats->agentType,
-                    'task' => $stats->task,
-                    'status' => $stats->status,
-                    'elapsed' => round($stats->elapsed(), 1),
-                    'toolCalls' => $stats->toolCalls,
-                    'success' => $stats->status === 'done',
-                    'error' => $stats->error,
-                    'children' => $this->buildSubtree($orchestrator, $stats->id),
-                ];
+        $index = $this->buildChildrenIndex($orchestrator->allStats());
+
+        return $this->buildIndexedSubtree($index, $parentId, $siblingLimit);
+    }
+
+    /**
+     * @param  array<string, SubagentStats>  $stats
+     * @return array<string, list<SubagentStats>>
+     */
+    private function buildChildrenIndex(array $stats): array
+    {
+        $index = [];
+
+        foreach ($stats as $agentStats) {
+            $index[$agentStats->parentId ?? 'root'][] = $agentStats;
+        }
+
+        foreach ($index as &$children) {
+            $this->sortStats($children);
+        }
+        unset($children);
+
+        return $index;
+    }
+
+    /**
+     * @param  array<string, list<SubagentStats>>  $index
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildIndexedSubtree(array $index, string $parentId, ?int $siblingLimit): array
+    {
+        $stats = $index[$parentId] ?? [];
+        if ($stats === []) {
+            return [];
+        }
+
+        $visible = $siblingLimit === null || $siblingLimit <= 0
+            ? $stats
+            : array_slice($stats, 0, $siblingLimit);
+
+        $nodes = [];
+        foreach ($visible as $agentStats) {
+            $nodes[] = $this->buildNode($agentStats, $index, $siblingLimit);
+        }
+
+        if ($siblingLimit !== null && $siblingLimit > 0 && count($stats) > $siblingLimit) {
+            $nodes[] = $this->buildSummaryNode(array_slice($stats, $siblingLimit), $index, $parentId);
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * @param  array<string, list<SubagentStats>>  $index
+     * @return array<string, mixed>
+     */
+    private function buildNode(SubagentStats $stats, array $index, ?int $siblingLimit): array
+    {
+        return [
+            'id' => $stats->id,
+            'type' => $stats->agentType,
+            'task' => $stats->task,
+            'status' => $stats->status,
+            'elapsed' => round($stats->elapsed(), 1),
+            'toolCalls' => $stats->toolCalls,
+            'success' => $stats->status === 'done',
+            'error' => $stats->error,
+            'queueReason' => $stats->queueReason,
+            'lastTool' => $stats->lastTool,
+            'lastMessagePreview' => $stats->lastMessagePreview,
+            'nextRetryAt' => $stats->nextRetryAt,
+            'children' => $this->buildIndexedSubtree($index, $stats->id, $siblingLimit),
+        ];
+    }
+
+    /**
+     * @param  list<SubagentStats>  $hidden
+     * @param  array<string, list<SubagentStats>>  $index
+     * @return array<string, mixed>
+     */
+    private function buildSummaryNode(array $hidden, array $index, string $parentId): array
+    {
+        $summary = $this->summarizeHiddenStats($hidden, $index);
+
+        return [
+            'id' => "summary-{$parentId}",
+            'type' => 'summary',
+            'task' => $this->formatSummaryTask($summary['count'], $summary['statuses']),
+            'status' => 'summary',
+            'elapsed' => 0.0,
+            'toolCalls' => 0,
+            'success' => true,
+            'error' => null,
+            'hiddenCount' => $summary['count'],
+            'hiddenStatuses' => $summary['statuses'],
+            'children' => [],
+        ];
+    }
+
+    /**
+     * @param  list<SubagentStats>  $stats
+     * @param  array<string, list<SubagentStats>>  $index
+     * @return array{count: int, statuses: array<string, int>}
+     */
+    private function summarizeHiddenStats(array $stats, array $index): array
+    {
+        $count = 0;
+        $statuses = [];
+
+        foreach ($stats as $agentStats) {
+            $count++;
+            $statuses[$agentStats->status] = ($statuses[$agentStats->status] ?? 0) + 1;
+
+            $childSummary = $this->summarizeHiddenStats($index[$agentStats->id] ?? [], $index);
+            $count += $childSummary['count'];
+            foreach ($childSummary['statuses'] as $status => $statusCount) {
+                $statuses[$status] = ($statuses[$status] ?? 0) + $statusCount;
             }
         }
 
-        return $children;
+        return ['count' => $count, 'statuses' => $statuses];
+    }
+
+    /**
+     * @param  array<string, int>  $statuses
+     */
+    private function formatSummaryTask(int $count, array $statuses): string
+    {
+        $parts = [];
+        foreach (['retrying', 'running', 'failed', 'waiting', 'queued_global', 'queued', 'done', 'cancelled'] as $status) {
+            if (($statuses[$status] ?? 0) > 0) {
+                $label = $status === 'queued_global' ? 'queued' : $status;
+                $parts[] = $statuses[$status].' '.$label;
+            }
+        }
+
+        $suffix = $parts === [] ? '' : ' ('.implode(', ', array_slice($parts, 0, 3)).')';
+
+        return "{$count} more agent".($count === 1 ? '' : 's').$suffix;
+    }
+
+    /**
+     * @param  list<SubagentStats>  $stats
+     */
+    private function sortStats(array &$stats): void
+    {
+        usort($stats, function (SubagentStats $a, SubagentStats $b): int {
+            $priority = $this->statusPriority($a->status) <=> $this->statusPriority($b->status);
+            if ($priority !== 0) {
+                return $priority;
+            }
+
+            $recency = $this->activityTimestamp($b) <=> $this->activityTimestamp($a);
+            if ($recency !== 0) {
+                return $recency;
+            }
+
+            return $a->id <=> $b->id;
+        });
+    }
+
+    private function statusPriority(string $status): int
+    {
+        return match ($status) {
+            'retrying' => 0,
+            'running' => 1,
+            'failed' => 2,
+            'cancelled' => 3,
+            'waiting' => 4,
+            'queued_global' => 5,
+            'queued' => 6,
+            'done' => 7,
+            default => 8,
+        };
+    }
+
+    private function activityTimestamp(SubagentStats $stats): float
+    {
+        return max($stats->lastActivityTime, $stats->endTime, $stats->startTime);
     }
 }

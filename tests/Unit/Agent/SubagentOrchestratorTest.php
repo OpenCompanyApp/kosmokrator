@@ -8,6 +8,9 @@ use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\Session\Database;
+use Kosmokrator\Session\SubagentOutputStore;
+use Kosmokrator\Session\SwarmMetadataStore;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Revolt\EventLoop;
@@ -47,6 +50,146 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertSame('result: do stuff', $future->await());
     }
 
+    public function test_spawn_persists_swarm_metadata_when_store_is_configured(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('session-1', '/tmp/project', 'test/model', '2026-04-29T00:00:00+00:00', '2026-04-29T00:00:00+00:00')");
+        $store = new SwarmMetadataStore($db);
+        $orchestrator = new SubagentOrchestrator(
+            new NullLogger,
+            3,
+            10,
+            0,
+            metadataStore: $store,
+            rootSessionIdProvider: fn () => 'session-1',
+        );
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $future = $orchestrator->spawnAgent(
+            $context, 'persist me', AgentType::Explore, 'await', 'persisted-1', [], null,
+            fn ($ctx, $task) => 'done',
+        );
+
+        $this->assertSame('done', $future->await());
+
+        $loaded = $store->latestForSession('session-1');
+        $this->assertArrayHasKey('persisted-1', $loaded);
+        $this->assertSame('done', $loaded['persisted-1']->status);
+        $this->assertSame('persist me', $loaded['persisted-1']->task);
+
+        $orchestrator->cancelAll();
+    }
+
+    public function test_background_results_are_spooled_and_compacted_for_parent_context(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('session-1', '/tmp/project', 'test/model', '2026-04-29T00:00:00+00:00', '2026-04-29T00:00:00+00:00')");
+        $metadata = new SwarmMetadataStore($db);
+        $outputStore = new SubagentOutputStore(sys_get_temp_dir().'/kosmo-output-'.bin2hex(random_bytes(4)));
+        $orchestrator = new SubagentOrchestrator(
+            new NullLogger,
+            3,
+            10,
+            0,
+            metadataStore: $metadata,
+            outputStore: $outputStore,
+            rootSessionIdProvider: fn () => 'session-1',
+        );
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+        $fullOutput = 'Useful summary '.str_repeat('large-result ', 500);
+
+        $future = $orchestrator->spawnAgent(
+            $context, 'large background result', AgentType::Explore, 'background', 'spooled-bg', [], null,
+            fn ($ctx, $task) => $fullOutput,
+        );
+
+        $this->assertSame($fullOutput, $future->await());
+        $pending = $orchestrator->collectPendingResults('root');
+
+        $this->assertArrayHasKey('spooled-bg', $pending);
+        $this->assertStringContainsString('Full output spooled to ', $pending['spooled-bg']);
+        $this->assertStringContainsString('Preview:', $pending['spooled-bg']);
+        $this->assertLessThan(1000, strlen($pending['spooled-bg']));
+
+        $loaded = $metadata->latestForSession('session-1');
+        $this->assertArrayHasKey('spooled-bg', $loaded);
+        $this->assertNotNull($loaded['spooled-bg']->outputRef);
+        $this->assertSame(strlen($fullOutput), $loaded['spooled-bg']->outputBytes);
+        $this->assertSame($fullOutput, $outputStore->read($loaded['spooled-bg']->outputRef));
+
+        $orchestrator->cancelAll();
+    }
+
+    public function test_dependency_results_are_spooled_and_compacted_for_child_task(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('session-1', '/tmp/project', 'test/model', '2026-04-29T00:00:00+00:00', '2026-04-29T00:00:00+00:00')");
+        $outputStore = new SubagentOutputStore(sys_get_temp_dir().'/kosmo-output-'.bin2hex(random_bytes(4)));
+        $orchestrator = new SubagentOrchestrator(
+            new NullLogger,
+            3,
+            10,
+            0,
+            metadataStore: new SwarmMetadataStore($db),
+            outputStore: $outputStore,
+            rootSessionIdProvider: fn () => 'session-1',
+        );
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+        $fullOutput = 'Dependency summary '.str_repeat('very-large-dependency-output ', 300);
+        $capturedTask = '';
+
+        $orchestrator->spawnAgent(
+            $context, 'dependency producer', AgentType::Explore, 'await', 'dep-large', [], null,
+            fn ($ctx, $task) => $fullOutput,
+        );
+
+        $child = $orchestrator->spawnAgent(
+            $context, 'consumer task', AgentType::Explore, 'await', 'dep-consumer', ['dep-large'], null,
+            function ($ctx, $task) use (&$capturedTask) {
+                $capturedTask = $task;
+
+                return 'child done';
+            },
+        );
+
+        $this->assertSame('child done', $child->await());
+        $this->assertStringContainsString('Full output spooled to ', $capturedTask);
+        $this->assertStringContainsString('Preview:', $capturedTask);
+        $this->assertLessThan(1500, strlen($capturedTask));
+
+        $orchestrator->cancelAll();
+    }
+
+    public function test_empty_subagent_output_is_not_spooled(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('session-1', '/tmp/project', 'test/model', '2026-04-29T00:00:00+00:00', '2026-04-29T00:00:00+00:00')");
+        $metadata = new SwarmMetadataStore($db);
+        $orchestrator = new SubagentOrchestrator(
+            new NullLogger,
+            3,
+            10,
+            0,
+            metadataStore: $metadata,
+            outputStore: new SubagentOutputStore(sys_get_temp_dir().'/kosmo-output-'.bin2hex(random_bytes(4))),
+            rootSessionIdProvider: fn () => 'session-1',
+        );
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $future = $orchestrator->spawnAgent(
+            $context, 'empty result', AgentType::Explore, 'await', 'empty-output', [], null,
+            fn ($ctx, $task) => '',
+        );
+
+        $this->assertSame('', $future->await());
+        $loaded = $metadata->latestForSession('session-1');
+        $this->assertNull($loaded['empty-output']->outputRef);
+        $this->assertSame(0, $loaded['empty-output']->outputBytes);
+        $this->assertNull($loaded['empty-output']->outputPreview);
+
+        $orchestrator->cancelAll();
+    }
+
     public function test_await_mode_blocks_until_complete(): void
     {
         $future = $this->orchestrator->spawnAgent(
@@ -83,6 +226,98 @@ class SubagentOrchestratorTest extends TestCase
 
         $second = $this->orchestrator->collectPendingResults('root');
         $this->assertEmpty($second);
+    }
+
+    public function test_active_background_agents_include_all_non_terminal_background_states(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'long background task', AgentType::Explore, 'background', 'active-bg', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(1.0);
+
+                return 'done';
+            },
+        );
+        \Amp\delay(0.01);
+
+        $stats = $this->orchestrator->getStats('active-bg');
+        $this->assertNotNull($stats);
+        $this->assertSame('background', $stats->mode);
+
+        foreach (['running', 'retrying', 'queued', 'queued_global', 'waiting'] as $status) {
+            $stats->status = $status;
+
+            $this->assertTrue(
+                $this->orchestrator->hasActiveBackgroundAgents('root'),
+                "Status {$status} should count as active background work.",
+            );
+        }
+    }
+
+    public function test_active_background_agents_exclude_terminal_states(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'long background task', AgentType::Explore, 'background', 'terminal-bg', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(1.0);
+
+                return 'done';
+            },
+        );
+        \Amp\delay(0.01);
+
+        $stats = $this->orchestrator->getStats('terminal-bg');
+        $this->assertNotNull($stats);
+
+        foreach (['done', 'failed', 'cancelled'] as $status) {
+            $stats->status = $status;
+
+            $this->assertFalse(
+                $this->orchestrator->hasActiveBackgroundAgents('root'),
+                "Terminal status {$status} should not count as active background work.",
+            );
+        }
+    }
+
+    public function test_active_background_agents_respect_parent_scope(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'long background task', AgentType::Explore, 'background', 'scoped-bg', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(1.0);
+
+                return 'done';
+            },
+        );
+        \Amp\delay(0.01);
+
+        $stats = $this->orchestrator->getStats('scoped-bg');
+        $this->assertNotNull($stats);
+        $stats->status = 'waiting';
+
+        $this->assertTrue($this->orchestrator->hasActiveBackgroundAgents('root'));
+        $this->assertFalse($this->orchestrator->hasActiveBackgroundAgents('other-parent'));
+    }
+
+    public function test_active_background_agents_ignore_awaited_agents(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'long awaited task', AgentType::Explore, 'await', 'active-await', [], null,
+            function ($ctx, $task) {
+                \Amp\delay(1.0);
+
+                return 'done';
+            },
+        );
+        \Amp\delay(0.01);
+
+        $stats = $this->orchestrator->getStats('active-await');
+        $this->assertNotNull($stats);
+        $this->assertSame('await', $stats->mode);
+        $stats->status = 'running';
+
+        $this->assertFalse($this->orchestrator->hasActiveBackgroundAgents('root'));
+        $this->assertFalse($this->orchestrator->hasRunningBackgroundAgents('root'));
     }
 
     public function test_depends_on_unknown_throws(): void
@@ -328,14 +563,17 @@ class SubagentOrchestratorTest extends TestCase
         $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
 
         $observedStatus = null;
+        $observedQueueReason = null;
 
         // First agent blocks so second must queue
         $orchestrator->spawnAgent(
             $context, 'blocker', AgentType::Explore, 'await', 'blocker', [], null,
-            function ($ctx, $task) use ($orchestrator, &$observedStatus) {
+            function ($ctx, $task) use ($orchestrator, &$observedStatus, &$observedQueueReason) {
                 // While this runs, check second agent's status
                 \Amp\delay(0.01);
-                $observedStatus = $orchestrator->getStats('waiter')?->status;
+                $waiterStats = $orchestrator->getStats('waiter');
+                $observedStatus = $waiterStats?->status;
+                $observedQueueReason = $waiterStats?->queueReason;
 
                 return 'done';
             },
@@ -350,6 +588,7 @@ class SubagentOrchestratorTest extends TestCase
         \Amp\delay(0.05);
 
         $this->assertSame('queued_global', $observedStatus);
+        $this->assertSame('global concurrency limit', $observedQueueReason);
     }
 
     public function test_global_semaphore_released_on_failure(): void
@@ -408,6 +647,40 @@ class SubagentOrchestratorTest extends TestCase
         $stats = $orchestrator->getStats('retry-1');
         $this->assertSame('done', $stats->status);
         $this->assertSame(1, $stats->retries);
+        $this->assertNull($stats->queueReason);
+        $this->assertNull($stats->nextRetryAt);
+    }
+
+    public function test_retry_stats_show_backoff_until_retry_resumes(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.05);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'flaky task', AgentType::Explore, 'await', 'retry-backoff', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+                if ($attempt === 1) {
+                    return ToolCallMapper::ERROR_PREFIX.'temporary provider overload';
+                }
+
+                return 'success after backoff';
+            },
+        );
+
+        \Amp\delay(0.01);
+
+        $stats = $orchestrator->getStats('retry-backoff');
+        $this->assertSame('retrying', $stats->status);
+        $this->assertSame('retry backoff', $stats->queueReason);
+        $this->assertNotNull($stats->nextRetryAt);
+        $this->assertGreaterThan(microtime(true), $stats->nextRetryAt);
+
+        $this->assertSame('success after backoff', $future->await());
+        $this->assertSame('done', $stats->status);
+        $this->assertNull($stats->queueReason);
+        $this->assertNull($stats->nextRetryAt);
     }
 
     public function test_non_retryable_result_skips_retry(): void
@@ -1260,6 +1533,111 @@ class SubagentOrchestratorTest extends TestCase
     }
 
     // --- Root agent slot management ---
+
+    public function test_yielded_slot_can_be_reclaimed_and_blocks_new_work(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $childRan = false;
+        $reclaimed = false;
+        $contenderRan = false;
+
+        $parent = $orchestrator->spawnAgent(
+            $context, 'parent', AgentType::General, 'await', 'yield-parent', [], null,
+            function (AgentContext $ctx, string $task) use ($orchestrator, &$childRan, &$reclaimed) {
+                $orchestrator->yieldSlot($ctx->id);
+
+                $child = $orchestrator->spawnAgent(
+                    $ctx, 'child', AgentType::Explore, 'await', 'yield-child', [], null,
+                    function () use (&$childRan) {
+                        $childRan = true;
+
+                        return 'child done';
+                    },
+                );
+
+                $this->assertSame('child done', $child->await());
+
+                $orchestrator->reclaimSlot($ctx->id);
+                $reclaimed = true;
+
+                \Amp\delay(0.05);
+
+                return 'parent done';
+            },
+        );
+
+        for ($i = 0; $i < 50 && ! $reclaimed; $i++) {
+            \Amp\delay(0.01);
+        }
+
+        $this->assertTrue($childRan);
+        $this->assertTrue($reclaimed);
+
+        $contender = $orchestrator->spawnAgent(
+            $context, 'contender', AgentType::Explore, 'await', 'yield-contender', [], null,
+            function () use (&$contenderRan) {
+                $contenderRan = true;
+
+                return 'contender done';
+            },
+        );
+
+        \Amp\delay(0.01);
+        $this->assertFalse($contenderRan, 'Reclaimed parent slot should block new work until the parent finishes.');
+
+        $this->assertSame('parent done', $parent->await());
+        $this->assertSame('contender done', $contender->await());
+        $this->assertTrue($contenderRan);
+    }
+
+    public function test_yield_slot_is_idempotent_and_reclaim_without_yield_is_noop(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $orchestrator->yieldSlot('missing-agent');
+        $orchestrator->reclaimSlot('missing-agent');
+
+        $future = $orchestrator->spawnAgent(
+            $context, 'double yield', AgentType::Explore, 'await', 'double-yield', [], null,
+            function (AgentContext $ctx) use ($orchestrator) {
+                $orchestrator->reclaimSlot($ctx->id);
+                $orchestrator->yieldSlot($ctx->id);
+                $orchestrator->yieldSlot($ctx->id);
+                $orchestrator->reclaimSlot($ctx->id);
+
+                return 'done';
+            },
+        );
+
+        $this->assertSame('done', $future->await());
+    }
+
+    public function test_finishing_after_yield_without_reclaim_does_not_leak_global_slot(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 1, 0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $first = $orchestrator->spawnAgent(
+            $context, 'yield and finish', AgentType::Explore, 'await', 'yield-finish', [], null,
+            function (AgentContext $ctx) use ($orchestrator) {
+                $orchestrator->yieldSlot($ctx->id);
+
+                return 'first done';
+            },
+        );
+
+        $this->assertSame('first done', $first->await());
+
+        $second = $orchestrator->spawnAgent(
+            $context, 'after yield finish', AgentType::Explore, 'await', 'after-yield-finish', [], null,
+            fn () => 'second done',
+        );
+
+        $this->assertSame('second done', $second->await());
+    }
 
     public function test_root_agent_slot_management(): void
     {

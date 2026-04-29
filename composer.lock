@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3c6191747528f53446bd6f7b406db406",
+    "content-hash": "27bfe499856668f88005f14f0b6538e1",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3632,7 +3632,7 @@
             "dist": {
                 "type": "path",
                 "url": "integrations/packages/clickup",
-                "reference": "1b14240d32e7a64b97eba16c6d4ad6717e132fc7"
+                "reference": "d451145ed1a20952930a64a6dbcef2eed391f626"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3672,7 +3672,7 @@
                 "tools"
             ],
             "transport-options": {
-                "symlink": true,
+                "symlink": false,
                 "relative": true
             }
         },
@@ -3682,7 +3682,7 @@
             "dist": {
                 "type": "path",
                 "url": "integrations/packages/coingecko",
-                "reference": "fbc18b504c7a71c6681edf91515f8669cf4b7934"
+                "reference": "91738a49c8304052c36595fca85d8e71fa1381aa"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3722,7 +3722,7 @@
                 "tools"
             ],
             "transport-options": {
-                "symlink": true,
+                "symlink": false,
                 "relative": true
             }
         },
@@ -3732,7 +3732,7 @@
             "dist": {
                 "type": "path",
                 "url": "integrations/core",
-                "reference": "b47a39158521ee333af52d484bfbdd6ad70bc250"
+                "reference": "ea9a4e5198f0b956e23acf030c68141b0ed65476"
             },
             "require": {
                 "illuminate/support": "^11.0 || ^12.0 || ^13.0",
@@ -3768,6 +3768,7 @@
                 "tools"
             ],
             "transport-options": {
+                "symlink": false,
                 "relative": true
             }
         },
@@ -3777,7 +3778,7 @@
             "dist": {
                 "type": "path",
                 "url": "integrations/packages/plane",
-                "reference": "e92979a8d1b4b2e7ffd1c25eb0e08760a4497525"
+                "reference": "518d80e2b5506830a7395c5f9ee0bfd09900bca6"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3817,7 +3818,7 @@
                 "tools"
             ],
             "transport-options": {
-                "symlink": true,
+                "symlink": false,
                 "relative": true
             }
         },
@@ -3827,7 +3828,7 @@
             "dist": {
                 "type": "path",
                 "url": "integrations/packages/plausible",
-                "reference": "9b4456487fb22697c68c1176314f78989a7390f7"
+                "reference": "ce3a1697934ac438442387b1976a1ad6b7b2cdb1"
             },
             "require": {
                 "opencompanyapp/integration-core": "^2.0 || @dev",
@@ -3866,7 +3867,7 @@
                 "tools"
             ],
             "transport-options": {
-                "symlink": true,
+                "symlink": false,
                 "relative": true
             }
         },

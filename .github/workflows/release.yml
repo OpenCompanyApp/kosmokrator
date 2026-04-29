@@ -53,6 +53,8 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction
+        env:
+          COMPOSER_MIRROR_PATH_REPOS: 1
 
       - name: Install Box
         run: composer global require humbug/box
@@ -65,6 +67,7 @@ jobs:
       - name: Verify PHAR
         run: |
           php -r "echo 'PHAR size: ' . filesize('builds/kosmokrator.phar') . ' bytes';"
+          php -r "require 'phar://' . getcwd() . '/builds/kosmokrator.phar/vendor/autoload.php'; foreach (['OpenCompany\\\\IntegrationCore\\\\Support\\\\ToolProviderRegistry', 'OpenCompany\\\\Integrations\\\\ClickUp\\\\ClickUpServiceProvider'] as \$class) { if (!class_exists(\$class)) { fwrite(STDERR, \"Missing PHAR class: {\$class}\\n\"); exit(1); } }"
 
       - name: Upload PHAR artifact
         uses: actions/upload-artifact@v4

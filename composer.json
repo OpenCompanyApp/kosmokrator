@@ -43,14 +43,17 @@
         {
             "name": "integration-core",
             "type": "path",
-            "url": "integrations/core"
+            "url": "integrations/core",
+            "options": {
+                "symlink": false
+            }
         },
         {
             "name": "integrations-monorepo",
             "type": "path",
             "url": "integrations/packages/*",
             "options": {
-                "symlink": true
+                "symlink": false
             }
         },
         {

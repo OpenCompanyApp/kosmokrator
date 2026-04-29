@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 use Kosmokrator\Command\AgentCommand;
+use Kosmokrator\Command\AcpCommand;
 use Kosmokrator\Command\AuthCommand;
 use Kosmokrator\Command\CodexLoginCommand;
 use Kosmokrator\Command\CodexLogoutCommand;
@@ -89,6 +90,7 @@ $kernel->boot();
 // Register commands
 $console = $kernel->getConsole();
 $console->addCommand(new AgentCommand($kernel->getContainer()));
+$console->addCommand(new AcpCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
 $console->addCommand(new CodexLoginCommand($kernel->getContainer()));
 $console->addCommand(new CodexStatusCommand($kernel->getContainer()));
 $console->addCommand(new CodexLogoutCommand($kernel->getContainer()));
@@ -166,7 +168,7 @@ foreach ($kernel->getContainer()->make(McpConfigStore::class)->effectiveServers(
 // 'agent' is removed from the explicit list so that `kosmokrator agent "prompt"`
 // enters single-command mode correctly (positional prompt binds to the command).
 $args = $_SERVER['argv'] ?? [];
-$explicitCommands = ['setup', 'config', 'auth', 'update', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
+$explicitCommands = ['setup', 'config', 'auth', 'update', 'acp', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
 $requestedCommand = $args[1] ?? null;
 $isExplicitCommand = is_string($requestedCommand)
     && ! str_starts_with($requestedCommand, '-')

@@ -82,6 +82,11 @@ final class McpCatalog
         return null;
     }
 
+    public function clearCache(): void
+    {
+        $this->toolCache = [];
+    }
+
     /**
      * @return array<string, array{description: string, functions: list<array<string, mixed>>}>
      */

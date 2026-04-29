@@ -8,6 +8,9 @@ final class McpConfigStore
 {
     private ?string $projectRoot = null;
 
+    /** @var array<string, McpServerConfig> */
+    private array $runtimeServers = [];
+
     public function __construct(
         private readonly ?string $home = null,
     ) {}
@@ -28,6 +31,10 @@ final class McpConfigStore
             foreach ($source['servers'] as $name => $config) {
                 $servers[$name] = $config;
             }
+        }
+
+        foreach ($this->runtimeServers as $name => $config) {
+            $servers[$name] = $config;
         }
 
         if (! $includeDisabled) {
@@ -84,6 +91,24 @@ final class McpConfigStore
     public function get(string $name): ?McpServerConfig
     {
         return $this->effectiveServers()[$name] ?? null;
+    }
+
+    public function addRuntimeServer(McpServerConfig $server): void
+    {
+        $this->runtimeServers[$server->name] = $server;
+    }
+
+    /**
+     * @param  array<string, McpServerConfig>  $servers
+     */
+    public function setRuntimeServers(array $servers): void
+    {
+        $this->runtimeServers = $servers;
+    }
+
+    public function removeRuntimeServer(string $name): void
+    {
+        unset($this->runtimeServers[$name]);
     }
 
     public function writeServer(McpServerConfig $server, string $scope = 'project'): string

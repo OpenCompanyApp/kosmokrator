@@ -1,0 +1,9 @@
+{
+  "name": "KosmoKrator",
+  "id": "kosmokrator",
+  "description": "KosmoKrator ACP agent for editor and IDE integrations.",
+  "command": "kosmokrator",
+  "args": ["acp"],
+  "version": "0.1.0",
+  "protocol": "acp"
+}

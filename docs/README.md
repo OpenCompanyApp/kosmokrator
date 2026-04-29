@@ -6,7 +6,7 @@ These docs describe shipped behavior. They must be updated when the codebase cha
 
 | Document | Description |
 |----------|-------------|
-| [overview.md](architecture/overview.md) | Architecture overview: runtime, UI, tools, context pipeline, subagents, integrations, MCP, config |
+| [overview.md](architecture/overview.md) | Architecture overview: runtime, UI, tools, context pipeline, subagents, ACP, integrations, MCP, config |
 | [permission-modes.md](architecture/permission-modes.md) | Agent modes (Edit/Plan/Ask), permission modes (Guardian/Argus/Prometheus), evaluation order |
 | [subagent-architecture.md](architecture/subagent-architecture.md) | Subagent types, tool scoping, orchestration, dependency resolution, concurrency |
 

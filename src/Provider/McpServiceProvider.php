@@ -19,9 +19,8 @@ final class McpServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $projectRoot = InstructionLoader::gitRoot() ?? getcwd() ?: null;
-
-        $this->container->singleton(McpConfigStore::class, function () use ($projectRoot): McpConfigStore {
+        $this->container->singleton(McpConfigStore::class, function (): McpConfigStore {
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd() ?: null;
             $store = new McpConfigStore;
             $store->setProjectRoot($projectRoot);
 
@@ -30,7 +29,8 @@ final class McpServiceProvider extends ServiceProvider
         $this->container->singleton(McpSecretStore::class);
         $this->container->singleton(McpClientManager::class);
         $this->container->singleton(McpCatalog::class);
-        $this->container->singleton(McpPermissionEvaluator::class, function () use ($projectRoot): McpPermissionEvaluator {
+        $this->container->singleton(McpPermissionEvaluator::class, function (): McpPermissionEvaluator {
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd() ?: null;
             $settings = $this->container->make(SettingsManager::class);
             $settings->setProjectRoot($projectRoot);
 

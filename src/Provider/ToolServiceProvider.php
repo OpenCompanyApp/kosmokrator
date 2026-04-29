@@ -65,18 +65,20 @@ class ToolServiceProvider extends ServiceProvider
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
         $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
         $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
-        $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
-        $allowedPaths = $this->resolveAllowedPaths(
-            $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
-        );
-
         $this->container->singleton(TaskStore::class);
         $this->container->singleton(PatchParser::class);
-        $this->container->singleton(PatchApplier::class, fn () => new PatchApplier(
-            $config->get('kosmokrator.tools.blocked_paths', []),
-            $projectRoot,
-            $allowedPaths,
-        ));
+        $this->container->singleton(PatchApplier::class, function () use ($config) {
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+            $allowedPaths = $this->resolveAllowedPaths(
+                $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
+            );
+
+            return new PatchApplier(
+                $config->get('kosmokrator.tools.blocked_paths', []),
+                $projectRoot,
+                $allowedPaths,
+            );
+        });
         $this->container->singleton(ShellSessionManager::class, fn () => new ShellSessionManager(
             $this->container->make(LoggerInterface::class),
             $shellWaitMs,
@@ -85,7 +87,11 @@ class ToolServiceProvider extends ServiceProvider
         ));
 
         $this->container->singleton(SessionGrants::class);
-        $this->container->singleton(PermissionEvaluator::class, function () use ($config, $projectRoot, $allowedPaths) {
+        $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+            $allowedPaths = $this->resolveAllowedPaths(
+                $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
+            );
             $parser = new PermissionConfigParser;
             $parsed = $parser->parse($config);
 
@@ -112,7 +118,11 @@ class ToolServiceProvider extends ServiceProvider
             return $evaluator;
         });
 
-        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot, $allowedPaths) {
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $config) {
+            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+            $allowedPaths = $this->resolveAllowedPaths(
+                $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
+            );
             $registry = new ToolRegistry;
             $registry->register(new FileReadTool($projectRoot, $allowedPaths));
             $registry->register(new FileWriteTool($projectRoot, $allowedPaths));

@@ -1,6 +1,6 @@
 # KosmoKrator Overview
 
-KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, headless agent execution, a headless integrations CLI, a headless MCP CLI, Lua scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
+KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, headless agent execution, an ACP stdio server, a headless integrations CLI, a headless MCP CLI, Lua scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
 
 This document is the current-state architecture summary. Proposal and roadmap material lives in `docs/proposals/` and is explicitly labeled there.
 
@@ -118,6 +118,17 @@ KosmoKrator also reads portable MCP config:
 The same runtime is available inside agent Lua through `execute_lua`, with
 documentation discovery via `lua_list_docs`, `lua_search_docs`, and
 `lua_read_doc`.
+
+### ACP
+
+KosmoKrator ships an Agent Client Protocol stdio server:
+
+- `kosmokrator acp` starts newline-delimited JSON-RPC over stdin/stdout for editors and IDEs.
+- ACP sessions are normal persisted KosmoKrator sessions and can be resumed from either ACP clients or the terminal CLI.
+- ACP prompt turns use the same `AgentLoop`, permission evaluator, tool registry, Lua runtime, integrations, MCP runtime, memory, tasks, and subagent infrastructure as the terminal UI.
+- Guardian and Argus permission prompts are bridged to ACP `session/request_permission`; Prometheus remains autonomous while hard policy denies still apply.
+- Client-provided stdio `mcpServers` are runtime-only session overlays and are not written to project `.mcp.json`.
+- Supported methods include initialize, authenticate, session new/load/resume/list/prompt/cancel/close, mode switching, model switching, and config option updates.
 
 ### Key Directories
 

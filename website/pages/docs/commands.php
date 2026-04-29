@@ -390,6 +390,24 @@ kosmokrator mcp:doctor --json</code></pre>
     See <a href="/docs/mcp">MCP</a> for the full command and Lua reference.
 </p>
 
+<h4 id="cmd-shell-acp"><code>kosmokrator acp</code></h4>
+<p>
+    Start the Agent Client Protocol stdio server for editors and IDEs. ACP mode
+    uses the same agent runtime as the terminal UI, including sessions,
+    permissions, Lua, integrations, MCP, memory, tasks, and subagents.
+</p>
+<pre><code>kosmokrator acp
+kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmokrator acp --model gpt-5.4-mini
+kosmokrator acp --yolo</code></pre>
+<p>
+    ACP clients can create, load, list, prompt, cancel, and close sessions.
+    Permission prompts are bridged to <code>session/request_permission</code>,
+    and client-provided stdio <code>mcpServers</code> are available as
+    runtime-only Lua namespaces under <code>app.mcp.*</code>. See
+    <a href="/docs/acp">ACP</a> for editor config snippets and protocol notes.
+</p>
+
 <h4 id="cmd-shell-gateway"><code>kosmokrator gateway:telegram</code></h4>
 <p>
     Start the Telegram gateway worker. This turns KosmoKrator into a Telegram

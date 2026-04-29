@@ -31,6 +31,7 @@ Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streamin
 
 - [Installation](#installation)
 - [CLI Usage](#cli-usage)
+- [ACP Server](#acp-server)
 - [Integration CLI](#integration-cli)
 - [Agent Modes](#agent-modes)
 - [Slash Commands](#slash-commands)
@@ -118,6 +119,42 @@ bin/kosmokrator --renderer=ansi         # Force ANSI mode
 bin/kosmokrator --no-animation          # Skip the animated intro
 bin/kosmokrator --resume                # Resume the last session for the current project
 bin/kosmokrator --session <id>          # Resume a specific session by ID or prefix
+```
+
+## ACP Server
+
+KosmoKrator can run as an ACP (Agent Client Protocol) server for editors and
+IDEs that speak ACP:
+
+```bash
+kosmokrator acp
+kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmokrator acp --yolo
+```
+
+ACP mode uses newline-delimited JSON-RPC over stdio. Stdout is reserved for
+protocol frames; diagnostics go to stderr. It reuses normal KosmoKrator
+provider credentials, sessions, permissions, Lua, integrations, MCP, memory,
+tasks, and subagents.
+
+Supported ACP surface: initialize, new/load/resume/list/close sessions, prompt
+turns, cancellation, streamed assistant chunks, tool call updates, permission
+requests, `session/set_config_option`, and legacy `session/set_model` for
+clients that still use it. ACP `mcpServers` are added as runtime-only
+session MCP overlays and exposed through `app.mcp.*` without writing project
+`.mcp.json`.
+
+Example editor configuration:
+
+```json
+{
+  "agent_servers": {
+    "kosmokrator": {
+      "command": "kosmokrator",
+      "args": ["acp"]
+    }
+  }
+}
 ```
 
 ## Integration CLI
@@ -624,7 +661,8 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 | `src/UI/Diff/` | Unified diff rendering with word-level highlighting |
 | `src/Tool/Coding/` | Tool implementations — file, bash, shell, grep, glob, subagent |
 | `src/Tool/Permission/` | Permission system — PermissionEvaluator, PermissionMode, Guardian rules |
-| `src/Command/` | CLI commands — AgentCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway, integrations |
+| `src/Command/` | CLI commands — AgentCommand, AcpCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway, integrations |
+| `src/Acp/` | Agent Client Protocol stdio server, JSON-RPC transport, session manager, and ACP renderer |
 | `src/Command/Slash/` | In-session slash commands |
 | `src/Integration/` | Headless OpenCompany integration runtime, catalog, credential resolution, CLI argument mapping |
 | `src/Mcp/` | MCP config compatibility, stdio client, permission/trust checks, headless runtime, and Lua bridge |

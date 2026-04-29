@@ -37,6 +37,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
   - `UI/AgentTreeBuilder.php` — Builds agent tree from orchestrator stats
 - `src/Tool/` — Tool implementations in `Coding/`, permission system in `Permission/`
 - `src/Command/` — AgentCommand (main REPL/headless), SetupCommand, ConfigCommand, AuthCommand, gateway/integration commands, slash commands in `Slash/`, power commands in `Power/`
+- `src/Acp/` — Agent Client Protocol stdio server, JSON-RPC transport, ACP renderer, and session/MCP overlay bridge
 - `src/Integration/` — OpenCompany integration catalog, runtime, docs, credential resolution, and Lua invocation helpers
 - `src/Mcp/` — MCP config compatibility, stdio client, trust/permission checks, headless runtime, and Lua bridge
 - `src/Lua/` — Lua sandbox, docs service, and native tool bridge
@@ -116,6 +117,22 @@ kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
 kosmokrator mcp:github search_repositories --query="kosmokrator" --json
 kosmokrator mcp:lua workflow.lua --json
 ```
+
+## ACP CLI
+
+KosmoKrator can run as an Agent Client Protocol server over newline-delimited
+JSON-RPC stdio:
+
+```bash
+kosmokrator acp
+kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmokrator acp --yolo
+```
+
+ACP mode reuses the normal agent runtime, sessions, permissions, provider
+credentials, Lua, integrations, MCP, memory, tasks, and subagents. Client
+`mcpServers` are runtime-only session overlays and should not be
+written to project MCP config.
 
 ### Building a PHAR
 

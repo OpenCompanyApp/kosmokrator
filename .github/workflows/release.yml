@@ -21,7 +21,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, dom, xml
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, dom, xml, lua-sandbox
           tools: composer:v2
 
       - name: Install dependencies
@@ -64,7 +64,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter, lua-sandbox
           tools: composer:v2
           ini-values: phar.readonly=0
 

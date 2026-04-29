@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-    AI coding agent for the terminal
+    AI coding agent for the terminal, headless automation, editors, and apps
 </p>
 
 <p align="center">
@@ -23,17 +23,22 @@
 
 ---
 
-KosmoKrator is a mythology-themed AI coding agent that runs in your terminal. It reads, writes, and edits files, searches your codebase, executes shell commands, and spawns parallel subagents — all with a permission system that keeps you in control.
+KosmoKrator is a mythology-themed AI coding agent with one reusable runtime and several entry points. Use it interactively in the terminal, run it headlessly from scripts and CI, call integrations and MCP servers directly, embed it in PHP through the SDK, or wrap it from non-PHP apps through ACP.
 
-Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streaming via **Amp/Revolt**. Supports 20+ LLM providers through OpenAI-compatible APIs and Prism PHP.
+The agent can read, write, and edit files, search your codebase, execute shell commands, run Lua workflows, call OpenCompany integrations, call MCP servers, and spawn parallel subagents. Permission modes, blocked paths, trust checks, sessions, settings, and credentials are shared across the terminal, headless CLI, SDK, and ACP surfaces.
+
+Built with **PHP 8.4+**, **Symfony Console**, **Symfony TUI**, and async streaming via **Amp/Revolt**. The current provider catalog exposes 120+ provider configurations and 4,800+ catalogued models through Prism, provider-native clients, OpenAI-compatible APIs, OAuth, and custom providers.
 
 ## Table of Contents
 
 - [Installation](#installation)
 - [CLI Usage](#cli-usage)
+- [Headless Agent CLI](#headless-agent-cli)
+- [Headless Configuration](#headless-configuration)
 - [ACP Server](#acp-server)
 - [Agent SDK](#agent-sdk)
 - [Integration CLI](#integration-cli)
+- [MCP CLI](#mcp-cli)
 - [Agent Modes](#agent-modes)
 - [Slash Commands](#slash-commands)
 - [Tools](#tools)
@@ -114,13 +119,79 @@ TUI mode requires a modern terminal (iTerm2, Kitty, Ghostty, Windows Terminal, e
 ## CLI Usage
 
 ```bash
-bin/kosmokrator                         # Auto-detect renderer (TUI if available, ANSI fallback)
-bin/kosmokrator --renderer=tui          # Force TUI mode
-bin/kosmokrator --renderer=ansi         # Force ANSI mode
-bin/kosmokrator --no-animation          # Skip the animated intro
-bin/kosmokrator --resume                # Resume the last session for the current project
-bin/kosmokrator --session <id>          # Resume a specific session by ID or prefix
+kosmokrator                         # Auto-detect renderer: TUI when available, ANSI fallback
+kosmokrator --renderer=tui          # Force TUI mode
+kosmokrator --renderer=ansi         # Force ANSI mode
+kosmokrator --no-animation          # Skip the animated intro
+kosmokrator --resume                # Resume the last session for the current project
+kosmokrator --session <id>          # Resume a specific session by ID or prefix
 ```
+
+The installed binary and `bin/kosmokrator` from a source checkout expose the same command surface.
+
+## Headless Agent CLI
+
+Passing a prompt enables non-interactive execution. Use `-p`/`--print` when you want KosmoKrator to complete the task and exit:
+
+```bash
+kosmokrator -p "Explain the routing in this repository"
+kosmokrator -p "Run the test suite and fix the failing tests" --mode edit --permission-mode guardian
+kosmokrator -p "Review this branch" --mode plan --output-format json
+kosmokrator -p "Summarize the architecture" --mode ask --output-format stream-json --no-session
+```
+
+Useful headless options:
+
+| Option | Purpose |
+|--------|---------|
+| `-p`, `--print` | Run one prompt and exit |
+| `-o`, `--output-format` | `text`, `json`, or `stream-json` |
+| `-m`, `--model` | Override the configured default model |
+| `--mode` | `edit`, `plan`, or `ask` |
+| `--permission-mode` | `guardian`, `argus`, or `prometheus` |
+| `--yolo` | Alias for `--permission-mode prometheus` |
+| `--max-turns` | Cap agentic turns |
+| `--timeout` | Cap wall-clock runtime in seconds |
+| `--continue` | Continue the most recent session |
+| `--session` | Resume a specific persisted session |
+| `--system-prompt` | Replace the system prompt |
+| `--append-system-prompt` | Append extra system instructions |
+| `--no-session` | Disable session persistence for this run |
+
+Headless mode uses `HeadlessRenderer` and the same `AgentSessionBuilder`/`AgentLoop` path as the interactive terminal. Tool permissions still apply. If a headless run cannot ask an approval question, choose a permission mode that matches the automation context.
+
+## Headless Configuration
+
+Everything needed to run KosmoKrator without the interactive setup can be configured from the CLI:
+
+```bash
+kosmokrator setup                         # Interactive provider/model wizard
+printf %s "$OPENAI_API_KEY" | kosmokrator setup --provider openai \
+  --model gpt-5.4-mini --api-key-stdin --global --json
+
+kosmokrator config show --json            # Inspect resolved configuration
+kosmokrator config paths --json           # Show global/project config paths
+kosmokrator settings:list --json          # Discover configurable settings
+kosmokrator settings:set agent.mode plan --global --json
+kosmokrator settings:options agent.default_model --provider openai --json
+kosmokrator settings:doctor --json        # Diagnose headless readiness
+
+kosmokrator providers:list --json
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --api-key-stdin --model gpt-5.4-mini --global --json
+kosmokrator providers:configure codex --device --global --json
+kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --json
+
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmokrator gateway:telegram:configure --token-stdin --enabled on --json
+kosmokrator gateway:telegram:status --json
+kosmokrator codex:login                   # ChatGPT OAuth for the Codex provider
+```
+
+The `settings:*`, `providers:*`, `secrets:*`, `gateway:telegram:*`, `integrations:*`, `mcp:*`, and `web:*` commands are designed for agents and scripts: they provide discovery helpers, stable JSON output, stdin secret entry, and non-zero exit codes on failures.
 
 ## ACP Server
 
@@ -211,16 +282,16 @@ provider/integration/MCP configuration helpers.
 
 ## Integration CLI
 
-KosmoKrator can also run as a headless integration CLI. Use direct commands for
-single calls and Lua for multi-step workflows:
+KosmoKrator can run as a unified headless CLI for OpenCompany integrations. Use direct commands for single calls and Lua for multi-step workflows. The currently bundled command shortcuts include ClickUp, CoinGecko, Plane, and Plausible; the runtime is catalog-driven, so additional integration packages can expose the same command shape.
 
 ```bash
-kosmokrator integrations:list
-kosmokrator integrations:status
+kosmokrator integrations:list --json
+kosmokrator integrations:status --json
 kosmokrator integrations:doctor clickup --json
 kosmokrator integrations:fields clickup --json
-kosmokrator integrations:configure clickup --set api_key="$CLICKUP_API_KEY" --enable --json
-kosmokrator integrations:search "create clickup task"
+kosmokrator integrations:configure clickup --set api_key="$CLICKUP_API_KEY" --enable --read=allow --write=ask --json
+kosmokrator integrations:configure plane --account work --set api_key="$PLANE_API_KEY" --enable --json
+kosmokrator integrations:search "create clickup task" --json
 kosmokrator integrations:docs clickup
 kosmokrator integrations:docs clickup.create_task
 kosmokrator integrations:schema clickup.create_task
@@ -233,16 +304,15 @@ kosmokrator integrations:lua --eval 'print(docs.read("clickup.create_task"))'
 kosmokrator integrations:lua workflow.lua --force --json
 ```
 
-Every docs page shows both direct CLI and Lua forms. Add `--json` to discovery
-commands when another coding CLI or script needs stable machine-readable output.
-Headless calls still follow provider read/write permissions; `--force` bypasses
-only that integration permission policy for trusted automation.
+Discovery commands expose credentials, activation, CLI compatibility, auth strategy, required runtime binaries, operations, and input schemas. Integrations that cannot be configured fully from the CLI are still listed because future proxy/web flows can support them.
+
+Credentials support account aliases through `--account`, so one provider can have multiple independently configured identities. Headless calls still follow each provider function's read/write permission policy; `--force` bypasses only that integration permission policy for one trusted automation call.
 
 ## MCP CLI
 
-KosmoKrator can call MCP servers headlessly and from Lua without registering
-them as native model tools. It reads the common project `.mcp.json`
-`mcpServers` shape, plus VS Code/Cursor `servers` files:
+KosmoKrator can call MCP servers headlessly and from Lua without registering them as native model tools. It reads the common project `.mcp.json` `mcpServers` shape, plus VS Code/Cursor `servers` files and `~/.kosmokrator/mcp.json`.
+
+Runtime execution is stdio-first. Remote HTTP servers can be used through a stdio bridge such as `mcp-remote` until native Streamable HTTP execution is added.
 
 ```bash
 kosmokrator mcp:list --json
@@ -254,6 +324,8 @@ kosmokrator mcp:schema github.search_repositories --json
 
 kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
 kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+kosmokrator mcp:resources github --json
+kosmokrator mcp:prompts github --json
 kosmokrator mcp:lua workflow.lua --json
 ```
 
@@ -263,47 +335,15 @@ under `mcp.*`; `--force` bypasses MCP trust and MCP read/write policy for one
 trusted automation call. Agent-side `execute_lua`, `integrations:lua`, and
 `mcp:lua` expose configured servers as `app.mcp.*`.
 
-Other commands:
-
-```bash
-bin/kosmokrator setup                         # Interactive provider/model wizard
-printf %s "$OPENAI_API_KEY" | bin/kosmokrator setup --provider openai \
-  --model gpt-5.4-mini --api-key-stdin --global --json
-
-bin/kosmokrator config show --json            # Inspect resolved configuration
-bin/kosmokrator config paths --json           # Show global/project config paths
-bin/kosmokrator settings:list --json          # Discover configurable settings
-bin/kosmokrator settings:set agent.mode plan --global --json
-bin/kosmokrator settings:doctor --json        # Diagnose headless readiness
-
-bin/kosmokrator providers:list --json
-printf %s "$OPENAI_API_KEY" | \
-  bin/kosmokrator providers:configure openai --api-key-stdin --json
-bin/kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --json
-
-printf %s "$OPENAI_API_KEY" | \
-  bin/kosmokrator secrets:set provider.openai.api_key --stdin --json
-
-printf %s "$TELEGRAM_BOT_TOKEN" | \
-  bin/kosmokrator gateway:telegram:configure --token-stdin --enabled on --json
-bin/kosmokrator gateway:telegram:status --json
-bin/kosmokrator codex:login                   # ChatGPT OAuth for the Codex provider
-```
-
-The `settings:*`, `providers:*`, `secrets:*`, and
-`gateway:telegram:configure/status` commands are the headless configuration
-surface. They use stable JSON, expose discovery helpers, and avoid echoing raw
-secret values.
-
 ## Agent Modes
 
-Three modes control what the agent is allowed to do. Switch modes at any time with slash commands.
+Three agent modes control the tool families available to the model. They are separate from permission modes: `edit` can still ask for approval in Guardian/Argus, and `ask` can still run safe read/search commands. Switch modes interactively with `/edit`, `/plan`, and `/ask`, or headlessly with `--mode`.
 
 | Mode | Tools Available | Use Case |
 |------|-----------------|----------|
-| **Edit** (default) | Full access — read, write, edit, patch, bash, subagents | Implementing features, fixing bugs |
-| **Plan** | Read-only — file_read, glob, grep, bash | Explore code and produce a plan before committing |
-| **Ask** | Read-only — same as Plan | Answer questions with file context |
+| **Edit** (default) | Full coding tools, shell sessions, Lua execution, subagents, tasks, memories, integrations, MCP through Lua | Implementing features and fixing bugs |
+| **Plan** | Read/search/bash/shell/subagent/task/ask/session/Lua docs tools; no file mutation or memory writes | Explore code and produce an implementation plan |
+| **Ask** | Read/search/bash/shell/task/ask/session/Lua docs tools; no file mutation, subagents, or Lua execution | Answer questions with file context |
 
 ## Slash Commands
 
@@ -405,7 +445,16 @@ KosmoKrator provides the LLM with a set of tools for interacting with your codeb
 | **lua_list_docs** | List Lua and integration documentation pages available to the agent. |
 | **lua_search_docs** | Search Lua and integration docs by topic or function name. |
 | **lua_read_doc** | Read a specific Lua docs page before writing a script. |
-| **execute_lua** | Run Lua with `app.integrations.*` and `app.tools.*` access. |
+| **execute_lua** | Run Lua with `app.integrations.*`, `app.mcp.*`, and approved native helper access. |
+
+### Web
+
+| Tool | Description |
+|------|-------------|
+| **web_search** | Search the web through an optional configured web provider. |
+| **web_fetch_external** | Fetch a URL through an optional configured external web provider. |
+| **web_extract** | Extract a URL through an optional configured external web provider. |
+| **web_crawl** | Crawl a site through an optional configured web provider. |
 
 ### Memory & Tasks
 
@@ -422,7 +471,7 @@ KosmoKrator provides the LLM with a set of tools for interacting with your codeb
 
 ## Permission System
 
-Three permission modes control tool approval. Governed tools (`file_write`, `file_edit`, `apply_patch`, `bash`, `shell_start`, `shell_write`, `execute_lua`) go through permission checks.
+Three permission modes control tool approval. Governed native tools (`file_write`, `file_edit`, `apply_patch`, `bash`, `shell_start`, `shell_write`, `execute_lua`) go through permission checks. Integration and MCP calls also have read/write policies in headless CLI, Lua, SDK, and ACP flows.
 
 | Mode | Symbol | Behavior |
 |------|--------|----------|
@@ -437,6 +486,7 @@ Guardian auto-approves tool calls that match its safety rules:
 - **file_read**, **glob**, **grep** — always auto-approved
 - **file_write**, **file_edit** — auto-approved when the target is inside the project root
 - **bash** — auto-approved when the command matches a known safe pattern AND contains no shell operators (`;`, `&&`, `||`, `|`, redirects, substitutions, newlines)
+- **web_search**, **web_fetch_external**, **web_extract**, **web_crawl** — run only when the relevant web provider setting is enabled
 
 Safe command patterns include: `git`, `ls`, `pwd`, `cat`, `head`, `tail`, `wc`, `find`, `which`, `echo`, `diff`, `php vendor/bin/phpunit`, `php vendor/bin/pint`, `composer`, `npm`, `npx`, `node`, `python`, `cargo`, `go`, `make`.
 
@@ -446,6 +496,7 @@ Regardless of permission mode:
 
 - **Blocked paths** are always denied: `*.env`, `.git/*`, `*.pem`, `*id_rsa*`, `*id_ed25519*`, `*.key`
 - **Blocked bash patterns** are always denied
+- **MCP project trust** is required before normal MCP discovery/execution
 - **Session grants** persist for the duration of the session — approve once, the tool is approved until you close
 
 See [docs/architecture/permission-modes.md](docs/architecture/permission-modes.md) for the full evaluation order and interaction with agent modes.
@@ -547,12 +598,18 @@ Open the settings workspace with `/settings` during a session. Settings are orga
 |----------|-------------|
 | **General** | Renderer (auto/tui/ansi), theme, intro animation |
 | **Models** | Default provider and model. Browse providers and select via the models browser. |
-| **Subagents** | Subagent provider/model overrides (depth 1 and depth 2+), max depth, concurrency, retries, idle watchdog |
+| **Provider Setup** | Per-provider credential management, custom provider definitions |
+| **Auth** | OAuth/device auth state such as Codex login |
 | **Agent** | Default mode (edit/plan/ask), temperature, max output tokens, max retries |
 | **Permissions** | Default permission mode (guardian/argus/prometheus) |
 | **Context & Memory** | Auto compact, compact threshold, token buffer thresholds, prune settings, memories toggle |
+| **Gateway** | Telegram gateway enablement and token configuration |
+| **Integrations** | Integration activation, credential fields, account aliases, and read/write policy |
+| **MCP** | MCP server config, project trust, server secrets, and read/write policy |
+| **Web** | Optional web search/fetch/crawl provider configuration |
+| **Subagents** | Subagent provider/model overrides (depth 1 and depth 2+), max depth, concurrency, retries, idle watchdog |
+| **Advanced** | Lower-level runtime flags and diagnostics |
 | **Audio** | Completion sound, soundfont path, composition timeout, max duration, retries |
-| **Provider Setup** | Per-provider credential management, custom provider definitions |
 
 ### Scopes
 
@@ -583,6 +640,16 @@ Configuration is loaded in layers (later overrides earlier):
 4. `.kosmokrator.yaml` — project overrides (in working directory)
 
 Environment variables (`${VAR_NAME}`) are resolved in all YAML files.
+
+Other runtime state is stored separately:
+
+| Path | Purpose |
+|------|---------|
+| `~/.kosmokrator/data/` | SQLite sessions, messages, memories, settings, and token accounting |
+| `~/.kosmokrator/mcp.json` | Global MCP servers in portable `mcpServers` format |
+| `.mcp.json` | Project MCP servers in the common `mcpServers` shape |
+| `.vscode/mcp.json`, `.cursor/mcp.json` | Compatibility reads for editor `servers` MCP config |
+| Integration credential config | Global/project activation and account aliases managed by `integrations:configure` |
 
 ### Key Configuration Options
 
@@ -691,14 +758,20 @@ Both renderers share `Theme` for a consistent mythology-themed aesthetic — pla
 ## Architecture
 
 ```
-bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoop (REPL)
-                                            ├── ToolExecutor → tools + PermissionEvaluator
-                                            ├── ContextManager → compaction, pruning, system prompt
-                                            ├── StuckDetector → headless loop convergence
-                                            ├── LLM client (AsyncLlmClient or PrismService)
-                                            ├── UIManager → TuiRenderer | AnsiRenderer | HeadlessRenderer
-                                            ├── ToolRegistry → all tools
-                                            └── SubagentOrchestrator → parallel child agents
+bin/kosmokrator
+  → Kernel
+  → AgentCommand | AcpCommand | integration/mcp/config commands | SDK entry points
+  → AgentSessionBuilder
+  → AgentLoop
+      ├── ToolExecutor → tools + PermissionEvaluator
+      ├── ContextManager → compaction, pruning, system prompt
+      ├── StuckDetector → headless loop convergence
+      ├── LLM client → AsyncLlmClient | PrismService | RetryableLlmClient
+      ├── Renderer → TuiRenderer | AnsiRenderer | HeadlessRenderer | ACP/SDK renderers
+      ├── ToolRegistry → coding + shell + web + Lua + coordination tools
+      ├── IntegrationRuntime → OpenCompany integrations + app.integrations.*
+      ├── McpRuntime → stdio MCP + app.mcp.*
+      └── SubagentOrchestrator → parallel child agents
 ```
 
 ### Key Directories
@@ -713,7 +786,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 | `src/UI/Diff/` | Unified diff rendering with word-level highlighting |
 | `src/Tool/Coding/` | Tool implementations — file, bash, shell, grep, glob, subagent |
 | `src/Tool/Permission/` | Permission system — PermissionEvaluator, PermissionMode, Guardian rules |
-| `src/Command/` | CLI commands — AgentCommand, AcpCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway, integrations |
+| `src/Command/` | CLI commands — AgentCommand, AcpCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, settings, providers, secrets, gateway, integrations, MCP, web |
 | `src/Sdk/` | Stable embeddable PHP API over the headless runtime: AgentBuilder, Agent, events, renderers, and configuration helpers |
 | `src/Acp/` | Agent Client Protocol stdio server, JSON-RPC transport, session manager, and ACP renderer |
 | `src/Command/Slash/` | In-session slash commands |

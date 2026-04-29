@@ -64,6 +64,60 @@ function minifyJs(string $js): string
     return trim($js);
 }
 
+function annotateCodeBlocks(string $html): string
+{
+    return (string) preg_replace_callback(
+        '/<pre><code(?![^>]*\bclass=)([^>]*)>(.*?)<\/code><\/pre>/si',
+        static function (array $m): string {
+            $language = inferCodeLanguage($m[2]);
+            if ($language === null) {
+                return $m[0];
+            }
+
+            return '<pre><code class="language-'.$language.'"'.$m[1].'>'.$m[2].'</code></pre>';
+        },
+        $html
+    );
+}
+
+function inferCodeLanguage(string $encoded): ?string
+{
+    $code = trim(html_entity_decode(strip_tags($encoded), ENT_QUOTES | ENT_HTML5));
+    if ($code === '') {
+        return null;
+    }
+
+    if (preg_match('/^(#|\$\s|kosmokrator|php |composer |git |curl |sudo |pkg |printf |jq |chmod |ln |cd |cat |brew |bin\/|termux-|COMPOSER_|mcp-cli\b)/m', $code)) {
+        return 'bash';
+    }
+
+    if (preg_match('/^(\/[a-z][a-z_-]*|:[a-z][a-z_-]*|You >|\$[a-z][a-z0-9_-]+[ \t]+(?![=])|[A-Za-z_][A-Za-z0-9_]*=\$\(|file_read|file_write|file_edit|apply_patch|glob|grep|web_search|web_fetch|web_crawl|bash|memory_|session_|task_|lua_|execute_lua|ask_)/', $code)) {
+        return 'bash';
+    }
+
+    if (str_starts_with($code, '<?php') || preg_match('/\b(use|namespace)\s+Kosmokrator\\\\|AgentBuilder::|\$[A-Za-z_][A-Za-z0-9_]*|->/', $code)) {
+        return 'php';
+    }
+
+    if ((str_starts_with($code, '{') || str_starts_with($code, '[')) && json_decode($code, true) !== null) {
+        return 'json';
+    }
+
+    if (preg_match('/^(agent|prism|integrations|mcp|tools|context|name|on|jobs|steps|providers|permissions|memory|gateway|ui):/m', $code)) {
+        return 'yaml';
+    }
+
+    if (preg_match('/\b(local|return|function|end|then)\b|app\.(integrations|mcp|tools)|docs\.(list|read|search)|dump\(/', $code)) {
+        return 'lua';
+    }
+
+    if (str_contains($code, "\n") && preg_match('/^[A-Za-z0-9_.-]+:\s/m', $code)) {
+        return 'yaml';
+    }
+
+    return 'plaintext';
+}
+
 function cleanDir(string $dir): void
 {
     if (! is_dir($dir)) return;
@@ -138,6 +192,7 @@ foreach ($files as $file) {
     $output = ltrim($output);
 
     if ($detectedType === 'text/html') {
+        $output = annotateCodeBlocks($output);
         $output = minifyHtml($output);
     }
 

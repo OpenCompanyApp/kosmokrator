@@ -9,6 +9,7 @@ $pageClass ??= '';
 $extraHead ??= '';
 $extraScript ??= '';
 $isDocsPage = str_contains($pageClass, 'docs-page');
+$hasCodeHighlighting = $isDocsPage || str_contains($pageClass, 'homepage');
 ?>
 <!DOCTYPE html>
 <html lang="en" style="background:#07070d;">
@@ -53,6 +54,9 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<?php if ($hasCodeHighlighting) { ?>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css">
+<?php } ?>
 
     <style>
         /* ── Custom properties ── */
@@ -1172,6 +1176,73 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
             font-size: inherit;
         }
 
+        .docs-content pre code.hljs,
+        .homepage pre code.hljs {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+
+        .docs-content .hljs-keyword,
+        .homepage .hljs-keyword,
+        .docs-content .hljs-selector-tag,
+        .homepage .hljs-selector-tag,
+        .docs-content .hljs-built_in,
+        .homepage .hljs-built_in,
+        .docs-content .hljs-name,
+        .homepage .hljs-name,
+        .docs-content .hljs-tag,
+        .homepage .hljs-tag {
+            color: #ff6b81;
+        }
+
+        .docs-content .hljs-string,
+        .homepage .hljs-string,
+        .docs-content .hljs-title,
+        .homepage .hljs-title,
+        .docs-content .hljs-section,
+        .homepage .hljs-section,
+        .docs-content .hljs-attribute,
+        .homepage .hljs-attribute,
+        .docs-content .hljs-literal,
+        .homepage .hljs-literal,
+        .docs-content .hljs-template-tag,
+        .homepage .hljs-template-tag,
+        .docs-content .hljs-template-variable,
+        .homepage .hljs-template-variable,
+        .docs-content .hljs-type,
+        .homepage .hljs-type,
+        .docs-content .hljs-addition,
+        .homepage .hljs-addition {
+            color: #00ff88;
+        }
+
+        .docs-content .hljs-comment,
+        .homepage .hljs-comment,
+        .docs-content .hljs-quote,
+        .homepage .hljs-quote,
+        .docs-content .hljs-deletion,
+        .homepage .hljs-deletion,
+        .docs-content .hljs-meta,
+        .homepage .hljs-meta {
+            color: var(--text-dim);
+        }
+
+        .docs-content .hljs-number,
+        .homepage .hljs-number,
+        .docs-content .hljs-symbol,
+        .homepage .hljs-symbol,
+        .docs-content .hljs-bullet,
+        .homepage .hljs-bullet,
+        .docs-content .hljs-variable,
+        .homepage .hljs-variable,
+        .docs-content .hljs-params,
+        .homepage .hljs-params,
+        .docs-content .hljs-link,
+        .homepage .hljs-link {
+            color: #ffbd5f;
+        }
+
         .docs-content ul, .docs-content ol {
             color: var(--text-muted);
             padding-left: 1.5rem;
@@ -1562,6 +1633,14 @@ $isDocsPage = str_contains($pageClass, 'docs-page');
 
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<?php if ($hasCodeHighlighting) { ?>
+    <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.docs-content pre code, .homepage pre code').forEach((block) => hljs.highlightElement(block));
+        });
+    </script>
+<?php } ?>
 
     <script>
         // Starfield

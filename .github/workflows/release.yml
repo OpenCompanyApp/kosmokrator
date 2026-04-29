@@ -168,6 +168,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter
+          tools: composer:v2
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:

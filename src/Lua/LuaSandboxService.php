@@ -51,8 +51,7 @@ class LuaSandboxService
         $start = microtime(true);
 
         try {
-            $fn = $sandbox->load($code);
-            $result = $fn();
+            $result = $this->runLoadedChunk($sandbox->load($code));
             $elapsed = round((microtime(true) - $start) * 1000, 1);
 
             return new LuaResult(

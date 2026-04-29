@@ -140,6 +140,8 @@ class LuaSandboxService
         $sandbox->register('__php', [
             'capture' => function ($line) use (&$output) {
                 $output[] = (string) $line;
+
+                return [];
             },
         ]);
 

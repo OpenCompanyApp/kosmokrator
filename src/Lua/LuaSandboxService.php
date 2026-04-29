@@ -386,12 +386,16 @@ class LuaSandboxService
 
     private function runLoadedChunk(mixed $chunk): mixed
     {
-        if ($chunk instanceof \Closure || is_callable($chunk)) {
+        if ($chunk instanceof \Closure) {
             return $chunk();
         }
 
         if (is_object($chunk) && method_exists($chunk, 'call')) {
             return $chunk->call();
+        }
+
+        if (is_callable($chunk)) {
+            return $chunk();
         }
 
         throw new \RuntimeException('Lua chunk is not callable.');

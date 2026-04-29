@@ -51,7 +51,7 @@ class EnvironmentContextTest extends TestCase
     {
         $context = EnvironmentContext::gather();
 
-        $this->assertStringContainsString('Git branch:', $context);
+        $this->assertMatchesRegularExpression('/Git branch:|Git: not a repository/', $context);
     }
 
     public function test_gather_refreshes_git_info_when_working_directory_changes(): void

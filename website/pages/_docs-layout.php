@@ -14,6 +14,7 @@ $topics = [
     'termux' => ['Termux (Android)',   'Running on Android via Termux'],
     'configuration' => ['Configuration',       'Settings and config files'],
     'headless' => ['Headless Mode',       'CI/CD and non-interactive execution'],
+    'sdk' => ['Agent SDK',           'Embed the headless runtime in PHP apps'],
     'integrations' => ['Integrations CLI',    'Headless integrations for scripts and coding CLIs'],
     'mcp' => ['MCP',                 'Portable .mcp.json servers, headless calls, and app.mcp Lua'],
     'acp' => ['ACP',                 'Editor and IDE integration through Agent Client Protocol'],

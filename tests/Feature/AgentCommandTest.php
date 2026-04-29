@@ -21,4 +21,17 @@ class AgentCommandTest extends TestCase
 
         $this->assertSame(1, $tester->getStatusCode());
     }
+
+    public function test_agent_command_rejects_invalid_headless_mode_cleanly(): void
+    {
+        $kernel = new Kernel(dirname(__DIR__, 2));
+        $kernel->boot();
+
+        $command = new AgentCommand($kernel->getContainer());
+        $tester = new CommandTester($command);
+
+        $tester->execute(['prompt' => 'hello', '--mode' => 'invalid']);
+
+        $this->assertSame(1, $tester->getStatusCode());
+    }
 }

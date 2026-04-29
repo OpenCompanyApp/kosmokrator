@@ -25,6 +25,12 @@ ob_start();
     The integrations CLI is a separate headless surface from the coding-agent REPL:
 </p>
 
+<p>
+    PHP applications can use the same runtime through the <a href="/docs/sdk">Agent SDK</a>:
+    <code>$agent-&gt;integrations()-&gt;call(...)</code> for direct calls and
+    <code>$agent-&gt;integrations()-&gt;lua(...)</code> for Lua workflows.
+</p>
+
 <ul>
     <li><strong>Provider</strong> &mdash; an installed integration package such as <code>plane</code>, <code>clickup</code>, or <code>github</code>.</li>
     <li><strong>Function</strong> &mdash; a callable operation exposed by a provider, named as <code>provider.function</code>.</li>

@@ -37,6 +37,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
   - `UI/AgentTreeBuilder.php` — Builds agent tree from orchestrator stats
 - `src/Tool/` — Tool implementations in `Coding/`, permission system in `Permission/`
 - `src/Command/` — AgentCommand (main REPL/headless), SetupCommand, ConfigCommand, AuthCommand, gateway/integration commands, slash commands in `Slash/`, power commands in `Power/`
+- `src/Sdk/` — Stable embeddable PHP SDK over the headless runtime: AgentBuilder, Agent, events, renderers, and configuration helpers
 - `src/Acp/` — Agent Client Protocol stdio server, JSON-RPC transport, ACP renderer, and session/MCP overlay bridge
 - `src/Integration/` — OpenCompany integration catalog, runtime, docs, credential resolution, and Lua invocation helpers
 - `src/Mcp/` — MCP config compatibility, stdio client, trust/permission checks, headless runtime, and Lua bridge
@@ -89,6 +90,8 @@ php website/build.php
 Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/config.yaml` or `.kosmokrator.yaml` in the working directory.
 
 `README.md`, `docs/architecture/overview.md`, `docs/architecture/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/proposals/` are design notes. Actionable backlog is tracked in Plane, not in repo audit/todo docs.
+
+When adding or changing user-facing features, update the website docs in `website/pages/docs/` and rebuild generated `website/html/` output. SDK-facing changes must update `/docs/sdk`.
 
 ## MCP CLI
 

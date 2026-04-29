@@ -1,6 +1,6 @@
 # KosmoKrator Overview
 
-KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, headless agent execution, an ACP stdio server, a headless integrations CLI, a headless MCP CLI, Lua scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
+KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, an embeddable PHP Agent SDK over headless execution, an ACP stdio server, a headless integrations CLI, a headless MCP CLI, Lua scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
 
 This document is the current-state architecture summary. Proposal and roadmap material lives in `docs/proposals/` and is explicitly labeled there.
 
@@ -119,6 +119,18 @@ The same runtime is available inside agent Lua through `execute_lua`, with
 documentation discovery via `lua_list_docs`, `lua_search_docs`, and
 `lua_read_doc`.
 
+### Agent SDK
+
+KosmoKrator exposes the headless runtime as a PHP SDK under `Kosmokrator\Sdk`.
+
+- `AgentBuilder` is the stable entry point for embedding `kosmokrator -p` behavior in PHP applications.
+- `Agent::collect()` executes one headless task and returns `AgentResult`.
+- `Agent::stream()` returns the event sequence for a run, while `CallbackRenderer` receives events during execution for WebSocket/custom UI surfaces.
+- SDK runs use `AgentSessionBuilder::buildHeadless()` with an SDK renderer, so model/mode/permission overrides, sessions, Lua, integrations, MCP, context management, subagents, max turns, timeout, and stuck detection share the CLI headless path.
+- `Sdk\Config\ProviderConfigurator`, `IntegrationConfigurator`, `McpConfigurator`, and `SecretConfigurator` provide programmatic equivalents to the headless configuration commands.
+- `Agent::integrations()` and `Agent::mcp()` expose the same direct call and Lua runtimes used by `integrations:*` and `mcp:*`.
+- `Agent::close()` explicitly releases runtime clients for long-lived workers that use direct SDK helpers.
+
 ### ACP
 
 KosmoKrator ships an Agent Client Protocol stdio server:
@@ -143,6 +155,7 @@ KosmoKrator ships an Agent Client Protocol stdio server:
 | `src/Command/Power/` | 22 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
 | `src/Command/Integration/` | Headless integration CLI commands and dynamic provider shortcuts |
 | `src/Command/Mcp/` | Headless MCP CLI commands and dynamic server shortcuts |
+| `src/Sdk/` | Stable embeddable PHP SDK over headless execution: AgentBuilder, Agent, events, renderers, config helpers |
 | `src/Integration/` | Integration catalog, runtime, credential resolution, command argument coercion, Lua invoker |
 | `src/Mcp/` | MCP config store, stdio client, catalog, trust/permissions, secrets, runtime, Lua invoker |
 | `src/Lua/` | Lua sandbox service, documentation registry, native tool bridge |

@@ -76,6 +76,8 @@ class AgentLoop
     /** @var array{cache_read: int, prompt_tokens: int, round: int}|null */
     private ?array $lastCacheObservation = null;
 
+    private int $lastHeadlessTurns = 0;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -423,6 +425,7 @@ class AgentLoop
         $this->history->addUser($task);
 
         $this->stuckDetector->reset();
+        $this->lastHeadlessTurns = 0;
 
         $round = 0;
         $trimAttempts = 0;
@@ -431,6 +434,7 @@ class AgentLoop
         try {
             while (true) {
                 $round++;
+                $this->lastHeadlessTurns = $round;
                 $this->stats?->touchActivity();
 
                 // Yield to the event loop so cancellation signals, background
@@ -617,6 +621,11 @@ class AgentLoop
     public function history(): ConversationHistory
     {
         return $this->history;
+    }
+
+    public function getLastHeadlessTurns(): int
+    {
+        return $this->lastHeadlessTurns;
     }
 
     public function getSessionCost(): float

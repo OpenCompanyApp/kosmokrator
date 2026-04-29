@@ -32,6 +32,7 @@ Built with **PHP 8.4**, **Symfony Console**, **Symfony TUI**, and async streamin
 - [Installation](#installation)
 - [CLI Usage](#cli-usage)
 - [ACP Server](#acp-server)
+- [Agent SDK](#agent-sdk)
 - [Integration CLI](#integration-cli)
 - [Agent Modes](#agent-modes)
 - [Slash Commands](#slash-commands)
@@ -156,6 +157,30 @@ Example editor configuration:
   }
 }
 ```
+
+## Agent SDK
+
+KosmoKrator can also be embedded as a PHP library. The public SDK lives under
+`Kosmokrator\Sdk\*` and uses the same runtime path as `kosmokrator -p`:
+
+```php
+use Kosmokrator\Sdk\AgentBuilder;
+
+$result = AgentBuilder::create()
+    ->forProject('/path/to/project')
+    ->withMode('edit')
+    ->withPermissionMode('guardian')
+    ->withMaxTurns(20)
+    ->build()
+    ->collect('Fix the failing tests');
+
+echo $result->text;
+```
+
+The SDK supports the headless CLI feature set: model/mode/permission overrides,
+sessions and resume, system prompt overrides, max turns, timeout, Lua code mode,
+integrations, MCP runtime overlays, subagents, callbacks, and programmatic
+provider/integration/MCP configuration helpers.
 
 ## Integration CLI
 
@@ -662,6 +687,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 | `src/Tool/Coding/` | Tool implementations — file, bash, shell, grep, glob, subagent |
 | `src/Tool/Permission/` | Permission system — PermissionEvaluator, PermissionMode, Guardian rules |
 | `src/Command/` | CLI commands — AgentCommand, AcpCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway, integrations |
+| `src/Sdk/` | Stable embeddable PHP API over the headless runtime: AgentBuilder, Agent, events, renderers, and configuration helpers |
 | `src/Acp/` | Agent Client Protocol stdio server, JSON-RPC transport, session manager, and ACP renderer |
 | `src/Command/Slash/` | In-session slash commands |
 | `src/Integration/` | Headless OpenCompany integration runtime, catalog, credential resolution, CLI argument mapping |

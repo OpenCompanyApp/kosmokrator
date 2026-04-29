@@ -25,6 +25,12 @@ echo "explain this error" | kosmokrator</code></pre>
 
 <p>All three produce the same result: the agent runs to completion, writes the final response to <strong>stdout</strong>, and exits with code <code>0</code> on success. Progress and diagnostics go to <strong>stderr</strong>, so <code>result=$(kosmokrator -p "task")</code> captures only the response.</p>
 
+<p>
+    This CLI path is backed by the same <a href="/docs/sdk">Agent SDK</a> runtime exposed to PHP
+    applications through <code>Kosmokrator\Sdk\AgentBuilder</code>. Use the SDK when you want
+    headless execution inside a web app, worker, daemon, or another PHP automation surface.
+</p>
+
 <div class="tip"><p><strong>Tip:</strong> Combine stdin with a positional prompt — stdin is appended after the prompt. Great for injecting file contents into a task:</p></div>
 
 <pre><code>cat error.log | kosmokrator -p "explain this error and suggest a fix"</code></pre>
@@ -644,4 +650,4 @@ sys.exit(proc.returncode)</code></pre>
 
 <?php
 $docContent = ob_get_clean();
-include __DIR__ . '/../_docs-layout.php';
+include __DIR__.'/../_docs-layout.php';

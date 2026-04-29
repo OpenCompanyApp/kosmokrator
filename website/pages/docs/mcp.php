@@ -20,6 +20,12 @@ ob_start();
     <code>app.mcp.SERVER.TOOL(...)</code>.
 </div>
 
+<p>
+    PHP applications can use the same runtime through the <a href="/docs/sdk">Agent SDK</a>:
+    <code>$agent-&gt;mcp()-&gt;call(...)</code>, <code>$agent-&gt;mcp()-&gt;lua(...)</code>, and
+    runtime-only <code>-&gt;withMcpServer(...)</code> overlays.
+</p>
+
 <h2 id="config">Portable Config</h2>
 
 <p>

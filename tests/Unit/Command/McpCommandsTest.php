@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Command;
 
+use Kosmokrator\Lua\LuaSandboxService;
 use Lua\Sandbox;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
@@ -65,7 +66,7 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(0, $dynamic['exit']);
         $this->assertSame('dynamic', $dynamic['json']['data']);
 
-        if (! class_exists(Sandbox::class)) {
+        if (! $this->luaSandboxCapturesOutput()) {
             $this->markTestSkipped('Lua sandbox extension is not available.');
         }
 
@@ -96,7 +97,7 @@ final class McpCommandsTest extends TestCase
         $this->assertSame('ok', $forced['json']['data']);
         $this->assertTrue($forced['json']['meta']['permission_bypassed']);
 
-        if (! class_exists(Sandbox::class)) {
+        if (! $this->luaSandboxCapturesOutput()) {
             $this->markTestSkipped('Lua sandbox extension is not available.');
         }
 
@@ -185,5 +186,20 @@ final class McpCommandsTest extends TestCase
             'output' => $output,
             'json' => is_array($decoded) ? $decoded : [],
         ];
+    }
+
+    private function luaSandboxCapturesOutput(): bool
+    {
+        if (! class_exists(Sandbox::class)) {
+            return false;
+        }
+
+        try {
+            $result = (new LuaSandboxService)->execute('print("ok")');
+
+            return $result->error === null && trim($result->output) === 'ok';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

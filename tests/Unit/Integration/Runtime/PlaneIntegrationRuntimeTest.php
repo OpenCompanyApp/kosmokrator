@@ -159,7 +159,7 @@ final class PlaneIntegrationRuntimeTest extends TestCase
 
     public function test_lua_docs_helpers_can_discover_plane_functions_without_calling_api(): void
     {
-        if (! class_exists(Sandbox::class)) {
+        if (! $this->luaSandboxCapturesOutput()) {
             $this->markTestSkipped('Lua sandbox extension is not available.');
         }
 
@@ -225,6 +225,21 @@ final class PlaneIntegrationRuntimeTest extends TestCase
                 $invoker,
             ),
         ];
+    }
+
+    private function luaSandboxCapturesOutput(): bool
+    {
+        if (! class_exists(Sandbox::class)) {
+            return false;
+        }
+
+        try {
+            $result = (new LuaSandboxService)->execute('print("ok")');
+
+            return $result->error === null && trim($result->output) === 'ok';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
 

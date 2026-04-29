@@ -1,6 +1,6 @@
 # KosmoKrator Overview
 
-KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, headless agent execution, a headless integrations CLI, Lua integration scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
+KosmoKrator is a terminal coding agent built in PHP. The shipped product today is a CLI application with a dual renderer, headless agent execution, a headless integrations CLI, a headless MCP CLI, Lua scripting, a tool-driven agent loop, session persistence, context management, slash commands, power commands, a skill system, and a subagent system.
 
 This document is the current-state architecture summary. Proposal and roadmap material lives in `docs/proposals/` and is explicitly labeled there.
 
@@ -97,7 +97,7 @@ KosmoKrator ships with a working subagent system:
 
 See `AGENTS.md` and `docs/architecture/subagent-architecture.md` for implementation details.
 
-### Headless Integrations and Lua
+### Headless Integrations, MCP, and Lua
 
 KosmoKrator also exposes OpenCompany integration packages without starting an
 agent session:
@@ -105,7 +105,15 @@ agent session:
 - `integrations:list`, `integrations:status`, `integrations:search`, `integrations:docs`, `integrations:schema`, `integrations:examples`
 - `integrations:call provider.function` for direct calls
 - dynamic shortcuts like `integrations:plane list_issues`
-- `integrations:lua` for multi-step Lua workflows over `app.integrations.*`
+- `integrations:lua` for multi-step Lua workflows over `app.integrations.*` and `app.mcp.*`
+
+KosmoKrator also reads portable MCP config:
+
+- project `.mcp.json` with top-level `mcpServers`
+- compatibility reads for `.vscode/mcp.json` and `.cursor/mcp.json` with top-level `servers`
+- global `~/.kosmokrator/mcp.json`
+- `mcp:list`, `mcp:add`, `mcp:trust`, `mcp:tools`, `mcp:schema`, `mcp:call`, dynamic `mcp:<server>` shortcuts, `mcp:lua`, resource/prompt commands, and MCP secret commands
+- MCP servers are exposed to Lua under `app.mcp.*`, not registered as native model tools
 
 The same runtime is available inside agent Lua through `execute_lua`, with
 documentation discovery via `lua_list_docs`, `lua_search_docs`, and
@@ -123,13 +131,15 @@ documentation discovery via `lua_list_docs`, `lua_search_docs`, and
 | `src/Command/Slash/` | 22 interactive slash commands (`/edit`, `/compact`, `/settings`, etc.) |
 | `src/Command/Power/` | 22 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
 | `src/Command/Integration/` | Headless integration CLI commands and dynamic provider shortcuts |
+| `src/Command/Mcp/` | Headless MCP CLI commands and dynamic server shortcuts |
 | `src/Integration/` | Integration catalog, runtime, credential resolution, command argument coercion, Lua invoker |
+| `src/Mcp/` | MCP config store, stdio client, catalog, trust/permissions, secrets, runtime, Lua invoker |
 | `src/Lua/` | Lua sandbox service, documentation registry, native tool bridge |
 | `src/Session/` | SQLite persistence: sessions, messages, memories, settings |
 | `src/Task/` | Task tracking with tree structure and dependency enforcement |
 | `src/Skill/` | Skill system: YAML-based custom prompts with `$skillname` dispatch |
 | `src/Settings/` | Layered settings resolution (project → global → default) |
-| `src/Provider/` | Service providers for DI container wiring (9 providers) |
+| `src/Provider/` | Service providers for DI container wiring (12 providers) |
 | `src/Update/` | Self-updater with GitHub release checking |
 | `src/Audio/` | Completion sounds (LLM-composed MIDI per session) |
 
@@ -138,7 +148,7 @@ documentation discovery via `lua_list_docs`, `lua_search_docs`, and
 These are still proposal or future-work areas, not shipped runtime features:
 
 - Lua code mode as a dedicated interactive agent mode (Lua integration scripting is shipped)
-- MCP client support
+- Streamable HTTP MCP transport (stdio MCP is shipped)
 - desktop app surface
 - provider failover across multiple backends in the main runtime
 

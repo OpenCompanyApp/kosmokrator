@@ -38,6 +38,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 - `src/Tool/` — Tool implementations in `Coding/`, permission system in `Permission/`
 - `src/Command/` — AgentCommand (main REPL/headless), SetupCommand, ConfigCommand, AuthCommand, gateway/integration commands, slash commands in `Slash/`, power commands in `Power/`
 - `src/Integration/` — OpenCompany integration catalog, runtime, docs, credential resolution, and Lua invocation helpers
+- `src/Mcp/` — MCP config compatibility, stdio client, trust/permission checks, headless runtime, and Lua bridge
 - `src/Lua/` — Lua sandbox, docs service, and native tool bridge
 - `src/Session/` — SQLite persistence: sessions, messages, memories, settings
 - `src/Task/` — Task tracking system with tool integrations
@@ -90,17 +91,31 @@ Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/co
 
 ## MCP CLI
 
-- MCP CLI is installed at `~/.local/bin/mcp-cli`.
-- Config is at `~/.config/mcp/mcp_servers.json`.
-- Common usage:
-- `mcp-cli`
-- `mcp-cli info <server>`
-- `mcp-cli call <server> <tool> '<json>'`
-- Connected servers currently include:
-- `founder-mode`
-- `notion`
-- `vibe_kanban`
-- `plane`
+KosmoKrator has first-class MCP support for headless usage and Lua code mode.
+MCP servers are not registered as native model tools; they are exposed through
+`kosmokrator mcp:*`, dynamic `kosmokrator mcp:<server>` shortcuts, and Lua
+namespaces under `app.mcp.*`.
+
+- Portable project config: `.mcp.json` with top-level `mcpServers`
+- Compatibility reads: `.vscode/mcp.json` and `.cursor/mcp.json` with top-level `servers`
+- Global config: `~/.kosmokrator/mcp.json`
+- Kosmo-only policy: `mcp.*` YAML settings for trust and read/write permissions
+- Secrets: `mcp:secret:set/list/unset`, referenced with `${KOSMO_SECRET:mcp.server.key}`
+- Trust: project MCP servers require `mcp:trust <server> --project --json` before normal discovery/execution
+- Force: `--force` bypasses MCP project trust and MCP read/write policy for one trusted headless call
+
+Common usage:
+
+```bash
+kosmokrator mcp:list --json
+kosmokrator mcp:add github --project --type=stdio --command=github-mcp-server --env GITHUB_TOKEN --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+kosmokrator mcp:lua workflow.lua --json
+```
 
 ### Building a PHAR
 

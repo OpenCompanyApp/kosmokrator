@@ -1024,7 +1024,7 @@ subagent task="Design a unified event system based on the auth, payment, and not
 
 <div class="tip">
     For the full Lua model &mdash; host-side Lua tools, <code>app.integrations.*</code>,
-    <code>app.tools.*</code>, multi-account namespaces, and discovery workflow &mdash; see
+    <code>app.mcp.*</code>, <code>app.tools.*</code>, multi-account namespaces, and discovery workflow &mdash; see
     <a href="/docs/lua">Lua</a>.
 </div>
 
@@ -1032,8 +1032,9 @@ subagent task="Design a unified event system based on the auth, payment, and not
 
 <p>
     Execute Lua code with <code>app.*</code> namespace access. Use <code>app.integrations.*</code>
-    for API calls, <code>app.tools.*</code> for native tools (file_read, glob, grep, bash, subagent,
-    etc.). Always use <code>lua_read_doc</code> first to look up function names and parameters. Use
+    for OpenCompany integration calls, <code>app.mcp.*</code> for configured MCP server calls, and
+    <code>app.tools.*</code> for native tools (file_read, glob, grep, bash, subagent, etc.). Always
+    use <code>lua_read_doc</code> first to look up function names and parameters. Use
     <code>print()</code> or <code>dump()</code> for output.
 </p>
 
@@ -1053,7 +1054,8 @@ subagent task="Design a unified event system based on the auth, payment, and not
             <td>Yes</td>
             <td>
                 Lua code to execute. Use <code>print()</code>/<code>dump()</code> for output.
-                Access integrations via <code>app.integrations.{name}.{function}()</code>.
+                Access integrations via <code>app.integrations.{name}.{function}()</code> and MCP
+                tools via <code>app.mcp.{server}.{tool}()</code>.
             </td>
         </tr>
         <tr>
@@ -1075,14 +1077,19 @@ subagent task="Design a unified event system based on the auth, payment, and not
 <pre><code>execute_lua code="local stats = app.integrations.plausible.query_stats({site_id='example.com'})
 print(stats.visitors)"</code></pre>
 
+<p><strong>Example:</strong> Call an MCP server tool from Lua:</p>
+<pre><code>lua_read_doc page="mcp.github"
+execute_lua code="local repos = app.mcp.github.search_repositories({query='kosmokrator'})
+dump(repos)"</code></pre>
+
 <!-- ------------------------------------------------------------------ -->
 
 <h3 id="lua_list_docs">lua_list_docs</h3>
 
 <p>
     List available Lua API namespaces and functions. Each namespace maps to an integration
-    (plausible, coingecko, celestial, etc.). Shows function signatures with parameter names.
-    Use this first to discover what integrations are available.
+    (plausible, coingecko, celestial, etc.), MCP server, or native Lua tool namespace. Shows
+    function signatures with parameter names. Use this first to discover what is available.
 </p>
 
 <table>
@@ -1099,7 +1106,7 @@ print(stats.visitors)"</code></pre>
             <td><code>namespace</code></td>
             <td>string</td>
             <td>No</td>
-            <td>Filter to a specific namespace (e.g. <code>"integrations.plausible"</code>). Omit to list all.</td>
+            <td>Filter to a specific namespace (e.g. <code>"integrations.plausible"</code> or <code>"mcp.github"</code>). Omit to list all.</td>
         </tr>
     </tbody>
 </table>
@@ -1109,6 +1116,9 @@ print(stats.visitors)"</code></pre>
 
 <p><strong>Example:</strong> Show functions in a specific integration:</p>
 <pre><code>lua_list_docs namespace="integrations.plausible"</code></pre>
+
+<p><strong>Example:</strong> Show functions in a specific MCP server:</p>
+<pre><code>lua_list_docs namespace="mcp.github"</code></pre>
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -1156,8 +1166,8 @@ print(stats.visitors)"</code></pre>
 </p>
 
 <ul>
-    <li><strong>Namespace</strong> (e.g. <code>"integrations.plausible"</code>) &rarr; full API reference with all functions and parameters</li>
-    <li><strong>Function</strong> (e.g. <code>"integrations.plausible.query_stats"</code>) &rarr; detailed single-function docs</li>
+    <li><strong>Namespace</strong> (e.g. <code>"integrations.plausible"</code> or <code>"mcp.github"</code>) &rarr; full API reference with all functions and parameters</li>
+    <li><strong>Function</strong> (e.g. <code>"integrations.plausible.query_stats"</code> or <code>"mcp.github.search_repositories"</code>) &rarr; detailed single-function docs</li>
     <li><strong>Guide</strong> (e.g. <code>"overview"</code>, <code>"examples"</code>) &rarr; supplementary documentation</li>
 </ul>
 
@@ -1181,7 +1191,7 @@ print(stats.visitors)"</code></pre>
             <td>Yes</td>
             <td>
                 Page to read: namespace (e.g. <code>"integrations.plausible"</code>), function path
-                (e.g. <code>"integrations.plausible.query_stats"</code>), or guide name
+                (e.g. <code>"integrations.plausible.query_stats"</code> or <code>"mcp.github.search_repositories"</code>), or guide name
                 (e.g. <code>"overview"</code>, <code>"examples"</code>).
             </td>
         </tr>
@@ -1190,6 +1200,9 @@ print(stats.visitors)"</code></pre>
 
 <p><strong>Example:</strong></p>
 <pre><code>lua_read_doc page="integrations.plausible.query_stats"</code></pre>
+
+<p><strong>Example:</strong></p>
+<pre><code>lua_read_doc page="mcp.github.search_repositories"</code></pre>
 
 
 <!-- ================================================================== -->

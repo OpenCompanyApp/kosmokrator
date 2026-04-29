@@ -7,7 +7,8 @@ ob_start();
 <p class="lead">
     KosmoKrator exposes a sandboxed Lua runtime for multi-step integration work. Lua sits between
     plain tool calls and a full agent turn: you can discover namespaces with docs tools, then run
-    deterministic scripts against <code>app.integrations.*</code> and <code>app.tools.*</code>.
+    deterministic scripts against <code>app.integrations.*</code>, <code>app.mcp.*</code>, and
+    <code>app.tools.*</code>.
 </p>
 
 <div class="tip">
@@ -17,10 +18,10 @@ ob_start();
 </div>
 
 <div class="tip">
-    For scripts and other coding CLIs, use <code>kosmokrator integrations:lua</code>. That
-    headless endpoint exposes integration namespaces and <code>docs.list</code>,
-    <code>docs.search</code>, and <code>docs.read</code> helpers without starting an agent
-    session. See <a href="/docs/integrations">Integrations CLI</a> for the full reference.
+    For scripts and other coding CLIs, use <code>kosmokrator integrations:lua</code> when the
+    workflow primarily uses integrations, or <code>kosmokrator mcp:lua</code> when it only needs
+    MCP servers. Both headless endpoints expose <code>app.mcp.*</code> and docs helpers without
+    starting an agent session.
 </div>
 
 <!-- ================================================================== -->
@@ -39,14 +40,16 @@ ob_start();
 
 <ul>
     <li><code>app.integrations.*</code> &mdash; enabled integrations exposed as callable Lua namespaces</li>
+    <li><code>app.mcp.*</code> &mdash; configured MCP servers exposed as callable Lua namespaces</li>
     <li><code>app.tools.*</code> &mdash; KosmoKrator's built-in native tools, callable from Lua</li>
 </ul>
 
 <p>
-    In the standalone <code>integrations:lua</code> command, the runtime exposes
-    <code>app.integrations.*</code> plus docs helpers. The native coding tools under
-    <code>app.tools.*</code> are only available when Lua is executed from inside a KosmoKrator
-    agent session.
+    In standalone headless commands, <code>integrations:lua</code> exposes
+    <code>app.integrations.*</code>, <code>app.mcp.*</code>, and docs helpers, while
+    <code>mcp:lua</code> exposes <code>app.mcp.*</code> and MCP helper functions. The native
+    coding tools under <code>app.tools.*</code> are only available when Lua is executed from
+    inside a KosmoKrator agent session.
 </p>
 
 <p>
@@ -106,6 +109,7 @@ ob_start();
 <pre><code>lua_list_docs
 lua_read_doc page="integrations.coingecko"
 lua_read_doc page="integrations.coingecko.price"
+lua_read_doc page="mcp.github"
 execute_lua code="local prices = app.integrations.coingecko.price({ids={'bitcoin'}, vs_currencies={'usd'}})
 print(prices.bitcoin.usd)"</code></pre>
 
@@ -114,12 +118,13 @@ print(prices.bitcoin.usd)"</code></pre>
 <!-- ================================================================== -->
 
 <p>
-    Integration namespaces follow a stable account-aware shape:
+    Integration and MCP namespaces follow stable shapes:
 </p>
 
 <pre><code>app.integrations.{name}.*          -- default account path
 app.integrations.{name}.default.*  -- explicit default alias
 app.integrations.{name}.{account}.* -- named account/credential alias
+app.mcp.{server}.{tool}(args)      -- MCP server tool call
 app.tools.{tool_name}(args)        -- native KosmoKrator tools</code></pre>
 
 <p>
@@ -132,6 +137,8 @@ app.tools.{tool_name}(args)        -- native KosmoKrator tools</code></pre>
     <li>The root integration namespace usually means "use the default account".</li>
     <li><code>.default</code> is an explicit alias for the default account.</li>
     <li><code>.{account}</code> is only present when you have multiple named credentials/accounts saved for the same integration.</li>
+    <li>MCP server names and tool names are normalized to Lua-safe identifiers; read <code>lua_read_doc page="mcp.SERVER"</code> to confirm the exact path.</li>
+    <li>MCP project trust and read/write permissions still apply inside Lua unless the headless command is run with <code>--force</code>.</li>
 </ul>
 
 <h3 id="single-vs-multi-account">Single vs Multi-Account</h3>
@@ -150,6 +157,29 @@ app.integrations.github.default.search_repositories({...})  -- explicit alias</c
 <pre><code>app.integrations.github.default.search_repositories({...})
 app.integrations.github.work.search_repositories({...})
 app.integrations.github.personal.search_repositories({...})</code></pre>
+
+<h3 id="mcp-namespace">MCP Namespace</h3>
+
+<p>
+    MCP servers are configured with <code>.mcp.json</code> or <code>mcp:add</code>. After the
+    server is trusted and permissions are configured, each discovered tool appears under
+    <code>app.mcp.{server}</code>.
+</p>
+
+<pre><code>app.mcp.github.search_repositories({query = "kosmokrator"})
+app.mcp.context7.resolve_library_id({libraryName = "symfony console"})</code></pre>
+
+<p>
+    In headless Lua, MCP helper functions are also available:
+</p>
+
+<pre><code>dump(mcp.servers())
+dump(mcp.tools("github"))
+dump(mcp.schema("github.search_repositories"))
+dump(mcp.resources("github"))
+dump(mcp.read_resource("github", "resource://..."))
+dump(mcp.prompts("github"))
+dump(mcp.get_prompt("github", "summarize", {text = "..."}))</code></pre>
 
 <!-- ================================================================== -->
 <h2 id="native-tools">Native Lua Tools: app.tools.*</h2>
@@ -247,6 +277,8 @@ end</code></pre>
     <li><code>lua_search_docs</code> &mdash; search by concept when needed</li>
     <li><code>lua_read_doc page="integrations.NAME"</code> &mdash; inspect the namespace</li>
     <li><code>lua_read_doc page="integrations.NAME.function"</code> &mdash; inspect one function</li>
+    <li><code>lua_read_doc page="mcp.SERVER"</code> &mdash; inspect one MCP server namespace</li>
+    <li><code>lua_read_doc page="mcp.SERVER.function"</code> &mdash; inspect one MCP tool</li>
     <li><code>execute_lua</code> &mdash; run the script</li>
 </ol>
 
@@ -282,6 +314,13 @@ print(files.output)
 local status = app.tools.bash({command = 'git status --short'})
 print(status.stdout)"</code></pre>
 
+<h3 id="example-mcp-call">Calling MCP from Lua</h3>
+
+<pre><code>execute_lua code="local repos = app.mcp.github.search_repositories({
+  query = 'kosmokrator language:php'
+})
+dump(repos)"</code></pre>
+
 <h3 id="example-subagents">Spawning Subagents from Lua</h3>
 
 <pre><code>execute_lua code="local result = app.tools.subagent({
@@ -302,12 +341,13 @@ dump(result)"</code></pre>
     <li>Do not assume raw upstream API response shapes. Integrations may normalize fields and structure.</li>
     <li>If the docs do not describe the return shape clearly, inspect with a minimal call first.</li>
     <li>Use Lua when you need deterministic multi-step orchestration; use normal tools when one direct tool call is enough.</li>
-    <li>All normal permission and integration access rules still apply inside Lua.</li>
+    <li>All normal permission, integration access, MCP trust, and MCP read/write rules still apply inside Lua.</li>
 </ul>
 
 <div class="tip">
-    For per-tool parameter reference, see <a href="/docs/tools">Tools</a>. For integration setup and
-    activation, see <a href="/docs/configuration">Configuration</a>.
+    For per-tool parameter reference, see <a href="/docs/tools">Tools</a>. For integration and MCP
+    setup, see <a href="/docs/configuration">Configuration</a>, <a href="/docs/integrations">Integrations CLI</a>,
+    and <a href="/docs/mcp">MCP</a>.
 </div>
 
 <?php

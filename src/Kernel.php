@@ -16,6 +16,7 @@ use Kosmokrator\Provider\EventServiceProvider;
 use Kosmokrator\Provider\IntegrationServiceProvider;
 use Kosmokrator\Provider\LlmServiceProvider;
 use Kosmokrator\Provider\LoggingServiceProvider;
+use Kosmokrator\Provider\McpServiceProvider;
 use Kosmokrator\Provider\SessionServiceProvider;
 use Kosmokrator\Provider\ToolServiceProvider;
 use Revolt\EventLoop;
@@ -57,6 +58,7 @@ class Kernel
             new IntegrationServiceProvider($this->container, $this->basePath),
             new ToolServiceProvider($this->container),
             new SessionServiceProvider($this->container),
+            new McpServiceProvider($this->container),
             new EventServiceProvider($this->container),
             new AgentServiceProvider($this->container),
         ];

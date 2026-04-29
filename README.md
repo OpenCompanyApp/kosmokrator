@@ -149,6 +149,31 @@ commands when another coding CLI or script needs stable machine-readable output.
 Headless calls still follow provider read/write permissions; `--force` bypasses
 only that integration permission policy for trusted automation.
 
+## MCP CLI
+
+KosmoKrator can call MCP servers headlessly and from Lua without registering
+them as native model tools. It reads the common project `.mcp.json`
+`mcpServers` shape, plus VS Code/Cursor `servers` files:
+
+```bash
+kosmokrator mcp:list --json
+kosmokrator mcp:add github --project --type=stdio \
+  --command=github-mcp-server --env GITHUB_TOKEN --read=allow --write=ask --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+kosmokrator mcp:lua workflow.lua --json
+```
+
+MCP project servers must be trusted before normal discovery/execution because
+they can start local commands. MCP read/write policy is configured separately
+under `mcp.*`; `--force` bypasses MCP trust and MCP read/write policy for one
+trusted automation call. Agent-side `execute_lua`, `integrations:lua`, and
+`mcp:lua` expose configured servers as `app.mcp.*`.
+
 Other commands:
 
 ```bash
@@ -602,6 +627,7 @@ bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoo
 | `src/Command/` | CLI commands — AgentCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway, integrations |
 | `src/Command/Slash/` | In-session slash commands |
 | `src/Integration/` | Headless OpenCompany integration runtime, catalog, credential resolution, CLI argument mapping |
+| `src/Mcp/` | MCP config compatibility, stdio client, permission/trust checks, headless runtime, and Lua bridge |
 | `src/Lua/` | Lua sandbox, documentation service, and native tool bridge |
 | `src/Session/` | SQLite persistence — sessions, messages, memories, settings |
 | `src/Task/` | Task tracking system with tool integrations |

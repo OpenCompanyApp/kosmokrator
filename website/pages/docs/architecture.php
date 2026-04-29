@@ -187,6 +187,14 @@ ob_start();
             </td>
         </tr>
         <tr>
+            <td><code>src/Mcp/</code></td>
+            <td>
+                MCP config compatibility, stdio transport, trust and read/write
+                permission checks, headless command runtime, resources/prompts,
+                secret resolution, and Lua <code>app.mcp.*</code> bridge
+            </td>
+        </tr>
+        <tr>
             <td><code>src/Audio/</code></td>
             <td>
                 Sound effects via <code>CompletionSound</code>
@@ -605,12 +613,12 @@ ob_start();
 </ol>
 
 <p>
-    There are 11 service providers in <code>src/Provider/</code>:
+    There are 12 service providers in <code>src/Provider/</code>:
     <code>CoreServiceProvider</code>, <code>ConfigServiceProvider</code>,
     <code>DatabaseServiceProvider</code>, <code>LlmServiceProvider</code>,
     <code>ToolServiceProvider</code>, <code>SessionServiceProvider</code>,
     <code>AgentServiceProvider</code>, <code>EventServiceProvider</code>,
-    <code>IntegrationServiceProvider</code>,
+    <code>IntegrationServiceProvider</code>, <code>McpServiceProvider</code>,
     <code>LoggingServiceProvider</code>, and
     <code>UiServiceProvider</code>.
     The Kernel also loads <code>.env</code> variables via

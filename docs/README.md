@@ -6,7 +6,7 @@ These docs describe shipped behavior. They must be updated when the codebase cha
 
 | Document | Description |
 |----------|-------------|
-| [overview.md](architecture/overview.md) | Architecture overview: runtime, UI, tools, context pipeline, subagents, config |
+| [overview.md](architecture/overview.md) | Architecture overview: runtime, UI, tools, context pipeline, subagents, integrations, MCP, config |
 | [permission-modes.md](architecture/permission-modes.md) | Agent modes (Edit/Plan/Ask), permission modes (Guardian/Argus/Prometheus), evaluation order |
 | [subagent-architecture.md](architecture/subagent-architecture.md) | Subagent types, tool scoping, orchestration, dependency resolution, concurrency |
 
@@ -27,6 +27,14 @@ Forward-looking design docs. Not shipped — may reference classes or features t
 | [tui-ux-improvements.md](proposals/tui-ux-improvements.md) | 10 ranked UX improvements with mockups |
 | [command-inspiration.md](proposals/command-inspiration.md) | Slash/power command ideas from competitive analysis |
 | [laravel-ai-patterns.md](proposals/laravel-ai-patterns.md) | Patterns from Laravel AI SDK worth borrowing |
+
+## Plans
+
+Implementation plans for reviewed but not-yet-shipped work.
+
+| Document | Description |
+|----------|-------------|
+| [swarm-ux-fix-plan.md](plans/swarm-ux-fix-plan.md) | Phased plan for smoother long-running subagent swarm UX, observability, and durability |
 
 ## Audits (Historical)
 

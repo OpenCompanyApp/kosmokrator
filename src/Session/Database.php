@@ -20,27 +20,42 @@ class Database
      */
     public function __construct(?string $path = null)
     {
+        $initLock = null;
         if ($path === null) {
             $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
             $dir = $home.'/.kosmokrator/data';
-            if (! is_dir($dir)) {
-                mkdir($dir, 0700, true);
+            if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
+                throw new \RuntimeException("Unable to create data directory: {$dir}");
             }
             $path = $dir.'/kosmokrator.db';
         }
 
         $isMemory = $path === ':memory:';
-        $this->pdo = new \PDO("sqlite:{$path}");
-        $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
-
         if (! $isMemory) {
-            $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
-            $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
+            $initLock = fopen($path.'.init.lock', 'c');
+            if ($initLock === false || ! flock($initLock, LOCK_EX)) {
+                throw new \RuntimeException("Unable to lock database initialization: {$path}");
+            }
         }
-        $this->pdo->exec('PRAGMA foreign_keys=ON'); // Enforce referential integrity
 
-        $this->ensureSchema();
+        try {
+            $this->pdo = new \PDO("sqlite:{$path}");
+            $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+
+            if (! $isMemory) {
+                $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
+                $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
+            }
+            $this->pdo->exec('PRAGMA foreign_keys=ON'); // Enforce referential integrity
+
+            $this->ensureSchema();
+        } finally {
+            if (is_resource($initLock)) {
+                flock($initLock, LOCK_UN);
+                fclose($initLock);
+            }
+        }
     }
 
     /** @return \PDO The raw PDO connection for direct queries. */

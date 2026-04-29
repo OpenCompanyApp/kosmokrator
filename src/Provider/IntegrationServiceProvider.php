@@ -17,6 +17,8 @@ use Kosmokrator\Integration\YamlCredentialResolver;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\LuaSandboxService;
 use Kosmokrator\Lua\NativeToolBridge;
+use Kosmokrator\Mcp\McpCatalog;
+use Kosmokrator\Mcp\McpPermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use OpenCompany\IntegrationCore\Contracts\AgentFileStorage;
 use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
@@ -78,6 +80,8 @@ class IntegrationServiceProvider extends ServiceProvider
                 catalogBuilder: $c->make(LuaCatalogBuilder::class),
                 docRenderer: $c->make(LuaDocRenderer::class),
                 nativeToolBridge: new NativeToolBridge(fn () => $c->make(ToolRegistry::class)),
+                mcpCatalog: $c->bound(McpCatalog::class) ? $c->make(McpCatalog::class) : null,
+                mcpPermissions: $c->bound(McpPermissionEvaluator::class) ? $c->make(McpPermissionEvaluator::class) : null,
             );
         });
 

@@ -52,7 +52,7 @@ Guardian uses static checks only. Current auto-approve rules are:
 | `file_write`, `file_edit` | auto-approved only when the resolved path is inside the project root |
 | `bash` | auto-approved only when the command matches the safe-command whitelist and contains no shell operators |
 | `shell_start`, `shell_write` | auto-approved only when the command/input matches the safe-command whitelist and contains no shell operators |
-| `execute_lua` | auto-approved in Guardian after absolute denies and boundary checks; inner integration permissions still apply |
+| `execute_lua` | auto-approved in Guardian after absolute denies and boundary checks; inner integration and MCP permissions still apply |
 
 Blocked paths and blocked command patterns always win, regardless of permission mode.
 

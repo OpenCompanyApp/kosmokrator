@@ -9,7 +9,12 @@ use Kosmokrator\Integration\KosmokratorLuaToolInvoker;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\LuaSandboxService;
 use Kosmokrator\Lua\NativeToolBridge;
+use Kosmokrator\Mcp\CompositeLuaToolInvoker;
+use Kosmokrator\Mcp\McpCatalog;
+use Kosmokrator\Mcp\McpLuaToolInvoker;
+use Kosmokrator\Mcp\McpRuntime;
 use OpenCompany\IntegrationCore\Lua\LuaBridge;
+use OpenCompany\IntegrationCore\Lua\LuaCatalogBuilder;
 
 final class IntegrationRuntime
 {
@@ -20,6 +25,9 @@ final class IntegrationRuntime
         private readonly LuaDocService $docService,
         private readonly IntegrationDocService $integrationDocs,
         private readonly KosmokratorLuaToolInvoker $invoker,
+        private readonly ?McpCatalog $mcpCatalog = null,
+        private readonly ?McpLuaToolInvoker $mcpInvoker = null,
+        private readonly ?McpRuntime $mcpRuntime = null,
     ) {}
 
     public function catalog(): IntegrationCatalog
@@ -117,13 +125,27 @@ final class IntegrationRuntime
      */
     public function executeLua(string $code, array $options = [], ?NativeToolBridge $nativeToolBridge = null): LuaExecutionResult
     {
+        $force = (bool) ($options['force'] ?? false);
+        unset($options['force']);
+
         $bridge = null;
-        if ($this->integrationManager->getActiveProviders() !== []) {
+        $functionMap = $this->docService->buildFunctionMap();
+        $parameterMap = $this->docService->buildParameterMap();
+        $accountMap = $this->docService->buildAccountMap();
+        $mcpNamespaces = $this->mcpRuntime?->luaNamespaces($force) ?? [];
+
+        if ($mcpNamespaces !== []) {
+            $builder = new LuaCatalogBuilder;
+            $functionMap = array_merge($functionMap, $builder->buildFunctionMap($mcpNamespaces));
+            $parameterMap = array_merge($parameterMap, $builder->buildParameterMap($mcpNamespaces));
+        }
+
+        if ($functionMap !== []) {
             $bridge = new LuaBridge(
-                $this->docService->buildFunctionMap(),
-                $this->docService->buildParameterMap(),
-                $this->invoker,
-                $this->docService->buildAccountMap(),
+                $functionMap,
+                $parameterMap,
+                $this->mcpInvoker === null ? $this->invoker : new CompositeLuaToolInvoker($this->invoker, $this->mcpInvoker),
+                $accountMap,
             );
         }
 
@@ -135,14 +157,14 @@ final class IntegrationRuntime
             )),
             'docs.read' => fn (string $page) => $this->integrationDocs->render($page),
         ];
+        if ($this->mcpRuntime !== null) {
+            $phpFunctions = array_merge($phpFunctions, $this->mcpRuntime->helperFunctions($force));
+        }
 
-        $force = (bool) ($options['force'] ?? false);
-        unset($options['force']);
-
-        $result = $this->invoker->runWithForce(
-            $force,
-            fn () => $this->lua->execute($code, $options, $bridge, nativeBridge: $nativeToolBridge, phpFunctions: $phpFunctions),
-        );
+        $execute = fn () => $this->lua->execute($code, $options, $bridge, nativeBridge: $nativeToolBridge, phpFunctions: $phpFunctions);
+        $result = $this->mcpInvoker === null
+            ? $this->invoker->runWithForce($force, $execute)
+            : $this->mcpInvoker->runWithForce($force, fn () => $this->invoker->runWithForce($force, $execute));
 
         return new LuaExecutionResult(
             lua: $result,

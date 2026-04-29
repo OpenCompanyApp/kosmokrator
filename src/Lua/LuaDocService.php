@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Lua;
 
 use Kosmokrator\Integration\IntegrationManager;
+use Kosmokrator\Mcp\McpCatalog;
+use Kosmokrator\Mcp\McpPermissionEvaluator;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
 use OpenCompany\IntegrationCore\Lua\LuaCatalogBuilder;
 use OpenCompany\IntegrationCore\Lua\LuaDocRenderer;
@@ -21,6 +23,8 @@ class LuaDocService
         private readonly LuaCatalogBuilder $catalogBuilder,
         private readonly LuaDocRenderer $docRenderer,
         private readonly ?NativeToolBridge $nativeToolBridge = null,
+        private readonly ?McpCatalog $mcpCatalog = null,
+        private readonly ?McpPermissionEvaluator $mcpPermissions = null,
     ) {}
 
     /**
@@ -231,6 +235,12 @@ class LuaDocService
             $parts[] = implode("\n", $lines);
         }
 
+        $mcpServers = $this->mcpCatalog?->servers(false) ?? [];
+        if ($mcpServers !== []) {
+            $names = array_map(static fn (string $name): string => "app.mcp.{$name}", array_keys($mcpServers));
+            $parts[] = "app.mcp.* — Configured MCP server namespaces exposed to Lua.\n  Active now:\n    ".implode(', ', $names)."\n  Use lua_read_doc page=\"mcp.SERVER\" before calling MCP tools.";
+        }
+
         $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
 
         return implode("\n\n", $parts);
@@ -252,6 +262,12 @@ class LuaDocService
                 '  Use lua_list_docs or lua_read_doc to inspect a namespace before writing Lua code.',
             ];
             $parts[] = implode("\n", $lines);
+        }
+
+        $mcpServers = $this->mcpCatalog?->servers(false) ?? [];
+        if ($mcpServers !== []) {
+            $names = array_map(static fn (string $name): string => "app.mcp.{$name}", array_keys($mcpServers));
+            $parts[] = "app.mcp.* — Active MCP server namespaces exposed to Lua in this session.\n  Active now:\n    ".implode(', ', $names)."\n  Use lua_read_doc page=\"mcp.SERVER\" before calling MCP tools.";
         }
 
         $parts[] = "app.tools.* — Native KosmoKrator tools (file_read, glob, grep, bash, subagent, etc.). See lua_read_doc page 'overview' for details.";
@@ -367,6 +383,16 @@ class LuaDocService
             $catalog,
             ['tasks', 'system', 'lua'],
         );
+
+        if ($this->mcpCatalog !== null) {
+            $this->cachedNamespaces = array_merge(
+                $this->cachedNamespaces,
+                $this->mcpCatalog->luaNamespaces(
+                    fn ($config): bool => $this->mcpPermissions?->isTrusted($config) ?? true,
+                ),
+            );
+            ksort($this->cachedNamespaces, SORT_STRING);
+        }
 
         return $this->cachedNamespaces;
     }

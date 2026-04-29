@@ -11,10 +11,10 @@ ob_start();
 </p>
 
 <div class="tip">
-    This is a direct local CLI surface, not an MCP server. MCP support can be layered on later,
-    but today the contract is simple: run <code>kosmokrator integrations:...</code>, discover the
-    available functions, call one function directly, or execute a Lua workflow against configured
-    integrations.
+    This is a direct local CLI surface, not an MCP server. Use
+    <code>kosmokrator integrations:...</code> to discover functions, call one integration directly,
+    or execute a Lua workflow. Use <a href="/docs/mcp"><code>kosmokrator mcp:...</code></a> for
+    external MCP servers; both surfaces can be composed from Lua.
 </div>
 
 <!-- ================================================================== -->
@@ -455,9 +455,9 @@ kosmokrator integrations:lua workflow.lua --force --json</code></pre>
 <!-- ================================================================== -->
 
 <p>
-    <code>integrations:lua</code> runs a Lua script in a sandbox with integration namespaces and
-    documentation helpers. This is the ergonomic path for multi-step workflows that would be clumsy
-    as a sequence of shell calls.
+    <code>integrations:lua</code> runs a Lua script in a sandbox with integration namespaces, MCP
+    namespaces, and documentation helpers. This is the ergonomic path for multi-step workflows that
+    would be clumsy as a sequence of shell calls.
 </p>
 
 <pre><code># Inline Lua
@@ -616,21 +616,27 @@ kosmokrator integrations:lua workflow.lua \
     <tbody>
         <tr>
             <td><code>kosmokrator integrations:lua</code></td>
-            <td><code>docs.*</code>, <code>json.*</code>, <code>regex.*</code>, <code>app.integrations.*</code></td>
-            <td>Headless integration workflows for scripts and external coding CLIs.</td>
+            <td><code>docs.*</code>, <code>json.*</code>, <code>regex.*</code>, <code>app.integrations.*</code>, <code>app.mcp.*</code></td>
+            <td>Headless integration and MCP workflows for scripts and external coding CLIs.</td>
+        </tr>
+        <tr>
+            <td><code>kosmokrator mcp:lua</code></td>
+            <td><code>mcp.*</code>, <code>json.*</code>, <code>regex.*</code>, <code>app.mcp.*</code></td>
+            <td>Headless MCP-only workflows with MCP resources, prompts, and tool calls.</td>
         </tr>
         <tr>
             <td>Agent tool <code>execute_lua</code></td>
-            <td><code>json.*</code>, <code>regex.*</code>, <code>app.integrations.*</code>, <code>app.tools.*</code></td>
-            <td>Inside a KosmoKrator agent session, where Lua can compose integrations with native coding tools.</td>
+            <td><code>json.*</code>, <code>regex.*</code>, <code>app.integrations.*</code>, <code>app.mcp.*</code>, <code>app.tools.*</code></td>
+            <td>Inside a KosmoKrator agent session, where Lua can compose integrations and MCP with native coding tools.</td>
         </tr>
     </tbody>
 </table>
 
 <p>
-    If another coding CLI only needs integrations, prefer <code>integrations:lua</code>. If the
-    KosmoKrator agent itself needs to combine integration data with file edits, shell commands, or
-    subagents, use the agent-side Lua tools documented on the <a href="/docs/lua">Lua</a> page.
+    If another coding CLI needs integrations, prefer <code>integrations:lua</code>. If it only
+    needs MCP, use <code>mcp:lua</code>. If the KosmoKrator agent itself needs to combine
+    integration or MCP data with file edits, shell commands, or subagents, use the agent-side Lua
+    tools documented on the <a href="/docs/lua">Lua</a> page.
 </p>
 
 <!-- ================================================================== -->
@@ -1002,7 +1008,7 @@ kosmokrator integrations:plane list_issues \
         </tr>
         <tr>
             <td>Lua cannot call <code>app.tools.bash</code>.</td>
-            <td><code>integrations:lua</code> only exposes integration namespaces, not native coding tools.</td>
+            <td><code>integrations:lua</code> exposes integration and MCP namespaces, not native coding tools.</td>
             <td>Use agent-side <code>execute_lua</code> inside a KosmoKrator session for <code>app.tools.*</code>.</td>
         </tr>
         <tr>

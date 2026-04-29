@@ -66,6 +66,47 @@ kosmokrator integrations:lua workflow.lua --json</code></pre>
 </p>
 
 <!-- ------------------------------------------------------------------ -->
+<h3 id="headless-mcp">Headless MCP</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    MCP servers can also be used without an agent turn. KosmoKrator reads the common project
+    <code>.mcp.json</code> shape, plus VS Code/Cursor <code>servers</code> files, then exposes the
+    servers through <code>mcp:*</code> commands and Lua as <code>app.mcp.*</code>.
+</p>
+
+<pre><code># Add a portable project server
+kosmokrator mcp:add github --project --type=stdio \
+  --command=github-mcp-server --env GITHUB_TOKEN --json
+
+# Review and trust project server command before discovery/execution
+kosmokrator mcp:list --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+
+# Call directly or through a per-server shortcut
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+
+# Run a Lua workflow against MCP servers
+kosmokrator mcp:lua workflow.lua --json</code></pre>
+
+<p>
+    Headless MCP keeps project trust and read/write policy checks. Project MCP config can start
+    local processes, so normal execution requires <code>mcp:trust</code>. Tool calls also check
+    <code>mcp.servers.SERVER.permissions.read</code> or <code>.write</code>; <code>ask</code>
+    fails in pure headless mode because there is no approval modal. Use <code>--force</code> only
+    for trusted automation that should bypass both MCP trust and MCP read/write policy for that
+    single invocation.
+</p>
+
+<p>
+    See <a href="/docs/mcp">MCP</a> for config compatibility, secrets, resources, prompts, Lua
+    helpers, and the full command reference.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
 <h3 id="headless-configuration">Headless Configuration</h3>
 <!-- ------------------------------------------------------------------ -->
 
@@ -89,6 +130,10 @@ jq -n '{settings:{"agent.mode":"plan","context.max_output_lines":1200}}' | \
 # Store managed secrets without echoing raw values
 printf %s "$OPENAI_API_KEY" | \
   kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+# Store MCP server secrets without committing tokens to .mcp.json
+printf %s "$GITHUB_TOKEN" | \
+  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
 
 # Configure Telegram gateway without the TUI
 printf %s "$TELEGRAM_BOT_TOKEN" | \

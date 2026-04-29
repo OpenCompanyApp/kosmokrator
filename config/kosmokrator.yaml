@@ -125,6 +125,11 @@ ui:
 integrations:
   permissions_default: ask  # Default for operations not explicitly set
 
+# Model Context Protocol servers discovered from .mcp.json and compatibility files.
+# Per-server trust and read/write permissions are managed with mcp:* commands.
+mcp:
+  permissions_default: ask  # Default for MCP operations not explicitly set
+
 gateway:
   telegram:
     enabled: false

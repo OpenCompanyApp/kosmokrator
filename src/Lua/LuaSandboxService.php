@@ -85,11 +85,15 @@ class LuaSandboxService
     {
         $sandbox->register('__php_globals', [
             'call' => function (string $name, mixed ...$args) use ($phpFunctions): mixed {
-                if (! isset($phpFunctions[$name])) {
-                    throw new \RuntimeException("Unknown PHP-backed Lua helper: {$name}");
-                }
+                try {
+                    if (! isset($phpFunctions[$name])) {
+                        throw new \RuntimeException("Unknown PHP-backed Lua helper: {$name}");
+                    }
 
-                return $phpFunctions[$name](...$args);
+                    return $phpFunctions[$name](...$args);
+                } catch (\Throwable $e) {
+                    return ['__error' => $e->getMessage()];
+                }
             },
         ]);
 
@@ -109,7 +113,13 @@ class LuaSandboxService
 
             $escaped = addcslashes($name, '"\\');
             $lines[] = "{$table} = {$table} or {}";
-            $lines[] = "{$table}.{$function} = function(...) return __php_globals.call(\"{$escaped}\", ...) end";
+            $lines[] = "{$table}.{$function} = function(...)
+                local result = __php_globals.call(\"{$escaped}\", ...)
+                if type(result) == \"table\" and result.__error then
+                    error(result.__error, 2)
+                end
+                return result
+            end";
         }
 
         if ($lines !== []) {

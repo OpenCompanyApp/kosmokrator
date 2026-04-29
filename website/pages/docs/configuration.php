@@ -503,6 +503,90 @@ kosmokrator settings:examples --json</code></pre>
     </tbody>
 </table>
 
+<!-- ---------------------------------------- MCP ---------------------------------------- -->
+<h3 id="mcp">MCP</h3>
+
+<p>
+    MCP server definitions intentionally live in JSON so projects can share config with other
+    coding agents. KosmoKrator reads global <code>~/.kosmokrator/mcp.json</code>, project
+    <code>.vscode/mcp.json</code>, project <code>.cursor/mcp.json</code>, and project
+    <code>.mcp.json</code>. The portable shape is a top-level <code>mcpServers</code> object;
+    VS Code/Cursor compatibility files may use top-level <code>servers</code>.
+</p>
+
+<pre><code>{
+  "mcpServers": {
+    "github": {
+      "command": "github-mcp-server",
+      "args": [],
+      "env": {
+        "GITHUB_TOKEN": "${KOSMO_SECRET:mcp.github.env.GITHUB_TOKEN}"
+      }
+    }
+  }
+}</code></pre>
+
+<p>
+    Kosmo-only policy stays in YAML config because trust and permissions should not be committed
+    into a shared portable MCP file unless the project intentionally owns that policy.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>mcp.permissions_default</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><code>ask</code></td>
+            <td>Default read/write policy for MCP tool operations not explicitly configured.</td>
+            <td>applies now</td>
+        </tr>
+        <tr>
+            <td><code>mcp.servers.SERVER.permissions.read</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><em>inherits default</em></td>
+            <td>Read policy for one MCP server. Also applies to resources and prompts.</td>
+            <td>applies now</td>
+        </tr>
+        <tr>
+            <td><code>mcp.servers.SERVER.permissions.write</code></td>
+            <td>choice: <code>allow</code>, <code>ask</code>, <code>deny</code></td>
+            <td><em>inherits default</em></td>
+            <td>Write policy for one MCP server. Tools without MCP <code>readOnlyHint</code> are treated as write.</td>
+            <td>applies now</td>
+        </tr>
+        <tr>
+            <td><code>mcp.trust.SERVER.fingerprint</code></td>
+            <td>string</td>
+            <td><em>unset</em></td>
+            <td>Fingerprint written by <code>mcp:trust</code> after reviewing a project MCP command.</td>
+            <td>applies now</td>
+        </tr>
+    </tbody>
+</table>
+
+<pre><code>mcp:
+  permissions_default: ask
+  servers:
+    github:
+      permissions:
+        read: allow
+        write: ask</code></pre>
+
+<p>
+    Configure headlessly with <code>mcp:add</code>, <code>mcp:trust</code>,
+    <code>mcp:secret:set</code>, and <code>settings:set</code>. See
+    <a href="/docs/mcp">MCP</a> for the full command reference.
+</p>
+
 <!-- ---------------------------------------- Gateway ---------------------------------------- -->
 <h3 id="gateway">Gateway</h3>
 
@@ -1040,6 +1124,14 @@ codex:
 
 integrations:
   permissions_default: ask    # allow | ask | deny (default for integration ops)
+
+mcp:
+  permissions_default: ask    # allow | ask | deny (default for MCP ops)
+  servers:
+    github:
+      permissions:
+        read: allow
+        write: ask
 
 tools:
   approval_required:          # Tools requiring explicit approval

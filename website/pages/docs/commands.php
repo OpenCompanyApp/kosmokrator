@@ -361,6 +361,35 @@ kosmokrator integrations:lua workflow.lua --force --json</code></pre>
     external coding CLI patterns.
 </p>
 
+<h4 id="cmd-shell-mcp"><code>kosmokrator mcp:*</code></h4>
+<p>
+    Configure and call Model Context Protocol servers headlessly. KosmoKrator
+    reads common <code>.mcp.json</code> <code>mcpServers</code> files, plus
+    VS Code/Cursor <code>servers</code> files, and exposes MCP tools through
+    direct commands and Lua as <code>app.mcp.*</code>.
+</p>
+<pre><code>kosmokrator mcp:list --json
+kosmokrator mcp:add github --project --type=stdio \
+  --command=github-mcp-server --env GITHUB_TOKEN --read=allow --write=ask --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+kosmokrator mcp:resources github --json
+kosmokrator mcp:prompts github --json
+printf %s "$GITHUB_TOKEN" | \
+  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
+kosmokrator mcp:lua workflow.lua --json
+kosmokrator mcp:doctor --json</code></pre>
+<p>
+    Project MCP servers must be trusted before normal discovery or execution.
+    Headless <code>ask</code> permissions fail because there is no approval
+    modal; configure read/write policies or use <code>--force</code> for a
+    trusted automation call that should bypass MCP trust and read/write policy.
+    See <a href="/docs/mcp">MCP</a> for the full command and Lua reference.
+</p>
+
 <h4 id="cmd-shell-gateway"><code>kosmokrator gateway:telegram</code></h4>
 <p>
     Start the Telegram gateway worker. This turns KosmoKrator into a Telegram

@@ -225,6 +225,45 @@ ob_start();
 </div>
 
 <!-- ------------------------------------------------------------------ -->
+<h2 id="mcp-and-integrations">MCP And Integration Permissions</h2>
+
+<p>
+    Headless integrations and MCP servers have their own read/write policies in addition to native
+    tool permissions. This keeps external API calls governed even when they are invoked from
+    <code>integrations:call</code>, <code>mcp:call</code>, <code>integrations:lua</code>,
+    <code>mcp:lua</code>, or agent-side <code>execute_lua</code>.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Surface</th>
+            <th>Policy Keys</th>
+            <th>Force Behavior</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Integrations</td>
+            <td><code>integrations.permissions_default</code> and provider/account read/write config</td>
+            <td><code>--force</code> bypasses integration read/write policy for the one headless call.</td>
+        </tr>
+        <tr>
+            <td>MCP</td>
+            <td><code>mcp.permissions_default</code>, <code>mcp.servers.SERVER.permissions.read</code>, <code>.write</code>, and <code>mcp.trust.SERVER.fingerprint</code></td>
+            <td><code>--force</code> bypasses MCP project trust and MCP read/write policy for the one headless call.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>
+    In pure headless mode, <code>ask</code> cannot open an approval modal. Configure the relevant
+    operation as <code>allow</code> or run trusted automation with <code>--force</code>. MCP tools
+    marked with MCP <code>readOnlyHint</code> are treated as read operations; other MCP tools are
+    conservatively treated as write operations.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
 <h2 id="guardian-heuristics">Guardian Heuristics</h2>
 
 <p>
@@ -252,7 +291,7 @@ ob_start();
     <li><code>memory_save</code>, <code>memory_search</code> &mdash; Persistent memory operations</li>
     <li><code>session_search</code>, <code>session_read</code> &mdash; Prior session discovery and transcript reads</li>
     <li><code>lua_list_docs</code>, <code>lua_search_docs</code>, <code>lua_read_doc</code> &mdash; Lua API documentation</li>
-    <li><code>execute_lua</code> &mdash; Lua script execution (inner integration permissions enforce per-tool granularity)</li>
+    <li><code>execute_lua</code> &mdash; Lua script execution (inner integration and MCP permissions enforce per-call granularity)</li>
 </ul>
 
 <h3 id="file-operation-heuristics">File Operation Heuristics</h3>

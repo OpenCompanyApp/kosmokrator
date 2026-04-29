@@ -6,9 +6,11 @@ namespace Kosmokrator\Provider;
 
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
+use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Session\Tool\SessionReadTool;
@@ -43,6 +45,10 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
+use Kosmokrator\Tool\Web\WebCrawlTool;
+use Kosmokrator\Tool\Web\WebFetchExternalTool;
+use Kosmokrator\Tool\Web\WebSearchTool;
+use Kosmokrator\Web\WebProviderRegistry;
 use Lua\Sandbox;
 use Psr\Log\LoggerInterface;
 
@@ -66,6 +72,11 @@ class ToolServiceProvider extends ServiceProvider
         $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
         $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
         $this->container->singleton(TaskStore::class);
+        $this->container->singleton(WebProviderRegistry::class, fn () => new WebProviderRegistry(
+            $this->container->make('config'),
+            $this->container->make(SettingsRepositoryInterface::class),
+            $this->container->bound(ProviderCatalog::class) ? $this->container->make(ProviderCatalog::class) : null,
+        ));
         $this->container->singleton(PatchParser::class);
         $this->container->singleton(PatchApplier::class, function () use ($config) {
             $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
@@ -147,6 +158,12 @@ class ToolServiceProvider extends ServiceProvider
             $registry->register(new ShellKillTool(
                 $this->container->make(ShellSessionManager::class),
             ));
+
+            $webProviders = $this->container->make(WebProviderRegistry::class);
+            $registry->register(new WebSearchTool($webProviders, $config));
+            $registry->register(new WebFetchExternalTool($webProviders, $config));
+            $registry->register(new WebFetchExternalTool($webProviders, $config, 'web_extract'));
+            $registry->register(new WebCrawlTool($webProviders, $config));
 
             $taskStore = $this->container->make(TaskStore::class);
             $registry->register(new TaskCreateTool($taskStore));

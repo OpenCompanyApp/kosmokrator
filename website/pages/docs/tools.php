@@ -306,6 +306,74 @@ ob_start();
     patterns inside them.
 </div>
 
+<!-- ================================================================== -->
+<h2 id="web">Web</h2>
+<!-- ================================================================== -->
+
+<p>
+    KosmoKrator keeps native <code>web_fetch</code> separate from optional external web providers.
+    External search, extract, and crawl tools are disabled by default and only run after you enable
+    the related <code>web.*</code> settings or configure a provider with <code>web:configure</code>.
+</p>
+
+<h3 id="web_search">web_search</h3>
+
+<p>
+    Search the web through Tavily, Firecrawl, Exa, Brave Search, Parallel, Jina, SearXNG,
+    Perplexity, OpenAI native web search, or Anthropic native web search.
+</p>
+
+<table>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+        <tr><td><code>query</code></td><td>string</td><td>Yes</td><td>Search query.</td></tr>
+        <tr><td><code>provider</code></td><td>enum</td><td>No</td><td>Override <code>web.search.provider</code>.</td></tr>
+        <tr><td><code>max_results</code></td><td>int</td><td>No</td><td>Defaults to <code>web.search.max_results</code>.</td></tr>
+        <tr><td><code>mode</code></td><td>enum</td><td>No</td><td>Provider hint such as <code>fast</code>, <code>deep</code>, <code>cached</code>, or <code>live</code>.</td></tr>
+        <tr><td><code>allowed_domains</code>, <code>blocked_domains</code></td><td>array</td><td>No</td><td>Domain filters when supported.</td></tr>
+    </tbody>
+</table>
+
+<pre><code>web_search query="Symfony TUI latest release" provider="tavily" max_results=5</code></pre>
+
+<h3 id="web_fetch_external">web_fetch_external / web_extract</h3>
+
+<p>
+    Fetch or extract a specific URL through an external provider. This does not replace native
+    <code>web_fetch</code>; native fetch remains the default for providers that expose it directly.
+    External fetch is approval-gated by default.
+</p>
+
+<table>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+        <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>URL to fetch.</td></tr>
+        <tr><td><code>provider</code></td><td>enum</td><td>No</td><td>Override <code>web.fetch.provider</code>.</td></tr>
+        <tr><td><code>format</code></td><td>enum</td><td>No</td><td><code>markdown</code>, <code>text</code>, or <code>html</code>.</td></tr>
+    </tbody>
+</table>
+
+<pre><code>web_fetch_external url="https://symfony.com/blog/" provider="firecrawl" format="markdown"</code></pre>
+
+<h3 id="web_crawl">web_crawl</h3>
+
+<p>
+    Crawl multiple pages from a site with Tavily or Firecrawl. Crawling is disabled by default
+    and approval-gated because it can expand one user request into many external fetches.
+</p>
+
+<table>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+        <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>Starting URL.</td></tr>
+        <tr><td><code>provider</code></td><td>enum</td><td>No</td><td>Override <code>web.crawl.provider</code>.</td></tr>
+        <tr><td><code>max_pages</code></td><td>int</td><td>No</td><td>Defaults to <code>web.crawl.max_pages</code>.</td></tr>
+        <tr><td><code>instructions</code></td><td>string</td><td>No</td><td>Optional provider-specific crawl instructions.</td></tr>
+    </tbody>
+</table>
+
+<pre><code>web_crawl url="https://docs.example.com" provider="tavily" max_pages=10</code></pre>
+
 
 <!-- ================================================================== -->
 <h2 id="shell">Shell</h2>

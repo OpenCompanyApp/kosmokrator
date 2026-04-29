@@ -130,6 +130,75 @@ integrations:
 mcp:
   permissions_default: ask  # Default for MCP operations not explicitly set
 
+web:
+  search:
+    enabled: false
+    provider: null
+    fallback_providers: []
+    max_results: 8
+    timeout_seconds: 30
+    output_limit_chars: 60000
+  fetch:
+    provider: native
+    allow_external: false
+    timeout_seconds: 30
+    max_bytes: 5242880
+    output_limit_chars: 100000
+  crawl:
+    enabled: false
+    provider: null
+    max_pages: 20
+    timeout_seconds: 60
+    output_limit_chars: 100000
+  native:
+    enabled: false
+    provider: null
+    mode: cached
+    max_uses: 5
+    openai:
+      model: gpt-5
+    anthropic:
+      model: claude-sonnet-4-20250514
+  providers:
+    tavily:
+      enabled: false
+      api_key_env: TAVILY_API_KEY
+      api_url: https://api.tavily.com
+    firecrawl:
+      enabled: false
+      api_key_env: FIRECRAWL_API_KEY
+      api_url: https://api.firecrawl.dev
+    exa:
+      enabled: false
+      api_key_env: EXA_API_KEY
+      api_url: https://api.exa.ai
+    brave:
+      enabled: false
+      api_key_env: BRAVE_SEARCH_API_KEY
+      api_url: https://api.search.brave.com
+    parallel:
+      enabled: false
+      api_key_env: PARALLEL_API_KEY
+      api_url: https://api.parallel.ai
+    jina:
+      enabled: false
+      api_key_env: JINA_API_KEY
+    searxng:
+      enabled: false
+      base_url: null
+    perplexity:
+      enabled: false
+      api_key_env: PERPLEXITY_API_KEY
+      api_url: https://api.perplexity.ai
+    openai_native:
+      enabled: false
+      api_key_env: OPENAI_API_KEY
+      api_url: https://api.openai.com/v1
+    anthropic_native:
+      enabled: false
+      api_key_env: ANTHROPIC_API_KEY
+      api_url: https://api.anthropic.com
+
 gateway:
   telegram:
     enabled: false
@@ -167,6 +236,8 @@ tools:
     - lua_list_docs
     - lua_search_docs
     - lua_read_doc
+    - web_search
+    - web_fetch
   approval_required:
     - file_write
     - file_edit
@@ -175,6 +246,9 @@ tools:
     - shell_start
     - shell_write
     - execute_lua
+    - web_fetch_external
+    - web_extract
+    - web_crawl
   bash:
     timeout: 120
     blocked_commands:

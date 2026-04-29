@@ -83,6 +83,10 @@ final class SettingsCatalog
             return [];
         }
 
+        if (str_starts_with($definition->id, 'web.')) {
+            return $this->staticOptions($definition);
+        }
+
         if ($definition->id === 'agent.default_provider'
             || str_ends_with($definition->id, '_provider')) {
             return $this->providerOptions();
@@ -95,6 +99,14 @@ final class SettingsCatalog
             return $this->modelOptions($provider);
         }
 
+        return $this->staticOptions($definition);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function staticOptions(SettingDefinition $definition): array
+    {
         return array_map(
             static fn (string $option): array => [
                 'value' => $option,

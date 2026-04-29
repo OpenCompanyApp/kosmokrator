@@ -61,6 +61,29 @@ kosmokrator mcp:import .vscode/mcp.json --project --json
 kosmokrator mcp:export --format=mcpServers --json
 kosmokrator mcp:export --format=vscode --path=.vscode/mcp.json --json</code></pre>
 
+<h2 id="presets">Web Provider Presets</h2>
+
+<p>
+    For common web-search MCP servers, <code>mcp:preset</code> writes a portable server entry
+    without making you remember package names.
+</p>
+
+<pre><code># List available presets
+kosmokrator mcp:preset list --json
+
+# Add a project-level preset
+kosmokrator mcp:preset add tavily --project --json
+kosmokrator mcp:preset add firecrawl --project --json
+kosmokrator mcp:preset add exa --project --json
+kosmokrator mcp:preset add fetch --project --json
+kosmokrator mcp:preset add parallel --project --json</code></pre>
+
+<p>
+    Presets use environment placeholders such as <code>${TAVILY_API_KEY}</code>. Store shared
+    project config in <code>.mcp.json</code> and keep actual secrets in the shell environment or
+    with <code>mcp:secret:set</code>.
+</p>
+
 <h2 id="headless">Headless Calls</h2>
 
 <pre><code># Discovery

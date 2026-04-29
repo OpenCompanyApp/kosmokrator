@@ -107,6 +107,38 @@ kosmokrator mcp:lua workflow.lua --json</code></pre>
 </p>
 
 <!-- ------------------------------------------------------------------ -->
+<h3 id="headless-web">Headless Web Providers</h3>
+<!-- ------------------------------------------------------------------ -->
+
+<p>
+    External web providers can be configured and tested without opening a TUI. They are opt-in
+    and do not replace native <code>web_fetch</code>; external fetch and crawl remain separate
+    provider-backed tools.
+</p>
+
+<pre><code># Inspect available providers and effective configuration
+kosmokrator web:providers --json
+kosmokrator web:doctor --json
+
+# Configure provider keys from environment variables
+kosmokrator web:configure tavily --api-key-env=TAVILY_API_KEY \
+  --enable --search --global --json
+kosmokrator web:configure firecrawl --api-key-env=FIRECRAWL_API_KEY \
+  --enable --fetch --crawl --project --json
+
+# Call providers directly from scripts
+kosmokrator web:search "latest Symfony TUI changes" --provider=tavily --json
+kosmokrator web:fetch https://symfony.com/blog/ --provider=firecrawl --json
+kosmokrator web:crawl https://docs.example.com --provider=tavily --max-pages=10 --json</code></pre>
+
+<p>
+    Supported providers are Tavily, Firecrawl, Exa, Brave Search, Parallel, Jina Reader/Search,
+    SearXNG, Perplexity, OpenAI native web search, and Anthropic native web search. Provider API
+    keys can also be stored with <code>web:configure --api-key-stdin</code> or
+    <code>secrets:set provider.PROVIDER.api_key</code>.
+</p>
+
+<!-- ------------------------------------------------------------------ -->
 <h3 id="headless-configuration">Headless Configuration</h3>
 <!-- ------------------------------------------------------------------ -->
 

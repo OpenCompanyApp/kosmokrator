@@ -42,6 +42,9 @@ class AgentTypeTest extends TestCase
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
         $this->assertContains('memory_save', $tools);
+        $this->assertContains('web_search', $tools);
+        $this->assertContains('web_fetch_external', $tools);
+        $this->assertContains('web_crawl', $tools);
     }
 
     public function test_explore_allowed_tools_excludes_write(): void
@@ -58,6 +61,9 @@ class AgentTypeTest extends TestCase
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
+        $this->assertContains('web_search', $tools);
+        $this->assertContains('web_fetch_external', $tools);
+        $this->assertContains('web_crawl', $tools);
         $this->assertNotContains('apply_patch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
@@ -77,6 +83,9 @@ class AgentTypeTest extends TestCase
         $this->assertContains('subagent', $tools);
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
+        $this->assertContains('web_search', $tools);
+        $this->assertContains('web_fetch_external', $tools);
+        $this->assertContains('web_crawl', $tools);
         $this->assertNotContains('memory_save', $tools);
     }
 

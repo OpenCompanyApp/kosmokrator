@@ -34,6 +34,7 @@ use Kosmokrator\Command\Mcp\McpImportCommand;
 use Kosmokrator\Command\Mcp\McpListCommand;
 use Kosmokrator\Command\Mcp\McpLuaCommand;
 use Kosmokrator\Command\Mcp\McpPromptsCommand;
+use Kosmokrator\Command\Mcp\McpPresetCommand;
 use Kosmokrator\Command\Mcp\McpRemoveCommand;
 use Kosmokrator\Command\Mcp\McpResourcesCommand;
 use Kosmokrator\Command\Mcp\McpSchemaCommand;
@@ -66,6 +67,12 @@ use Kosmokrator\Command\SetupCommand;
 use Kosmokrator\Command\TelegramGatewayCommand;
 use Kosmokrator\Command\TelegramGatewayWorkerCommand;
 use Kosmokrator\Command\UpdateCommand;
+use Kosmokrator\Command\Web\WebConfigureCommand;
+use Kosmokrator\Command\Web\WebCrawlCommand;
+use Kosmokrator\Command\Web\WebDoctorCommand;
+use Kosmokrator\Command\Web\WebFetchCommand;
+use Kosmokrator\Command\Web\WebProvidersCommand;
+use Kosmokrator\Command\Web\WebSearchCommand;
 use Kosmokrator\Integration\Runtime\IntegrationCatalog;
 use Kosmokrator\Kernel;
 use Kosmokrator\Mcp\McpConfigStore;
@@ -155,6 +162,13 @@ $console->addCommand(new McpDoctorCommand($kernel->getContainer()));
 $console->addCommand(new McpExamplesCommand);
 $console->addCommand(new McpImportCommand($kernel->getContainer()));
 $console->addCommand(new McpExportCommand($kernel->getContainer()));
+$console->addCommand(new McpPresetCommand($kernel->getContainer()));
+$console->addCommand(new WebProvidersCommand($kernel->getContainer()));
+$console->addCommand(new WebConfigureCommand($kernel->getContainer()));
+$console->addCommand(new WebDoctorCommand($kernel->getContainer()));
+$console->addCommand(new WebSearchCommand($kernel->getContainer()));
+$console->addCommand(new WebFetchCommand($kernel->getContainer()));
+$console->addCommand(new WebCrawlCommand($kernel->getContainer()));
 
 foreach ($kernel->getContainer()->make(IntegrationCatalog::class)->locallyRunnableProviderNames() as $provider) {
     $console->addCommand(new IntegrationProviderCommand($kernel->getContainer(), $provider));
@@ -178,6 +192,7 @@ $isExplicitCommand = is_string($requestedCommand)
         || str_starts_with($requestedCommand, 'providers:')
         || str_starts_with($requestedCommand, 'secrets:')
         || str_starts_with($requestedCommand, 'mcp:')
+        || str_starts_with($requestedCommand, 'web:')
         || str_starts_with($requestedCommand, 'gateway:telegram:'));
 
 if (! $isExplicitCommand) {

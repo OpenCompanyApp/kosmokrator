@@ -587,6 +587,104 @@ kosmokrator settings:examples --json</code></pre>
     <a href="/docs/mcp">MCP</a> for the full command reference.
 </p>
 
+<!-- ---------------------------------------- Web ---------------------------------------- -->
+<h3 id="web">Web</h3>
+
+<p>
+    Optional external web providers are configured under <code>web.*</code>. They are not default-on:
+    native <code>web_fetch</code> remains the normal fetch path, while <code>web_search</code>,
+    <code>web_fetch_external</code>, <code>web_extract</code>, and <code>web_crawl</code> require
+    explicit provider enablement.
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+            <th>Effect</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>web.search.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable the optional <code>web_search</code> tool.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.search.provider</code></td>
+            <td>choice</td>
+            <td><em>unset</em></td>
+            <td>Default search provider: Tavily, Firecrawl, Exa, Brave, Parallel, Jina, SearXNG, Perplexity, OpenAI native, or Anthropic native.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.fetch.provider</code></td>
+            <td>choice</td>
+            <td><code>native</code></td>
+            <td>Default fetch provider. Keep <code>native</code> for built-in web fetch; select an external provider for <code>web_fetch_external</code>.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.fetch.allow_external</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Allow external extract/fetch tools. These tools still require approval by default.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.crawl.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable <code>web_crawl</code>.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.crawl.provider</code></td>
+            <td>choice</td>
+            <td><em>unset</em></td>
+            <td>Default crawl provider, currently Tavily or Firecrawl.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.providers.PROVIDER.enabled</code></td>
+            <td>toggle</td>
+            <td><code>off</code></td>
+            <td>Enable one provider. API keys can come from managed settings, provider-specific env vars, or provider config.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.providers.searxng.base_url</code></td>
+            <td>string</td>
+            <td><em>unset</em></td>
+            <td>Base URL for a trusted SearXNG instance.</td>
+            <td>next session</td>
+        </tr>
+        <tr>
+            <td><code>web.native.mode</code></td>
+            <td>choice: <code>cached</code>, <code>live</code></td>
+            <td><code>cached</code></td>
+            <td>Provider-native search hint for OpenAI and Anthropic adapters.</td>
+            <td>next session</td>
+        </tr>
+    </tbody>
+</table>
+
+<pre><code># Enable Tavily search globally without putting a key in YAML
+kosmokrator web:configure tavily --api-key-env=TAVILY_API_KEY \
+  --enable --search --global --json
+
+# Enable Firecrawl extract/fetch for one project
+kosmokrator web:configure firecrawl --api-key-env=FIRECRAWL_API_KEY \
+  --enable --fetch --project --json
+
+# Diagnose the effective web setup
+kosmokrator web:doctor --json</code></pre>
+
 <!-- ---------------------------------------- Gateway ---------------------------------------- -->
 <h3 id="gateway">Gateway</h3>
 

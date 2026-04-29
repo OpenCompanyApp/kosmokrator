@@ -172,7 +172,7 @@ class MessageRepository implements MessageRepositoryInterface
                 $pdo->commit();
             }
         } catch (\Throwable $e) {
-            if ($startedTransaction && $pdo->inTransaction()) {
+            if ($startedTransaction) {
                 $pdo->rollBack();
             }
 

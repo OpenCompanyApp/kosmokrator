@@ -2,11 +2,107 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
+  smoke:
+    name: Startup Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter
+          tools: composer:v2
+          ini-values: phar.readonly=0
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Install dependencies
+        run: composer install --no-interaction
+        env:
+          COMPOSER_MIRROR_PATH_REPOS: 1
+
+      - name: Source startup smoke
+        run: |
+          tmp_home="$(mktemp -d)"
+          tmp_cwd="$(mktemp -d)"
+          cd "$tmp_cwd"
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" --version
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" list --raw
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" web:providers --json
+
+      - name: Command help smoke
+        run: |
+          tmp_home="$(mktemp -d)"
+          php "$GITHUB_WORKSPACE/bin/kosmokrator" list --raw | awk '{ print $1 }' | while read -r command; do
+            HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" "$command" --help >/dev/null
+          done
+
+      - name: Generated website docs are current
+        run: |
+          php website/build.php
+          git diff --exit-code -- website/html
+
+      - name: No-dev startup smoke
+        run: |
+          composer install --no-dev --optimize-autoloader --no-interaction
+          tmp_home="$(mktemp -d)"
+          tmp_cwd="$(mktemp -d)"
+          cd "$tmp_cwd"
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" smoke:startup --json
+        env:
+          COMPOSER_MIRROR_PATH_REPOS: 1
+
+  phar-smoke:
+    name: PHAR Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, zlib, dom, xml, xmlwriter, simplexml, phar, tokenizer, ctype, filter
+          tools: composer:v2
+          ini-values: phar.readonly=0
+
+      - name: Install release dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+        env:
+          COMPOSER_MIRROR_PATH_REPOS: 1
+
+      - name: Install Box
+        run: composer global require humbug/box
+
+      - name: Build PHAR
+        run: |
+          mkdir -p builds
+          box compile
+
+      - name: PHAR startup smoke
+        run: |
+          php -r "require 'phar://' . getcwd() . '/builds/kosmokrator.phar/vendor/autoload.php'; foreach (['OpenCompany\\\\IntegrationCore\\\\Support\\\\ToolProviderRegistry', 'OpenCompany\\\\Integrations\\\\ClickUp\\\\ClickUpServiceProvider'] as \$class) { if (!class_exists(\$class)) { fwrite(STDERR, \"Missing PHAR class: {\$class}\\n\"); exit(1); } }"
+          tmp_home="$(mktemp -d)"
+          tmp_cwd="$(mktemp -d)"
+          cd "$tmp_cwd"
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" --version
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" list --raw
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" web:providers --json
+
   phpstan:
     name: PHPStan
     runs-on: ubuntu-latest

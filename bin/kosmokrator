@@ -64,6 +64,7 @@ use Kosmokrator\Command\Settings\SettingsOptionsCommand;
 use Kosmokrator\Command\Settings\SettingsSetCommand;
 use Kosmokrator\Command\Settings\SettingsUnsetCommand;
 use Kosmokrator\Command\SetupCommand;
+use Kosmokrator\Command\SmokeStartupCommand;
 use Kosmokrator\Command\TelegramGatewayCommand;
 use Kosmokrator\Command\TelegramGatewayWorkerCommand;
 use Kosmokrator\Command\UpdateCommand;
@@ -169,6 +170,7 @@ $console->addCommand(new WebDoctorCommand($kernel->getContainer()));
 $console->addCommand(new WebSearchCommand($kernel->getContainer()));
 $console->addCommand(new WebFetchCommand($kernel->getContainer()));
 $console->addCommand(new WebCrawlCommand($kernel->getContainer()));
+$console->addCommand(new SmokeStartupCommand($kernel->getContainer()));
 
 foreach ($kernel->getContainer()->make(IntegrationCatalog::class)->locallyRunnableProviderNames() as $provider) {
     $console->addCommand(new IntegrationProviderCommand($kernel->getContainer(), $provider));
@@ -182,7 +184,7 @@ foreach ($kernel->getContainer()->make(McpConfigStore::class)->effectiveServers(
 // 'agent' is removed from the explicit list so that `kosmokrator agent "prompt"`
 // enters single-command mode correctly (positional prompt binds to the command).
 $args = $_SERVER['argv'] ?? [];
-$explicitCommands = ['setup', 'config', 'auth', 'update', 'acp', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
+$explicitCommands = ['setup', 'config', 'auth', 'update', 'acp', 'smoke:startup', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
 $requestedCommand = $args[1] ?? null;
 $isExplicitCommand = is_string($requestedCommand)
     && ! str_starts_with($requestedCommand, '-')

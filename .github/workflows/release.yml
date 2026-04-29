@@ -26,12 +26,29 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction
+        env:
+          COMPOSER_MIRROR_PATH_REPOS: 1
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
 
       - name: PHPStan
         run: php vendor/bin/phpstan analyse --no-progress
 
       - name: Tests
         run: php vendor/bin/phpunit tests/Unit --no-coverage
+
+      - name: Source startup smoke
+        run: |
+          tmp_home="$(mktemp -d)"
+          tmp_cwd="$(mktemp -d)"
+          cd "$tmp_cwd"
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" smoke:startup --json
+
+      - name: Generated website docs are current
+        run: |
+          php website/build.php
+          git diff --exit-code -- website/html
 
   build-phar:
     name: Build PHAR
@@ -68,6 +85,13 @@ jobs:
         run: |
           php -r "echo 'PHAR size: ' . filesize('builds/kosmokrator.phar') . ' bytes';"
           php -r "require 'phar://' . getcwd() . '/builds/kosmokrator.phar/vendor/autoload.php'; foreach (['OpenCompany\\\\IntegrationCore\\\\Support\\\\ToolProviderRegistry', 'OpenCompany\\\\Integrations\\\\ClickUp\\\\ClickUpServiceProvider'] as \$class) { if (!class_exists(\$class)) { fwrite(STDERR, \"Missing PHAR class: {\$class}\\n\"); exit(1); } }"
+          tmp_home="$(mktemp -d)"
+          tmp_cwd="$(mktemp -d)"
+          cd "$tmp_cwd"
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" --version
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" list --raw
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/builds/kosmokrator.phar" web:providers --json
 
       - name: Upload PHAR artifact
         uses: actions/upload-artifact@v4
@@ -121,6 +145,12 @@ jobs:
           chmod +x kosmokrator-${{ matrix.platform }}
           ls -lh kosmokrator-${{ matrix.platform }}
           file kosmokrator-${{ matrix.platform }}
+          tmp_home="$(mktemp -d)"
+          tmp_cwd="$(mktemp -d)"
+          cd "$tmp_cwd"
+          HOME="$tmp_home" "$GITHUB_WORKSPACE/kosmokrator-${{ matrix.platform }}" --version
+          HOME="$tmp_home" "$GITHUB_WORKSPACE/kosmokrator-${{ matrix.platform }}" list --raw
+          HOME="$tmp_home" "$GITHUB_WORKSPACE/kosmokrator-${{ matrix.platform }}" smoke:startup --json
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -157,8 +187,25 @@ jobs:
 
           cd release
           sha256sum * > checksums.sha256 || shasum -a 256 * > checksums.sha256
+          sha256sum -c checksums.sha256 || shasum -a 256 -c checksums.sha256
           echo "Release assets:"
           ls -lh
+
+      - name: Install path smoke
+        run: |
+          tmp_root="$(mktemp -d)"
+          mkdir -p "$tmp_root/bin" "$tmp_root/home" "$tmp_root/work"
+
+          if [ -f "release/kosmokrator-linux-x86_64" ]; then
+            cp "release/kosmokrator-linux-x86_64" "$tmp_root/bin/kosmokrator"
+            chmod +x "$tmp_root/bin/kosmokrator"
+            cd "$tmp_root/work"
+            PATH="$tmp_root/bin:$PATH" HOME="$tmp_root/home" kosmokrator --version
+            PATH="$tmp_root/bin:$PATH" HOME="$tmp_root/home" kosmokrator smoke:startup --json
+          fi
+
+          cd "$tmp_root/work"
+          HOME="$tmp_root/home" php "$GITHUB_WORKSPACE/release/kosmokrator.phar" smoke:startup --json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

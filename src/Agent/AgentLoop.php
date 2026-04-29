@@ -22,6 +22,7 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
+use Kosmokrator\Web\Cache\WebTransientCache;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
@@ -96,6 +97,7 @@ class AgentLoop
         private readonly int $memoryWarningThreshold = 50 * 1024 * 1024,
         private readonly ?Dispatcher $events = null,
         private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
+        private readonly ?WebTransientCache $webCache = null,
     ) {
         $this->history = new ConversationHistory;
         $this->tokens = new SessionTokenTracker;
@@ -230,6 +232,7 @@ class AgentLoop
      */
     public function run(string $userInput): void
     {
+        $this->webCache?->advanceTurn();
         $this->log->debug('User input', ['input' => $userInput]);
         $this->history->addUser($userInput);
         $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);

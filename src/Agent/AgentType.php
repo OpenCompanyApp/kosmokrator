@@ -43,12 +43,12 @@ enum AgentType: string
     public function allowedTools(): array
     {
         $luaTools = ['lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'execute_lua'];
-        $webTools = ['web_search', 'web_fetch', 'web_fetch_external', 'web_extract', 'web_crawl'];
+        $webTools = ['web_search', 'web_fetch'];
 
         return match ($this) {
-            self::General => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'session_search', 'session_read', 'memory_save', ...$luaTools, ...$webTools],
-            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'session_search', 'session_read', ...$luaTools, ...$webTools],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'session_search', 'session_read', ...$luaTools, ...$webTools],
+            self::General => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'session_search', 'session_read', 'memory_save', ...$webTools, ...$luaTools],
+            self::Explore => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'session_search', 'session_read', ...$webTools, ...$luaTools],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', 'memory_search', 'session_search', 'session_read', ...$webTools, ...$luaTools],
         };
     }
 

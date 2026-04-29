@@ -14,6 +14,7 @@
         "amphp/amp": "^3.1",
         "amphp/http-client": "^5.3",
         "league/commonmark": "^2.9",
+        "league/html-to-markdown": "^5.1",
         "opencompany/prism-codex": "dev-main",
         "opencompanyapp/integration-clickup": "@dev",
         "opencompanyapp/integration-coingecko": "@dev",

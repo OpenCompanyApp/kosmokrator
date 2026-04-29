@@ -14,7 +14,8 @@ use Kosmokrator\Mcp\McpConfigStore;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Settings\SettingsCatalog;
 use Kosmokrator\Tool\ToolRegistry;
-use Kosmokrator\Web\WebProviderRegistry;
+use Kosmokrator\Web\Provider\WebFetchProviderManager;
+use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use OpenCompany\IntegrationCore\Support\ToolProviderRegistry;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -67,9 +68,7 @@ final class SmokeStartupCommand extends Command
                     'apply_patch',
                     'bash',
                     'web_search',
-                    'web_fetch_external',
-                    'web_extract',
-                    'web_crawl',
+                    'web_fetch',
                 ]),
             ];
         });
@@ -89,7 +88,8 @@ final class SmokeStartupCommand extends Command
         });
 
         $this->check('web', $checks, $errors, fn (): array => [
-            'providers' => count($this->container->make(WebProviderRegistry::class)->statuses()),
+            'search_providers' => $this->container->make(WebSearchProviderManager::class)->availableProviderIds(),
+            'fetch_providers' => $this->container->make(WebFetchProviderManager::class)->availableProviderIds(),
         ]);
 
         $this->check('mcp', $checks, $errors, fn (): array => [

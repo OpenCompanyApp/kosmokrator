@@ -19,6 +19,7 @@ use Kosmokrator\Provider\LoggingServiceProvider;
 use Kosmokrator\Provider\McpServiceProvider;
 use Kosmokrator\Provider\SessionServiceProvider;
 use Kosmokrator\Provider\ToolServiceProvider;
+use Kosmokrator\Provider\WebServiceProvider;
 use Revolt\EventLoop;
 use Symfony\Component\Console\Application;
 
@@ -56,6 +57,7 @@ class Kernel
             new CoreServiceProvider($this->container, $this->basePath),
             new LlmServiceProvider($this->container),
             new IntegrationServiceProvider($this->container, $this->basePath),
+            new WebServiceProvider($this->container),
             new ToolServiceProvider($this->container),
             new SessionServiceProvider($this->container),
             new McpServiceProvider($this->container),

@@ -169,6 +169,9 @@ final class SettingsSchema
             'web_crawl_provider' => 'web.crawl.provider',
             'web_native_provider' => 'web.native.provider',
             'web_native_mode' => 'web.native.mode',
+            'web_search_default_provider' => 'web.search.default_provider',
+            'web_fetch_default_provider' => 'web.fetch.default_provider',
+            'web_fetch_max_chars' => 'web.fetch.max_chars',
         ];
 
         $definitions = [
@@ -730,6 +733,38 @@ final class SettingsSchema
                 options: ['on', 'off'],
                 effect: 'next_session',
                 default: 'off',
+            ),
+            new SettingDefinition(
+                id: 'web.search.default_provider',
+                path: 'kosmokrator.web.search.default_provider',
+                label: 'Web search provider',
+                description: 'Default provider used by web_search when no provider override is passed.',
+                category: 'advanced',
+                type: 'choice',
+                options: ['tavily', 'zai', 'exa'],
+                effect: 'next_session',
+                default: 'tavily',
+            ),
+            new SettingDefinition(
+                id: 'web.fetch.default_provider',
+                path: 'kosmokrator.web.fetch.default_provider',
+                label: 'Web fetch provider',
+                description: 'Default provider used by web_fetch when no provider override is passed.',
+                category: 'advanced',
+                type: 'choice',
+                options: ['direct', 'zai', 'firecrawl'],
+                effect: 'next_session',
+                default: 'direct',
+            ),
+            new SettingDefinition(
+                id: 'web.fetch.max_chars',
+                path: 'kosmokrator.web.fetch.max_chars',
+                label: 'Web fetch max chars',
+                description: 'Default maximum number of characters returned by web_fetch before chunking.',
+                category: 'advanced',
+                type: 'number',
+                effect: 'next_session',
+                default: 12000,
             ),
             new SettingDefinition(
                 id: 'context.memories',

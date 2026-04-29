@@ -33,9 +33,8 @@ class AgentModeTest extends TestCase
         $this->assertContains('memory_save', $tools);
         $this->assertContains('subagent', $tools);
         $this->assertContains('web_search', $tools);
-        $this->assertContains('web_fetch_external', $tools);
-        $this->assertContains('web_crawl', $tools);
-        $this->assertCount(30, $tools);
+        $this->assertContains('web_fetch', $tools);
+        $this->assertCount(27, $tools);
     }
 
     public function test_plan_mode_has_read_only_tools(): void
@@ -59,8 +58,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
         $this->assertContains('web_search', $tools);
-        $this->assertContains('web_fetch_external', $tools);
-        $this->assertContains('web_crawl', $tools);
+        $this->assertContains('web_fetch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);
@@ -88,8 +86,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('memory_search', $tools);
         $this->assertContains('session_search', $tools);
         $this->assertContains('web_search', $tools);
-        $this->assertContains('web_fetch_external', $tools);
-        $this->assertContains('web_crawl', $tools);
+        $this->assertContains('web_fetch', $tools);
         $this->assertNotContains('file_write', $tools);
         $this->assertNotContains('file_edit', $tools);
         $this->assertNotContains('memory_save', $tools);

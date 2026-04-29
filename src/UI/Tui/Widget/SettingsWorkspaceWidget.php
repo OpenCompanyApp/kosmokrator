@@ -105,6 +105,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         }
 
         $this->syncProviderSetupListIndex();
+        $this->applyInitialCategory();
     }
 
     /** Register the callback invoked when the user saves changes. */
@@ -935,6 +936,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $accent = Theme::accent();
         $white = Theme::white();
         $dim = Theme::dim();
+        $heading = (string) ($this->view['title'] ?? 'Settings');
 
         $provider = $this->values['agent.default_provider'] ?? '';
         $model = $this->values['agent.default_model'] ?? '';
@@ -944,10 +946,34 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $modelLabel = $this->displayLabelForFieldValue('agent.default_model', $model);
 
         return [
-            "{$accent}⚙ Settings{$r}  {$dim}scope{$r}: {$white}{$this->scope}{$r}  {$dim}provider{$r}: {$white}{$providerLabel}{$r}  {$dim}model{$r}: {$white}{$modelLabel}{$r}  {$status}{$unsaved}{$r}",
+            "{$accent}⚙ {$heading}{$r}  {$dim}scope{$r}: {$white}{$this->scope}{$r}  {$dim}provider{$r}: {$white}{$providerLabel}{$r}  {$dim}model{$r}: {$white}{$modelLabel}{$r}  {$status}{$unsaved}{$r}",
             "{$dim}Separate settings workspace. Save writes YAML-backed config; auth secrets remain managed separately.{$r}",
             str_repeat('─', max(10, $width - 2)),
         ];
+    }
+
+    private function applyInitialCategory(): void
+    {
+        $initialCategory = trim((string) ($this->view['initial_category'] ?? ''));
+        if ($initialCategory === '') {
+            return;
+        }
+
+        foreach ($this->categories() as $index => $category) {
+            if ((string) ($category['id'] ?? '') !== $initialCategory) {
+                continue;
+            }
+
+            $this->categoryIndex = $index;
+            $this->fieldIndex = 0;
+
+            if ($initialCategory === 'provider_setup') {
+                $this->providerSetupEditing = false;
+                $this->syncProviderSetupListIndex();
+            }
+
+            return;
+        }
     }
 
     /**

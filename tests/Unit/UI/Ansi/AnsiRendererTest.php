@@ -44,9 +44,10 @@ class AnsiRendererTest extends TestCase
         $this->assertNull($this->renderer->consumeQueuedMessage());
     }
 
-    public function test_approve_plan_returns_null(): void
+    public function test_approve_plan_returns_defaults_in_non_interactive(): void
     {
-        $this->assertNull($this->renderer->approvePlan('guardian'));
+        $result = $this->renderer->approvePlan('guardian');
+        $this->assertSame(['permission' => 'guardian', 'context' => 'keep'], $result);
     }
 
     public function test_initialize_is_noop(): void

@@ -21,6 +21,7 @@ use Kosmokrator\UI\HeadlessRenderer;
 use Kosmokrator\UI\OutputFormat;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\UIManager;
+use Kosmokrator\Web\Cache\WebTransientCache;
 use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
@@ -92,6 +93,7 @@ final class AgentSessionBuilder
 
         // Append Lua integration docs if available
         $baseSystemPrompt .= $this->buildLuaDocsSuffix();
+        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
 
         // Task store
         $taskStore = $this->container->make(TaskStore::class);
@@ -113,7 +115,7 @@ final class AgentSessionBuilder
             $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager,
             $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
             $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events,
+            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
         );
 
         // Subagent pipeline (orchestrator, root context, factory)
@@ -225,6 +227,7 @@ final class AgentSessionBuilder
 
         // Append Lua integration docs if available
         $baseSystemPrompt .= $this->buildLuaDocsSuffix();
+        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
 
         // Task store
         $taskStore = $this->container->make(TaskStore::class);
@@ -246,7 +249,7 @@ final class AgentSessionBuilder
             $persistSession ? $sessionManager : null,
             $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
             $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events,
+            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
         );
 
         // Apply guardrails
@@ -343,6 +346,7 @@ final class AgentSessionBuilder
         }
 
         $baseSystemPrompt .= $this->buildLuaDocsSuffix();
+        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
 
         $taskStore = $this->container->make(TaskStore::class);
         $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
@@ -356,7 +360,7 @@ final class AgentSessionBuilder
             $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager,
             $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
             $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events,
+            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
         );
 
         if (! empty($options['max_turns'])) {
@@ -426,5 +430,20 @@ final class AgentSessionBuilder
         } catch (\Throwable) {
             return '';
         }
+    }
+
+    private function buildWebToolsSuffix(ToolRegistry $toolRegistry): string
+    {
+        if ($toolRegistry->get('web_search') === null && $toolRegistry->get('web_fetch') === null) {
+            return '';
+        }
+
+        return "\n\n# Web Research\n\n"
+            .'Web tools are available: `web_search` for discovery and `web_fetch` for reading pages. '
+            .'For large pages, prefer `web_fetch` in `metadata` or `outline` mode first, then fetch only the relevant '
+            ."section, match, or chunk.\n\n"
+            .'For multi-source research, prefer subagents so different sources can be searched and inspected in parallel. '
+            .'Have subagents return concise findings with URLs, then synthesize in the parent agent instead of loading many '
+            .'full pages into the main conversation context.';
     }
 }

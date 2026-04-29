@@ -131,19 +131,45 @@ mcp:
   permissions_default: ask  # Default for MCP operations not explicitly set
 
 web:
+  cache:
+    keep_turns: 2
+    max_entries: 128
   search:
     enabled: false
     provider: null
+    default_provider: tavily
     fallback_providers: []
     max_results: 8
+    timeout: 20
     timeout_seconds: 30
     output_limit_chars: 60000
+    providers:
+      tavily:
+        api_key: ${TAVILY_API_KEY}
+      zai:
+        api_key: ${ZAI_API_KEY}
+        remote_url: https://api.z.ai/api/mcp/web_search_prime/mcp
+      exa:
+        api_key: ${EXA_API_KEY}
   fetch:
     provider: native
+    default_provider: direct
     allow_external: false
+    fallback_providers: []
+    timeout: 20
     timeout_seconds: 30
-    max_bytes: 5242880
+    max_bytes: 10485760
+    max_chars: 12000
     output_limit_chars: 100000
+    providers:
+      direct:
+        user_agent_mode: browser_like
+      zai:
+        api_key: ${ZAI_API_KEY}
+        base_url: https://api.z.ai/api/coding/paas/v4
+      firecrawl:
+        api_key: ${FIRECRAWL_API_KEY}
+        api_url: ${FIRECRAWL_API_URL}
   crawl:
     enabled: false
     provider: null
@@ -233,11 +259,11 @@ tools:
     - subagent
     - session_search
     - session_read
+    - web_search
+    - web_fetch
     - lua_list_docs
     - lua_search_docs
     - lua_read_doc
-    - web_search
-    - web_fetch
   approval_required:
     - file_write
     - file_edit
@@ -246,9 +272,6 @@ tools:
     - shell_start
     - shell_write
     - execute_lua
-    - web_fetch_external
-    - web_extract
-    - web_crawl
   bash:
     timeout: 120
     blocked_commands:

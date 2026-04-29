@@ -112,7 +112,15 @@ final class AnsiCoreRenderer implements CoreRendererInterface
         $r = Theme::reset();
         $red = Theme::primary();
 
-        $input = readline($red.'  ⟡ '.$r);
+        if (\function_exists('readline')) {
+            $input = \readline($red.'  ⟡ '.$r);
+        } else {
+            echo $red.'  ⟡ '.$r;
+            $input = fgets(STDIN);
+            if (is_string($input)) {
+                $input = rtrim($input, "\r\n");
+            }
+        }
 
         if ($input === false) {
             return '/quit';

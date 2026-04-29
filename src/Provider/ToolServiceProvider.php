@@ -6,15 +6,14 @@ namespace Kosmokrator\Provider;
 
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
-use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Session\SessionManager;
-use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Session\Tool\MemorySaveTool;
 use Kosmokrator\Session\Tool\MemorySearchTool;
 use Kosmokrator\Session\Tool\SessionReadTool;
 use Kosmokrator\Session\Tool\SessionSearchTool;
+use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Task\Tool\TaskCreateTool;
 use Kosmokrator\Task\Tool\TaskGetTool;
@@ -45,10 +44,10 @@ use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
-use Kosmokrator\Tool\Web\WebCrawlTool;
-use Kosmokrator\Tool\Web\WebFetchExternalTool;
+use Kosmokrator\Tool\Web\WebFetchTool;
 use Kosmokrator\Tool\Web\WebSearchTool;
-use Kosmokrator\Web\WebProviderRegistry;
+use Kosmokrator\Web\Provider\WebFetchProviderManager;
+use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use Lua\Sandbox;
 use Psr\Log\LoggerInterface;
 
@@ -71,25 +70,18 @@ class ToolServiceProvider extends ServiceProvider
         $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
         $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
         $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
-        $this->container->singleton(TaskStore::class);
-        $this->container->singleton(WebProviderRegistry::class, fn () => new WebProviderRegistry(
-            $this->container->make('config'),
-            $this->container->make(SettingsRepositoryInterface::class),
-            $this->container->bound(ProviderCatalog::class) ? $this->container->make(ProviderCatalog::class) : null,
-        ));
-        $this->container->singleton(PatchParser::class);
-        $this->container->singleton(PatchApplier::class, function () use ($config) {
-            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
-            $allowedPaths = $this->resolveAllowedPaths(
-                $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
-            );
+        $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
+        $allowedPaths = $this->resolveAllowedPaths(
+            $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
+        );
 
-            return new PatchApplier(
-                $config->get('kosmokrator.tools.blocked_paths', []),
-                $projectRoot,
-                $allowedPaths,
-            );
-        });
+        $this->container->singleton(TaskStore::class);
+        $this->container->singleton(PatchParser::class);
+        $this->container->singleton(PatchApplier::class, fn () => new PatchApplier(
+            $config->get('kosmokrator.tools.blocked_paths', []),
+            $projectRoot,
+            $allowedPaths,
+        ));
         $this->container->singleton(ShellSessionManager::class, fn () => new ShellSessionManager(
             $this->container->make(LoggerInterface::class),
             $shellWaitMs,
@@ -98,11 +90,7 @@ class ToolServiceProvider extends ServiceProvider
         ));
 
         $this->container->singleton(SessionGrants::class);
-        $this->container->singleton(PermissionEvaluator::class, function () use ($config) {
-            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
-            $allowedPaths = $this->resolveAllowedPaths(
-                $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
-            );
+        $this->container->singleton(PermissionEvaluator::class, function () use ($config, $projectRoot, $allowedPaths) {
             $parser = new PermissionConfigParser;
             $parsed = $parser->parse($config);
 
@@ -129,11 +117,7 @@ class ToolServiceProvider extends ServiceProvider
             return $evaluator;
         });
 
-        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $config) {
-            $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
-            $allowedPaths = $this->resolveAllowedPaths(
-                $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
-            );
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot, $allowedPaths) {
             $registry = new ToolRegistry;
             $registry->register(new FileReadTool($projectRoot, $allowedPaths));
             $registry->register(new FileWriteTool($projectRoot, $allowedPaths));
@@ -144,6 +128,14 @@ class ToolServiceProvider extends ServiceProvider
             ));
             $registry->register(new GlobTool);
             $registry->register(new GrepTool);
+            $registry->register(new WebSearchTool(
+                $this->container->make(WebSearchProviderManager::class),
+                $this->container->make(SettingsManager::class),
+            ));
+            $registry->register(new WebFetchTool(
+                $this->container->make(WebFetchProviderManager::class),
+                $this->container->make(SettingsManager::class),
+            ));
             $registry->register(new BashTool($bashTimeout));
             $registry->register(new ShellStartTool(
                 $this->container->make(ShellSessionManager::class),
@@ -158,12 +150,6 @@ class ToolServiceProvider extends ServiceProvider
             $registry->register(new ShellKillTool(
                 $this->container->make(ShellSessionManager::class),
             ));
-
-            $webProviders = $this->container->make(WebProviderRegistry::class);
-            $registry->register(new WebSearchTool($webProviders, $config));
-            $registry->register(new WebFetchExternalTool($webProviders, $config));
-            $registry->register(new WebFetchExternalTool($webProviders, $config, 'web_extract'));
-            $registry->register(new WebCrawlTool($webProviders, $config));
 
             $taskStore = $this->container->make(TaskStore::class);
             $registry->register(new TaskCreateTool($taskStore));

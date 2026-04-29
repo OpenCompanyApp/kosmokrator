@@ -122,21 +122,31 @@ ob_start();
         }
 
         .panel-tab {
+            border: 0;
             padding: 0.75rem 0.9rem;
             color: var(--text-muted);
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.78rem;
             border-right: 1px solid rgba(220, 20, 60, 0.07);
             background: rgba(220, 20, 60, 0.025);
+            text-align: left;
+            cursor: pointer;
+            transition: color 0.15s ease, background 0.15s ease;
         }
 
         .panel-tab:last-child {
             border-right: 0;
         }
 
-        .panel-tab.active {
+        .panel-tab.active,
+        .panel-tab[aria-selected="true"] {
             color: var(--crimson-light);
             background: var(--crimson-dim);
+        }
+
+        .panel-tab:focus-visible {
+            outline: 2px solid var(--crimson-light);
+            outline-offset: -2px;
         }
 
         .product-panel pre {
@@ -149,6 +159,10 @@ ob_start();
             line-height: 1.65;
             overflow-x: auto;
             background: transparent;
+        }
+
+        .surface-snippet[hidden] {
+            display: none;
         }
 
         .metric-strip {
@@ -315,7 +329,7 @@ ob_start();
         "name": "KosmoKrator",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Android via Termux",
-        "description": "AI coding agent for terminal use, headless automation, integrations, MCP, ACP, and embeddable PHP SDK workflows.",
+        "description": "Terminal AI coding agent for reading, editing, testing, and shipping code, with optional headless automation, integrations, MCP, ACP, and SDK surfaces.",
         "url": "https://kosmokrator.dev/",
         "downloadUrl": "https://github.com/OpenCompanyApp/kosmokrator/releases/latest",
         "license": "https://opensource.org/licenses/MIT",
@@ -341,7 +355,7 @@ ob_start();
         <header class="hero">
             <div class="hero-grid">
                 <div class="hero-copy">
-                    <div class="eyebrow">PHP 8.4 agent runtime for terminal, CI, editors, and apps</div>
+                    <div class="eyebrow">Terminal AI coding agent for real repository work</div>
                     <pre class="ascii-logo"
 >&#x2588;&#x2588;&#x2557;  &#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2588;&#x2557;   &#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2557;  &#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;  &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557;
 &#x2588;&#x2588;&#x2551; &#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D;&#x2588;&#x2588;&#x2588;&#x2588;&#x2557; &#x2588;&#x2588;&#x2588;&#x2588;&#x2551;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2551; &#x2588;&#x2588;&#x2554;&#x255D;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x255A;&#x2550;&#x2550;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x255D;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;&#x2588;&#x2588;&#x2554;&#x2550;&#x2550;&#x2588;&#x2588;&#x2557;
@@ -351,93 +365,126 @@ ob_start();
 &#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D; &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D; &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D;&#x255A;&#x2550;&#x255D;     &#x255A;&#x2550;&#x255D; &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D; &#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;&#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;&#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;   &#x255A;&#x2550;&#x255D;    &#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D; &#x255A;&#x2550;&#x255D;  &#x255A;&#x2550;&#x255D;</pre>
                     <h1 class="hero-title-fallback">KosmoKrator</h1>
                     <p class="hero-lead">
-                        A terminal-first coding agent with the same runtime available headlessly through
-                        CLI commands, Lua, MCP, ACP, and an embeddable PHP SDK.
+                        Work like a coding agent in your shell: inspect files, edit code, run tests,
+                        review changes, and coordinate subagents without leaving the terminal.
                     </p>
                     <div class="hero-actions">
                         <a href="/docs/getting-started" class="btn btn-primary">Get Started</a>
-                        <a href="/docs/sdk" class="btn btn-secondary">Read SDK Docs</a>
+                        <a href="/docs" class="btn btn-secondary">Read Docs</a>
                         <a href="https://github.com/OpenCompanyApp/kosmokrator" class="btn btn-secondary" target="_blank" rel="noopener">GitHub</a>
                     </div>
                     <ul class="hero-points">
-                        <li>Interactive TUI or ANSI terminal</li>
-                        <li>Headless JSON and stream-json execution</li>
-                        <li>OpenCompany integrations, MCP, and Lua</li>
-                        <li>ACP for non-PHP UI wrappers</li>
-                        <li>SDK parity with the headless CLI</li>
+                        <li>Interactive TUI with ANSI fallback</li>
+                        <li>Repo edits, shell commands, tests, and reviews</li>
+                        <li>Parallel subagents for larger tasks</li>
+                        <li>Guardian, Argus, and Prometheus permissions</li>
+                        <li>Headless, MCP, ACP, and SDK when you need automation</li>
                     </ul>
                 </div>
 
                 <div class="product-panel" aria-label="KosmoKrator surfaces">
-                    <div class="panel-tabs">
-                        <div class="panel-tab active">terminal</div>
-                        <div class="panel-tab">headless</div>
-                        <div class="panel-tab">sdk</div>
-                        <div class="panel-tab">acp</div>
+                    <div class="panel-tabs" role="tablist" aria-label="KosmoKrator runtime surfaces">
+                        <button type="button" class="panel-tab active" role="tab" id="surface-tab-terminal" aria-selected="true" aria-controls="surface-panel-terminal" data-surface-tab="terminal">terminal</button>
+                        <button type="button" class="panel-tab" role="tab" id="surface-tab-headless" aria-selected="false" aria-controls="surface-panel-headless" data-surface-tab="headless">headless</button>
+                        <button type="button" class="panel-tab" role="tab" id="surface-tab-sdk" aria-selected="false" aria-controls="surface-panel-sdk" data-surface-tab="sdk">sdk</button>
+                        <button type="button" class="panel-tab" role="tab" id="surface-tab-acp" aria-selected="false" aria-controls="surface-panel-acp" data-surface-tab="acp">acp</button>
                     </div>
-<pre><code>$ kosmokrator
+<pre class="surface-snippet" id="surface-panel-terminal" role="tabpanel" aria-labelledby="surface-tab-terminal" data-surface-panel="terminal"><code class="language-bash">$ kosmokrator
 You > Fix the failing tests and explain the risky changes.
 
   phase: exploring
   tool: php vendor/bin/phpunit
   tool: grep pattern="PaymentService"
   subagents: 3 running, 1 waiting
+  dashboard: /agents
+
+You > /prometheus
+mode: trusted automation for governed tools
+
+You > :review src/Billing/PaymentService.php</code></pre>
+<pre class="surface-snippet" id="surface-panel-headless" role="tabpanel" aria-labelledby="surface-tab-headless" data-surface-panel="headless" hidden><code class="language-bash">kosmokrator providers:configure openai \
+  --api-key-env OPENAI_API_KEY \
+  --model gpt-5.4-mini \
+  --global --json
 
 $ kosmokrator -p "Review this branch" \
-    --mode plan \
-    --output stream-json
+  --mode plan \
+  --permission-mode guardian \
+  -o stream-json
 
 $ kosmokrator integrations:plane search_issues --json
 $ kosmokrator mcp:call github search_repositories \
-    '{"query":"kosmokrator"}'
+  '{"query":"kosmokrator"}'</code></pre>
+<pre class="surface-snippet" id="surface-panel-sdk" role="tabpanel" aria-labelledby="surface-tab-sdk" data-surface-panel="sdk" hidden><code class="language-php">use Kosmokrator\Sdk\AgentBuilder;
 
 $agent = AgentBuilder::create()
     ->forProject($repo)
     ->withMode('edit')
-    ->build()
-    ->collect('Add tests for the billing edge cases');</code></pre>
+    ->withPermissionMode('guardian')
+    ->withMaxTurns(20)
+    ->build();
+
+$result = $agent->collect('Add tests for billing edge cases');
+
+foreach ($agent->stream('Review this branch') as $event) {
+    $socket->send($event->toArray());
+}</code></pre>
+<pre class="surface-snippet" id="surface-panel-acp" role="tabpanel" aria-labelledby="surface-tab-acp" data-surface-panel="acp" hidden><code class="language-json">{
+  "agent_servers": {
+    "kosmokrator": {
+      "command": "kosmokrator",
+      "args": ["acp", "--cwd", "/repo", "--mode", "edit"]
+    }
+  }
+}
+
+// ACP clients receive KosmoKrator extension events:
+// kosmokrator/phase_changed
+// kosmokrator/tool_call_started
+// kosmokrator/subagent_tree
+// kosmokrator/mcp/event</code></pre>
                 </div>
             </div>
 
             <div class="metric-strip">
                 <div class="metric"><strong>~50MB</strong><span>runtime footprint</span></div>
-                <div class="metric"><strong>40+</strong><span>LLM providers</span></div>
+                <div class="metric"><strong>40+</strong><span>provider families</span></div>
                 <div class="metric"><strong>10</strong><span>parallel subagents by default</span></div>
-                <div class="metric"><strong>1:1</strong><span>headless and SDK runtime parity</span></div>
+                <div class="metric"><strong>TUI</strong><span>terminal-first interface</span></div>
             </div>
         </header>
 
         <main>
             <section id="features">
                 <div class="section-header reveal">
-                    <span class="section-label">Runtime Surface</span>
-                    <h2>One agent core, several integration points</h2>
+                    <span class="section-label">Terminal First</span>
+                    <h2>A coding agent you live in, not a library demo</h2>
                     <p class="section-desc">
-                        The terminal UI is only one way to use KosmoKrator. The same session builder,
-                        tools, permissions, subagents, integrations, MCP runtime, Lua runtime, and context
-                        system are available to automation and external applications.
+                        KosmoKrator is built around the interactive terminal loop: prompt, inspect,
+                        approve, edit, test, and continue. Headless CLI, MCP, ACP, and SDK support are
+                        there for automation and wrappers around that same agent.
                     </p>
                 </div>
 
                 <div class="surface-grid reveal-stagger">
                     <div class="surface-card reveal-child">
                         <h3>Terminal Agent</h3>
-                        <p>Interactive TUI with ANSI fallback, slash commands, approvals, model switching, sessions, memories, and live subagent monitoring.</p>
+                        <p>Interactive TUI with ANSI fallback, slash commands, approvals, model switching, sessions, memories, diffs, and live subagent monitoring.</p>
                         <a href="/docs/getting-started">/docs/getting-started</a>
                     </div>
                     <div class="surface-card reveal-child">
-                        <h3>Headless CLI</h3>
-                        <p>Use `kosmokrator -p`, JSON output, stream-json events, settings commands, provider credentials, and agent-friendly helper commands in scripts.</p>
+                        <h3>Repo Automation</h3>
+                        <p>Use `kosmokrator -p`, JSON output, stream-json events, settings commands, provider credentials, and helper commands when CI or another CLI needs the agent.</p>
                         <a href="/docs/headless">/docs/headless</a>
                     </div>
                     <div class="surface-card reveal-child">
-                        <h3>Integrations, MCP, and Lua</h3>
-                        <p>Call OpenCompany integrations and MCP tools directly from CLI or Lua while preserving read/write permissions and credential handling.</p>
+                        <h3>Integrations and MCP</h3>
+                        <p>Call Plane, ClickUp, MCP servers, and Lua workflows from the terminal while preserving read/write permissions and credential handling.</p>
                         <a href="/docs/integrations">/docs/integrations</a>
                     </div>
                     <div class="surface-card reveal-child">
-                        <h3>SDK and ACP</h3>
-                        <p>Embed the headless runtime in PHP applications, or wrap KosmoKrator from non-PHP apps through ACP plus KosmoKrator extension events.</p>
+                        <h3>Editor and App Wrappers</h3>
+                        <p>ACP and the PHP SDK exist to wrap the terminal-grade agent in editors and apps, not to replace the primary CLI experience.</p>
                         <a href="/docs/sdk">/docs/sdk</a>
                     </div>
                 </div>
@@ -556,16 +603,16 @@ kosmokrator</code></pre>
             <section id="architecture">
                 <div class="section-header reveal">
                     <span class="section-label">Architecture</span>
-                    <h2>Built around a reusable headless session</h2>
+                    <h2>Built around the terminal agent loop</h2>
                     <p class="section-desc">
                         `AgentSessionBuilder` wires the LLM client, tools, permissions, context manager,
-                        renderer, subagents, integrations, MCP, and Lua. Terminal, CLI, SDK, and ACP entry
-                        points all run through that same shape.
+                        renderer, subagents, integrations, MCP, and Lua. The terminal UI is the primary
+                        surface; headless, ACP, and SDK entry points reuse the same loop for automation.
                     </p>
                 </div>
 
                 <div class="arch-flow reveal">
-                    <div class="arch-node">CLI / SDK / ACP</div>
+                    <div class="arch-node">Terminal / Headless / ACP</div>
                     <span class="arch-arrow">&rarr;</span>
                     <div class="arch-node">AgentSessionBuilder</div>
                     <span class="arch-arrow">&rarr;</span>
@@ -577,5 +624,54 @@ kosmokrator</code></pre>
         </main>
 <?php
 $pageBody = ob_get_clean();
+
+$extraScript = <<<'HTML'
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const tabs = Array.from(document.querySelectorAll('[data-surface-tab]'));
+        const panels = Array.from(document.querySelectorAll('[data-surface-panel]'));
+
+        function activateSurface(name, focus = false) {
+            tabs.forEach((tab) => {
+                const active = tab.dataset.surfaceTab === name;
+                tab.classList.toggle('active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                tab.tabIndex = active ? 0 : -1;
+                if (active && focus) {
+                    tab.focus();
+                }
+            });
+
+            panels.forEach((panel) => {
+                panel.hidden = panel.dataset.surfacePanel !== name;
+            });
+        }
+
+        tabs.forEach((tab, index) => {
+            tab.tabIndex = tab.getAttribute('aria-selected') === 'true' ? 0 : -1;
+            tab.addEventListener('click', () => activateSurface(tab.dataset.surfaceTab || 'terminal'));
+            tab.addEventListener('keydown', (event) => {
+                if (! ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+                    return;
+                }
+
+                event.preventDefault();
+                let nextIndex = index;
+                if (event.key === 'ArrowLeft') {
+                    nextIndex = (index - 1 + tabs.length) % tabs.length;
+                } else if (event.key === 'ArrowRight') {
+                    nextIndex = (index + 1) % tabs.length;
+                } else if (event.key === 'Home') {
+                    nextIndex = 0;
+                } else if (event.key === 'End') {
+                    nextIndex = tabs.length - 1;
+                }
+
+                activateSurface(tabs[nextIndex].dataset.surfaceTab || 'terminal', true);
+            });
+        });
+    });
+</script>
+HTML;
 
 include __DIR__.'/_layout.php';

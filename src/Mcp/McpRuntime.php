@@ -97,9 +97,6 @@ final class McpRuntime
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public static function normalizeToolResult(mixed $result): mixed
     {
         if (! is_array($result)) {

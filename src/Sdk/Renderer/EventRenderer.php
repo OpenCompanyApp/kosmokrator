@@ -42,14 +42,14 @@ class EventRenderer extends NullRenderer
     /** @var null|\Closure(AgentEvent): void */
     private ?\Closure $eventCallback = null;
 
-    /** @var null|\Closure(string, array<string, mixed>): string|bool */
+    /** @var null|\Closure(string, array<string, mixed>): (string|bool) */
     private ?\Closure $permissionCallback = null;
 
     private DeferredCancellation $cancellation;
 
     /**
      * @param  null|\Closure(AgentEvent): void  $eventCallback
-     * @param  null|\Closure(string, array<string, mixed>): string|bool  $permissionCallback
+     * @param  null|\Closure(string, array<string, mixed>): (string|bool)  $permissionCallback
      */
     public function __construct(?\Closure $eventCallback = null, ?\Closure $permissionCallback = null)
     {

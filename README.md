@@ -145,6 +145,33 @@ clients that still use it. ACP `mcpServers` are added as runtime-only
 session MCP overlays and exposed through `app.mcp.*` without writing project
 `.mcp.json`.
 
+KosmoKrator also advertises `kosmokratorCapabilities` and emits namespaced
+`kosmokrator/*` notifications for wrappers that need the terminal-grade model:
+phase changes, text/thinking deltas, tool lifecycle, permission lifecycle,
+usage, runtime changes, subagent spawn/tree/dashboard/completion, integration
+events, MCP events, and errors. Direct runtime JSON-RPC methods are available
+for non-PHP apps:
+
+```text
+kosmokrator/runtime/set
+kosmokrator/settings/set
+kosmokrator/providers/configure
+kosmokrator/integrations/list
+kosmokrator/integrations/describe
+kosmokrator/integrations/configure
+kosmokrator/integrations/call
+kosmokrator/mcp/list_servers
+kosmokrator/mcp/list_tools
+kosmokrator/mcp/schema
+kosmokrator/mcp/add_stdio_server
+kosmokrator/mcp/set_secret
+kosmokrator/mcp/call_tool
+kosmokrator/lua/execute
+```
+
+Those methods require a session ID so project root, permissions, session MCP
+overlays, credentials, and Lua namespaces match the active agent.
+
 Example editor configuration:
 
 ```json

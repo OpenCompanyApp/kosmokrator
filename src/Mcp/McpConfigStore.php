@@ -70,7 +70,7 @@ final class McpConfigStore
 
             $servers = [];
             foreach ($rawServers as $name => $raw) {
-                if (! is_string($name) || ! is_array($raw)) {
+                if (! is_array($raw)) {
                     continue;
                 }
 

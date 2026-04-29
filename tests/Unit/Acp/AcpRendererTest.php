@@ -23,13 +23,57 @@ final class AcpRendererTest extends TestCase
         $renderer->endTurn();
 
         $frames = $this->frames($output);
-        $this->assertSame('session/update', $frames[0]['method']);
-        $this->assertSame('agent_message_chunk', $frames[0]['params']['update']['sessionUpdate']);
-        $this->assertSame('hello', $frames[0]['params']['update']['content']['text']);
-        $this->assertSame('tool_call', $frames[1]['params']['update']['sessionUpdate']);
-        $this->assertSame('read', $frames[1]['params']['update']['kind']);
-        $this->assertSame('tool_call_update', $frames[2]['params']['update']['sessionUpdate']);
-        $this->assertSame('completed', $frames[2]['params']['update']['status']);
+        $text = $this->firstFrame($frames, 'session/update', 'agent_message_chunk');
+        $toolCall = $this->firstFrame($frames, 'session/update', 'tool_call');
+        $toolUpdate = $this->firstFrame($frames, 'session/update', 'tool_call_update');
+        $toolStarted = $this->firstMethod($frames, 'kosmokrator/tool_started');
+        $toolCompleted = $this->firstMethod($frames, 'kosmokrator/tool_completed');
+
+        $this->assertSame('hello', $text['params']['update']['content']['text']);
+        $this->assertSame('read', $toolCall['params']['update']['kind']);
+        $this->assertSame('completed', $toolUpdate['params']['update']['status']);
+        $this->assertSame('file_read', $toolStarted['params']['tool']);
+        $this->assertSame('file_read', $toolCompleted['params']['tool']);
+        $this->assertTrue($toolCompleted['params']['success']);
+    }
+
+    public function test_subagent_events_are_emitted_as_kosmokrator_extension_events(): void
+    {
+        [$input, $output] = $this->streams();
+        $renderer = new AcpRenderer(new AcpConnection($input, $output));
+        $renderer->setSessionId('s1');
+
+        $renderer->beginTurn();
+        $renderer->showSubagentSpawn([
+            ['id' => 'a1', 'args' => ['id' => 'a1', 'type' => 'explore', 'task' => 'inspect docs']],
+        ]);
+        $renderer->refreshSubagentTree([
+            [
+                'id' => 'a1',
+                'type' => 'explore',
+                'task' => 'inspect docs',
+                'status' => 'running',
+                'elapsed' => 0.1,
+                'toolCalls' => 1,
+                'success' => false,
+                'error' => null,
+                'children' => [],
+            ],
+        ]);
+        $renderer->showSubagentBatch([
+            ['args' => ['id' => 'a1', 'type' => 'explore', 'task' => 'inspect docs'], 'success' => true, 'result' => 'done'],
+        ]);
+
+        $frames = $this->frames($output);
+        $spawn = $this->firstMethod($frames, 'kosmokrator/subagent_spawned');
+        $tree = $this->firstMethod($frames, 'kosmokrator/subagent_tree');
+        $completed = $this->firstMethod($frames, 'kosmokrator/subagent_completed');
+
+        $this->assertSame('s1', $spawn['params']['sessionId']);
+        $this->assertSame('run_1', $spawn['params']['runId']);
+        $this->assertSame('a1', $spawn['params']['entries'][0]['args']['id']);
+        $this->assertSame('running', $tree['params']['tree'][0]['status']);
+        $this->assertTrue($completed['params']['entries'][0]['success']);
     }
 
     public function test_permission_response_maps_allow_always_to_session_grant(): void
@@ -44,8 +88,10 @@ final class AcpRendererTest extends TestCase
 
         $this->assertSame('always', $decision);
         $frames = $this->frames($output);
-        $this->assertSame('session/request_permission', $frames[0]['method']);
-        $this->assertSame('execute', $frames[0]['params']['toolCall']['kind']);
+        $permissionEvent = $this->firstMethod($frames, 'kosmokrator/permission_requested');
+        $permissionRequest = $this->firstMethod($frames, 'session/request_permission');
+        $this->assertSame('bash', $permissionEvent['params']['tool']);
+        $this->assertSame('execute', $permissionRequest['params']['toolCall']['kind']);
     }
 
     public function test_cancel_marks_current_turn_cancelled(): void
@@ -93,5 +139,35 @@ final class AcpRendererTest extends TestCase
         }
 
         return $frames;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $frames
+     * @return array<string, mixed>
+     */
+    private function firstMethod(array $frames, string $method): array
+    {
+        foreach ($frames as $frame) {
+            if (($frame['method'] ?? null) === $method) {
+                return $frame;
+            }
+        }
+
+        $this->fail("No frame emitted for method {$method}");
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $frames
+     * @return array<string, mixed>
+     */
+    private function firstFrame(array $frames, string $method, string $sessionUpdate): array
+    {
+        foreach ($frames as $frame) {
+            if (($frame['method'] ?? null) === $method && ($frame['params']['update']['sessionUpdate'] ?? null) === $sessionUpdate) {
+                return $frame;
+            }
+        }
+
+        $this->fail("No {$method} frame emitted for update {$sessionUpdate}");
     }
 }

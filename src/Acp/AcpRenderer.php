@@ -15,6 +15,8 @@ final class AcpRenderer implements RendererInterface
 {
     private ?string $sessionId = null;
 
+    private ?string $runId = null;
+
     private ?DeferredCancellation $cancellation = null;
 
     /** @var list<string> */
@@ -25,7 +27,12 @@ final class AcpRenderer implements RendererInterface
 
     private int $toolCounter = 0;
 
+    private int $runCounter = 0;
+
     private bool $cancelled = false;
+
+    /** @var null|\Closure(): array<string, mixed> */
+    private ?\Closure $agentTreeProvider = null;
 
     public function __construct(
         private readonly AcpConnection $connection,
@@ -42,11 +49,18 @@ final class AcpRenderer implements RendererInterface
         $this->pendingToolIdsByName = [];
         $this->cancelled = false;
         $this->cancellation = new DeferredCancellation;
+        $this->runId = 'run_'.(++$this->runCounter);
+        $this->kosmo('session_update', ['status' => 'started']);
     }
 
     public function endTurn(): void
     {
+        $this->kosmo('session_update', [
+            'status' => $this->cancelled ? 'cancelled' : 'completed',
+            'text' => $this->collectedText(),
+        ]);
         $this->cancellation = null;
+        $this->runId = null;
     }
 
     public function cancel(): void
@@ -79,9 +93,13 @@ final class AcpRenderer implements RendererInterface
         $this->update('user_message_chunk', [
             'content' => ['type' => 'text', 'text' => $text],
         ]);
+        $this->kosmo('session_update', ['role' => 'user', 'text' => $text]);
     }
 
-    public function setPhase(AgentPhase $phase): void {}
+    public function setPhase(AgentPhase $phase): void
+    {
+        $this->kosmo('phase_changed', ['phase' => $phase->value]);
+    }
 
     public function showThinking(): void {}
 
@@ -104,6 +122,7 @@ final class AcpRenderer implements RendererInterface
         $this->update('agent_thought_chunk', [
             'content' => ['type' => 'text', 'text' => $content],
         ]);
+        $this->kosmo('thinking_delta', ['text' => $content, 'delta' => $content]);
     }
 
     public function streamChunk(string $text): void
@@ -112,6 +131,7 @@ final class AcpRenderer implements RendererInterface
         $this->update('agent_message_chunk', [
             'content' => ['type' => 'text', 'text' => $text],
         ]);
+        $this->kosmo('text_delta', ['text' => $text, 'delta' => $text]);
     }
 
     public function streamComplete(): void {}
@@ -121,6 +141,7 @@ final class AcpRenderer implements RendererInterface
         $this->update('agent_message_chunk', [
             'content' => ['type' => 'text', 'text' => "Error: {$message}"],
         ]);
+        $this->kosmo('error', ['message' => $message]);
     }
 
     public function showNotice(string $message): void
@@ -128,6 +149,7 @@ final class AcpRenderer implements RendererInterface
         $this->update('agent_thought_chunk', [
             'content' => ['type' => 'text', 'text' => $message],
         ]);
+        $this->kosmo('status_updated', ['message' => $message]);
     }
 
     public function showMode(string $label, string $color = ''): void {}
@@ -139,6 +161,7 @@ final class AcpRenderer implements RendererInterface
         $this->update('current_mode_update', [
             'currentModeId' => $modeId,
         ]);
+        $this->kosmo('runtime_changed', ['mode' => $modeId]);
     }
 
     public function showStatus(string $model, int $tokensIn, int $tokensOut, float $cost, int $maxContext): void
@@ -148,9 +171,23 @@ final class AcpRenderer implements RendererInterface
             'size' => $maxContext,
             'cost' => ['amount' => $cost, 'currency' => 'USD'],
         ]);
+        $this->kosmo('usage_updated', [
+            'model' => $model,
+            'tokensIn' => $tokensIn,
+            'tokensOut' => $tokensOut,
+            'cost' => $cost,
+            'maxContext' => $maxContext,
+        ]);
     }
 
-    public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void {}
+    public function refreshRuntimeSelection(string $provider, string $model, int $maxContext): void
+    {
+        $this->kosmo('runtime_changed', [
+            'provider' => $provider,
+            'model' => $model,
+            'maxContext' => $maxContext,
+        ]);
+    }
 
     public function consumeQueuedMessage(): ?string
     {
@@ -190,6 +227,15 @@ final class AcpRenderer implements RendererInterface
             'rawInput' => (object) $args,
             'locations' => $this->toolLocations($name, $args),
         ]);
+        $this->kosmo('tool_started', [
+            'toolCallId' => $id,
+            'tool' => $name,
+            'name' => $name,
+            'args' => $args,
+            'kind' => $this->toolKind($name),
+            'title' => $this->formatToolTitle($name, $args),
+            'locations' => $this->toolLocations($name, $args),
+        ]);
     }
 
     public function showToolResult(string $name, string $output, bool $success): void
@@ -209,27 +255,47 @@ final class AcpRenderer implements RendererInterface
             'content' => $content,
             'rawOutput' => ['output' => $output, 'success' => $success],
         ]);
+        $this->kosmo('tool_completed', [
+            'toolCallId' => $id,
+            'tool' => $name,
+            'name' => $name,
+            'output' => $output,
+            'success' => $success,
+            'status' => $success ? 'completed' : 'failed',
+        ]);
     }
 
     public function askToolPermission(string $toolName, array $args): string
     {
         $pending = $this->pendingToolIdsByName[$toolName] ?? [];
         $toolCallId = ($pending !== [] ? end($pending) : false) ?: 'permission_'.$this->toolCounter++;
+        $toolCall = [
+            'toolCallId' => $toolCallId,
+            'title' => $this->formatToolTitle($toolName, $args),
+            'kind' => $this->toolKind($toolName),
+            'status' => 'pending',
+            'rawInput' => (object) $args,
+        ];
+        $options = [
+            ['optionId' => 'allow_once', 'name' => 'Allow once', 'kind' => 'allow_once'],
+            ['optionId' => 'allow_always', 'name' => 'Allow always', 'kind' => 'allow_always'],
+            ['optionId' => 'reject_once', 'name' => 'Reject', 'kind' => 'reject_once'],
+            ['optionId' => 'reject_always', 'name' => 'Reject always', 'kind' => 'reject_always'],
+        ];
+
+        $this->kosmo('permission_requested', [
+            'toolCallId' => $toolCallId,
+            'tool' => $toolName,
+            'name' => $toolName,
+            'args' => $args,
+            'toolCall' => $toolCall,
+            'options' => $options,
+        ]);
+
         $response = $this->connection->request('session/request_permission', [
             'sessionId' => $this->sessionId,
-            'toolCall' => [
-                'toolCallId' => $toolCallId,
-                'title' => $this->formatToolTitle($toolName, $args),
-                'kind' => $this->toolKind($toolName),
-                'status' => 'pending',
-                'rawInput' => (object) $args,
-            ],
-            'options' => [
-                ['optionId' => 'allow_once', 'name' => 'Allow once', 'kind' => 'allow_once'],
-                ['optionId' => 'allow_always', 'name' => 'Allow always', 'kind' => 'allow_always'],
-                ['optionId' => 'reject_once', 'name' => 'Reject', 'kind' => 'reject_once'],
-                ['optionId' => 'reject_always', 'name' => 'Reject always', 'kind' => 'reject_always'],
-            ],
+            'toolCall' => $toolCall,
+            'options' => $options,
         ]);
 
         $outcome = $response['outcome'] ?? [];
@@ -238,14 +304,29 @@ final class AcpRenderer implements RendererInterface
                 $this->cancel();
             }
 
+            $this->kosmo('permission_resolved', [
+                'toolCallId' => $toolCallId,
+                'tool' => $toolName,
+                'decision' => 'deny',
+                'outcome' => $outcome,
+            ]);
+
             return 'deny';
         }
 
-        return match ($outcome['optionId'] ?? '') {
+        $decision = match ($outcome['optionId'] ?? '') {
             'allow_always' => 'always',
             'allow_once' => 'allow',
             default => 'deny',
         };
+        $this->kosmo('permission_resolved', [
+            'toolCallId' => $toolCallId,
+            'tool' => $toolName,
+            'decision' => $decision,
+            'outcome' => $outcome,
+        ]);
+
+        return $decision;
     }
 
     public function showAutoApproveIndicator(string $toolName): void {}
@@ -260,6 +341,12 @@ final class AcpRenderer implements RendererInterface
         if (is_string($id)) {
             $this->update('tool_call_update', [
                 'toolCallId' => $id,
+                'status' => 'in_progress',
+            ]);
+            $this->kosmo('tool_progress', [
+                'toolCallId' => $id,
+                'tool' => $name,
+                'name' => $name,
                 'status' => 'in_progress',
             ]);
         }
@@ -298,21 +385,66 @@ final class AcpRenderer implements RendererInterface
 
     public function replayHistory(array $messages): void {}
 
-    public function showSubagentStatus(array $stats): void {}
+    public function showSubagentStatus(array $stats): void
+    {
+        $this->kosmo('subagent_status', ['stats' => $stats]);
+    }
 
-    public function clearSubagentStatus(): void {}
+    public function clearSubagentStatus(): void
+    {
+        $this->kosmo('subagent_status', ['stats' => []]);
+    }
 
-    public function showSubagentRunning(array $entries): void {}
+    public function showSubagentRunning(array $entries): void
+    {
+        $this->kosmo('subagent_running', ['entries' => $entries]);
+    }
 
-    public function showSubagentSpawn(array $entries): void {}
+    public function showSubagentSpawn(array $entries): void
+    {
+        $this->kosmo('subagent_spawned', ['entries' => $entries]);
+    }
 
-    public function showSubagentBatch(array $entries): void {}
+    public function showSubagentBatch(array $entries): void
+    {
+        $this->kosmo('subagent_completed', ['entries' => $entries]);
+    }
 
-    public function refreshSubagentTree(array $tree): void {}
+    public function refreshSubagentTree(array $tree): void
+    {
+        $this->kosmo('subagent_tree', ['tree' => $tree]);
+    }
 
-    public function setAgentTreeProvider(?\Closure $provider): void {}
+    public function setAgentTreeProvider(?\Closure $provider): void
+    {
+        $this->agentTreeProvider = $provider;
+    }
 
-    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void {}
+    public function showAgentsDashboard(array $summary, array $allStats, ?\Closure $refresh = null): void
+    {
+        $tree = null;
+        if ($refresh !== null) {
+            $refresh();
+        }
+        if ($this->agentTreeProvider !== null) {
+            $candidate = ($this->agentTreeProvider)();
+            $tree = is_array($candidate) ? $candidate : null;
+        }
+
+        $this->kosmo('subagent_dashboard', array_filter([
+            'summary' => $summary,
+            'stats' => $allStats,
+            'tree' => $tree,
+        ], fn ($value) => $value !== null));
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     */
+    public function emitKosmokratorEvent(string $type, array $fields = []): void
+    {
+        $this->kosmo($type, $fields);
+    }
 
     /**
      * @param  array<string, mixed>  $fields
@@ -327,6 +459,21 @@ final class AcpRenderer implements RendererInterface
             'sessionId' => $this->sessionId,
             'update' => ['sessionUpdate' => $type] + $fields,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     */
+    private function kosmo(string $type, array $fields = []): void
+    {
+        if ($this->sessionId === null) {
+            return;
+        }
+
+        $this->connection->notify(
+            'kosmokrator/'.$type,
+            AcpKosmokratorProtocol::event($this->sessionId, $this->runId, $type, $fields),
+        );
     }
 
     private function shiftToolId(string $name): ?string

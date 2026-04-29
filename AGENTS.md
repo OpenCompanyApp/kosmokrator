@@ -137,6 +137,12 @@ credentials, Lua, integrations, MCP, memory, tasks, and subagents. Client
 `mcpServers` are runtime-only session overlays and should not be
 written to project MCP config.
 
+ACP also exposes KosmoKrator-native extension notifications and methods under
+the `kosmokrator/*` JSON-RPC namespace. Rich UI wrappers should use these for
+phase changes, tool lifecycle, permission lifecycle, subagent trees/dashboards,
+direct integration/MCP calls, Lua execution, and runtime configuration while
+keeping ordinary ACP compatibility.
+
 ### Building a PHAR
 
 ```bash

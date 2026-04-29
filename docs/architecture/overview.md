@@ -140,7 +140,9 @@ KosmoKrator ships an Agent Client Protocol stdio server:
 - ACP prompt turns use the same `AgentLoop`, permission evaluator, tool registry, Lua runtime, integrations, MCP runtime, memory, tasks, and subagent infrastructure as the terminal UI.
 - Guardian and Argus permission prompts are bridged to ACP `session/request_permission`; Prometheus remains autonomous while hard policy denies still apply.
 - Client-provided stdio `mcpServers` are runtime-only session overlays and are not written to project `.mcp.json`.
-- Supported methods include initialize, authenticate, session new/load/resume/list/prompt/cancel/close, mode switching, model switching, and config option updates.
+- Supported base ACP methods include initialize, authenticate, session new/load/resume/list/prompt/cancel/close, mode switching, model switching, and config option updates.
+- The server advertises `kosmokratorCapabilities` and emits `kosmokrator/*` extension notifications for native UI wrappers: phase changes, text/thinking deltas, tool lifecycle, permission lifecycle, runtime changes, usage, subagent spawn/tree/dashboard/completion, integration events, MCP events, and errors.
+- Direct extension methods expose the same headless runtime surfaces to non-PHP clients: runtime settings, provider configuration, integration configuration/list/describe/call, MCP configuration/server/tool/schema/call, and `kosmokrator/lua/execute`.
 
 ### Key Directories
 

@@ -94,6 +94,11 @@ final class IntegrationCatalog
         return $this->functions()[$name] ?? null;
     }
 
+    public function clearCache(): void
+    {
+        $this->functions = null;
+    }
+
     public function hydrate(IntegrationFunction $function): IntegrationFunction
     {
         if ($function->parameters !== []) {

@@ -16,7 +16,7 @@ final class CallbackRenderer extends EventRenderer
      * @param  null|\Closure(string): void  $onText
      * @param  null|\Closure(string, array<string, mixed>): void  $onToolCall
      * @param  null|\Closure(string, string, bool): void  $onToolResult
-     * @param  null|\Closure(string, array<string, mixed>): string|bool  $onPermission
+     * @param  null|\Closure(string, array<string, mixed>): (string|bool)  $onPermission
      */
     public function __construct(
         ?\Closure $onEvent = null,

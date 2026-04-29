@@ -47,7 +47,7 @@ final class McpConfigurator extends RuntimeConfigurator
             name: $name,
             type: 'stdio',
             command: $command,
-            args: array_values(array_map('strval', $args)),
+            args: array_map('strval', $args),
             env: array_map('strval', $env),
             enabled: $enabled,
             source: $scope,

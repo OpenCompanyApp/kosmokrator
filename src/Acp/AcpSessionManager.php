@@ -11,6 +11,7 @@ use Kosmokrator\Mcp\McpClientManager;
 use Kosmokrator\Mcp\McpConfigStore;
 use Kosmokrator\Mcp\McpServerConfig;
 use Kosmokrator\Session\SessionManager;
+use Kosmokrator\Settings\SettingsManager;
 
 final class AcpSessionManager
 {
@@ -94,6 +95,11 @@ final class AcpSessionManager
         $this->states[$sessionId]->session->orchestrator?->cancelAll();
     }
 
+    public function refreshRuntime(AcpSessionState $state): void
+    {
+        $this->activateRuntime($state);
+    }
+
     /**
      * @return list<array<string, mixed>>
      */
@@ -129,6 +135,9 @@ final class AcpSessionManager
 
         try {
             $renderer = new AcpRenderer($this->connection);
+            if ($this->container->bound(SettingsManager::class)) {
+                $this->container->make(SettingsManager::class)->setProjectRoot($cwd);
+            }
             $this->applyMcpServers($mcpServers, $cwd);
             $builder = new AgentSessionBuilder($this->container);
             $session = $builder->buildGateway($renderer, $this->buildOptions());
@@ -201,6 +210,9 @@ final class AcpSessionManager
     {
         if ($this->container->bound(McpConfigStore::class)) {
             $this->container->make(McpConfigStore::class)->setProjectRoot($state->cwd);
+        }
+        if ($this->container->bound(SettingsManager::class)) {
+            $this->container->make(SettingsManager::class)->setProjectRoot($state->cwd);
         }
 
         $this->applyMcpServers($state->mcpServers, $state->cwd);

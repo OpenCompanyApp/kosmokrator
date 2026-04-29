@@ -183,7 +183,7 @@ final class AgentBuilder
         return $this;
     }
 
-    /** @param \Closure(string, array<string, mixed>): string|bool $callback */
+    /** @param \Closure(string, array<string, mixed>): (string|bool) $callback */
     public function withPermissionCallback(\Closure $callback): self
     {
         $this->permissionCallback = $callback;
@@ -212,7 +212,7 @@ final class AgentBuilder
             'name' => $name,
             'type' => $type,
             'command' => $command,
-            'args' => array_values(array_map('strval', $args)),
+            'args' => array_map('strval', $args),
             'env' => array_map('strval', $env),
             'url' => $url,
             'headers' => array_map('strval', $headers),

@@ -16,6 +16,10 @@
 </p>
 
 <p align="center">
+    <strong><a href="https://kosmokrator.dev">Documentation website: kosmokrator.dev</a></strong>
+</p>
+
+<p align="center">
     <img src="https://img.shields.io/badge/php-%3E%3D8.4-8892BF?logo=php&logoColor=white" alt="PHP 8.4+" />
     <img src="https://img.shields.io/github/license/OpenCompanyApp/kosmokrator" alt="License" />
     <img src="https://img.shields.io/github/v/release/OpenCompanyApp/kosmokrator?label=latest" alt="Latest Release" />
@@ -53,6 +57,7 @@ Built with **PHP 8.4+**, **Symfony Console**, **Symfony TUI**, and async streami
 - [Rendering](#rendering)
 - [Architecture](#architecture)
 - [Development](#development)
+- [Changelog & Releases](#changelog--releases)
 - [License](#license)
 
 ## Installation
@@ -822,6 +827,28 @@ php vendor/bin/phpstan analyse      # Static analysis
 php vendor/bin/box compile          # Uses box.json config
 ```
 
+## Changelog & Releases
+
+`CHANGELOG.md` is the source of truth for release notes. Add user-facing changes under `## [Unreleased]` as part of the same PR that changes behavior, commands, providers, packaging, docs surfaces, or runtime behavior.
+
+The website changelog is generated from the root changelog during the Astro build:
+
+```bash
+cd website
+npm run sync:changelog
+npm run build
+```
+
+Release helpers:
+
+```bash
+php bin/changelog check --base-ref=origin/main
+php bin/changelog prepare 0.7.2
+php bin/changelog extract v0.7.2
+```
+
+The release workflow uses `bin/changelog extract "$GITHUB_REF_NAME"` as the GitHub Release body, so tags must have a matching changelog section.
+
 ### Conventions
 
 - PSR-4 autoloading: `Kosmokrator\` maps to `src/`
@@ -834,6 +861,10 @@ php vendor/bin/box compile          # Uses box.json config
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=OpenCompanyApp/kosmokrator&type=Date)](https://star-history.com/#OpenCompanyApp/kosmokrator&Date)
+
+## Documentation
+
+The full documentation site is available at **[https://kosmokrator.dev](https://kosmokrator.dev)**.
 
 ## License
 

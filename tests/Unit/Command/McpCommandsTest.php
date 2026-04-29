@@ -130,6 +130,136 @@ final class McpCommandsTest extends TestCase
         $this->assertArrayHasKey('fake', $export['json']['config']['servers']);
     }
 
+    public function test_gateway_export_and_install_write_claude_compatible_stdio_config(): void
+    {
+        $export = $this->runKosmo([
+            'mcp:gateway:export',
+            '--integration=plane',
+            '--upstream=context7',
+            '--write=deny',
+            '--json',
+        ]);
+
+        $this->assertSame(0, $export['exit'], $export['output']);
+        $server = $export['json']['config']['mcpServers']['kosmokrator'] ?? null;
+        $this->assertIsArray($server);
+        $this->assertSame('stdio', $server['type']);
+        $this->assertContains('mcp:serve', $server['args']);
+        $this->assertContains('--integration=plane', $server['args']);
+        $this->assertContains('--upstream=context7', $server['args']);
+
+        $install = $this->runKosmo([
+            'mcp:gateway:install',
+            '--integration=plane',
+            '--upstream=context7',
+            '--write=deny',
+            '--json',
+        ]);
+
+        $this->assertSame(0, $install['exit'], $install['output']);
+        $this->assertFileExists($this->project.'/.mcp.json');
+        $installed = json_decode((string) file_get_contents($this->project.'/.mcp.json'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertContains('mcp:serve', $installed['mcpServers']['kosmokrator']['args']);
+        $this->assertContains('--integration=plane', $installed['mcpServers']['kosmokrator']['args']);
+    }
+
+    public function test_gateway_export_with_profile_does_not_override_profile_write_policy(): void
+    {
+        $export = $this->runKosmo([
+            'mcp:gateway:export',
+            '--profile=claude',
+            '--json',
+        ]);
+
+        $this->assertSame(0, $export['exit'], $export['output']);
+        $args = $export['json']['config']['mcpServers']['kosmokrator']['args'];
+        $this->assertContains('--profile=claude', $args);
+        $this->assertNotContains('--write=deny', $args);
+    }
+
+    public function test_gateway_serves_selected_hyphenated_upstream_mcp_tools_over_json_rpc(): void
+    {
+        $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';
+        file_put_contents($this->project.'/.mcp.json', json_encode([
+            'mcpServers' => [
+                'fake-server' => ['command' => 'php', 'args' => [$server]],
+                'kosmokrator' => ['command' => 'kosmokrator', 'args' => ['mcp:serve', '--upstream=fake-server']],
+            ],
+        ], JSON_PRETTY_PRINT));
+
+        $process = new Process([
+            'php', $this->root.'/bin/kosmokrator',
+            'mcp:serve',
+            '--upstream=fake-server',
+            '--write=allow',
+            '--force',
+        ], $this->project, [
+            'HOME' => $this->home,
+        ]);
+        $process->setInput(implode("\n", [
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}',
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mcp__fake_server__echo","arguments":{"message":"from gateway"}}}',
+            '{"jsonrpc":"2.0","id":4,"method":"unknown/method"}',
+            '',
+        ]));
+        $process->setTimeout(15);
+        $process->run();
+
+        $this->assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        $lines = array_values(array_filter(explode("\n", trim($process->getOutput()))));
+        $responses = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), $lines);
+
+        $this->assertSame('kosmokrator', $responses[0]['result']['serverInfo']['name']);
+        $toolNames = array_column($responses[1]['result']['tools'], 'name');
+        $this->assertContains('mcp__fake_server__echo', $toolNames);
+        $this->assertSame('from gateway', $responses[2]['result']['structuredContent']['value']);
+        $this->assertSame(-32601, $responses[3]['error']['code']);
+    }
+
+    public function test_gateway_profile_write_policy_is_not_overridden_by_missing_cli_write_option(): void
+    {
+        $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';
+        mkdir($this->project.'/.kosmokrator', 0777, true);
+        file_put_contents($this->project.'/.mcp.json', json_encode([
+            'mcpServers' => [
+                'fake-server' => ['command' => 'php', 'args' => [$server]],
+            ],
+        ], JSON_PRETTY_PRINT));
+        file_put_contents($this->project.'/.kosmokrator/config.yaml', <<<'YAML'
+mcp_gateway:
+  profiles:
+    claude:
+      upstream_mcp:
+        include: [fake-server]
+      write_policy: allow
+YAML);
+
+        $process = new Process([
+            'php', $this->root.'/bin/kosmokrator',
+            'mcp:serve',
+            '--profile=claude',
+            '--force',
+        ], $this->project, [
+            'HOME' => $this->home,
+        ]);
+        $process->setInput(implode("\n", [
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
+            '',
+        ]));
+        $process->setTimeout(15);
+        $process->run();
+
+        $this->assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        $lines = array_values(array_filter(explode("\n", trim($process->getOutput()))));
+        $responses = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), $lines);
+
+        $toolNames = array_column($responses[1]['result']['tools'], 'name');
+        $this->assertContains('mcp__fake_server__create_issue', $toolNames);
+    }
+
     public function test_parallel_headless_mcp_adds_do_not_lose_config_or_permissions(): void
     {
         $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';

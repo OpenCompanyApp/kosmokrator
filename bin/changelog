@@ -1,0 +1,236 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+$changelog = $root.'/CHANGELOG.md';
+
+main($argv, $changelog);
+
+/**
+ * @param  list<string>  $argv
+ */
+function main(array $argv, string $changelog): void
+{
+    $command = $argv[1] ?? 'help';
+
+    try {
+        match ($command) {
+            'extract' => extractCommand($argv, $changelog),
+            'prepare' => prepareCommand($argv, $changelog),
+            'check' => checkCommand($argv),
+            default => help($command === 'help' ? 0 : 1),
+        };
+    } catch (RuntimeException $exception) {
+        fwrite(STDERR, $exception->getMessage().PHP_EOL);
+        exit(1);
+    }
+}
+
+function extractCommand(array $argv, string $changelog): void
+{
+    $version = normalizeVersion($argv[2] ?? '');
+    $content = readChangelog($changelog);
+    $section = extractVersionSection($content, $version);
+
+    if (trim($section) === '') {
+        throw new RuntimeException("Changelog section for {$version} is empty.");
+    }
+
+    echo trim($section).PHP_EOL;
+}
+
+function prepareCommand(array $argv, string $changelog): void
+{
+    $version = normalizeVersion($argv[2] ?? '');
+    $date = date('Y-m-d');
+
+    foreach (array_slice($argv, 3) as $argument) {
+        if (str_starts_with($argument, '--date=')) {
+            $date = substr($argument, strlen('--date='));
+        }
+    }
+
+    if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        throw new RuntimeException('Release date must use YYYY-MM-DD.');
+    }
+
+    $content = readChangelog($changelog);
+    $unreleased = extractVersionSection($content, 'Unreleased');
+
+    if (! hasMeaningfulSectionContent($unreleased)) {
+        throw new RuntimeException('Unreleased changelog section is empty.');
+    }
+
+    if (preg_match('/^## \['.preg_quote($version, '/').'\]/m', $content) === 1) {
+        throw new RuntimeException("Changelog already contains {$version}.");
+    }
+
+    $replacement = "## [Unreleased]\n\n### Added\n\n### Changed\n\n### Fixed\n\n";
+    $replacement .= "## [{$version}] - {$date}\n\n".trim($unreleased)."\n\n";
+
+    $updated = preg_replace(
+        '/^## \[Unreleased\]\R(?P<body>.*?)(?=^## \[)/ms',
+        $replacement,
+        $content,
+        1,
+        $count,
+    );
+
+    if ($updated === null || $count !== 1) {
+        throw new RuntimeException('Could not replace Unreleased changelog section.');
+    }
+
+    file_put_contents($changelog, $updated);
+    echo "Prepared changelog section for {$version}.".PHP_EOL;
+}
+
+function checkCommand(array $argv): void
+{
+    $baseRef = 'origin/main';
+
+    foreach (array_slice($argv, 2) as $argument) {
+        if (str_starts_with($argument, '--base-ref=')) {
+            $baseRef = substr($argument, strlen('--base-ref='));
+        }
+    }
+
+    $changedFiles = gitLines(['git', 'diff', '--name-only', "{$baseRef}...HEAD"]);
+
+    if ($changedFiles === []) {
+        echo 'No changed files detected for changelog check.'.PHP_EOL;
+
+        return;
+    }
+
+    if (in_array('CHANGELOG.md', $changedFiles, true)) {
+        echo 'CHANGELOG.md changed.'.PHP_EOL;
+
+        return;
+    }
+
+    $requiresChangelog = array_values(array_filter($changedFiles, requiresChangelog(...)));
+
+    if ($requiresChangelog === []) {
+        echo 'No user-facing changes require a changelog entry.'.PHP_EOL;
+
+        return;
+    }
+
+    fwrite(STDERR, "CHANGELOG.md must be updated for user-facing changes.\n");
+    fwrite(STDERR, "Add a bullet under ## [Unreleased], or apply the no-changelog PR label for internal-only work.\n");
+    fwrite(STDERR, "Files requiring changelog coverage:\n");
+
+    foreach ($requiresChangelog as $file) {
+        fwrite(STDERR, " - {$file}\n");
+    }
+
+    exit(1);
+}
+
+function normalizeVersion(string $version): string
+{
+    $version = trim($version);
+    $version = preg_replace('/^v/', '', $version) ?? '';
+
+    if ($version === '' || ($version !== 'Unreleased' && preg_match('/^\d+\.\d+\.\d+$/', $version) !== 1)) {
+        throw new RuntimeException('Usage: bin/changelog <extract|prepare> <version>');
+    }
+
+    return $version;
+}
+
+function readChangelog(string $path): string
+{
+    $content = file_get_contents($path);
+
+    if ($content === false) {
+        throw new RuntimeException("Could not read {$path}.");
+    }
+
+    return $content;
+}
+
+function extractVersionSection(string $content, string $version): string
+{
+    $pattern = '/^## \['.preg_quote($version, '/').'\](?:[^\n]*)\R(?P<body>.*?)(?=^## \[|\z)/ms';
+
+    if (preg_match($pattern, $content, $matches) !== 1) {
+        throw new RuntimeException("Could not find changelog section for {$version}.");
+    }
+
+    return trim($matches['body']);
+}
+
+function hasMeaningfulSectionContent(string $section): bool
+{
+    foreach (preg_split('/\R/', $section) ?: [] as $line) {
+        $line = trim($line);
+
+        if ($line !== '' && ! str_starts_with($line, '###')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function requiresChangelog(string $file): bool
+{
+    if ($file === 'CHANGELOG.md') {
+        return false;
+    }
+
+    foreach ([
+        'src/',
+        'bin/',
+        'config/',
+        'website/src/',
+        'website/public/',
+        '.github/workflows/release.yml',
+        'composer.json',
+        'composer.lock',
+        'box.json',
+    ] as $prefix) {
+        if ($file === rtrim($prefix, '/') || str_starts_with($file, $prefix)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param  list<string>  $command
+ * @return list<string>
+ */
+function gitLines(array $command): array
+{
+    $escaped = array_map(escapeshellarg(...), $command);
+    exec(implode(' ', $escaped), $output, $exitCode);
+
+    if ($exitCode !== 0) {
+        throw new RuntimeException('Git command failed: '.implode(' ', $command));
+    }
+
+    return array_values(array_filter(array_map(trim(...), $output), static fn (string $line): bool => $line !== ''));
+}
+
+function help(int $exitCode): never
+{
+    $message = <<<'TXT'
+Usage:
+  bin/changelog extract <version>
+  bin/changelog prepare <version> [--date=YYYY-MM-DD]
+  bin/changelog check [--base-ref=origin/main]
+
+Commands:
+  extract   Print the changelog body for a released version.
+  prepare   Move Unreleased entries into a dated release section.
+  check     Require CHANGELOG.md for user-facing PR changes.
+TXT;
+
+    fwrite($exitCode === 0 ? STDOUT : STDERR, $message.PHP_EOL);
+    exit($exitCode);
+}

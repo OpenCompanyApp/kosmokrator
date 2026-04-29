@@ -1,0 +1,22 @@
+{
+  "name": "kosmokrator-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:changelog": "node scripts/sync-changelog.mjs",
+    "predev": "npm run sync:changelog",
+    "dev": "astro dev",
+    "prebuild": "npm run sync:changelog",
+    "build": "astro build",
+    "prepreview": "npm run sync:changelog",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.38.4",
+    "astro": "^6.1.10"
+  },
+  "devDependencies": {
+    "wrangler": "^4.50.0"
+  }
+}

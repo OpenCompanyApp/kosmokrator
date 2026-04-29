@@ -1,0 +1,178 @@
+---
+title: "Termux (Android)"
+description: "Run KosmoKrator on Android through Termux."
+sidebar:
+  order: 4
+---
+KosmoKrator runs on Android via [Termux](https://termux.dev), a terminal emulator that provides a full Linux environment without root. This guide covers all three installation methods — static binary, PHAR, and source — with Termux-specific tips and workarounds.
+
+## Prerequisites
+
+Install Termux from [F-Droid](https://f-droid.org/packages/com.termux/). The Google Play version is outdated and no longer receives updates — always use the F-Droid release.
+
+Once Termux is open, update the package index:
+
+```bash
+pkg update && pkg upgrade -y
+```
+
+## Static Binary (Recommended)
+
+The fastest path. Most Android devices use ARM, so download the `aarch64` binary. No PHP installation required.
+
+```bash
+pkg install -y curl
+
+curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
+  -o $PREFIX/bin/kosmokrator \
+  && chmod +x $PREFIX/bin/kosmokrator
+```
+
+Verify:
+
+```bash
+kosmokrator --version
+```
+
+**Tip:** Termux uses `$PREFIX/bin` (typically `/data/data/com.termux/files/usr/bin`) instead of `/usr/local/bin`. There is no `sudo` — Termux packages are installed in user space.
+
+## PHAR Package
+
+If you prefer the PHAR, install PHP first:
+
+```bash
+pkg install -y php curl
+
+curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o $PREFIX/bin/kosmokrator \
+  && chmod +x $PREFIX/bin/kosmokrator
+```
+
+Termux's PHP package ships with `curl`, `mbstring`, `openssl`, and `pdo_sqlite` built in. Verify with:
+
+```bash
+php -m | grep -E 'curl|mbstring|openssl|pdo_sqlite|pcntl|readline'
+```
+
+If any extensions are missing, install the matching Termux package:
+
+```bash
+pkg install -y php-pdo php-sqlite
+```
+
+## From Source
+
+A source checkout gives you the full development environment.
+
+### Install packages
+
+```bash
+pkg install -y php git composer openssh
+```
+
+### Clone and install
+
+```bash
+git clone https://github.com/OpenCompanyApp/kosmokrator.git
+cd kosmokrator
+composer install
+```
+
+Run directly from the checkout:
+
+```bash
+php bin/kosmokrator --renderer=ansi
+```
+
+Or symlink for convenience:
+
+```bash
+ln -s "$(pwd)/bin/kosmokrator" $PREFIX/bin/kosmokrator
+```
+
+**Tip:** If Composer runs out of memory, set `COMPOSER_MEMORY_LIMIT=-1 composer install` to remove the cap.
+
+## First Run
+
+Run the setup wizard to configure your LLM provider:
+
+```bash
+kosmokrator setup
+```
+
+Then start a session. Use ANSI mode for the most reliable experience:
+
+```bash
+kosmokrator --renderer=ansi
+```
+
+The ANSI renderer works well in Termux and does not depend on `stty` or `pcntl` features that may behave differently on Android.
+
+## Choosing a Renderer
+
+| Renderer | Termux Support | Notes |
+| --- | --- | --- |
+| `ansi` | Recommended | Pure escape codes, works everywhere, readline input |
+| `tui` | Experimental | Requires `stty` and a terminal that correctly reports size. May work in Termux but can be glitchy on some devices. |
+
+If you want to try the TUI renderer, launch with `kosmokrator --renderer=tui` and fall back to ANSI if you encounter display issues.
+
+## Keyboard Tips
+
+A hardware keyboard or [Hacker's Keyboard](https://play.google.com/store/apps/details?id=org.pocketworkstation.pckeyboard) makes the experience much better. If you are using the default Termux soft keyboard:
+
+-   Swipe the extra-keys bar left/right to access `Ctrl`, `Tab`, `Esc`, and arrow keys
+-   Long-press the volume-down key while typing for `Ctrl` combos
+-   `Ctrl+C` cancels a running tool, `Ctrl+D` exits the session
+
+## Storage & Sessions
+
+By default, KosmoKrator stores its SQLite database and configuration in `~/.kosmokrator/`. In Termux, `~` resolves to `/data/data/com.termux/files/home`, which is private to the Termux app.
+
+If you need to access project files on shared storage (Downloads, Documents, etc.), grant Termux storage access first:
+
+```bash
+termux-setup-storage
+```
+
+This creates `~/storage/` with symlinks to shared directories. You can then `cd ~/storage/downloads` to work on files there.
+
+## Troubleshooting
+
+### stty: stdin not a terminal
+
+This warning is harmless. The ANSI renderer handles it gracefully. If you see persistent issues, force ANSI mode with `--renderer=ansi`.
+
+### SQLite errors or permission denied
+
+Ensure the storage directory is writable:
+
+```bash
+chmod -R 775 ~/.kosmokrator/
+```
+
+If running from source, also check the project's `storage/` directory:
+
+```bash
+chmod -R 775 storage/
+```
+
+### Composer memory errors
+
+Termux's default memory limit may be too low for Composer on some devices. Override it:
+
+```bash
+COMPOSER_MEMORY_LIMIT=-1 composer install
+```
+
+### Process killed by Android
+
+Android may kill background Termux processes to reclaim memory. To keep sessions alive:
+
+-   Run `termux-wake-lock` to acquire a wake lock
+-   In Android settings, disable battery optimization for the Termux app
+-   Use [Termux:API](https://wiki.termux.com/wiki/Termux:API) with `termux-notification` for persistent foreground notifications
+
+### pcntl extension not available
+
+The `pcntl` extension may not be available in Termux's PHP build. KosmoKrator's ANSI renderer works without it — Revolt's event loop falls back to `stream_select`. You can safely ignore `pcntl`\-related warnings when using ANSI mode.

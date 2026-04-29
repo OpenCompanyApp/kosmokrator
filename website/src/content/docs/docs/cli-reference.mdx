@@ -1,0 +1,358 @@
+---
+title: "CLI Reference"
+description: "Complete shell command reference for the KosmoKrator terminal agent, headless automation, providers, integrations, MCP, web, settings, secrets, and gateway commands."
+sidebar:
+  order: 10
+---
+
+This is the reference page for commands run from a shell. Interactive slash commands and power commands live in [Commands](/docs/commands); this page covers the Symfony Console command surface exposed by `kosmokrator` and `bin/kosmokrator`.
+
+Most automation-oriented commands support `--json`. Prefer JSON mode for agents, scripts, CI, wrappers, and tests because failures return structured `success: false` envelopes where the command owns the error handling.
+
+## Global Options
+
+Symfony global options are accepted by every command:
+
+| Option | Purpose |
+| --- | --- |
+| `-h`, `--help` | Show help for a command. |
+| `-q`, `--quiet` | Only show errors. |
+| `-v`, `-vv`, `-vvv` | Increase verbosity. |
+| `-V`, `--version` | Print application version. |
+| `--ansi`, `--no-ansi` | Force or disable ANSI output. |
+| `-n`, `--no-interaction` | Never ask interactive questions. |
+
+Shell completion is built in:
+
+```bash
+kosmokrator completion zsh
+eval "$(kosmokrator completion zsh)"
+```
+
+## Agent Command
+
+`agent` is also the default command, so `kosmokrator -p "task"` and `kosmokrator agent -p "task"` are equivalent.
+
+```bash
+kosmokrator [options] [prompt]
+kosmokrator agent [options] [prompt]
+```
+
+| Option | Values | Purpose |
+| --- | --- | --- |
+| `--renderer` | `auto`, `tui`, `ansi` | Select terminal renderer. |
+| `--no-animation` | flag | Skip startup animation. |
+| `--resume` | flag | Resume last session for this project. |
+| `--session` | session ID or prefix | Resume a specific session. |
+| `-p`, `--print` | flag | Run headlessly and exit. |
+| `-o`, `--output-format` | `text`, `json`, `stream-json` | Select headless output format. |
+| `-m`, `--model` | model ID | Override configured model. |
+| `--mode` | `edit`, `plan`, `ask` | Select agent mode. |
+| `--permission-mode` | `guardian`, `argus`, `prometheus` | Select permission mode. |
+| `--yolo` | flag | Alias for `--permission-mode prometheus`. |
+| `-t`, `--max-turns` | integer | Cap agentic LLM turns. |
+| `--timeout` | seconds | Cap wall-clock runtime. |
+| `-c`, `--continue` | flag | Continue the most recent session. |
+| `--append-system-prompt` | text | Append extra instructions to the default prompt. |
+| `--system-prompt` | text | Replace the system prompt for this run. |
+| `--no-session` | flag | Do not persist this run. |
+
+Examples:
+
+```bash
+kosmokrator
+kosmokrator --renderer=ansi --no-animation
+kosmokrator -p "Explain this repository" --mode ask --output-format text
+kosmokrator -p "Run tests and fix failures" --mode edit --permission-mode guardian
+kosmokrator -p "Review the branch" --mode plan --output-format json --no-session
+kosmokrator -p "Summarize progress" --continue --output-format stream-json
+```
+
+## Setup, Auth, And Config
+
+| Command | Purpose |
+| --- | --- |
+| `setup` | Interactive or headless first-run provider/model setup. |
+| `auth` | Provider auth status, login, and logout. |
+| `config` | Inspect and update settings through the legacy config facade. |
+| `settings:*` | Schema-backed headless settings API. |
+| `secrets:*` | Managed secret storage helpers. |
+| `providers:*` | Provider discovery, model discovery, credentials, and custom providers. |
+| `codex:*` | ChatGPT OAuth helpers for the Codex provider. |
+
+### `setup`
+
+```bash
+kosmokrator setup
+kosmokrator setup --provider openai --model gpt-5.4-mini --api-key-env OPENAI_API_KEY --global --json
+printf %s "$ANTHROPIC_API_KEY" | kosmokrator setup --provider anthropic --api-key-stdin --json
+kosmokrator setup --provider codex --device --json
+```
+
+Options: `--renderer`, `--no-animation`, `--provider`, `--model`, `--api-key`, `--api-key-stdin`, `--api-key-env`, `--device`, `--global`, `--project`, `--json`.
+
+### `auth`
+
+```bash
+kosmokrator auth status --json
+kosmokrator auth status openai --json
+kosmokrator auth login openai --api-key-env OPENAI_API_KEY --json
+printf %s "$OPENAI_API_KEY" | kosmokrator auth login openai --api-key-stdin --json
+kosmokrator auth login codex --device
+kosmokrator auth logout openai --json
+```
+
+Actions: `status`, `login`, `logout`.
+
+### `config`
+
+```bash
+kosmokrator config show
+kosmokrator config show --json
+kosmokrator config paths --json
+kosmokrator config get agent.default_model --json
+kosmokrator config set agent.default_model gpt-5.4-mini --provider openai --global --json
+kosmokrator config unset agent.mode --project --json
+kosmokrator config edit --project
+```
+
+Actions: `show`, `get`, `set`, `unset`, `edit`, `paths`.
+
+Prefer `settings:*` for new automation because it exposes categories, types, current source, effect timing, and validation metadata.
+
+## Settings Commands
+
+| Command | Purpose |
+| --- | --- |
+| `settings:list` | List all headless-configurable settings. |
+| `settings:get` | Read one effective setting. |
+| `settings:set` | Write one setting. |
+| `settings:unset` | Remove an override. |
+| `settings:apply` | Apply a JSON batch. |
+| `settings:options` | Show valid options for choice settings. |
+| `settings:doctor` | Diagnose headless readiness. |
+| `settings:examples` | Print machine-readable examples. |
+
+```bash
+kosmokrator settings:list --json
+kosmokrator settings:list --category permissions --json
+kosmokrator settings:get tools.default_permission_mode --json
+kosmokrator settings:options agent.default_model --provider openai --json
+kosmokrator settings:set agent.mode plan --project --json
+kosmokrator settings:set tools.denied_tools "file_write,bash" --global --json
+kosmokrator settings:unset agent.mode --project --json
+
+jq -n '{
+  settings: {
+    "agent.default_provider": "openai",
+    "agent.default_model": "gpt-5.4-mini",
+    "tools.default_permission_mode": "guardian"
+  }
+}' | kosmokrator settings:apply --stdin-json --global --json
+```
+
+See [Settings Reference](/docs/settings-reference) for the full schema.
+
+## Provider Commands
+
+| Command | Purpose |
+| --- | --- |
+| `providers:list` | List providers, labels, source, auth mode, and configured status. |
+| `providers:models &lt;provider&gt;` | List models for one provider. |
+| `providers:status [provider]` | Show credential/configuration status. |
+| `providers:configure &lt;provider&gt;` | Configure provider credentials and default model. |
+| `providers:logout &lt;provider&gt;` | Clear stored provider credentials. |
+| `providers:custom:list` | List custom providers. |
+| `providers:custom:upsert [id]` | Create or update a custom provider. |
+| `providers:custom:delete &lt;id&gt;` | Delete a custom provider. |
+
+```bash
+kosmokrator providers:list --json
+kosmokrator providers:models anthropic --json
+kosmokrator providers:status openai --json
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --api-key-stdin --model gpt-5.4-mini --global --json
+kosmokrator providers:configure codex --device --global --json
+kosmokrator providers:logout openai --json
+```
+
+Custom OpenAI-compatible provider:
+
+```bash
+kosmokrator providers:custom:upsert local_ollama \
+  --driver openai-compatible \
+  --url http://127.0.0.1:11434/v1 \
+  --model qwen3:32b \
+  --label "Local Ollama" \
+  --global \
+  --json
+```
+
+Custom provider options: `--driver`, `--url`, `--auth`, `--model`, `--label`, `--context`, `--max-output`, `--api-key`, `--api-key-stdin`, `--api-key-env`, `--stdin-json`, `--global`, `--project`, `--json`.
+
+## Secrets Commands
+
+| Command | Purpose |
+| --- | --- |
+| `secrets:list` | List managed secret statuses. |
+| `secrets:status &lt;key&gt;` | Show whether one secret is configured. |
+| `secrets:set &lt;key&gt; [value]` | Store a secret. |
+| `secrets:unset &lt;key&gt;` | Remove a secret. |
+
+```bash
+printf %s "$OPENAI_API_KEY" | kosmokrator secrets:set provider.openai.api_key --stdin --json
+kosmokrator secrets:status provider.openai.api_key --json
+kosmokrator secrets:list --json
+kosmokrator secrets:unset provider.openai.api_key --json
+```
+
+Use `--stdin` or `--env` for automation. Avoid putting secrets directly in argv because shell history and process listings may capture them.
+
+## Integration Commands
+
+Integrations are discovered from installed OpenCompany integration packages and exposed through both generic and provider-specific commands.
+
+| Command | Purpose |
+| --- | --- |
+| `integrations:list` | List providers and functions. |
+| `integrations:status` | Show activation, credentials, accounts, and permission state. |
+| `integrations:search &lt;query&gt;` | Search functions. |
+| `integrations:docs [page]` | Read provider/function docs. |
+| `integrations:fields &lt;provider&gt;` | Show credential fields. |
+| `integrations:doctor [provider]` | Diagnose readiness and next steps. |
+| `integrations:configure &lt;provider&gt;` | Configure credentials, activation, accounts, and permissions. |
+| `integrations:schema &lt;provider.function&gt;` | Print JSON input schema. |
+| `integrations:examples &lt;page&gt;` | Show usage examples. |
+| `integrations:call &lt;provider.function&gt;` | Call any function. |
+| `integrations:lua [file]` | Run Lua against configured integrations and MCP servers. |
+| `integrations:&lt;provider&gt; [function]` | Dynamic provider shortcut, for example `integrations:plane`. |
+
+```bash
+kosmokrator integrations:list --json
+kosmokrator integrations:search "plane issue" --json
+kosmokrator integrations:docs plane.create_issue --format markdown
+kosmokrator integrations:schema plane.create_issue
+kosmokrator integrations:configure plane --set api_key="$PLANE_API_KEY" --enable --read allow --write ask --json
+kosmokrator integrations:call plane.list_issues '{"project_id":"..."}' --json
+kosmokrator integrations:plane list_issues --project-id=... --json
+kosmokrator integrations:lua workflow.lua --force --json
+```
+
+Installed dynamic shortcuts currently include `integrations:clickup`, `integrations:coingecko`, `integrations:plane`, and `integrations:plausible` in this checkout. The set changes with installed integration packages.
+
+See [Integrations](/docs/integrations) for argument coercion, multi-account credentials, Lua helpers, permissions, and result envelopes.
+
+## MCP Commands
+
+MCP servers are configured in portable `mcpServers` JSON files, with compatibility for VS Code/Cursor `servers` files.
+
+| Command | Purpose |
+| --- | --- |
+| `mcp:list` | List configured servers. |
+| `mcp:status [server]` | Show server readiness. |
+| `mcp:add &lt;name&gt;` | Add or update a server. |
+| `mcp:remove &lt;name&gt;` | Remove a server. |
+| `mcp:enable &lt;name&gt;` / `mcp:disable &lt;name&gt;` | Toggle a server. |
+| `mcp:trust &lt;server&gt;` | Trust a project server command after review. |
+| `mcp:tools [server]` | Discover tools. |
+| `mcp:schema &lt;server.tool&gt;` | Show tool schema. |
+| `mcp:call &lt;server.tool&gt;` | Call a tool. |
+| `mcp:&lt;server&gt; &lt;tool&gt;` | Dynamic server shortcut. |
+| `mcp:lua [file]` | Run Lua against MCP servers. |
+| `mcp:resources &lt;server&gt;` / `mcp:resource &lt;server&gt; &lt;uri&gt;` | List or read resources. |
+| `mcp:prompts &lt;server&gt;` / `mcp:prompt &lt;server&gt; &lt;prompt&gt;` | List or get prompts. |
+| `mcp:secret:set`, `mcp:secret:list`, `mcp:secret:unset` | Store MCP secret values. |
+| `mcp:import &lt;path&gt;` | Import `.mcp.json`, VS Code, Cursor, or `mcpServers` JSON. |
+| `mcp:export` | Export effective config. |
+| `mcp:preset` | List or install known presets. |
+| `mcp:examples` | Print examples. |
+| `mcp:doctor` | Diagnose MCP readiness. |
+
+```bash
+kosmokrator mcp:add github --type stdio --command github-mcp-server \
+  --env GITHUB_TOKEN --read allow --write ask --project --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+kosmokrator mcp:call github.search_repositories --query kosmokrator --json
+kosmokrator mcp:github search_repositories --query kosmokrator --json
+kosmokrator mcp:lua workflow.lua --json
+```
+
+Use `--force` on discovery/call/Lua commands only for trusted automation. It bypasses MCP trust and read/write policy for that one command.
+
+## Web Commands
+
+| Command | Purpose |
+| --- | --- |
+| `web:providers` | List optional external web providers. |
+| `web:configure &lt;provider&gt;` | Configure provider credentials and defaults. |
+| `web:doctor` | Diagnose web-provider setup. |
+| `web:search &lt;query&gt;` | Run an external search provider. |
+| `web:fetch &lt;url&gt;` | Fetch or extract a URL through a provider. |
+| `web:crawl &lt;url&gt;` | Crawl a site through Tavily or Firecrawl. |
+
+```bash
+kosmokrator web:providers --json
+kosmokrator web:configure tavily --api-key-env TAVILY_API_KEY --enable --search --global --json
+kosmokrator web:search "KosmoKrator terminal agent" --max-results 5 --json
+kosmokrator web:fetch https://example.com --format markdown --json
+kosmokrator web:crawl https://docs.example.com --max-pages 10 --json
+```
+
+See [Web Providers](/docs/web) for provider capabilities, environment variables, and settings.
+
+## Telegram Gateway Commands
+
+| Command | Purpose |
+| --- | --- |
+| `gateway:telegram` | Run the gateway worker. |
+| `gateway:telegram:configure` | Configure the worker headlessly. |
+| `gateway:telegram:status` | Show readiness and effective config. |
+| `gateway:telegram:worker` | Internal worker command. |
+
+```bash
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmokrator gateway:telegram:configure --token-stdin --enabled on --global --json
+kosmokrator gateway:telegram:configure --allowed-users "12345,@alice" --require-mention on --json
+kosmokrator gateway:telegram:status --json
+kosmokrator gateway:telegram
+```
+
+See [Telegram Gateway](/docs/gateway-telegram) for routing, security, and deployment notes.
+
+## ACP And Maintenance
+
+| Command | Purpose |
+| --- | --- |
+| `acp` | Start the Agent Client Protocol stdio server. |
+| `update` | Check for and apply release updates when supported. |
+| `smoke:startup` | Offline startup checks for CI and release artifacts. |
+| `codex:login` / `codex:status` / `codex:logout` | Codex provider OAuth helpers. |
+
+```bash
+kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmokrator update --check
+kosmokrator update --yes
+kosmokrator smoke:startup --json
+```
+
+## JSON And Exit Codes
+
+Automation commands generally follow this shape:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "meta": {}
+}
+```
+
+On failure they return a non-zero exit code and include an `error` field when JSON mode is enabled. Headless `agent --output-format json` returns a run result with text, session ID, duration, usage, turn count, tool-call count, success, exit code, and error.
+
+For long-running headless agent runs, prefer `--output-format stream-json` when a wrapper needs progress:
+
+```bash
+kosmokrator -p "Run tests and fix failures" --output-format stream-json | jq -c .
+```

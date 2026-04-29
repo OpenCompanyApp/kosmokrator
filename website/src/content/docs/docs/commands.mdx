@@ -1,0 +1,614 @@
+---
+title: "Commands"
+description: "Slash commands and power commands available in the terminal UI."
+sidebar:
+  order: 9
+---
+KosmoKrator provides three command systems for controlling the agent: **slash commands** typed at the input prompt with a `/` prefix, **power commands** prefixed with `:` that activate specialized agent behaviors, and **skill commands** prefixed with `$` that invoke reusable skill templates. This page covers the interactive command surface plus the main shell-level commands. For every shell command and option family, use the [CLI Reference](/docs/cli-reference).
+
+All command types support Tab autocompletion in the input prompt. Start typing `/`, `:`, or `$` and press Tab to see matching options.
+
+## Slash Commands
+
+Slash commands are typed directly into the input prompt, prefixed with `/`. They control session management, agent modes, permissions, context, and various utilities. Most slash commands take effect immediately and do not consume LLM tokens.
+
+### Session Management
+
+#### `/new`
+
+Clear the current conversation and start a fresh session. Cancels any running subagents, clears conversation history, resets the session cost, resets permission grants, and sets the permission mode back to **Guardian**. The system prompt is regenerated for the new session.
+
+#### `/resume`
+
+Open the session picker to resume a previous conversation. Displays a list of recent sessions with dates, model information, and a preview of the last message. Select a session to restore the full conversation history and continue where you left off.
+
+#### `/sessions`
+
+List all recent sessions. Shows session IDs, timestamps, models used, and message counts. Useful for reviewing past work without committing to resuming a specific session.
+
+#### `/rename [name]`
+
+Rename the current session for easier identification later. If no name is provided, shows the usage message. Named sessions are easier to find when using `/resume` or `/sessions`.
+
+```bash
+/rename Refactor payment module
+```
+
+#### `/quit` (aliases: `/exit`, `/q`)
+
+Save the current session and exit KosmoKrator. The session is persisted to SQLite and can be resumed in a future invocation. Equivalent to pressing `Ctrl+C` at an idle prompt.
+
+### Mode Switching
+
+KosmoKrator operates in one of three modes that determine what the agent is allowed to do. Switching modes takes effect immediately for the next agent turn.
+
+#### `/edit`
+
+Switch to **Edit mode** (the default). The agent has full read and write access to the project. It can create files, modify code, run shell commands, and make changes autonomously within the constraints of the active [permission mode](/docs/permissions).
+
+#### `/plan`
+
+Switch to **Plan mode**. The agent operates in read-only mode: it can read files, search the codebase, and run non-destructive commands, but cannot write files or execute modifying shell commands. Use this mode when you want the agent to analyze and propose changes without actually making them.
+
+#### `/ask`
+
+Switch to **Ask mode**. A read-only Q&A mode where the agent can read files for context but focuses on answering questions and explaining code rather than proposing changes. Ideal for learning about an unfamiliar codebase or getting explanations of complex logic.
+
+You can also set the default mode in your [configuration file](/docs/configuration). The slash command overrides the configured default for the current session only.
+
+### Model Switching
+
+#### `/models` (alias: `/model`)
+
+Open the curated model switcher for day-to-day use. Instead of dumping the full provider catalog, it shows the most likely choices in this order: recent models you used, likely models from the current provider, and likely models from your most recently used non-current provider.
+
+You can also jump directly with arguments:
+
+```bash
+/models
+/models openai
+/models gpt-5.4
+/models anthropic:claude-sonnet-4-20250514
+```
+
+Switching updates the live runtime immediately when the active LLM backend supports it, and also updates the default provider/model used for future sessions. Full provider and model inventory remains in `/settings`.
+
+### Permission Control
+
+Permission modes control how the agent handles tool approval. Switching permission modes takes effect immediately. See the [Permissions](/docs/permissions) page for full details on what each mode allows.
+
+#### `/guardian`
+
+Switch to **Guardian** permission mode. The agent uses smart auto-approve logic: read-only operations are approved automatically, while writes and shell commands require explicit user approval unless they match safe patterns. This is the default mode.
+
+#### `/argus`
+
+Switch to **Argus** permission mode. Every tool call requires explicit approval. Nothing runs without your confirmation. Use this when working on sensitive code or when you want to review every single action the agent takes.
+
+#### `/prometheus`
+
+Switch to **Prometheus** permission mode. Full autonomy — all tool calls are approved automatically without prompts. The agent can read, write, and execute freely. Use this when you trust the agent to work independently on well-understood tasks.
+
+### Context & Memory
+
+#### `/compact`
+
+Manually trigger context compaction. The agent summarizes the conversation so far into a condensed form, freeing up context window space. Useful when the context feels bloated, when you are about to start a large task and want maximum room, or when the agent starts forgetting earlier parts of the conversation.
+
+#### `/memories`
+
+List all stored persistent memories. Displays each memory's ID, type (project, user, or decision), title, and creation date. Memories persist across sessions and are automatically included in the agent's system prompt.
+
+#### `/forget &lt;id&gt;`
+
+Delete a specific memory by its numeric ID. Use `/memories` first to find the ID of the memory you want to remove. This is permanent — the memory will no longer be included in future sessions.
+
+```bash
+/forget 42
+```
+
+### Monitoring
+
+#### `/agents` (alias: `/swarm`)
+
+Open the live swarm dashboard showing all active and completed subagents. Displays each agent's status, progress, resource usage, and task description. The dashboard updates in real time in TUI mode. Also accessible via the `Ctrl+A` keyboard shortcut during agent activity.
+
+#### `/settings`
+
+Open the interactive settings workspace. Navigate through categories (LLM, permissions, UI, tools, gateway, integrations, etc.) and change configuration values in real time. Changes are persisted to your user-level configuration and take effect immediately when supported.
+
+### Utilities
+
+#### `/clear`
+
+Clear the terminal display. This only clears the visual output — it does not affect the conversation history or context window. The agent retains full memory of the session.
+
+#### `kosmokrator update`
+
+Check for new KosmoKrator versions from the shell. Static binary and PHAR installs update in place. Source installs are detected and you get the exact manual update commands to run.
+
+## Shell Commands
+
+These commands are run directly from your terminal rather than inside the interactive REPL.
+
+#### `kosmokrator update`
+
+Check GitHub Releases for a newer version. Static binary and PHAR installs can replace themselves in place. Source installs print the exact `git pull` and `composer install` commands to run.
+
+#### `kosmokrator setup`
+
+Run the interactive first-time configuration flow. It selects a provider, stores credentials, and writes the default provider/model settings used by future sessions.
+
+#### `kosmokrator config`
+
+Inspect and edit resolved settings from the shell. Supports `show`, `get`, `set`, `unset`, `paths`, and `edit`, with `--global` and `--project` to choose where overrides are written. Add `--json` to `show`, `get`, `set`, `unset`, or `paths` for machine-readable output.
+
+```bash
+kosmokrator config show
+kosmokrator config show --json
+kosmokrator config paths --json
+kosmokrator config get agent.default_model --json
+kosmokrator config set agent.default_model glm-5.1 --provider z --global --json
+kosmokrator config edit --project
+```
+
+#### `kosmokrator settings:*`
+
+Agent-friendly configuration commands backed by the same schema as `/settings`. They expose categories, labels, descriptions, current values, sources, effects, valid options, and YAML target paths.
+
+```bash
+kosmokrator settings:list --json
+kosmokrator settings:list --category permissions --json
+kosmokrator settings:get tools.default_permission_mode --json
+kosmokrator settings:options agent.default_model --provider openai --json
+kosmokrator settings:set agent.mode plan --global --json
+kosmokrator settings:set tools.safe_tools "file_read,glob,grep" --project --json
+jq -n '{settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.4-mini"}}' | \
+  kosmokrator settings:apply --stdin-json --global --json
+kosmokrator settings:unset agent.mode --project --json
+kosmokrator settings:doctor --json
+kosmokrator settings:examples --json
+```
+
+#### `kosmokrator providers:*`
+
+Configure LLM providers, discover models, manage custom OpenAI-compatible endpoints, and inspect authentication status without opening the setup TUI. Provider commands never echo raw API keys in JSON or text output.
+
+```bash
+kosmokrator providers:list --json
+kosmokrator providers:models openai --json
+kosmokrator providers:status openai --json
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json
+kosmokrator providers:configure codex --device --global --json
+kosmokrator providers:logout openai --json
+kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --global --json
+kosmokrator providers:custom:list --json
+kosmokrator providers:custom:delete local_ai --json
+```
+
+#### `kosmokrator secrets:*`
+
+Store and inspect managed secrets headlessly. Supported keys currently use `provider.&lt;id&gt;.api_key` for LLM providers and `gateway.telegram.token` for the Telegram gateway.
+
+```bash
+printf %s "$OPENAI_API_KEY" | kosmokrator secrets:set provider.openai.api_key --stdin --json
+kosmokrator secrets:status provider.openai.api_key --json
+kosmokrator secrets:list --json
+kosmokrator secrets:unset provider.openai.api_key --json
+```
+
+#### `kosmokrator auth`
+
+Manage provider authentication. Use `status` to inspect providers, `login` to store an API key or run OAuth, and `logout` to remove stored credentials.
+
+```bash
+kosmokrator auth status
+printf %s "$OPENAI_API_KEY" | kosmokrator auth login openai --api-key-stdin --json
+kosmokrator auth login openai --api-key-env OPENAI_API_KEY --json
+kosmokrator auth login codex --device
+kosmokrator auth logout openai --json
+```
+
+#### `kosmokrator codex:*`
+
+Convenience commands for the Codex provider's ChatGPT OAuth flow. These map to the same credential store used by `auth login codex`.
+
+```bash
+kosmokrator codex:login
+kosmokrator codex:login --device
+kosmokrator codex:status
+kosmokrator codex:logout
+```
+
+#### `kosmokrator integrations:*`
+
+Run OpenCompany integrations directly from the shell without starting an agent session. This surface is intended for scripts, CI jobs, and other coding CLIs that need a unified local integration layer.
+
+```bash
+kosmokrator integrations:list --json
+kosmokrator integrations:status --json
+kosmokrator integrations:doctor plane --json
+kosmokrator integrations:fields plane --json
+kosmokrator integrations:configure plane --set api_key="$PLANE_API_KEY" --enable --json
+kosmokrator integrations:search "plane issue" --json
+kosmokrator integrations:docs plane.create_issue
+kosmokrator integrations:schema plane.create_issue
+kosmokrator integrations:call plane.create_issue --project-id=PROJECT_UUID --name="Check" --dry-run --json
+kosmokrator integrations:call plane.list_issues --project-id=PROJECT_UUID --json
+kosmokrator integrations:plane list_issues --project-id=PROJECT_UUID --json
+kosmokrator integrations:lua workflow.lua --force --json
+```
+
+See [Integrations CLI](/docs/integrations) for the complete command reference, argument passing rules, Lua endpoint, JSON result envelopes, headless configuration, permissions, account aliases, and external coding CLI patterns.
+
+#### `kosmokrator mcp:*`
+
+Configure and call Model Context Protocol servers headlessly. KosmoKrator reads common `.mcp.json` `mcpServers` files, plus VS Code/Cursor `servers` files, and exposes MCP tools through direct commands and Lua as `app.mcp.*`.
+
+```bash
+kosmokrator mcp:list --json
+kosmokrator mcp:add github --project --type=stdio \
+  --command=github-mcp-server --env GITHUB_TOKEN --read=allow --write=ask --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+kosmokrator mcp:resources github --json
+kosmokrator mcp:prompts github --json
+kosmokrator mcp:gateway:export --integration=plane --upstream=context7 --json
+kosmokrator mcp:gateway:install --integration=plane --upstream=context7 --json
+printf %s "$GITHUB_TOKEN" | \
+  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
+kosmokrator mcp:lua workflow.lua --json
+kosmokrator mcp:doctor --json
+```
+
+Project MCP servers must be trusted before normal discovery or execution. Headless `ask` permissions fail because there is no approval modal; configure read/write policies or use `--force` for a trusted automation call that should bypass MCP trust and read/write policy. `mcp:serve` runs KosmoKrator as a stdio MCP gateway for clients such as Claude Code; select exposed integrations and upstream MCP servers with `--integration` and `--upstream`. See [MCP](/docs/mcp) for the full command, gateway, and Lua reference.
+
+#### `kosmokrator acp`
+
+Start the Agent Client Protocol stdio server for editors and IDEs. ACP mode uses the same agent runtime as the terminal UI, including sessions, permissions, Lua, integrations, MCP, memory, tasks, and subagents.
+
+```bash
+kosmokrator acp
+kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmokrator acp --model gpt-5.4-mini
+kosmokrator acp --yolo
+```
+
+ACP clients can create, load, list, prompt, cancel, and close sessions. Permission prompts are bridged to `session/request_permission`, and client-provided stdio `mcpServers` are available as runtime-only Lua namespaces under `app.mcp.*`. See [ACP](/docs/acp) for editor config snippets and protocol notes.
+
+#### `kosmokrator gateway:telegram`
+
+Start the Telegram gateway worker. This turns KosmoKrator into a Telegram bot surface backed by the normal agent/session runtime. The gateway keeps a linked session per configured chat route, supports typing indicators, streamed replies, queued follow-up messages, and inline approval buttons.
+
+Typical flow:
+
+```bash
+/settings → Gateway
+enable Telegram, store bot token, set allowlist
+
+kosmokrator gateway:telegram
+```
+
+The gateway can also be configured headlessly:
+
+```bash
+printf %s "$TELEGRAM_BOT_TOKEN" | kosmokrator gateway:telegram:configure \
+  --token-stdin \
+  --enabled on \
+  --session-mode thread_user \
+  --allowed-users "123456789,@maintainer" \
+  --global --json
+
+kosmokrator gateway:telegram:status --json
+```
+
+The internal worker command `kosmokrator gateway:telegram:worker` is process-managed by the main gateway and is not intended for normal manual use.
+
+## Telegram Gateway Commands
+
+When you talk to KosmoKrator through Telegram, the bot exposes a transport layer of Telegram-native commands in addition to the normal Kosmo slash commands.
+
+#### `/help`
+
+Show Telegram gateway help, available controls, and the supported slash-command bridge.
+
+#### `/status`
+
+Show the linked session, active run state, queued input count, and current mode details for that chat route.
+
+#### `/new`
+
+Start a fresh linked session for the current Telegram route.
+
+#### `/resume`
+
+Reuse the existing linked session for the current Telegram route if one exists.
+
+#### `/cancel`
+
+Cancel the active run for the current Telegram route.
+
+#### `/approve` / `/deny`
+
+Resolve the latest pending approval request. Approval also supports scoped variants:
+
+```bash
+/approve
+/approve always
+/approve guardian
+/approve prometheus
+/deny
+```
+
+The Telegram gateway also provides inline approval buttons, so typing these commands is optional in the normal case.
+
+#### `/feedback &lt;text&gt;` (aliases: `/bug`, `/issue`)
+
+Submit feedback or a bug report. Injects a prompt into the LLM conversation instructing the agent to create a GitHub issue on the KosmoKrator repository via `gh issue create`. System information (version, OS, PHP version, provider/model) is automatically appended to the issue body. Requires the `gh` CLI to be installed and authenticated.
+
+```bash
+/feedback The glob tool should support brace expansion for multi-pattern matching
+```
+
+#### `/seed`
+
+Development tool that plays a scripted mock session. Used for testing and debugging the UI and agent interaction flow. Not intended for normal use.
+
+#### `/tasks-clear`
+
+Clear all tracked tasks from the current session. Removes every task regardless of status (pending, in progress, or completed). The task list in the context bar is emptied.
+
+#### `/theogony` (alias: `/cosmogony`)
+
+Replay the animated intro sequence. The theogony is the mythological creation narrative that plays when KosmoKrator first launches (unless started with `--no-animation`).
+
+## Slash Command Reference
+
+**Need a quick reminder?** Use `/help` (aliases: `/?`, `/commands`) to list all available commands directly in the terminal.
+
+Complete reference table of all slash commands, their arguments, and descriptions.
+
+| Command | Arguments | Description |
+| --- | --- | --- |
+| `/help` | None | List available commands. (aliases: `/?`, `/commands`) |
+| `/new` | None | Clear conversation and start a fresh session. |
+| `/resume` | None | Open session picker to resume a previous conversation. |
+| `/sessions` | None | List all recent sessions. |
+| `/rename` | `[name]` | Rename the current session. |
+| `/quit` | None | Save and exit KosmoKrator. (aliases: `/exit`, `/q`) |
+| `/edit` | None | Switch to Edit mode (full read/write access). |
+| `/plan` | None | Switch to Plan mode (read-only analysis). |
+| `/models` | `[provider|model|provider:model]` | Open the curated model switcher or jump directly to a likely provider/model. |
+| `/ask` | None | Switch to Ask mode (read-only Q&A). |
+| `/guardian` | None | Switch to Guardian permission mode (smart auto-approve). |
+| `/argus` | None | Switch to Argus permission mode (ask for every governed tool call). |
+| `/prometheus` | None | Switch to Prometheus permission mode (full autonomy). |
+| `/compact` | None | Manually trigger context compaction. |
+| `/memories` | None | List all stored persistent memories. |
+| `/forget` | `&lt;id&gt;` | Delete a specific memory by numeric ID. |
+| `/agents` | None | Open the live swarm dashboard. (alias: `/swarm`) |
+| `/settings` | None | Open the interactive settings workspace. |
+| `/clear` | None | Clear the terminal display. |
+| `/feedback` | `&lt;text&gt;` | Submit feedback or a bug report as a GitHub issue. (aliases: `/bug`, `/issue`) |
+| `/seed` | None | Play a scripted mock session (dev tool). |
+| `/tasks-clear` | None | Clear all tracked tasks. |
+| `/theogony` | None | Replay the animated intro sequence. (alias: `/cosmogony`) |
+
+Shell-level commands are documented separately above. The main operational ones are `kosmokrator update` and `kosmokrator gateway:telegram`.
+
+## Power Commands
+
+Power commands are prefixed with `:` and activate specialized agent behaviors. Each power command comes with unique animations and a tailored system prompt injection that shapes how the agent approaches your task. Type the power command followed by your instructions.
+
+```bash
+:unleash Refactor the entire authentication module to use JWT tokens
+```
+
+Power commands can be combined. When you use multiple power commands together, the agent receives behavioral instructions from all of them. See [Command Combinability](#command-combinability) for details.
+
+### Coding
+
+#### `:unleash` (aliases: `:swarm`, `:nuke`)
+
+Aggressive autonomous coding mode. The agent works with maximum speed and output, making decisions independently without hand-holding. Best for well-defined tasks where you want the agent to just get it done. Minimizes clarification questions and maximizes throughput.
+
+#### `:autopilot` (aliases: `:pilot`, `:auto`)
+
+Sustained autonomous work with periodic check-ins. The agent works independently for extended stretches but pauses at natural breakpoints to report progress and confirm direction. A good middle ground between `:unleash` and `:babysit`.
+
+#### `:babysit` (aliases: `:watch`, `:shepherd`)
+
+Monitor a pull request until it is merged. The agent watches CI status, handles failing checks, addresses review comments, and applies fixes as needed. Checks every few minutes for up to 60 minutes. Pass a PR number or URL as the argument.
+
+#### `:review` (alias: `:cr`)
+
+Deep code review mode. The agent reads through the specified code (or recent changes) and provides actionable feedback covering correctness, performance, security, readability, and best practices. Does not make changes unless explicitly asked.
+
+#### `:deepdive` (alias: `:dive`)
+
+Thorough codebase investigation. The agent reads files extensively, traces code paths across modules, follows call chains, and builds a comprehensive understanding of how a feature or subsystem works. Results in a detailed written analysis.
+
+#### `:deepinit` (aliases: `:init`, `:map`)
+
+Comprehensive project initialization and onboarding. The agent explores the entire project structure, reads configuration files, examines dependencies, understands the architecture, and produces a thorough onboarding summary. Use this when starting work on an unfamiliar codebase.
+
+#### `:research` (alias: `:sci`)
+
+In-depth research mode. The agent gathers information from the codebase, documentation, and any available sources before acting. It reads broadly, cross-references findings, and builds a knowledge base before proposing solutions. Use this for tasks that require understanding complex existing systems.
+
+#### `:deslop` (alias: `:clean`)
+
+Clean up sloppy code. The agent systematically identifies and fixes dead code, poor naming, unnecessary duplication, inconsistent formatting, overly complex logic, and other code quality issues. Focuses on making the code cleaner without changing behavior.
+
+### Quality & Testing
+
+#### `:ultraqa` (alias: `:qa`)
+
+Exhaustive quality assurance pass. The agent acts as a thorough QA engineer: it looks for bugs, edge cases, race conditions, missing error handling, inconsistencies between related components, and potential regressions. Produces a prioritized list of findings with suggested fixes.
+
+#### `:doctor` (alias: `:diag`)
+
+Diagnose and fix project issues. The agent checks configuration files, dependency versions, environment setup, common misconfigurations, and known problem patterns. Acts like a troubleshooting wizard that methodically works through potential causes of whatever issue you describe.
+
+### Documentation
+
+#### `:docs` (alias: `:doc`)
+
+Generate or improve documentation. The agent reads the code and produces clear, accurate documentation — whether that is inline PHPDoc, README sections, API documentation, architecture guides, or usage examples. Follows the project's existing documentation style.
+
+### Collaboration
+
+#### `:interview` (alias: `:socrates`)
+
+Interactive Q&A mode to understand requirements. The agent asks targeted questions to clarify what you need before writing any code. Useful for complex features where the requirements are not fully defined yet. The agent gathers enough information to produce a solid implementation plan.
+
+#### `:learner` (alias: `:learn`)
+
+Extract a reusable pattern from the current conversation. The agent analyzes the conversation for generalizable, non-obvious, actionable patterns with clear triggers, applies a quality gate, and saves the result to persistent memory. If no pattern passes the quality gate, the agent says so honestly.
+
+#### `:trace` (alias: `:debug`)
+
+Trace execution paths and data flow through the code. The agent follows a request, event, or data structure from entry point to final output, documenting every transformation, method call, and branching decision along the way. Produces a step-by-step execution narrative.
+
+#### `:ralph` (aliases: `:sisyphus`, `:persist`)
+
+Persistent retry loop — the boulder never stops. The agent attempts the task repeatedly (up to 5 attempts), trying a different approach each time. Includes a mandatory self-review after all checks pass. After 3 failures, it reconsiders the entire approach; after 5, it asks for guidance.
+
+### Release & CI
+
+#### `:release` (alias: `:ship`)
+
+Prepare a release. The agent handles the full release workflow: version bump, changelog generation from recent commits, running the test suite, verifying CI status, and creating a git tag. Walks you through each step and asks for confirmation before finalizing.
+
+### Multi-Agent
+
+#### `:legion` (alias: `:perspectives`)
+
+Five perspective agents deliberate, Moirai synthesizes the decree. Spawns five specialized perspective agents — each evaluating from a different angle (correctness, simplicity, performance, security, integration) — then a synthesis agent merges their findings into a single coherent recommendation.
+
+#### `:replay` (alias: `:redo`)
+
+Re-run a failed or incomplete multi-agent task. The agent reviews what the previous subagent run accomplished, identifies where it went wrong, and re-attempts the failed portions. Useful for recovering from transient errors or picking up where a cancelled operation left off.
+
+#### `:team` (alias: `:squad`)
+
+Spawn a team of specialized subagents for a complex task. The agent breaks the task into subtasks, assigns each to an appropriate subagent type (general, explore, or plan), manages dependencies between them, and synthesizes their results. Best for large tasks that benefit from parallel execution.
+
+#### `:consensus` (alias: `:council`)
+
+Run multiple agents on the same task and compare results. The agent spawns several independent subagents that each tackle the task separately, then evaluates and merges their outputs. Useful for critical decisions where you want multiple perspectives or for validating that a solution is robust.
+
+### Control
+
+#### `:cancel` (alias: `:stop`)
+
+Cancel all running subagents immediately. Any background subagents are terminated and their partial results are discarded. The main agent remains active and ready for new instructions.
+
+### Knowledge
+
+#### `:wiki` (alias: `:w`)
+
+Build and maintain a persistent, interlinked markdown knowledge base. Supports four subcommands: `init` to create a new wiki with schema and structure, `ingest` to capture a source and write wiki pages, `lint` to health-check for contradictions and orphans, and `query` (default) to search the wiki and synthesize answers with citations.
+
+## Power Command Reference
+
+Complete reference table of all power commands.
+
+| Command | Category | Description |
+| --- | --- | --- |
+| `:unleash` | Coding | Aggressive autonomous coding with maximum output. (aliases: `:swarm`, `:nuke`) |
+| `:autopilot` | Coding | Sustained autonomous work with periodic check-ins. (aliases: `:pilot`, `:auto`) |
+| `:babysit` | Coding | Monitor a PR until merged — handle CI, reviews, and fixes. (aliases: `:watch`, `:shepherd`) |
+| `:review` | Coding | Deep code review with actionable feedback. (alias: `:cr`) |
+| `:deepdive` | Coding | Thorough codebase investigation and analysis. (alias: `:dive`) |
+| `:deepinit` | Coding | Comprehensive project onboarding and exploration. (aliases: `:init`, `:map`) |
+| `:research` | Coding | In-depth research before taking action. (alias: `:sci`) |
+| `:deslop` | Coding | Clean up dead code, naming, and duplication. (alias: `:clean`) |
+| `:ultraqa` | Quality | Exhaustive QA: bugs, edge cases, inconsistencies. (alias: `:qa`) |
+| `:doctor` | Quality | Diagnose and fix project configuration issues. (alias: `:diag`) |
+| `:docs` | Documentation | Generate or improve documentation. (alias: `:doc`) |
+| `:interview` | Collaboration | Interactive Q&A to clarify requirements. (alias: `:socrates`) |
+| `:learner` | Collaboration | Extract reusable patterns from the conversation. (alias: `:learn`) |
+| `:trace` | Collaboration | Trace execution paths and data flow. (alias: `:debug`) |
+| `:ralph` | Collaboration | Persistent retry loop — the boulder never stops. (aliases: `:sisyphus`, `:persist`) |
+| `:release` | Release | Version bump, changelog, tests, and tagging. (alias: `:ship`) |
+| `:legion` | Multi-Agent | Five perspective agents deliberate, Moirai synthesizes. (alias: `:perspectives`) |
+| `:replay` | Multi-Agent | Re-run a failed multi-agent task. (alias: `:redo`) |
+| `:team` | Multi-Agent | Spawn a specialized subagent team. (alias: `:squad`) |
+| `:consensus` | Multi-Agent | Run multiple agents, compare results. (alias: `:council`) |
+| `:cancel` | Control | Cancel all running subagents. (alias: `:stop`) |
+| `:wiki` | Knowledge | Build and maintain a persistent markdown knowledge base. (alias: `:w`) |
+
+## Skill Commands
+
+Skill commands are prefixed with `$` and invoke reusable, customizable skill templates. Skills are auto-discovered from several directories at runtime:
+
+-   `.kosmokrator/skills/` — project-level skills
+-   `.agents/skills/` — alternative project-level location
+-   `~/.kosmokrator/skills/` — user-level skills (available in all projects)
+
+Each skill is a directory containing a `SKILL.md` file that defines the prompt template and metadata. Invoking a skill injects its prompt into the LLM conversation with your arguments filled in.
+
+### Built-in Skill Management
+
+| Command | Description |
+| --- | --- |
+| `$list` or `$skills` | List all discovered skills with name, scope (project/user), and description. |
+| `$create &lt;name&gt;` | Create a new skill template (SKILL.md) in the project skills directory. The agent helps you define the skill content. |
+| `$show &lt;name&gt;` | Display a skill's content, scope, and file path. |
+| `$edit &lt;name&gt;` | Inject a prompt for the agent to read and help modify the skill file. |
+| `$delete &lt;name&gt;` | Remove a skill directory recursively. |
+
+### Invoking Skills
+
+To invoke a skill, type `$` followed by the skill name and any arguments:
+
+```bash
+$my-custom-skill Refactor the authentication module
+```
+
+Skills are reloaded from disk on every invocation, so you can edit a skill's `SKILL.md` file and immediately use the updated version without restarting.
+
+## Keyboard Shortcuts
+
+Keyboard shortcuts provide quick access to common actions without typing commands. Some shortcuts are context-dependent and only available in specific situations.
+
+| Shortcut | Action | Context |
+| --- | --- | --- |
+| `Ctrl+A` | Open swarm dashboard | During agent activity |
+| `Ctrl+O` | Toggle collapsed output | When viewing tool results |
+| `Shift+Enter` or `Alt+Enter` | New line in input | TUI mode |
+| `Tab` | Autocomplete slash/power/skill commands | Input prompt |
+| `Shift+Tab` | Cycle through modes (Edit → Plan → Ask) | Input prompt |
+| `Ctrl+L` | Force refresh the TUI display | TUI mode |
+| `Up` / `Down` | Navigate command history | Input prompt |
+| `Page Up` / `Page Down` | Scroll conversation history | When viewing conversation |
+| `End` | Jump to live output (bottom of conversation) | When scrolled up in conversation |
+| `Esc` | Close overlay or dialog | TUI mode |
+| `Ctrl+C` | Cancel current operation | Any time |
+
+In ANSI mode, multi-line input is not available via keyboard shortcuts. Switch to TUI mode for full multi-line editing support via the EditorWidget.
+
+## Command Combinability
+
+Power commands can be combined in a single input line. When multiple power commands are used together, the agent receives the behavioral instructions from all of them and applies the combined approach to your task.
+
+```bash
+:unleash :review Fix all lint warnings and review the changes
+```
+
+In this example, the agent applies both the aggressive autonomous approach from `:unleash` and the thorough review methodology from `:review`. It will fix the lint warnings autonomously and then perform a deep review of its own changes.
+
+Some effective combinations:
+
+-   `:unleash :deslop` — Aggressively clean up code quality issues across the entire codebase without stopping for confirmations.
+-   `:babysit :review` — Perform a code review while monitoring a PR with step-by-step explanations.
+-   `:research :deepdive` — Combine broad research with thorough code tracing for maximum understanding before acting.
+-   `:team :ultraqa` — Spawn a multi-agent QA team that covers different aspects of quality in parallel.
+-   `:autopilot :docs` — Autonomously generate documentation across the project with periodic progress check-ins.
+
+Slash commands cannot be combined with each other or with power commands. Each slash command must be entered on its own line and takes effect immediately.

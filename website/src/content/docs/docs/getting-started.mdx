@@ -1,0 +1,230 @@
+---
+title: "Getting Started"
+description: "Quick-start guide for running KosmoKrator as a terminal coding agent."
+sidebar:
+  order: 2
+---
+Five minutes from zero to your first AI-assisted code change. This guide covers the essentials: install, configure, and start using KosmoKrator in your project. For detailed installation options, see the [Installation](/docs/installation) page.
+
+## Prerequisites
+
+You need a terminal and an API key from at least one LLM provider (Anthropic, OpenAI, Google, Mistral, local endpoints, or any configured OpenAI-compatible provider). That's it.
+
+If you use the **static binary**, no PHP installation is required — the runtime is bundled. If you prefer the PHAR or source install, check your PHP version:
+
+```bash
+php -v
+```
+
+You need **PHP 8.4 or newer** for the PHAR and source methods. The static binary has no PHP requirement at all.
+
+## Install in 30 Seconds
+
+Pick your preferred method below. For detailed instructions, platform-specific notes, and troubleshooting, see [Installation](/docs/installation).
+
+Static Binary PHAR From Source Termux
+
+Auto-detects your OS and architecture. No PHP required.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash
+```
+
+Or download manually — see [Installation](/docs/installation#static-binary) for all platform binaries.
+
+Requires PHP 8.4+. Download the PHAR and place it on your `$PATH`.
+
+```bash
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o /usr/local/bin/kosmokrator \
+  && sudo chmod +x /usr/local/bin/kosmokrator
+```
+
+Requires PHP 8.4+ and Composer. Clone the repository and install dependencies.
+
+```bash
+git clone https://github.com/OpenCompanyApp/kosmokrator.git
+cd kosmokrator
+composer install
+```
+
+Then run with `bin/kosmokrator`.
+
+Android via Termux. Use the PHAR path when you want the smallest install, or clone from source when you want a development checkout.
+
+```bash
+pkg update
+pkg install php composer git curl
+
+curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o $PREFIX/bin/kosmokrator \
+  && chmod +x $PREFIX/bin/kosmokrator
+```
+
+See [Termux](/docs/termux) for renderer, storage, and Android battery-management notes.
+
+**Verify:** Run `kosmokrator --version` to confirm the install succeeded.
+
+## First Run
+
+Launch the setup wizard to configure your LLM provider:
+
+```bash
+kosmokrator setup
+```
+
+The wizard walks you through three steps:
+
+1.  **Pick a provider** — Choose from the configured provider catalog, including Anthropic, OpenAI, Google, Mistral, local endpoints, and custom OpenAI-compatible providers.
+2.  **Authenticate** — Most providers accept an API key entered directly. OAuth-based providers (like Codex) use a browser or device flow instead — the wizard opens a link for you to authorize. Credentials are stored locally at `~/.kosmokrator/config.yaml` and never sent anywhere except the provider's own API.
+3.  **Pick a model** — Select a default model. You can override this per-session or change it in the config later.
+
+Once setup is complete, start KosmoKrator in your project directory:
+
+```bash
+cd your-project
+kosmokrator
+```
+
+**Reconfigure anytime:** Run `kosmokrator setup` again or use the `/settings` command inside a session to update providers and models on the fly.
+
+## Optional: Add Telegram
+
+KosmoKrator can also run as a Telegram bot surface backed by the same session and agent runtime. This is optional, but useful when you want to continue a session from your phone or use KosmoKrator outside the terminal.
+
+1.  Open KosmoKrator locally and go to `/settings` → **Gateway**.
+2.  Enable Telegram, store the bot token, and set an allowlist for your Telegram user ID or username.
+3.  Choose a session mode such as `chat_user` for isolated personal chats.
+4.  Start the gateway from your shell:
+
+```bash
+kosmokrator gateway:telegram
+```
+
+Then DM the bot and start with:
+
+```bash
+/status
+```
+
+The gateway supports streaming replies, typing indicators, queued follow-up messages, inline approval buttons, and a bridge for the main Kosmo slash commands like `/edit`, `/plan`, `/ask`, `/compact`, and `/models`.
+
+## Your First Task
+
+Once KosmoKrator is running, you'll see the interactive prompt. Here are three ways to put it to work immediately:
+
+### Ask a question
+
+Type a natural-language question about your codebase. KosmoKrator will read relevant files and explain what's going on.
+
+```bash
+You > Explain how the routing works in this project
+```
+
+The agent searches your project, reads the relevant files, and responds with a clear explanation — no file edits, just understanding.
+
+### Make a change
+
+Describe what you want done in plain language. The agent plans the change, reads the files it needs, and writes the code.
+
+```bash
+You > Add a /health endpoint to the API controller
+```
+
+Depending on your [permission mode](/docs/permissions), file writes may ask for your approval before they land. In **Prometheus** mode they go through automatically; in **Guardian** mode you review each one.
+
+### Use a power command
+
+Power commands (prefixed with `:`) activate specialized agent behaviors with a single instruction.
+
+```bash
+You > :review src/Controller/UserController.php
+```
+
+This launches a focused code review of the specified file. The agent reads the file, analyzes it for bugs, style issues, and improvements, and presents its findings.
+
+**More power commands:** Try `:release` to generate a conventional commit, or `:trace` to investigate a failing test. See the full list on the [Commands](/docs/commands) page.
+
+### Dispatch a skill
+
+Use the `$` prefix to dispatch a named skill directly:
+
+```bash
+You > $phpstan src/Controller/UserController.php
+```
+
+This invokes the **phpstan** skill on the specified file. Skills are specialized, reusable workflows you can define in your project config. See [Commands](/docs/commands) for details.
+
+## Switch Modes
+
+KosmoKrator operates in one of three modes that control what the agent can do. Switch modes at any time with a slash command:
+
+| Command | Mode | Description |
+| --- | --- | --- |
+| `/edit` | Edit | Full access — read, write, search, and execute. The agent can modify files and run commands. |
+| `/plan` | Plan | Read-only access — the agent reads files and produces a plan but cannot write or execute anything. |
+| `/ask` | Ask | Question-only — the agent reads files to answer questions but cannot suggest edits or run commands. |
+
+For the complete list of slash commands, power commands, and keyboard shortcuts, see the [Commands](/docs/commands) reference.
+
+**Agent modes vs. permission modes:** The table above shows _agent modes_, which control what capabilities the agent has (read, write, execute). Separately, _permission modes_ control how aggressively those capabilities are auto-approved. Switch permission modes with `/guardian` (auto-approve safe operations), `/argus` (review governed tool calls), or `/prometheus` (auto-approve governed prompts while hard denies still apply). See [Permissions](/docs/permissions) for details.
+
+## CLI Essentials
+
+### Subcommands
+
+Beyond the interactive session, KosmoKrator ships with several subcommands:
+
+| Command | Description |
+| --- | --- |
+| `kosmokrator setup` | Run the setup wizard (providers, models, keys). |
+| `kosmokrator config` | View and manage configuration values. |
+| `kosmokrator auth` | Manage provider authentication (API keys, OAuth tokens). |
+
+### Useful CLI options
+
+| Option | Description |
+| --- | --- |
+| `--no-animation` | Disable all terminal animations. Useful in CI or screen readers. |
+| `--renderer &lt;type&gt;` | Choose the output renderer (e.g. `stream`, `batch`). |
+| `--resume` | Resume the most recent session. |
+| `--session &lt;id&gt;` | Resume a specific session by ID. |
+
+### Project-level config
+
+Global config lives at `~/.kosmokrator/config.yaml`. For per-project settings, create `.kosmokrator/config.yaml` in your project root. Project config overrides global values — perfect for team-shared defaults, model preferences, or custom skills. See [Configuration](/docs/configuration) for the full reference.
+
+## Next Steps
+
+You're set up and productive. Dive deeper into the topics below to get the most out of KosmoKrator.
+
+<div class="doc-index-grid">
+  <a class="doc-index-card" href="/docs/installation">
+    <strong>Installation</strong>
+    <span>Static binaries, PHAR, source install, CLI options, and troubleshooting.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/configuration">
+    <strong>Configuration</strong>
+    <span>Config file layering, settings categories, environment variables, and YAML examples.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/tools">
+    <strong>Tools</strong>
+    <span>Built-in file ops, search, bash, shell sessions, memory, task, and Lua tools.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/providers">
+    <strong>Providers</strong>
+    <span>LLM providers, authentication setup, custom endpoints, and model overrides.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/agents">
+    <strong>Agents</strong>
+    <span>Agent types, subagent swarms, dependency DAGs, concurrency, and stuck detection.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/permissions">
+    <strong>Permissions</strong>
+    <span>Guardian, Argus, and Prometheus modes, evaluation order, and approval flows.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/commands">
+    <strong>Commands</strong>
+    <span>Slash commands, power commands, and keyboard shortcuts with usage examples.</span>
+  </a>
+</div>

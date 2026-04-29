@@ -1,0 +1,253 @@
+---
+title: "Agents"
+description: "Subagent types, orchestration, dependencies, concurrency, and swarm display."
+sidebar:
+  order: 17
+---
+KosmoKrator's agent system is built around a hierarchy of autonomous agents that can read, write, search, and execute code. The main interactive agent operates in one of three modes, and it can spawn child agents (subagents) that run independently with scoped capabilities. Subagents can form dependency graphs, run in parallel or sequentially, and are monitored by stuck detection and watchdog systems to ensure they converge.
+
+## Interactive Agent Modes
+
+The main agent operates in one of three modes that control which tools are available and what actions the agent is permitted to take. The mode is set at session start and can be changed at any time during a conversation using slash commands.
+
+### Edit Mode (Default)
+
+Edit mode gives the agent full access to every tool in the toolbox. It can read files, write new files, edit existing files, execute shell commands, save memories, and spawn subagents. This is the default mode and the one you will use for most coding tasks.
+
+### Plan Mode
+
+Plan mode restricts the agent to read-only operations. It can read files, search the codebase, and execute bash commands that do not modify the filesystem, but it cannot write or edit any files. This mode is designed for analyzing a codebase and proposing changes without making them. The agent can still spawn subagents to distribute the analysis work.
+
+### Ask Mode
+
+Ask mode is the most restricted interactive mode. Like Plan mode, the agent can read files and run read-only bash commands, but it cannot spawn subagents. This mode is intended for quick question-and-answer interactions where you want the agent to reference files for context but not take any autonomous action.
+
+### Mode Comparison
+
+| Mode | Can Read | Can Write | Can Bash | Can Subagent |
+| --- | --- | --- | --- | --- |
+| **Edit** | Yes | Yes | Yes | Yes |
+| **Plan** | Yes | No | Read-only bash | Yes |
+| **Ask** | Yes | No | Read-only bash | No |
+
+Switch between modes at any time during a session using the slash commands `/edit`, `/plan`, and `/ask`. The mode change takes effect immediately for the next agent turn.
+
+**Tip:** Plan mode is useful when you want the agent to study a large codebase and produce a detailed implementation plan before you switch to Edit mode to execute it. This two-phase workflow reduces the risk of the agent making changes you did not expect.
+
+## Subagent Types
+
+When the main agent (or another subagent) needs to delegate work, it spawns a child agent called a _subagent_. Every subagent has a type that determines its capabilities, which tools it can access, and what kinds of children it can spawn in turn. The type system enforces a strict principle: **a child can never escalate capabilities beyond its parent.**
+
+| Type | Capabilities | Can Spawn | Use Case |
+| --- | --- | --- | --- |
+| **General** | file\_read, file\_write, file\_edit, apply\_patch, glob, grep, bash, shell\_start, shell\_write, shell\_read, shell\_kill, subagent, memory\_search, session\_search, session\_read, memory\_save, lua\_list\_docs, lua\_search\_docs, lua\_read\_doc, execute\_lua | General, Explore, Plan | Autonomous coding tasks |
+| **Explore** | file\_read, glob, grep, bash, shell\_start, shell\_write, shell\_read, shell\_kill, subagent, memory\_search, session\_search, session\_read, lua\_list\_docs, lua\_search\_docs, lua\_read\_doc, execute\_lua | Explore only | Research and investigation |
+| **Plan** | file\_read, glob, grep, bash, shell\_start, shell\_write, shell\_read, shell\_kill, subagent, memory\_search, session\_search, session\_read, lua\_list\_docs, lua\_search\_docs, lua\_read\_doc, execute\_lua | Explore only | Planning and architecture |
+
+A **General** subagent has the full tool set and can spawn any type of child, making it the most powerful and flexible option. Use it when the delegated task requires making changes to the codebase.
+
+An **Explore** subagent is restricted to read-only tools. It can read files, search with glob and grep, and run bash commands, but it cannot write or edit anything. Its children are also restricted to Explore type. Use it for research tasks like "find all usages of this function" or "investigate how the caching layer works."
+
+A **Plan** subagent has the same tool access as Explore but is semantically intended for architecture and planning tasks. It can spawn Explore children to gather information but cannot spawn General children. Use it for tasks like "design a migration strategy" or "propose an API for this feature."
+
+**Tip:** Prefer the most restrictive subagent type that can accomplish the task. Using Explore subagents for research and Plan subagents for analysis reduces the blast radius if something goes wrong and makes it clear to the LLM that it should not attempt writes.
+
+## Spawning Subagents
+
+The LLM spawns subagents by calling the `subagent` tool. This tool accepts several parameters that control the subagent's identity, type, execution mode, and relationship to other agents.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `task` | string | Yes | A description of what the subagent should do. This becomes the subagent's system prompt and should be specific and actionable. |
+| `type` | string | No | One of `general`, `explore`, or `plan`. Defaults to `explore`. |
+| `mode` | string | No | One of `await` or `background`. Defaults to `await`. |
+| `id` | string | No | A custom agent ID that other agents can reference in their `depends_on` field. If omitted, the system generates an ID automatically. |
+| `depends_on` | array | No | A list of agent IDs that this subagent depends on. The subagent will not start until all dependencies have completed. |
+| `group` | string | No | A sequential group name. Agents in the same group run one at a time in the order they were spawned. |
+| `agents` | array | No | Batch mode: an array of agent specs to spawn multiple agents concurrently. Each spec is an object with: `task` (required, string), `type` (string), `id` (string), `depends_on` (array of strings), and `group` (string). When set, the top-level `task`, `type`, `id`, `depends_on`, and `group` parameters are ignored. The top-level `mode` controls await/background behavior for the entire batch. |
+
+## Execution Modes
+
+Every subagent runs in one of two execution modes that control whether the parent blocks while waiting for the result.
+
+### Await Mode
+
+In await mode (`mode: "await"`), the parent agent blocks until the subagent completes. The subagent's result is returned directly as the tool call response, and the parent can immediately use it in its next reasoning step. This is the default execution mode.
+
+Use await mode when the parent needs the result before it can continue. For example, if the parent asks a subagent to analyze a module's API and then wants to use that analysis to write an integration, the subagent should run in await mode so the analysis is available immediately.
+
+### Background Mode
+
+In background mode (`mode: "background"`), the parent agent continues immediately after spawning the subagent. The subagent runs in parallel, and its results are injected into the parent's context on the next LLM turn after the subagent completes.
+
+Use background mode when the parent can make progress on other work while the subagent runs. For example, spawning three subagents to research different parts of the codebase in parallel, then synthesizing the results.
+
+**Tip:** Background mode is essential for parallelism. If you spawn multiple await-mode subagents, they run sequentially because each one blocks the parent. To run them in parallel, use background mode and let the results arrive asynchronously.
+
+## Dependency DAGs
+
+Subagents can declare dependencies on other subagents, forming a directed acyclic graph (DAG) of execution. When a subagent specifies `depends_on`, it will not start until every agent in that list has completed successfully. The results of completed dependencies are automatically injected into the dependent agent's task prompt, giving it access to the information it needs.
+
+```bash
+# Spawned by the LLM as three separate subagent tool calls:
+
+subagent(id: "analyze-api", task: "Analyze the REST API endpoints", type: "explore", mode: "background")
+
+subagent(id: "analyze-db", task: "Analyze the database schema", type: "explore", mode: "background")
+
+subagent(id: "write-integration", task: "Write the integration layer",
+         depends_on: ["analyze-api", "analyze-db"], mode: "background")
+```
+
+In this example, `write-integration` will not start until both `analyze-api` and `analyze-db` have finished. When it starts, the results from both analysis agents are included in its prompt so it can use them to inform the integration code.
+
+Before any subagent is spawned, the system performs a depth-first search (DFS) on the dependency graph to detect circular dependencies. If a cycle is found, the spawn is rejected with an error rather than risking a deadlock.
+
+**Tip:** Dependency DAGs are particularly powerful for multi-step workflows. The LLM can declare the entire graph up front in a single turn, and the orchestrator handles scheduling, waiting, and result injection automatically.
+
+## Sequential Groups
+
+Sequential groups provide a simpler alternative to dependency DAGs when you need ordered execution without explicit dependency wiring. By assigning the same `group` name to multiple subagents, you ensure they run one at a time in the order they were spawned. Different groups run in parallel with each other.
+
+```bash
+# Pipeline group: runs sequentially in spawn order
+subagent(task: "Analyze the test failures", type: "explore", group: "pipeline", mode: "background")
+subagent(task: "Fix the failing tests", type: "general", group: "pipeline", mode: "background")
+subagent(task: "Run the test suite to verify", type: "general", group: "pipeline", mode: "background")
+
+# Docs group: runs in parallel with the pipeline group, but sequential within
+subagent(task: "Update the API docs", type: "general", group: "docs", mode: "background")
+subagent(task: "Update the changelog", type: "general", group: "docs", mode: "background")
+```
+
+In this example, the three "pipeline" agents run one after another: first analyze, then fix, then verify. The two "docs" agents also run sequentially relative to each other. But the pipeline and docs groups run in parallel — the docs work does not wait for the pipeline to finish.
+
+**Tip:** Use sequential groups for ordered pipelines where each step builds on the previous one but you do not need explicit result injection. If you need the output of one agent passed into the next, use dependency DAGs instead.
+
+## Concurrency Control
+
+KosmoKrator enforces multiple layers of concurrency control to prevent resource exhaustion and ensure predictable behavior.
+
+### Global Semaphore
+
+A global semaphore limits the total number of concurrently running agents. The default limit is **10** concurrent agents, configurable via the `subagent_concurrency` setting. When the limit is reached, newly spawned agents are queued and start as soon as a slot becomes available.
+
+### Per-Group Semaphores
+
+Each sequential group has its own semaphore with a concurrency of 1, ensuring that agents within the same group run strictly one at a time in spawn order. This is enforced independently of the global semaphore.
+
+### Slot Yielding
+
+When a parent agent spawns a child, it yields its concurrency slot to the child. After the child completes, the parent reclaims its slot and continues. This mechanism prevents a common deadlock scenario: without slot yielding, a parent could hold a slot while waiting for a child that is itself waiting for a slot.
+
+### Max Depth
+
+The agent hierarchy has a maximum depth of **3 levels** by default (main agent at depth 0, its children at depth 1, grandchildren at depth 2). This limit is configurable via the `subagent_max_depth` setting. Attempts to spawn subagents beyond the maximum depth are rejected with an error.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `subagent_concurrency` | 10 | Maximum number of agents running at the same time |
+| `subagent_max_depth` | 3 | Maximum nesting depth of the agent hierarchy |
+
+## Per-Depth Model Overrides
+
+By default, all subagents use the model configured by the `subagent_provider` and `subagent_model` settings (or the main session model if those are unset). You can override the model used at specific depths in the agent tree, which is useful for running cheaper or faster models for deeper agents that handle simpler tasks.
+
+| Setting | Description |
+| --- | --- |
+| `subagent_depth2_provider` | LLM provider for agents at depth 2 (grandchildren of the main agent) |
+| `subagent_depth2_model` | LLM model name for agents at depth 2 |
+
+When a depth-specific override is set, agents at that depth use the overridden provider and model instead of the default subagent model. Depths without an explicit override fall back to the default `subagent_provider` / `subagent_model` settings.
+
+## Stuck Detection
+
+Subagents run autonomously without human oversight, which means they can get stuck in repetitive loops — calling the same tool with the same arguments over and over without making progress. KosmoKrator's stuck detector monitors every [headless](/docs/headless) subagent for this pattern and intervenes with a three-stage escalation process.
+
+### How It Works
+
+The stuck detector maintains a rolling window of the last **8 tool call signatures** for each subagent. A signature is derived from the tool name and its arguments. After each tool call, the detector checks whether any single signature appears **3 or more times** within the window. If it does, escalation begins.
+
+### Escalation Stages
+
+-   **Stage 1 — Nudge:** A gentle system message is injected into the subagent's context, prompting it to try a different approach. The message explains that the agent appears to be repeating itself and suggests alternative strategies.
+-   **Stage 2 — Final Notice:** A firmer system message warns the subagent that it will be terminated if it does not change course. This gives the LLM one last chance to break out of the loop.
+-   **Stage 3 — Force Return:** The subagent is terminated immediately. Any partial results it has produced so far are collected and returned to the parent agent with a note explaining that the subagent was terminated due to repetitive behavior.
+
+The escalation counter resets when the subagent produces **2 consecutive diverse turns** — that is, when the agent calls different tools or uses different arguments for two turns in a row. A single changed turn is not enough; the agent must demonstrate sustained diversity to clear the escalation.
+
+**Tip:** Stuck detection is active for [headless](/docs/headless) subagents. The main interactive agent is not subject to stuck detection because you, the user, can intervene manually at any time.
+
+## Watchdog Timers
+
+In addition to stuck detection, every subagent has a configurable idle timeout that acts as a safety net against agents that stall entirely — for example, waiting indefinitely for an API response that will never come, or entering a state where no tool calls are made at all.
+
+| Agent Type | Default Timeout |
+| --- | --- |
+| Subagents | 900 seconds (15 minutes) |
+
+If an agent makes no progress (no tool calls, no LLM responses) within its timeout window, it is automatically cancelled. For subagents, any partial results are returned to the parent along with a timeout notice. This prevents resource waste from agents that are truly stuck rather than merely slow.
+
+## Auto-Retry
+
+When a subagent fails due to a transient error, KosmoKrator can automatically retry it with exponential backoff and jitter. This is particularly useful for handling temporary LLM API issues without requiring human intervention.
+
+### Retry Behavior
+
+-   **Max retries:** Configurable, with a default of **2** attempts. After the final retry fails, the error is returned to the parent agent.
+-   **Backoff:** Each retry waits longer than the last, using exponential backoff with random jitter to avoid thundering herd problems when many agents fail simultaneously.
+-   **Fresh context:** Each retry starts with a fresh context window, so accumulated errors from previous attempts do not pollute the new attempt.
+
+### Error Classification
+
+| Error Type | Retried? | Reason |
+| --- | --- | --- |
+| Rate limit (429) | Yes | Temporary; waiting usually resolves it |
+| Server error (5xx) | Yes | Transient server-side failures |
+| Network/timeout errors | Yes | Temporary connectivity issues |
+| Auth errors (401/403) | No | Invalid credentials will not self-resolve |
+| Client errors (4xx) | No | Bad requests indicate a logic problem |
+
+## Swarm Dashboard
+
+When subagents are active, the swarm dashboard provides a real-time overview of all running, queued, completed, and failed agents. It is the primary interface for monitoring complex multi-agent workflows.
+
+### Accessing the Dashboard
+
+Open the swarm dashboard with either of these methods:
+
+-   Press `Ctrl+A` at any time during a session
+-   Type the `/agents` slash command
+
+The dashboard opens as an overlay and auto-refreshes every 2 seconds while it is visible.
+
+### What the Dashboard Shows
+
+Each agent in the swarm is displayed with the following information:
+
+| Field | Description |
+| --- | --- |
+| Status | Current state: **running**, **done**, **queued**, **queued\_global** (waiting for a global concurrency slot), **waiting** (blocked on dependencies), **retrying** (re-queued after a transient failure), **failed**, or **cancelled** |
+| Progress | A live progress bar showing estimated completion percentage |
+| Tokens In / Out | Input and output token counts for the agent's LLM calls |
+| Cost | Estimated cost of the agent's LLM usage so far |
+| Elapsed Time | Wall-clock time since the agent started executing |
+| Throughput | Tokens per second for the agent's LLM calls |
+
+The dashboard also shows the overall swarm topology — parent-child relationships, dependency edges, and group memberships — giving you a clear picture of how the agents relate to each other.
+
+**Tip:** The swarm dashboard is available in both the TUI and ANSI renderers. In TUI mode it renders as an interactive overlay widget; in ANSI mode it prints a formatted table to the terminal.
+
+## Putting It All Together
+
+The agent system's components work together to enable complex, autonomous coding workflows. Here is a typical example of how they interact:
+
+1.  You start a session in **Edit mode** and describe a feature that spans several modules.
+2.  The main agent spawns an **Explore** subagent in background mode to research the relevant parts of the codebase.
+3.  Simultaneously, it spawns a **Plan** subagent to design the architecture, with a `depends_on` reference to the Explore agent so it gets the research results.
+4.  Once both complete, the main agent reads their results and spawns multiple **General** subagents in a sequential group to implement the changes module by module.
+5.  The **concurrency controls** ensure no more than 10 agents run at once. The **stuck detector** monitors each subagent for repetitive loops. The **watchdog timer** catches any agent that stalls completely.
+6.  You watch the progress in the **swarm dashboard**, seeing each agent's status, token usage, and cost in real time.
+7.  If a subagent hits a rate limit, **auto-retry** handles the transient failure transparently.
+
+This combination of typed agents, execution modes, dependency management, concurrency control, and monitoring makes it possible to tackle large coding tasks that would be impractical for a single agent working alone.

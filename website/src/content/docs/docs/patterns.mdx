@@ -1,0 +1,357 @@
+---
+title: "Advanced Patterns"
+description: "Advanced usage recipes for common KosmoKrator workflows."
+sidebar:
+  order: 19
+---
+Real-world recipes for getting the most out of KosmoKrator. Each pattern includes a brief description, a concrete example, and tips about when to use it. Adapt these to your own workflow and project.
+
+## CI/CD Integration
+
+KosmoKrator's [headless mode](/docs/headless) is designed for CI/CD pipelines. Pass a prompt, get output, exit. No TTY required.
+
+### Basic CI invocation
+
+```bash
+# Headless mode with auto-approve
+kosmokrator -p --yolo "Fix all failing tests"
+```
+
+The `-p` flag enables headless mode. `--yolo` auto-approves all tool calls so the agent can work unattended. Exit code `0` means the task completed successfully; non-zero indicates an error or that the agent hit a guardrail. See [Headless Mode](/docs/headless) for the full CLI reference including `--max-turns`, `--timeout`, and JSON output.
+
+### GitHub Actions workflow
+
+```yaml
+name: Auto-fix failing tests
+
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/fix'))
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run KosmoKrator
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          kosmokrator -p --yolo --max-turns 20 "Fix all failing tests"
+
+      - name: Commit and push fixes
+        run: |
+          git config user.name "kosmokrator[bot]"
+          git config user.email "bot@example.com"
+          git diff --quiet || (git add -A && git commit -m "fix: resolve failing tests" && git push)
+```
+
+**Tip:** For CI runs, use the `/prometheus` slash command at the start of the session to auto-approve all tool calls so the agent can work unattended. This is the equivalent of a fully permissive permission mode. See [Permissions](/docs/permissions) for details.
+
+### Exit codes and output parsing
+
+| Exit Code | Meaning | Typical Action |
+| --- | --- | --- |
+| `0` | Task completed successfully | Continue pipeline |
+| `1` | Agent error or task failure | Log output, notify team |
+| `2` | Configuration or startup error | Check config, API keys |
+
+## Multi-Model Cost Optimization
+
+Not every agent turn needs the most expensive model. KosmoKrator supports **per-depth model overrides** so you can assign powerful models to the main agent and cheaper, faster models to subagents. This can reduce costs dramatically with minimal impact on quality.
+
+### Per-depth cascade
+
+```bash
+# .kosmokrator.yaml
+
+# Main agent — most capable model for complex reasoning
+default_provider: anthropic
+default_model: claude-opus-4-5-20250415
+
+# Depth-1 subagents — fast and affordable
+subagent_provider: anthropic
+subagent_model: claude-haiku-4-5-20250415
+
+# Depth-2+ subagents — lightest tier for bulk work
+subagent_depth2_provider: anthropic
+subagent_depth2_model: claude-haiku-4-5-20250415
+```
+
+### Mixed-provider strategy
+
+You can also mix providers across depths. For example, use Claude for the main agent and GPT for subagents:
+
+```bash
+# Main agent — Claude for deep reasoning
+default_provider: anthropic
+default_model: claude-opus-4-5-20250415
+
+# Subagents — GPT for fast exploration
+subagent_provider: openai
+subagent_model: gpt-4.1-mini
+
+# Depth-2+ — smallest model for trivial tasks
+subagent_depth2_provider: openai
+subagent_depth2_model: gpt-4.1-mini
+```
+
+### Approximate cost comparison
+
+| Tier | Agent | Example Model | Relative Cost | Best For |
+| --- | --- | --- | --- | --- |
+| **Premium** | Main agent (depth 0) | Claude Opus, GPT-4.1 | ~15–75 ¢/1K tokens | Complex reasoning, architecture |
+| **Standard** | Subagents (depth 1) | Claude Sonnet, GPT-4.1-mini | ~0.6–3 ¢/1K tokens | Coding, research, file edits |
+| **Economy** | Sub-subagents (depth 2+) | Claude Haiku, GPT-4.1-mini | ~0.1–0.8 ¢/1K tokens | Bulk grep, simple transforms |
+
+**Tip:** For routine coding tasks, a Standard-tier model at depth 0 is often sufficient. Reserve Premium models for architecture decisions and complex debugging sessions. See [Providers](/docs/providers) for the full per-depth override reference.
+
+## Large Codebase Exploration
+
+Working with a big monorepo or unfamiliar project? Use KosmoKrator's exploration features to build understanding before making changes. The key is to start broad, then fan out into targeted investigation.
+
+### Step-by-step workflow
+
+1.  **Onboard the project** — Run `:deepinit` to generate a comprehensive project summary. This gives the agent a high-level map of the codebase structure, conventions, and key files.
+2.  **Fan out exploration** — Use `:team` to run a 5-stage sequential pipeline (Planner, Architect, Executor, Verifier, Fixer) for structured, thorough investigation of each subsystem.
+3.  **Analyze without changes** — Switch to `/plan` mode so the agent can read and search freely but cannot modify files. This is safer for initial reconnaissance.
+4.  **Reduce concurrency** — For very large repos, lower the `subagent_concurrency` setting to avoid overwhelming system resources.
+
+```bash
+# .kosmokrator.yaml — tuned for a large monorepo
+
+subagent_concurrency: 3
+mode: plan          # start in plan mode for safety
+
+# Use a fast model for exploration agents
+subagent_provider: anthropic
+subagent_model: claude-haiku-4-5-20250415
+```
+
+```bash
+# In-session workflow
+
+# 1. Build the project map
+:deepinit
+
+# 2. Run a structured pipeline to understand each module
+:team Explore the authentication module and summarize its public API
+:team Explore the database layer and document all migration files
+
+# 3. Switch to plan mode for safe analysis
+/plan
+```
+
+**Tip:** The `:deepinit` command writes its output to an `AGENTS.md` file in your project root. This file is automatically loaded in future sessions, giving the agent a persistent project map. You can also commit it to version control to share with your team.
+
+## Code Review Workflow
+
+KosmoKrator's [power commands](/docs/commands) provide several review strategies ranging from quick feedback to aggressive auto-fix. Choose the level of autonomy that matches your team's workflow.
+
+### Review strategies
+
+| Command | Behavior | When to Use |
+| --- | --- | --- |
+| `:review` | Standard code review with suggestions | Quick feedback, PR ready for review |
+| `:unleash :review` | Chained: unleash swarm + review prompts combined | Deep multi-angle review with maximum coverage |
+| `:team :review` | Chained: team pipeline + review prompts combined | Structured pipeline review with verification |
+
+### Safe review with Plan mode
+
+```bash
+# Review without any risk of changes
+/plan
+:review src/Module/NewFeature.php
+
+# The agent will read and analyze but cannot write.
+# When you are happy with the suggestions, switch back:
+/edit
+```
+
+### Parallel multi-file review
+
+```bash
+# Review changed files in parallel
+:team :review src/Auth/LoginHandler.php src/Auth/SessionManager.php src/Auth/Middleware.php
+```
+
+**Tip:** Use `/plan` mode when reviewing code you don't want modified. The agent can still read, search, and analyze freely but cannot write any files. Switch to `/edit` when you are ready to apply fixes.
+
+## Migration & Refactoring
+
+Large-scale migrations and refactors benefit from a phased approach: understand first, plan second, implement third. KosmoKrator's agent types and power commands map naturally to this workflow.
+
+### Phase 1: Understand the current architecture
+
+```bash
+# Deep dive into the codebase to map dependencies and conventions
+:research :deepdive
+
+# Example prompt:
+# "Map every class that implements the old Repository interface.
+#  For each one, list the file path, the methods it provides,
+#  and every caller in the codebase."
+```
+
+### Phase 2: Create a migration plan
+
+```bash
+# Switch to plan mode so nothing is changed yet
+/plan
+
+# Ask the agent to design the migration strategy:
+# "Based on the research above, create a step-by-step migration plan
+#  that converts all Repository implementations to the new Store interface.
+#  Group changes into independent modules that can be migrated separately.
+#  Identify risky changes that need human review."
+```
+
+### Phase 3: Implement module by module
+
+```bash
+# Switch to edit mode for implementation
+/edit
+
+# Use a sequential group to implement changes in order
+# (each agent waits for the previous one to finish)
+"Spawn a sequential group called 'migration'.
+ Module 1: Convert UserRepository to implement Store interface.
+ Module 2: Convert OrderRepository to implement Store interface.
+ Module 3: Update all callers to use the new Store methods."
+```
+
+### Critical decisions with consensus
+
+```bash
+# Use :consensus for architectural choices that matter
+:consensus Should we keep backward-compatible aliases or do a clean break?
+
+# The agent spawns multiple perspectives and weighs trade-offs
+# before recommending a path forward.
+```
+
+**Tip:** For migrations that span many files, use [sequential groups](/docs/agents) to enforce ordering. This prevents race conditions where a later module depends on changes from an earlier one. The `:consensus` power command is valuable for any decision with significant trade-offs.
+
+## Swarm Orchestration
+
+KosmoKrator's [subagent system](/docs/agents) supports dependency graphs, parallel execution, sequential groups, and background mode. Combining these primitives lets you build sophisticated multi-agent workflows.
+
+### Dependency DAG: explore → plan → implement → verify
+
+```bash
+# A four-phase pipeline where each phase depends on the previous
+
+"Spawn the following agents:
+
+ 1. 'explore' (type: explore, mode: await)
+    Task: Investigate how payment processing works and list all edge cases.
+
+ 2. 'plan' (type: plan, mode: await, depends_on: ['explore'])
+    Task: Based on the exploration results, design a retry mechanism for failed payments.
+
+ 3. 'implement' (type: general, mode: await, depends_on: ['plan'])
+    Task: Implement the retry mechanism as designed.
+
+ 4. 'verify' (type: explore, mode: await, depends_on: ['implement'])
+    Task: Review the implementation for correctness and edge cases."
+```
+
+### Background exploration
+
+```bash
+# Fire off research agents in parallel without blocking the main agent
+
+"Spawn these agents in background mode:
+
+ - 'auth-research' (type: explore, mode: background)
+   Task: Map the authentication flow end-to-end.
+
+ - 'db-research' (type: explore, mode: background)
+   Task: Document the database schema and all migration files.
+
+ - 'api-research' (type: explore, mode: background)
+   Task: List every public API endpoint and its authentication requirements."
+
+# The main agent continues working while these run.
+# Check status with /agents.
+```
+
+### Sequential group for ordered pipelines
+
+```bash
+# Agents in the same group run one at a time, in order
+
+"Spawn a group called 'refactor-queue':
+
+ 1. (type: general) Extract validation logic into a shared module.
+ 2. (type: general) Update all endpoints to use the new validation module.
+ 3. (type: general) Add tests for the shared validation module."
+```
+
+### Monitoring the swarm
+
+```bash
+# Open the swarm dashboard to see all active agents
+/agents
+
+# This shows each agent's status, type, depth, dependencies,
+# and whether it is running, waiting, or completed.
+```
+
+**Tip:** Use **background mode** for exploration and research tasks that don't need to block the main agent. Use **await mode** when the main agent needs the results before continuing. Use **groups** when ordering matters between subagents.
+
+## Session Continuity
+
+Complex tasks often span multiple sessions. KosmoKrator provides several mechanisms to preserve context and resume work seamlessly.
+
+### Resuming a session
+
+```bash
+# List previous sessions
+/sessions
+
+# Resume the most recent session
+/resume
+
+# Resume a specific session by name or ID
+/resume auth-migration
+```
+
+The `/resume` command restores the full conversation history, loaded files, and agent state. You pick up exactly where you left off.
+
+### Memory across sessions
+
+KosmoKrator's [memory system](/docs/context) persists key facts across sessions automatically. The agent saves project architecture, conventions, and decisions so it doesn't need to re-learn them each time.
+
+```bash
+# Memories are saved automatically, but you can also manage them:
+
+# View all saved memories
+/memories
+
+# The agent will recall relevant memories at the start of each session,
+# including project facts, user preferences, and past decisions.
+```
+
+### Managing context window pressure
+
+```bash
+# When the conversation gets long, compress it:
+/compact
+
+# Rename a session for easy identification later:
+/rename payment-refactor-phase2
+```
+
+The `/compact` command summarizes the conversation so far and replaces it with a condensed version, freeing token budget for continued work. Use it when you notice the agent's responses slowing down or when working on long sessions.
+
+**Tip:** Get into the habit of using `/rename` to give sessions descriptive names. This makes `/resume` much easier when you have dozens of past sessions. Combine with `/compact` periodically during long sessions to keep performance snappy.

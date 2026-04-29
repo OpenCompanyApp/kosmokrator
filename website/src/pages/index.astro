@@ -1,0 +1,267 @@
+---
+import '../styles/custom.css';
+
+const asciiLogo = `██╗  ██╗ ██████╗ ███████╗███╗   ███╗ ██████╗ ██╗  ██╗██████╗  █████╗ ████████╗ ██████╗ ██████╗
+██║ ██╔╝██╔═══██╗██╔════╝████╗ ████║██╔═══██╗██║ ██╔╝██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗
+█████╔╝ ██║   ██║███████╗██╔████╔██║██║   ██║█████╔╝ ██████╔╝███████║   ██║   ██║   ██║██████╔╝
+██╔═██╗ ██║   ██║╚════██║██║╚██╔╝██║██║   ██║██╔═██╗ ██╔══██╗██╔══██║   ██║   ██║   ██║██╔══██╗
+██║  ██╗╚██████╔╝███████║██║ ╚═╝ ██║╚██████╔╝██║  ██╗██║  ██║██║  ██║   ██║   ╚██████╔╝██║  ██║
+╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝`;
+
+const surfaceSnippets = {
+  terminal: `kosmokrator
+
+> fix the failing tests and explain the change
+
+● reading failing test output
+● editing src/Auth/TokenVerifier.php
+● running vendor/bin/phpunit --filter TokenVerifierTest
+
+Done. 2 files changed, tests passing.`,
+  headless: `kosmokrator -p "review this branch" \\
+  --mode plan \\
+  --permission-mode guardian \\
+  -o stream-json
+
+kosmokrator integrations:plane list_issues \\
+  --account work \\
+  --json`,
+  sdk: `use Kosmokrator\\Sdk\\AgentBuilder;
+
+$result = AgentBuilder::create()
+    ->forProject('/repo')
+    ->withMode('edit')
+    ->withPermissionMode('guardian')
+    ->build()
+    ->collect('Implement the missing tests');`,
+  acp: `kosmokrator acp --cwd /repo
+
+// newline-delimited JSON-RPC over stdio
+// session/prompt
+// session/request_permission
+// kosmokrator/subagents/tree
+// kosmokrator/tool/result`,
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KosmoKrator - Terminal AI Coding Agent</title>
+    <meta
+      name="description"
+      content="KosmoKrator is a terminal AI coding agent with headless execution, ACP, PHP SDK, Lua, integrations, MCP, and parallel subagents."
+    />
+    <meta property="og:title" content="KosmoKrator - Terminal AI Coding Agent" />
+    <meta property="og:description" content="A terminal coding agent with matching headless automation surfaces." />
+    <meta property="og:image" content="/og-image.svg" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="home-page">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="/docs/getting-started">Docs</a>
+        <a href="/docs/installation">Install</a>
+        <a href="/docs/headless">Headless</a>
+        <a href="/docs/acp">ACP</a>
+        <a href="/docs/changelog">Changelog</a>
+        <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero-section">
+        <div class="hero-copy">
+          <pre class="ascii-logo" aria-label="KosmoKrator ASCII logo">{asciiLogo}</pre>
+          <p class="eyebrow">Terminal AI coding agent for real repositories</p>
+          <h1>The coding agent you run from the terminal.</h1>
+          <p class="hero-lead">
+            KosmoKrator gives you a shell-first agent with TUI and ANSI renderers, permissions,
+            persistent sessions, context management, Lua code mode, integrations, MCP, ACP,
+            a PHP SDK, and parallel subagents.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="/docs/installation">Install KosmoKrator</a>
+            <a class="button secondary" href="/docs/getting-started">Read the docs</a>
+            <span class="github-star-embed">
+              <a
+                class="github-button"
+                href="https://github.com/OpenCompanyApp/kosmokrator"
+                data-icon="octicon-star"
+                data-size="large"
+                data-show-count="true"
+                aria-label="Star OpenCompanyApp/kosmokrator on GitHub"
+              >Star</a>
+            </span>
+          </div>
+        </div>
+
+        <div class="surface-panel" aria-label="KosmoKrator runtime examples">
+          <div class="surface-tabs" role="tablist" aria-label="Runtime surfaces">
+            {Object.keys(surfaceSnippets).map((key, index) => (
+              <button
+                type="button"
+                class="surface-tab"
+                data-surface-tab={key}
+                role="tab"
+                aria-selected={index === 0 ? 'true' : 'false'}
+                aria-controls={`surface-${key}`}
+                id={`tab-${key}`}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          {Object.entries(surfaceSnippets).map(([key, snippet], index) => (
+            <pre
+              id={`surface-${key}`}
+              class:list={['surface-snippet', index === 0 && 'active']}
+              data-surface-panel={key}
+              role="tabpanel"
+              aria-labelledby={`tab-${key}`}
+              hidden={index !== 0}
+            ><code>{snippet}</code></pre>
+          ))}
+        </div>
+      </section>
+
+      <section class="section-band install-band" id="install">
+        <div class="section-heading">
+          <p class="eyebrow">Install</p>
+          <h2>Choose the runtime package that matches the machine.</h2>
+        </div>
+        <div class="install-tabs-home" aria-label="Install methods">
+          <div class="install-tab-list" role="tablist" aria-label="Install methods">
+            <button type="button" role="tab" aria-selected="true" aria-controls="install-static" id="install-tab-static" data-install-tab="static">Static binary</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-phar" id="install-tab-phar" data-install-tab="phar">PHAR</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-source" id="install-tab-source" data-install-tab="source">Source checkout</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-termux" id="install-tab-termux" data-install-tab="termux">Termux</button>
+          </div>
+          <section id="install-static" class="install-panel-home active" role="tabpanel" aria-labelledby="install-tab-static" data-install-panel="static">
+            <h3>Static binary</h3>
+            <p>No PHP dependency. Recommended for normal terminal use on macOS and Linux.</p>
+            <pre><code>curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash</code></pre>
+          </section>
+          <section id="install-phar" class="install-panel-home" role="tabpanel" aria-labelledby="install-tab-phar" data-install-panel="phar" hidden>
+            <h3>PHAR</h3>
+            <p>Single PHP archive for systems with PHP 8.4 and the required extensions.</p>
+            <pre><code>php kosmokrator.phar</code></pre>
+          </section>
+          <section id="install-source" class="install-panel-home" role="tabpanel" aria-labelledby="install-tab-source" data-install-panel="source" hidden>
+            <h3>Source checkout</h3>
+            <p>Best for contributors and local development.</p>
+            <pre><code>git clone https://github.com/OpenCompanyApp/kosmokrator.git
+cd kosmokrator
+composer install
+bin/kosmokrator</code></pre>
+          </section>
+          <section id="install-termux" class="install-panel-home" role="tabpanel" aria-labelledby="install-tab-termux" data-install-panel="termux" hidden>
+            <h3>Termux</h3>
+            <p>Run the ANSI renderer on Android with PHP, Composer, and local storage access.</p>
+            <pre><code>pkg install php composer git
+bin/kosmokrator --renderer=ansi</code></pre>
+          </section>
+        </div>
+      </section>
+
+      <section class="section-band">
+        <div class="section-heading">
+          <p class="eyebrow">Runtime surfaces</p>
+          <h2>One agent core, several ways to operate it.</h2>
+        </div>
+        <div class="feature-grid">
+          <a href="/docs/headless">
+            <strong>Headless CLI</strong>
+            <span>Use `kosmokrator -p`, JSON output, stream-json, and direct integrations/MCP commands from automation.</span>
+          </a>
+          <a href="/docs/acp">
+            <strong>ACP server</strong>
+            <span>Expose terminal-equivalent sessions, permissions, tools, subagents, integrations, MCP, and Lua over stdio.</span>
+          </a>
+          <a href="/docs/sdk">
+            <strong>PHP SDK</strong>
+            <span>Embed headless runs and direct runtime helpers in PHP applications without creating another engine.</span>
+          </a>
+          <a href="/docs/lua">
+            <strong>Lua code mode</strong>
+            <span>Compose file tools, integrations, MCP calls, and helper functions in discoverable scripts.</span>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>KosmoKrator</span>
+      <a href="/docs">Documentation</a>
+      <a href="/docs/changelog">Changelog</a>
+      <a href="/docs/architecture">Architecture</a>
+      <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+    </footer>
+
+    <script>
+      const tabs = Array.from(document.querySelectorAll('[data-surface-tab]'));
+      const panels = Array.from(document.querySelectorAll('[data-surface-panel]'));
+
+      function selectSurface(key) {
+        tabs.forEach((tab) => {
+          const selected = tab.dataset.surfaceTab === key;
+          tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+
+        panels.forEach((panel) => {
+          const selected = panel.dataset.surfacePanel === key;
+          panel.hidden = !selected;
+          panel.classList.toggle('active', selected);
+        });
+      }
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectSurface(tab.dataset.surfaceTab));
+        tab.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+          event.preventDefault();
+          const direction = event.key === 'ArrowRight' ? 1 : -1;
+          const next = tabs[(index + direction + tabs.length) % tabs.length];
+          next.focus();
+          selectSurface(next.dataset.surfaceTab);
+        });
+      });
+
+      const installTabs = Array.from(document.querySelectorAll('[data-install-tab]'));
+      const installPanels = Array.from(document.querySelectorAll('[data-install-panel]'));
+
+      function selectInstall(key) {
+        installTabs.forEach((tab) => {
+          const selected = tab.dataset.installTab === key;
+          tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+
+        installPanels.forEach((panel) => {
+          const selected = panel.dataset.installPanel === key;
+          panel.hidden = !selected;
+          panel.classList.toggle('active', selected);
+        });
+      }
+
+      installTabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectInstall(tab.dataset.installTab));
+        tab.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+          event.preventDefault();
+          const direction = event.key === 'ArrowRight' ? 1 : -1;
+          const next = installTabs[(index + direction + installTabs.length) % installTabs.length];
+          next.focus();
+          selectInstall(next.dataset.installTab);
+        });
+      });
+
+    </script>
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
+  </body>
+</html>

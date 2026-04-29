@@ -1,0 +1,284 @@
+---
+title: "Installation"
+description: "Install KosmoKrator from static binaries, PHAR builds, source checkout, or Termux."
+sidebar:
+  order: 3
+---
+KosmoKrator is distributed in four practical forms: a self-contained static binary, a PHAR package, a Composer-based source checkout, and Android via Termux. Choose the method that fits your environment and workflow.
+
+<div class="doc-index-grid">
+  <a class="doc-index-card" href="#quick-install">
+    <strong>Quick install</strong>
+    <span>Auto-detected static binary for macOS and Linux.</span>
+  </a>
+  <a class="doc-index-card" href="#phar-package">
+    <strong>PHAR</strong>
+    <span>Small single-file package for PHP 8.4+ systems.</span>
+  </a>
+  <a class="doc-index-card" href="#from-source">
+    <strong>Source</strong>
+    <span>Development checkout with tests, Pint, and PHAR builds.</span>
+  </a>
+  <a class="doc-index-card" href="/docs/termux">
+    <strong>Termux</strong>
+    <span>Android install notes, renderer tips, and storage setup.</span>
+  </a>
+</div>
+
+## Quick Install (Recommended)
+
+The install script auto-detects your OS and architecture, downloads the right static binary, and places it on your `$PATH`. No PHP required — everything is bundled.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash
+```
+
+## Static Binary (Manual)
+
+If you prefer to download manually, pick the binary for your platform. Each is a self-contained ~25 MB executable with the PHP runtime bundled.
+
+### macOS — Apple Silicon (aarch64)
+
+```bash
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
+  -o /usr/local/bin/kosmokrator \
+  && sudo chmod +x /usr/local/bin/kosmokrator
+```
+
+### macOS — Intel (x86\_64)
+
+```bash
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
+  -o /usr/local/bin/kosmokrator \
+  && sudo chmod +x /usr/local/bin/kosmokrator
+```
+
+### Linux — x86\_64
+
+```bash
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
+  -o /usr/local/bin/kosmokrator \
+  && sudo chmod +x /usr/local/bin/kosmokrator
+```
+
+### Linux — ARM (aarch64)
+
+```bash
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
+  -o /usr/local/bin/kosmokrator \
+  && sudo chmod +x /usr/local/bin/kosmokrator
+```
+
+**Tip:** If `/usr/local/bin` is not in your `$PATH`, or you prefer a user-local install, use `~/.local/bin/kosmokrator` instead. Make sure the directory exists and is on your `$PATH`.
+
+After downloading, verify the binary works:
+
+```bash
+kosmokrator --version
+```
+
+## PHAR Package
+
+The PHAR (PHP Archive) build packages the entire application into a single `.phar` file of roughly 5 MB. It requires a working PHP 8.4+ installation with a few extensions but does not need Composer or any vendor dependencies at runtime.
+
+### Requirements
+
+-   PHP 8.4 or newer
+-   Extensions: `curl`, `mbstring`, `openssl`, `pdo_sqlite`, `pcntl`, `readline`
+
+### Download
+
+```bash
+sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
+  -o /usr/local/bin/kosmokrator \
+  && sudo chmod +x /usr/local/bin/kosmokrator
+```
+
+Because the PHAR is a standard PHP archive, you can also run it directly with the PHP interpreter if you prefer not to place it on your `$PATH`:
+
+```bash
+php kosmokrator.phar
+```
+
+**Tip:** To check whether the required extensions are installed, run `php -m | grep -E 'curl|mbstring|openssl|pdo_sqlite|pcntl|readline'`. All six should appear in the output. On most systems they are included with the default PHP build; if any are missing, install them via your system package manager (e.g., `apt install php8.4-mbstring` on Debian/Ubuntu).
+
+## From Source
+
+Installing from source gives you the full development setup: you can modify the code, run the test suite, and build your own PHAR. This is the right choice if you plan to contribute or want to stay on the bleeding edge.
+
+### Requirements
+
+-   PHP 8.4 or newer
+-   Composer (2.x recommended)
+-   Extensions: `curl`, `mbstring`, `openssl`, `pdo_sqlite`, `pcntl`, `readline`
+
+### Clone and install
+
+```bash
+git clone https://github.com/OpenCompanyApp/kosmokrator.git
+cd kosmokrator
+composer install
+```
+
+Once installed, run KosmoKrator directly from the repository:
+
+```bash
+bin/kosmokrator
+```
+
+You can optionally symlink the entry point to a directory on your `$PATH` for convenience:
+
+```bash
+ln -s "$(pwd)/bin/kosmokrator" /usr/local/bin/kosmokrator
+```
+
+### Running the tests
+
+```bash
+php vendor/bin/phpunit
+```
+
+### Code style
+
+```bash
+php vendor/bin/pint
+```
+
+## First Run Setup
+
+The very first time you launch KosmoKrator, you need to configure at least one LLM provider. The built-in setup wizard walks you through the process interactively.
+
+```bash
+kosmokrator setup
+```
+
+The setup wizard will guide you through three steps:
+
+1.  **Provider selection** — Choose from the configured provider catalog, including Anthropic, OpenAI, Google, Mistral, local endpoints, and custom OpenAI-compatible providers. You can configure multiple providers and switch between them later.
+2.  **Model selection** — Pick a default model from the provider's available options. You can override this per-session or per-depth later via the configuration file.
+3.  **API key entry** — Enter the API key for your chosen provider. For OAuth-based providers (e.g., Codex), the wizard will open a browser-based device flow instead of prompting for a key. Keys are stored locally and never transmitted anywhere other than the provider's own API endpoint.
+
+All settings are written to `~/.kosmokrator/config.yaml`. You can edit this file directly at any time, or re-run `kosmokrator setup` to walk through the wizard again.
+
+**Tip:** You can also configure providers through the in-app settings dialog. Once KosmoKrator is running, use the `/settings` command to open the interactive settings workspace.
+
+After setup completes, start KosmoKrator normally:
+
+```bash
+kosmokrator
+```
+
+KosmoKrator will auto-detect your terminal capabilities and choose the best renderer — the full TUI if your terminal supports it, or the ANSI fallback otherwise.
+
+## CLI Options
+
+KosmoKrator accepts a number of command-line flags that control startup behavior. All flags are optional; the defaults are suitable for most interactive use.
+
+| Flag | Description |
+| --- | --- |
+| `--renderer=tui|ansi` | Force a specific renderer. By default KosmoKrator auto-detects terminal capabilities and uses the TUI renderer when available, falling back to pure ANSI output. Set this flag to override auto-detection. |
+| `--no-animation` | Skip the animated intro sequence. Useful when piping output, embedding KosmoKrator in scripts, or when you simply prefer a faster startup. |
+| `--resume` | Resume the most recent session. Your full conversation history, tool results, and context are restored so you can continue exactly where you left off. |
+| `--session &lt;id&gt;` | Resume a specific session by its ID. Session IDs are displayed when a session is created and can be listed with the `/sessions` slash command. |
+
+Example combining several flags:
+
+```bash
+kosmokrator --renderer=ansi --no-animation --resume
+```
+
+## Updating
+
+KosmoKrator includes a built-in update command. From your shell, run:
+
+```bash
+kosmokrator update
+```
+
+This checks GitHub Releases for a newer version and follows the right update path for your installation method. Static binary and PHAR installs update in place. Source installs print the exact manual update commands.
+
+Alternatively, you can update manually by re-downloading the binary or PHAR using the same `curl` commands shown above. The latest release URL always points to the most recent version.
+
+### Updating a source installation
+
+If you installed from source, pull the latest changes and update dependencies:
+
+```bash
+cd kosmokrator
+git pull
+composer install
+```
+
+## Building a PHAR from Source
+
+If you are working from a source checkout and want to produce your own PHAR archive, use the [Box](https://github.com/box-project/box) compiler. The repository includes a `box.json` configuration file that defines the build. Box is not included in the project's Composer dependencies — install it separately before compiling.
+
+```bash
+# Install Box globally
+composer global require humbug/box
+
+# Compile the PHAR
+box compile
+```
+
+The compiled PHAR will be written to `builds/kosmokrator.phar`. You can then copy it to a location on your `$PATH` and use it exactly like the release PHAR.
+
+**Tip:** Make sure `phar.readonly` is set to `Off` in your `php.ini` before compiling. Box will warn you if this setting is blocking PHAR creation.
+
+## System Requirements
+
+The requirements depend on which installation method you choose. The static binary has the fewest requirements since it bundles everything it needs.
+
+| Requirement | Static Binary | PHAR | From Source |
+| --- | --- | --- | --- |
+| PHP | Not required | 8.4+ | 8.4+ |
+| Composer | Not required | Not required | 2.x |
+| `curl` extension | Bundled | Required | Required |
+| `mbstring` extension | Bundled | Required | Required |
+| `openssl` extension | Bundled | Required | Required |
+| `pdo_sqlite` extension | Bundled | Required | Required |
+| `pcntl` extension | Bundled | Required | Required |
+| `readline` extension | Bundled | Required | Required |
+| Terminal | Any modern terminal emulator (iTerm2, Alacritty, Kitty, GNOME Terminal, Windows Terminal via WSL, etc.) |
+| Operating System | macOS (Apple Silicon or Intel) or Linux (x86\_64 or aarch64) |
+
+**Tip:** For the best experience, use a terminal that supports 256 colors or true color. KosmoKrator's TUI renderer takes advantage of the full color palette for syntax highlighting, diffs, and the interactive dashboard.
+
+## Troubleshooting
+
+### Permission denied when writing to /usr/local/bin
+
+On macOS and some Linux distributions, `/usr/local/bin` requires elevated privileges. Either prefix the commands with `sudo`, or install to a user-local directory:
+
+```bash
+mkdir -p ~/.local/bin
+# Then use ~/.local/bin/kosmokrator as the download target
+```
+
+Make sure `~/.local/bin` is on your `$PATH` by adding this to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
+
+```php
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### macOS Gatekeeper blocks the binary
+
+On macOS, the first time you run a downloaded binary, Gatekeeper may prevent execution. To allow it, run:
+
+```lua
+xattr -d com.apple.quarantine /usr/local/bin/kosmokrator
+```
+
+### Missing PHP extensions (PHAR / source)
+
+If you see an error about a missing extension, install it through your system package manager. For example, on Debian or Ubuntu:
+
+```bash
+sudo apt install php8.4-curl php8.4-mbstring php8.4-openssl php8.4-pdo-sqlite php8.4-pcntl php8.4-readline
+```
+
+On macOS with Homebrew, these extensions are typically included with the main PHP formula:
+
+```bash
+brew install php@8.4
+```

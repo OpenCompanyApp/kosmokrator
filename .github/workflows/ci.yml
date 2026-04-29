@@ -7,6 +7,24 @@ on:
     branches: [main, dev]
 
 jobs:
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !contains(toJson(github.event.pull_request.labels.*.name), 'no-changelog')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+
+      - name: Check changelog coverage
+        run: php bin/changelog check --base-ref=origin/${{ github.base_ref }}
+
   smoke:
     name: Startup Smoke
     runs-on: ubuntu-latest
@@ -31,6 +49,13 @@ jobs:
         env:
           COMPOSER_MIRROR_PATH_REPOS: 1
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
       - name: Source startup smoke
         run: |
           tmp_home="$(mktemp -d)"
@@ -48,10 +73,11 @@ jobs:
             HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" "$command" --help >/dev/null
           done
 
-      - name: Generated website docs are current
+      - name: Build website docs
+        working-directory: website
         run: |
-          php website/build.php
-          git diff --exit-code -- website/html
+          npm ci
+          npm run build
 
       - name: No-dev startup smoke
         run: |

@@ -1,0 +1,162 @@
+---
+title: "UI Guide"
+description: "TUI and ANSI renderer behavior, terminal compatibility, and interface guidance."
+sidebar:
+  order: 10
+---
+KosmoKrator ships with two rendering modes — a full-screen interactive TUI and a lightweight ANSI fallback — so it works everywhere from modern GPU-accelerated terminals to bare SSH sessions. This guide covers how each mode works, what to expect, and how to get the best experience.
+
+## Dual Renderer System
+
+At startup KosmoKrator checks whether the **Symfony TUI** library is available (`class_exists(Tui::class)`). If the library is installed, it launches in **TUI mode**. If the library is not present — for example in a minimal installation or inside a basic SSH session — it falls back to **ANSI mode**, which uses only standard ANSI escape codes and `readline` for input.
+
+You can override the auto-detection with a CLI flag:
+
+| Flag | Effect |
+| --- | --- |
+| `--renderer=tui` | Force TUI mode. Silently falls back to ANSI if the Symfony TUI library is not available. |
+| `--renderer=ansi` | Force ANSI mode regardless of terminal capabilities. |
+| _(omit)_ | Auto-detect. TUI when possible, ANSI otherwise. |
+| `--no-animation` | Disable breathing animation and other visual effects in TUI mode. Useful over slow connections. |
+
+**Tip:** If the TUI renders but feels sluggish over a remote connection, run with `--renderer=ansi` for a snappier experience. ANSI mode sends far fewer escape sequences per frame.
+
+## TUI Mode
+
+The TUI is built on **Symfony TUI** with a **Revolt** event loop, giving it a responsive, non-blocking architecture that updates the screen in real time while the agent is working.
+
+### Editor Widget
+
+The `EditorWidget` provides a full multi-line input area. Press `Shift+Enter` to insert a new line without submitting, and `Enter` to send the message. The editor supports basic cursor movement, selection, and clipboard paste.
+
+### Overlay Dialogs
+
+Interactive prompts — permission requests, settings panels, the session picker — appear as overlay dialogs added on top of the conversation. They can be dismissed with `Escape` and navigated with arrow keys.
+
+### Animations & Activity Indicators
+
+While the agent is processing, the TUI shows a live **breathing animation** and a spinning indicator. Subagent activity is reflected in real time via the `SubagentDisplayManager`, which refreshes the agent tree overlay as children spawn and complete.
+
+**Toast notifications** appear briefly for transient events — tool completions, errors, or status changes — and fade away automatically. They provide feedback without interrupting the conversation flow.
+
+### Swarm Dashboard
+
+Press `Ctrl+A` at any time to open the **swarm dashboard**, an overlay widget that shows every active subagent, its status, elapsed time, and dependency edges. Press `Ctrl+A` again (or `Escape`) to dismiss it.
+
+### Syntax Highlighting & Markdown
+
+Code blocks in agent responses are syntax-highlighted via **tempest/highlight** with a custom `KosmokratorTerminalTheme` that matches the KosmoKrator color palette. Markdown rendering is handled by Symfony TUI's `MarkdownWidget` with a custom stylesheet tuned for terminal readability.
+
+**Tip:** Use `Ctrl+O` to collapse or expand tool output blocks inline. When collapsed, you see just the tool icon and a one-line summary — useful for scanning long conversations.
+
+## ANSI Mode
+
+ANSI mode uses pure ANSI escape codes for color and formatting, with PHP's `readline` extension for line editing and history. It works in literally any terminal — no alternate screen buffer, no event loop, no special capabilities required.
+
+### Markdown Formatting
+
+Agent responses are formatted by `MarkdownToAnsi`, which converts CommonMark AST nodes into ANSI-colored text. Specialized handlers extract tables and nested lists for clean alignment. The markdown parsing itself uses **league/commonmark**.
+
+### Table Rendering
+
+The `AnsiTableRenderer` produces aligned, bordered tables using box-drawing characters, automatically truncated to the terminal width.
+
+### Agent Tree Display
+
+When subagents are active, the ANSI renderer shows a tree of running agents using box-drawing characters (`├─`, `└─`) via the shared `AgentDisplayFormatter`.
+
+**Tip:** ANSI mode does not have a multi-line editor. If you need to compose long prompts, use the `/seed` command to load content from your preferred editor or paste from the clipboard.
+
+## Shared Components
+
+Both renderers share a common set of UI components that ensure a consistent look regardless of which mode is active:
+
+| Component | Purpose |
+| --- | --- |
+| `Theme.php` | Shared color palette and tool icons. Icons are celestial/planetary symbols: `☽` (Moon) for file reads, `☉` (Sun) for file writes, `♅` (Uranus) for edits/patches, `✧` for glob, `⊛` for grep, `⚡︎` for bash, `♃` (Jupiter) for subagents, `♄` (Saturn) for memory, `☿` (Mercury) for Lua, and more. |
+| `AgentDisplayFormatter` | Static utilities: `formatAgentLabel`, `formatElapsed`, `formatAgentStats`, `renderChildTree`. Used by both renderers to display agent hierarchy. |
+| `AgentTreeBuilder` | Builds a structured agent tree from orchestrator stats, consumed by the TUI swarm dashboard and the ANSI tree display alike. |
+| `KosmokratorTerminalTheme` | Syntax highlighting color definitions shared between TUI (tempest/highlight) and ANSI (inline coloring). |
+| `UI/Diff/` | Unified diff rendering with word-level highlighting. Produces colored `+/-` lines in both TUI and ANSI modes. |
+
+## Terminal Compatibility
+
+| Terminal | TUI Support | Notes |
+| --- | --- | --- |
+| **iTerm2** | Full | Recommended on macOS. Full true-color and Unicode support. |
+| **Alacritty** | Full | GPU-accelerated. Excellent performance. |
+| **Kitty** | Full | GPU-accelerated with full Unicode support. |
+| **WezTerm** | Full | Multiplx-aware, good Unicode and true-color. |
+| **GNOME Terminal** | Good | Full features. May need to enable 256-color in preferences. |
+| **Konsole** | Good | Full features on KDE. Ensure Unicode is enabled. |
+| **macOS Terminal.app** | ANSI recommended | Limited Unicode and color support. ANSI mode auto-selected. |
+| **Windows Terminal** (via WSL) | Full | Best Windows experience. Use with WSL2. |
+| **SSH sessions** | ANSI (auto-detected) | Fallback depends on remote `$TERM`. Use `-o "RequestTTY yes"` for better results. |
+| **[CI / headless](/docs/headless)** | HeadlessRenderer (stdout/stderr) | Agent output to stdout, progress to stderr. Use `-p` for headless mode. |
+
+**Tip:** The status line at the top of the TUI shows the current **mode label** (e.g. "Code", "Plan"), the **permission label**, and **token/model details** — so you always know the active configuration at a glance.
+
+## Context Bar
+
+In TUI mode, a **context bar** at the bottom of the screen displays real-time context window usage. It shows the current token count as a percentage of the configured maximum:
+
+| Color | Threshold | Meaning |
+| --- | --- | --- |
+| **Green** | 0–50% | Plenty of headroom. |
+| **Yellow** | 50–75% | Warning. Compaction may be triggered soon. |
+| **Red** | 75%+ | Critical. Auto-compaction or pruning will activate. |
+
+The context bar also shows active tasks as an indented tree — the parent task and any running subagents — so you always know what the agent is working on without opening the full swarm dashboard.
+
+**Tip:** When the bar turns red, the agent will automatically compact the conversation history. You can trigger this manually with `/compact` at any time. See [Context & Memory](/docs/context) for details.
+
+## Output Display
+
+Tool results and agent responses are rendered differently depending on the active mode:
+
+### TUI Output
+
+-   **Inline widgets** — Tool results appear as collapsible blocks inside the conversation. Press `Ctrl+O` to toggle collapse/expand.
+-   **Diff highlighting** — File edits are rendered as unified diffs with word-level color highlighting via `UI/Diff/`.
+-   **Code with syntax highlighting** — Code blocks use `KosmokratorTerminalTheme` for consistent colors across all supported languages.
+-   **Markdown** — Agent prose is rendered with headers, bold, italic, links, and bullet lists via the custom `MarkdownWidget` stylesheet.
+
+### ANSI Output
+
+-   **Colored blocks with tool icons** — Each tool call is prefixed with its celestial symbol icon from `Theme.php` and colored to indicate success/failure.
+-   **Truncated to terminal width** — All output respects `$COLUMNS`. Long lines are wrapped or truncated to prevent horizontal scroll.
+-   **Line-by-line streaming** — Agent responses stream as they are generated, with ANSI-colored text appearing line by line.
+
+### Feature Comparison
+
+| Feature | TUI Mode | ANSI Mode |
+| --- | --- | --- |
+| Multi-line input editor | Yes (Shift+Enter) | No — use `/seed` |
+| Overlay dialogs | Yes | No — inline prompts |
+| Swarm dashboard | Overlay (Ctrl+A) | Inline tree display |
+| Syntax highlighting | Full (tempest/highlight) | Basic ANSI colors |
+| Markdown rendering | Full (MarkdownWidget) | ANSI-formatted (MarkdownToAnsi) |
+| Collapsible output | Yes (Ctrl+O) | No |
+| Diff highlighting | Word-level | Line-level |
+| Context bar | Live percentage bar | Periodic text summary |
+| Breathing animation | Yes | No |
+| Toast notifications | Yes | No |
+| SSH / basic terminals | No | Yes |
+| [CI / headless](/docs/headless) | No | text, JSON, or stream-json to stdout |
+
+## Keyboard Shortcuts
+
+The TUI mode supports the following keyboard shortcuts for efficient navigation:
+
+| Shortcut | Action |
+| --- | --- |
+| `Shift+Tab` | Cycle through agent modes (e.g. Code → Plan → Explore). |
+| `Ctrl+L` | Force a full screen refresh. |
+| `Page Up` / `Page Down` | Scroll through the conversation history. |
+| `End` | Jump to the live (bottom) position in the conversation. |
+| `Escape` | Cancel an in-progress completion or dismiss an overlay. |
+| `Tab` | Accept the current autocomplete suggestion. |
+
+## Subagent Rendering
+
+Subagents spawned by the orchestrator use a **NullRenderer** by default — they produce no terminal output of their own. Results are forwarded to the parent agent and displayed through the parent's renderer. Active subagents appear in the TUI's swarm dashboard (`Ctrl+A`) or the ANSI agent tree display.

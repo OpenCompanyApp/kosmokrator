@@ -1,0 +1,571 @@
+---
+title: "Headless Mode"
+description: "Run KosmoKrator non-interactively from scripts, CI, and other coding CLIs."
+sidebar:
+  order: 6
+---
+Run KosmoKrator non-interactively for CI/CD pipelines, shell scripts, git hooks, and automated workflows. Pass a prompt, get output, exit. No TTY required.
+
+## Quick Start
+
+The three ways to invoke headless mode:
+
+```bash
+# Positional prompt — the simplest invocation
+kosmokrator "fix the off-by-one error in src/Math.php"
+
+# Explicit -p flag
+kosmokrator -p "list all TODO comments in the codebase"
+
+# Stdin pipe
+echo "explain this error" | kosmokrator
+```
+
+All three produce the same result: the agent runs to completion, writes the final response to **stdout**, and exits with code `0` on success. Progress and diagnostics go to **stderr**, so `result=$(kosmokrator -p "task")` captures only the response.
+
+This CLI path is backed by the same [Agent SDK](/docs/sdk) runtime exposed to PHP applications through `Kosmokrator\Sdk\AgentBuilder`. Use the SDK when you want headless execution inside a web app, worker, daemon, or another PHP automation surface.
+
+For the complete command matrix used by wrappers and other coding CLIs, see [CLI Reference](/docs/cli-reference). For every configurable setting and effect timing, see [Settings Reference](/docs/settings-reference).
+
+**Tip:** Combine stdin with a positional prompt — stdin is appended after the prompt. Great for injecting file contents into a task:
+
+```bash
+cat error.log | kosmokrator -p "explain this error and suggest a fix"
+```
+
+### Headless Integrations
+
+If you do not need an agent turn and only want to call external tools such as Plane, ClickUp, or other OpenCompany integration packages, use the dedicated integrations CLI instead:
+
+```bash
+# Discover configured providers
+kosmokrator integrations:status --json
+
+# Read the schema for one integration function
+kosmokrator integrations:schema plane.list_issues
+
+# Call an integration directly
+kosmokrator integrations:call plane.list_issues \
+  --workspace-slug=kosmokrator \
+  --project-id=PROJECT_UUID \
+  --json
+
+# Run a multi-step Lua workflow against configured integrations
+kosmokrator integrations:lua workflow.lua --json
+```
+
+This integration surface is designed for scripts and other coding CLIs. It is documented in detail in [Integrations CLI](/docs/integrations).
+
+Integration calls remain governed in headless mode. Read/write permissions configured with `integrations:configure --read=...`, `--write=...`, or `integrations.permissions_default` are checked before execution. A trusted automation job can pass `--force` to bypass only that integration read/write policy.
+
+### Headless MCP
+
+MCP servers can also be used without an agent turn. KosmoKrator reads the common project `.mcp.json` shape, plus VS Code/Cursor `servers` files, then exposes the servers through `mcp:*` commands and Lua as `app.mcp.*`.
+
+```bash
+# Add a portable project server
+kosmokrator mcp:add github --project --type=stdio \
+  --command=github-mcp-server --env GITHUB_TOKEN --json
+
+# Review and trust project server command before discovery/execution
+kosmokrator mcp:list --json
+kosmokrator mcp:trust github --project --json
+kosmokrator mcp:tools github --json
+kosmokrator mcp:schema github.search_repositories --json
+
+# Call directly or through a per-server shortcut
+kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
+kosmokrator mcp:github search_repositories --query="kosmokrator" --json
+
+# Run a Lua workflow against MCP servers
+kosmokrator mcp:lua workflow.lua --json
+```
+
+Headless MCP keeps project trust and read/write policy checks. Project MCP config can start local processes, so normal execution requires `mcp:trust`. Tool calls also check `mcp.servers.SERVER.permissions.read` or `.write`; `ask` fails in pure headless mode because there is no approval modal. Use `--force` only for trusted automation that should bypass both MCP trust and MCP read/write policy for that single invocation.
+
+See [MCP](/docs/mcp) for config compatibility, secrets, resources, prompts, Lua helpers, and the full command reference.
+
+### Headless Web Providers
+
+External web providers can be configured and tested without opening a TUI. They are opt-in and do not replace native `web_fetch`; external fetch and crawl remain separate provider-backed tools.
+
+```bash
+# Inspect available providers and effective configuration
+kosmokrator web:providers --json
+kosmokrator web:doctor --json
+
+# Configure provider keys from environment variables
+kosmokrator web:configure tavily --api-key-env=TAVILY_API_KEY \
+  --enable --search --global --json
+kosmokrator web:configure firecrawl --api-key-env=FIRECRAWL_API_KEY \
+  --enable --fetch --crawl --project --json
+
+# Call providers directly from scripts
+kosmokrator web:search "latest Symfony TUI changes" --provider=tavily --json
+kosmokrator web:fetch https://symfony.com/blog/ --provider=firecrawl --json
+kosmokrator web:crawl https://docs.example.com --provider=tavily --max-pages=10 --json
+```
+
+Supported providers are Tavily, Firecrawl, Exa, Brave Search, Parallel, Jina Reader/Search, SearXNG, Perplexity, OpenAI native web search, and Anthropic native web search. Provider API keys can also be stored with `web:configure --api-key-stdin` or `secrets:set provider.PROVIDER.api_key`.
+
+### Headless Configuration
+
+You can bootstrap KosmoKrator itself without opening the setup wizard or settings TUI:
+
+```bash
+# Configure an LLM provider and credentials
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator providers:configure openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# Discover and set normal settings
+kosmokrator settings:list --json
+kosmokrator settings:set tools.default_permission_mode guardian --global --json
+
+# Batch apply settings from JSON
+jq -n '{settings:{"agent.mode":"plan","context.max_output_lines":1200}}' | \
+  kosmokrator settings:apply --stdin-json --global --json
+
+# Store managed secrets without echoing raw values
+printf %s "$OPENAI_API_KEY" | \
+  kosmokrator secrets:set provider.openai.api_key --stdin --json
+
+# Store MCP server secrets without committing tokens to .mcp.json
+printf %s "$GITHUB_TOKEN" | \
+  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
+
+# Configure Telegram gateway without the TUI
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmokrator gateway:telegram:configure --token-stdin \
+  --enabled on --session-mode thread_user --global --json
+```
+
+Use `settings:doctor --json`, `providers:list --json`, and `secrets:list --json` as the agent-friendly discovery path. See [Configuration](/docs/configuration) and [Providers](/docs/providers) for the full command reference.
+
+## Output Formats
+
+Control the output format with `-o` / `--output-format`:
+
+```bash
+# Human-readable text (default)
+kosmokrator -p "list the files in src/"
+
+# Single JSON blob at completion
+kosmokrator -p -o json "what does the AgentLoop class do?"
+
+# Streaming NDJSON events as they happen
+kosmokrator -p -o stream-json "refactor the auth module"
+```
+
+### Text
+
+The default. Final response on stdout, progress on stderr:
+
+```bash
+$ kosmokrator -p "how many PHP files are in src/?"
+
+  [Working]                           ← stderr (dimmed)
+  → bash(command: find src/ -name "*.php" | wc -l)  ← stderr
+  ✓ bash: 142                         ← stderr
+  tokens: 1234→567  cost: $0.03       ← stderr
+
+There are 142 PHP files in the src/ directory.              ← stdout
+```
+
+**Tip:** Only stdout contains the result. Stderr is for human eyes only. This makes text mode ideal for scripting:
+
+```bash
+# Capture just the result
+result=$(kosmokrator -p "generate a migration for users table")
+
+# Show progress live, capture result
+kosmokrator -p "run the test suite" 2>/dev/null
+```
+
+### JSON
+
+A single structured JSON blob written to stdout when the agent finishes. Useful for programmatic consumption:
+
+```bash
+$ kosmokrator -p -o json "list the routes"
+{
+    "type": "result",
+    "text": "The application defines these routes:\n1. GET / ...",
+    "duration_ms": 4500,
+    "turns": 0,
+    "usage": {
+        "tokens_in": 1234,
+        "tokens_out": 567
+    },
+    "errors": [],
+    "tool_calls": [
+        {"name": "bash", "args": {"command": "php artisan route:list"}, "output": "...", "success": true}
+    ]
+}
+```
+
+### Stream JSON
+
+Emits [NDJSON](https://ndjson.org/) events to stdout as they happen. Each line is a complete JSON object. Designed for IDE integrations, real-time dashboards, and long-running agent monitoring:
+
+```bash
+$ kosmokrator -p -o stream-json "analyze the codebase"
+{"type":"user_message","text":"analyze the codebase","timestamp":1712570000000}
+{"type":"phase","phase":"thinking","timestamp":1712570000100}
+{"type":"text_delta","delta":"I'll start by ","timestamp":1712570005000}
+{"type":"text_delta","delta":"examining the directory structure.","timestamp":1712570005100}
+{"type":"tool_call","name":"bash","args":{"command":"find src/ -type f | head -30"},"timestamp":1712570006000}
+{"type":"tool_result","name":"bash","output":"src/Agent/AgentLoop.php\n...","success":true,"timestamp":1712570007000}
+{"type":"result","text":"The codebase follows...","duration_ms":8000,"turns":3,"usage":{"tokens_in":2345,"tokens_out":890},"timestamp":1712570010000}
+```
+
+Event types:
+
+| Event | Description |
+| --- | --- |
+| `user_message` | The prompt sent to the agent |
+| `phase` | Agent phase transition (thinking, working, idle) |
+| `text_delta` | Incremental text from the LLM response |
+| `reasoning` | Extended thinking content (if supported by model) |
+| `tool_call` | A tool is being invoked with name and arguments |
+| `tool_result` | Tool execution result with success status |
+| `subagent_spawn` | A child agent was spawned |
+| `subagent_batch` | Child agent(s) completed |
+| `stream_end` | The current text stream completed |
+| `error` | An error occurred during execution |
+| `result` | Final result with usage stats and duration |
+
+## CLI Reference
+
+All headless-related flags. Combine freely:
+
+| Flag | Alias | Description |
+| --- | --- | --- |
+| `[prompt]` | — | Positional task prompt (enables headless mode) |
+| `--print` | `-p` | Explicit headless mode |
+| `--output-format` | `-o` | Output format: `text`, `json`, `stream-json` |
+| `--model` | `-m` | Override model for this run |
+| `--mode` | — | Agent mode: `edit`, `plan`, `ask` |
+| `--yolo` | — | Auto-approve governed permission prompts (alias for `--permission-mode prometheus`) |
+| `--permission-mode` | — | Permission mode: `guardian`, `argus`, `prometheus` |
+| `--max-turns` | `-t` | Maximum agentic turns (LLM call cycles) |
+| `--timeout` | — | Maximum runtime in seconds |
+| `--continue` | `-c` | Continue the most recent session |
+| `--resume` | — | Resume last session (same as `--continue`) |
+| `--session` | — | Resume a specific session by ID |
+| `--system-prompt` | — | Replace the system prompt entirely |
+| `--append-system-prompt` | — | Append to the default system prompt |
+| `--no-session` | — | Don't persist the session to disk |
+
+## Permissions in Headless Mode
+
+In headless mode, there is no terminal dialog for approval. KosmoKrator still evaluates the configured permission mode, denied tools, blocked paths, agent mode, integration read/write policy, and file path validation before executing work. Calls that would require an unavailable prompt fail with a structured error unless you explicitly choose an auto-approval policy.
+
+Use `--yolo` to explicitly opt into Prometheus-style auto-approval for agent tool calls:
+
+```bash
+# Auto-approve governed permission prompts
+kosmokrator -p --yolo "run the full test suite and fix any failures"
+```
+
+Or use `--permission-mode` for explicit control. For direct integration commands, use `--force` when a trusted automation job should bypass integration read/write policy:
+
+```bash
+# Use Guardian mode (auto-approve safe tools, deny risky ones)
+kosmokrator -p --permission-mode guardian "add type hints to src/Utils.php"
+
+# Use Argus mode (deny tools that would normally ask)
+kosmokrator -p --permission-mode argus "what files are in the project?"
+
+# Bypass integration read/write policy for this direct call only
+kosmokrator integrations:call plane.create_issue --force --json
+```
+
+See [Permissions](/docs/permissions) for details on each mode.
+
+## Guardrails
+
+For autonomous runs, protect against runaway agents with `--max-turns` and `--timeout`:
+
+```bash
+# Maximum 10 LLM call cycles
+kosmokrator -p --max-turns 10 "refactor the database layer"
+
+# Maximum 5 minutes
+kosmokrator -p --timeout 300 "implement user authentication"
+
+# Combine both
+kosmokrator -p --max-turns 20 --timeout 600 "rewrite the API module"
+```
+
+**Tip:** One "turn" is one LLM call cycle. A turn that triggers tool calls counts as one turn — the tool execution and follow-up LLM call is the next turn.
+
+## Session Management
+
+Headless runs create sessions by default, just like interactive mode. This means you can resume them later:
+
+```bash
+# Run a task (creates a session)
+kosmokrator -p "analyze the authentication flow"
+
+# Continue that session later
+kosmokrator -p -c "now implement the suggested improvements"
+
+# Resume a specific session by ID
+kosmokrator -p --session abc123 "what was my last question about?"
+```
+
+Use `--no-session` for ephemeral runs where you don't need session history:
+
+```bash
+# Quick one-off question, no session persisted
+kosmokrator -p --no-session "what does this regex do? /([A-Z])\w+/"
+```
+
+## Model Selection
+
+Override the configured model for a single run:
+
+```bash
+# Use a specific model
+kosmokrator -p -m sonnet "quick code review of src/Http/"
+
+# Use a cheaper model for simple tasks
+kosmokrator -p -m haiku "generate a .gitignore for a PHP project"
+```
+
+The model name matches your provider's model identifier. See [Providers](/docs/providers) for available models.
+
+## Agent Modes
+
+Control which tools the agent can use:
+
+```bash
+# Full access (default) — all tools available
+kosmokrator -p --mode edit "fix the login bug"
+
+# Read-only — analyze without modifying files
+kosmokrator -p --mode plan "design a caching strategy for the API"
+
+# Ask mode — read files and run bash, but no file writes
+kosmokrator -p --mode ask "what does the QueueWorker do?"
+```
+
+| Mode | File Read | File Write | Bash | Subagents |
+| --- | --- | --- | --- | --- |
+| `edit` (default) | ✓ | ✓ | ✓ | ✓ |
+| `plan` | ✓ | × | ✓ | ✓ |
+| `ask` | ✓ | × | ✓ | × |
+
+## System Prompt Control
+
+Customize the agent's behavior by modifying the system prompt:
+
+```bash
+# Append instructions to the default prompt
+kosmokrator -p --append-system-prompt "Always use PSR-12 coding style" "refactor src/"
+
+# Replace the entire system prompt
+kosmokrator -p --system-prompt "You are a security auditor. Find vulnerabilities." "audit src/Auth/"
+```
+
+## Exit Codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success — agent completed the task |
+| `1` | Error — agent encountered an error or returned an error response |
+| `2` | Limit exceeded — max turns or timeout reached |
+| `130` | Cancelled — interrupted by SIGINT (Ctrl+C) |
+| `143` | Cancelled — interrupted by SIGTERM |
+
+```bash
+# Use in shell scripts
+kosmokrator -p "run tests"
+if [ $? -eq 0 ]; then
+    echo "Tests passed!"
+elif [ $? -eq 2 ]; then
+    echo "Agent hit a guardrail limit"
+fi
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: AI Code Review
+on: [pull_request]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup KosmoKrator
+        run: |
+          curl -sSL https://kosmokrator.dev/install.sh | bash
+          printf %s "${{ secrets.ANTHROPIC_API_KEY }}" | \
+            kosmokrator setup --provider anthropic --api-key-stdin --global --json
+
+      - name: Run AI Review
+        run: |
+          kosmokrator -p --no-session --max-turns 5 \
+            "Review the changed files in this PR. Focus on security,
+             performance, and code style. Output a summary." \
+            2>review-progress.txt >review-result.txt
+
+      - name: Post Review Comment
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('review-result.txt', 'utf8');
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: review
+            });
+```
+
+### Git Hooks
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit — AI-assisted commit message validation
+# Requires: kosmokrator in PATH
+
+staged=$(git diff --cached --name-only)
+if [ -z "$staged" ]; then exit 0; fi
+
+issues=$(kosmokrator -p --no-session --max-turns 3 --timeout 30 \
+  "Check these staged files for obvious bugs, debugging leftovers
+   (dd, dump, console.log), and TODO comments that should block commit.
+   Files: $staged
+   Output ONLY 'PASS' if everything looks good, or list the issues." \
+  2>/dev/null)
+
+if [ "$issues" != "PASS" ]; then
+  echo "AI pre-commit check found issues:"
+  echo "$issues"
+  exit 1
+fi
+```
+
+### Makefile Integration
+
+```bash
+# Makefile
+.PHONY: ai-review ai-docs ai-test
+
+ai-review:
+	@kosmokrator -p --max-turns 10 --timeout 300 \
+		"Review the codebase for security issues, performance problems, \
+		 and code style violations. Prioritize actual bugs over style nits."
+
+ai-docs:
+	@kosmokrator -p --mode plan \
+		"Generate API documentation for all public methods in src/. \
+		 Output markdown suitable for a docs site."
+
+ai-test:
+	@kosmokrator -p --yolo \
+		"Run the test suite. If any tests fail, fix them and re-run."
+```
+
+## Scripting Patterns
+
+### Batch Processing
+
+Process multiple files or tasks sequentially:
+
+```bash
+#!/bin/bash
+# Add type hints to all PHP files in a directory
+for file in src/Service/*.php; do
+  echo "Processing $file..."
+  kosmokrator -p --no-session --max-turns 3 \
+    "Add strict type declarations and parameter type hints to $file. \
+     Only modify the file if types are missing."
+done
+```
+
+### JSON Output Parsing
+
+```bash
+#!/bin/bash
+# Get structured results with jq
+result=$(kosmokrator -p -o json --no-session "list all PHP classes in src/")
+echo "Tokens used: $(echo "$result" | jq '.usage.tokens_in') in, $(echo "$result" | jq '.usage.tokens_out') out"
+echo "Duration: $(echo "$result" | jq '.duration_ms')ms"
+echo "Tool calls: $(echo "$result" | jq '.tool_calls | length')"
+echo "Response:"
+echo "$result" | jq -r '.text'
+```
+
+### Streaming Pipeline
+
+```bash
+#!/usr/bin/env python3
+"""Real-time agent monitoring via stream-json."""
+import sys, json, subprocess
+
+proc = subprocess.Popen(
+    ['kosmokrator', '-p', '-o', 'stream-json', 'refactor the auth module'],
+    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    text=True
+)
+
+for line in proc.stdout:
+    event = json.loads(line)
+    match event['type']:
+        case 'tool_call':
+            print(f"  → {event['name']}({list(event['args'].keys())[0]}: ...)")
+        case 'tool_result':
+            status = '✓' if event['success'] else '✗'
+            print(f"  {status} {event['name']}")
+        case 'result':
+            print(f"\nDone in {event['duration_ms']}ms")
+            print(event['text'])
+
+proc.wait()
+sys.exit(proc.returncode)
+```
+
+## Comparison with Interactive Mode
+
+| Feature | Interactive | Headless |
+| --- | --- | --- |
+| Input method | REPL prompt | CLI arg, stdin, or `-p` |
+| Output | TUI / ANSI renderer | stdout (text, JSON, stream-json) |
+| Tool permissions | Interactive prompts | Policy evaluated; use `--yolo` for agent auto-approval |
+| Plan approval | Interactive dialog | Plans output but not auto-implemented |
+| Ask user/choice | Interactive prompts | Returns empty/dismissed |
+| Slash commands | Available | Not available |
+| Session persistence | Yes | Yes (disable with `--no-session`) |
+| Session resume | `--resume` | `--continue`, `--resume`, `--session` |
+| Subagents | Full support | Full support |
+| Stuck detection | No | Yes (auto-nudge and force-return) |
+| Max turns / timeout | Not available | `--max-turns`, `--timeout` |
+
+## Migrating from Other Agents
+
+If you're coming from another coding agent, here's how the headless flags map:
+
+| You're used to | KosmoKrator equivalent |
+| --- | --- |
+| Claude Code `-p` | `kosmokrator -p` (identical) |
+| Claude Code `--output-format json` | `kosmokrator -o json` |
+| Claude Code `--output-format stream-json` | `kosmokrator -o stream-json` |
+| Claude Code `--dangerously-skip-permissions` | `kosmokrator --yolo` |
+| Claude Code `--continue` | `kosmokrator -c` (identical) |
+| Claude Code `--max-turns` | `kosmokrator --max-turns` (identical) |
+| Claude Code `--model` | `kosmokrator -m` |
+| Codex CLI `codex exec "task"` | `kosmokrator "task"` |
+| Codex CLI `--full-auto` | `kosmokrator --yolo` |
+| Codex CLI `-q` | `kosmokrator -p` |
+| Aider `--message "task"` | `kosmokrator -p "task"` |
+| Aider `--yes-always` | `kosmokrator --yolo` |
+| Goose `goose run -t "task"` | `kosmokrator "task"` |
+| OpenCode `opencode run "task"` | `kosmokrator "task"` |

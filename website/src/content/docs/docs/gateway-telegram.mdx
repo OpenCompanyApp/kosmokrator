@@ -1,0 +1,176 @@
+---
+title: "Telegram Gateway"
+description: "Configure, run, secure, and troubleshoot the KosmoKrator Telegram gateway."
+sidebar:
+  order: 14
+---
+
+The Telegram gateway lets users talk to KosmoKrator through a bot while still using the same sessions, providers, permissions, settings, tasks, memories, integrations, MCP, Lua runtime, and subagent system as the terminal agent.
+
+## Mental Model
+
+```text
+Telegram update
+  -> TelegramGatewayRuntime
+  -> TelegramSessionRouter
+  -> AgentSessionBuilder
+  -> AgentLoop
+  -> TelegramGatewayRenderer
+  -> Telegram sendMessage/editMessage
+```
+
+The gateway worker long-polls Telegram, normalizes updates, routes each message to a Kosmo session, and streams agent output back to Telegram through a gateway renderer.
+
+## Configure Headlessly
+
+```bash
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmokrator gateway:telegram:configure \
+    --token-stdin \
+    --enabled on \
+    --session-mode thread_user \
+    --allowed-users "123456789,@alice" \
+    --require-mention on \
+    --global \
+    --json
+```
+
+Options:
+
+| Option | Values | Purpose |
+| --- | --- | --- |
+| `--token` | token | Store bot token directly. Prefer stdin/env for automation. |
+| `--token-stdin` | flag | Read token from stdin. |
+| `--token-env` | env var name | Read token from an environment variable. |
+| `--enabled` | `on`, `off` | Enable or disable gateway. |
+| `--session-mode` | `thread`, `thread_user`, `chat`, `chat_user` | Route Telegram conversations to sessions. |
+| `--allowed-users` | list | Allowed user IDs or usernames. |
+| `--allowed-chats` | list | Allowed chat IDs. |
+| `--require-mention` | `on`, `off` | Require bot mention/reply in group chats. |
+| `--free-response-chats` | list | Chats where mention is not required. |
+| `--poll-timeout-seconds` | integer | Telegram long-poll timeout. |
+| `--global`, `--project` | flag | Write scope. |
+| `--json` | flag | Machine-readable output. |
+
+## Run The Gateway
+
+```bash
+kosmokrator gateway:telegram:status --json
+kosmokrator gateway:telegram
+```
+
+For a system service, run the installed binary from a working directory that has the desired project config:
+
+```ini
+[Unit]
+Description=KosmoKrator Telegram Gateway
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/my-project
+ExecStart=/usr/local/bin/kosmokrator gateway:telegram
+Restart=always
+RestartSec=5
+Environment=KOSMOKRATOR_TELEGRAM_BOT_TOKEN=123:abc
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Session Routing
+
+| Mode | Session key |
+| --- | --- |
+| `thread` | One session per Telegram thread/topic when available, falling back to chat. |
+| `thread_user` | One session per thread and user. |
+| `chat` | One session per chat. |
+| `chat_user` | One session per chat and user. |
+
+Use `thread_user` for shared group chats where multiple people may ask independent questions. Use `chat` for a private bot used by one person.
+
+## Security Controls
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `gateway.telegram.allowed_users` | empty | Empty allows any reachable user. Set user IDs or usernames to restrict access. |
+| `gateway.telegram.allowed_chats` | empty | Empty allows all chats. Set chat IDs for deployment safety. |
+| `gateway.telegram.require_mention` | `on` | In group chats, respond only when mentioned or replied to. |
+| `gateway.telegram.free_response_chats` | empty | Chat IDs where the bot can answer without mention. |
+
+Recommended group setup:
+
+```bash
+kosmokrator gateway:telegram:configure \
+  --allowed-users "123456789,@maintainer" \
+  --allowed-chats "-1001234567890" \
+  --require-mention on \
+  --session-mode thread_user \
+  --json
+```
+
+## Permissions
+
+Gateway sessions use the same permission system as terminal sessions.
+
+- Guardian auto-approves safe reads and asks for risky operations.
+- Argus asks for every governed tool call.
+- Prometheus auto-approves governed calls.
+- Hard denies, blocked paths, blocked commands, project boundaries, integration permissions, and MCP trust still apply.
+
+Because Telegram is remote, be conservative with project-level settings. A common deployment policy is:
+
+```bash
+kosmokrator settings:set tools.default_permission_mode guardian --project --json
+kosmokrator settings:set tools.denied_tools "file_write,file_edit,apply_patch" --project --json
+```
+
+For a bot that should only answer questions, start sessions in Ask mode:
+
+```bash
+kosmokrator settings:set agent.mode ask --project --json
+```
+
+## Slash Commands
+
+The gateway bridges supported Telegram text commands to Kosmo slash commands through `TelegramSlashCommandBridge`. Useful commands include:
+
+| Command | Purpose |
+| --- | --- |
+| `/new` | Start a new session. |
+| `/resume` | Resume a previous session where supported. |
+| `/sessions` | List sessions. |
+| `/compact` | Compact context. |
+| `/guardian`, `/argus`, `/prometheus` | Change permission mode. |
+| `/edit`, `/plan`, `/ask` | Change agent mode. |
+
+## Credentials
+
+The bot token can come from:
+
+1. Managed secret `gateway.telegram.token`.
+2. YAML config value `gateway.telegram.token`.
+3. Environment variable `KOSMOKRATOR_TELEGRAM_BOT_TOKEN`.
+
+Preferred setup:
+
+```bash
+printf %s "$TELEGRAM_BOT_TOKEN" | kosmokrator secrets:set gateway.telegram.token --stdin --json
+kosmokrator gateway:telegram:configure --enabled on --json
+```
+
+## Troubleshooting
+
+```bash
+kosmokrator gateway:telegram:status --json
+kosmokrator settings:list --category gateway --json
+kosmokrator secrets:status gateway.telegram.token --json
+```
+
+| Symptom | Check |
+| --- | --- |
+| Worker exits with disabled error | `gateway.telegram.enabled` must be `on`. |
+| Worker exits with missing token | Configure `gateway.telegram.token` or `KOSMOKRATOR_TELEGRAM_BOT_TOKEN`. |
+| Bot ignores group messages | Mention the bot, reply to the bot, or add the chat to `free_response_chats`. |
+| Some users cannot talk to the bot | Check `allowed_users`; usernames are stored without the leading `@`. |
+| Messages go to the wrong session | Change `session_mode` to `thread_user` or `chat_user`. |

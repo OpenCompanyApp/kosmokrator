@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#07070d"/>
+  <rect x="72" y="72" width="1056" height="486" rx="28" fill="#101018" stroke="#dc143c" stroke-opacity=".45"/>
+  <text x="116" y="174" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="38" font-weight="700">KosmoKrator</text>
+  <text x="116" y="248" fill="#dc143c" font-family="Inter, system-ui, sans-serif" font-size="74" font-weight="800">Terminal AI coding agent</text>
+  <text x="116" y="326" fill="#cbd5e1" font-family="Inter, system-ui, sans-serif" font-size="34">TUI, headless CLI, ACP, SDK, Lua, integrations, MCP, subagents</text>
+  <text x="116" y="440" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="30">$ kosmokrator</text>
+  <circle cx="1035" cy="163" r="46" fill="#dc143c"/>
+  <text x="1035" y="181" text-anchor="middle" fill="#fff" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="800">K</text>
+</svg>

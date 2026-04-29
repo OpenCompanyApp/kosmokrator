@@ -1,0 +1,181 @@
+---
+title: "Sessions And Memory"
+description: "How KosmoKrator persists sessions, messages, summaries, memories, token usage, and cross-session project knowledge."
+sidebar:
+  order: 15
+---
+
+KosmoKrator persists useful state so terminal, headless CLI, SDK, ACP, Telegram gateway, and subagents can all resume work consistently.
+
+## What Is Persisted
+
+State is stored under `~/.kosmokrator/data` in SQLite-backed repositories.
+
+| Data | Purpose |
+| --- | --- |
+| Sessions | Conversation identity, project root, model/provider metadata, timestamps, names. |
+| Messages | User, assistant, tool-call, tool-result, and system context messages. |
+| Settings | Global and project-scoped setting overrides. |
+| Memories | Long-lived project/user/decision notes injected into future sessions. |
+| Swarm metadata | Subagent tree state and output summaries. |
+| Usage metadata | Token and cost counters used for status and resume views. |
+
+## Session Lifecycle
+
+Interactive:
+
+```bash
+kosmokrator
+/rename Payment refactor
+/compact
+/sessions
+/resume
+/new
+/quit
+```
+
+Headless:
+
+```bash
+kosmokrator -p "Explain the auth flow"
+kosmokrator -p "Continue the previous task" --continue
+kosmokrator -p "Use this exact session" --session sess_abc123
+kosmokrator -p "One-off analysis" --no-session
+```
+
+SDK:
+
+```php
+use Kosmokrator\Sdk\AgentBuilder;
+
+$agent = AgentBuilder::create()
+    ->forProject('/repo')
+    ->resumeLatestSession()
+    ->build();
+
+$result = $agent->collect('Continue the previous task.');
+```
+
+ACP sessions are normal persisted sessions and can be resumed from the terminal when needed.
+
+## Session Search Tools
+
+The agent can search and read past sessions when those tools are available in the active mode.
+
+| Tool | Purpose |
+| --- | --- |
+| `session_search` | Search prior sessions by text, project, and metadata. |
+| `session_read` | Load a full transcript by session ID prefix. |
+
+Modes:
+
+| Mode/type | Session tools |
+| --- | --- |
+| Edit | `session_search`, `session_read` |
+| Plan | `session_search`, `session_read` |
+| Ask | `session_search` |
+| General subagent | `session_search`, `session_read` |
+| Explore/Plan subagent | `session_search`, `session_read` |
+
+## Context Compaction
+
+Long sessions are kept usable through a pipeline:
+
+1. Tool output truncation.
+2. Duplicate tool-result removal.
+3. Low-value tool-result pruning.
+4. LLM-based compaction.
+5. Oldest-turn trimming as a last resort.
+
+Manual compaction:
+
+```bash
+/compact
+```
+
+Settings:
+
+```bash
+kosmokrator settings:get context.auto_compact --json
+kosmokrator settings:set context.auto_compact on --global --json
+kosmokrator settings:set context.reserve_output_tokens 16000 --project --json
+```
+
+See [Context](/docs/context) for the full pipeline.
+
+## Memories
+
+Memories are durable facts that should survive one conversation.
+
+| Type | Use |
+| --- | --- |
+| `project` | Architecture facts, repo conventions, commands, persistent environment details. |
+| `user` | User preferences and workflow preferences. |
+| `decision` | Architectural decisions and trade-offs. |
+
+Interactive commands:
+
+```bash
+/memories
+/forget 42
+```
+
+Agent tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `memory_search` | Search saved memories before asking the user. |
+| `memory_save` | Create or update a durable memory. |
+
+Mode behavior:
+
+| Mode/type | Memory access |
+| --- | --- |
+| Edit | Search and save. |
+| Plan | Search only. |
+| Ask | Search only. |
+| General subagent | Search and save. |
+| Explore/Plan subagent | Search only. |
+
+Disable memory features:
+
+```bash
+kosmokrator settings:set context.memories off --global --json
+```
+
+## Naming Sessions
+
+Name important sessions so they are easy to resume:
+
+```bash
+/rename MCP implementation audit
+```
+
+Good names include the project area and the outcome:
+
+| Weak | Better |
+| --- | --- |
+| `Fix stuff` | `Fix MCP trust policy` |
+| `Docs` | `Starlight docs migration` |
+| `Review` | `Review provider auth refactor` |
+
+## Storage Hygiene
+
+Use `/sessions` to inspect prior sessions. If a session contains sensitive output, delete it from the session UI or remove the underlying SQLite data after backing up anything important.
+
+Secrets are not stored as plain session settings by provider configuration commands. Use the secret store for API keys:
+
+```bash
+kosmokrator secrets:list --json
+kosmokrator secrets:status provider.openai.api_key --json
+```
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `--continue` resumed the wrong work | Use `--session &lt;id&gt;` from `/sessions` output. |
+| Session picker is cluttered | Rename important sessions and clean old ones from `/sessions`. |
+| Agent forgot a durable project fact | Check `context.memories`; save or update a memory in an Edit-capable session. |
+| Context compacts too often | Increase `context.auto_compact_buffer_tokens` carefully or use a model with a larger context window. |
+| Context overflow warnings appear | Run `/compact`, reduce huge tool outputs, or split the task into a new named session. |

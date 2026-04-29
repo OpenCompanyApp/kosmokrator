@@ -130,6 +130,11 @@ integrations:
 mcp:
   permissions_default: ask  # Default for MCP operations not explicitly set
 
+# KosmoKrator can expose selected integrations and selected upstream MCP
+# servers as one stdio MCP gateway for clients such as Claude Code.
+mcp_gateway:
+  profiles: {}
+
 web:
   cache:
     keep_turns: 2

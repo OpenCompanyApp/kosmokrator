@@ -12,5 +12,9 @@
 /builds
 /.kosmokrator
 /storage
+/website/node_modules
+/website/dist
+/website/.astro
+/website/src/content/docs/docs/changelog.mdx
 tui_err.log
 tui_error.log

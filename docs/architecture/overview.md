@@ -157,10 +157,14 @@ KosmoKrator ships an Agent Client Protocol stdio server:
 | `src/Command/Power/` | 22 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
 | `src/Command/Integration/` | Headless integration CLI commands and dynamic provider shortcuts |
 | `src/Command/Mcp/` | Headless MCP CLI commands and dynamic server shortcuts |
+| `src/Command/Web/` | Optional web provider CLI commands for search, fetch/extract, crawl, provider setup, and diagnostics |
+| `src/Command/Gateway/` | Gateway configuration/status commands such as Telegram headless setup |
 | `src/Sdk/` | Stable embeddable PHP SDK over headless execution: AgentBuilder, Agent, events, renderers, config helpers |
 | `src/Integration/` | Integration catalog, runtime, credential resolution, command argument coercion, Lua invoker |
 | `src/Mcp/` | MCP config store, stdio client, catalog, trust/permissions, secrets, runtime, Lua invoker |
 | `src/Lua/` | Lua sandbox service, documentation registry, native tool bridge |
+| `src/Web/` | Web provider abstractions, fetch/search/crawl providers, safety guards, extraction, cache |
+| `src/Gateway/` | Telegram gateway runtime, routing, approval/pending input stores, gateway renderers |
 | `src/Session/` | SQLite persistence: sessions, messages, memories, settings |
 | `src/Task/` | Task tracking with tree structure and dependency enforcement |
 | `src/Skill/` | Skill system: YAML-based custom prompts with `$skillname` dispatch |

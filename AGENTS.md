@@ -79,10 +79,20 @@ php vendor/bin/phpunit
 php vendor/bin/pint             # Code style (Laravel Pint)
 ```
 
-When adding or changing user-facing features, update the website documentation in `website/pages/docs/` in the same change and rebuild generated docs with:
+When adding or changing user-facing behavior, commands, configuration, providers, packaging, docs surfaces, or runtime features, update `CHANGELOG.md` under `## [Unreleased]` in the same change.
 
 ```bash
-php website/build.php
+php bin/changelog check --base-ref=origin/main
+php bin/changelog prepare 0.7.2
+php bin/changelog extract v0.7.2
+```
+
+Website docs live in the Astro/Starlight app under `website/src/content/docs/docs/`. The website changelog is generated from root `CHANGELOG.md`.
+
+```bash
+cd website
+npm run sync:changelog
+npm run build
 ```
 
 ### Config
@@ -91,7 +101,7 @@ Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/co
 
 `README.md`, `docs/architecture/overview.md`, `docs/architecture/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/proposals/` are design notes. Actionable backlog is tracked in Plane, not in repo audit/todo docs.
 
-When adding or changing user-facing features, update the website docs in `website/pages/docs/` and rebuild generated `website/html/` output. SDK-facing changes must update `/docs/sdk`.
+When adding or changing user-facing features, update the website docs in `website/src/content/docs/docs/` and update `CHANGELOG.md`. SDK-facing changes must update `/docs/sdk`.
 
 ## MCP CLI
 

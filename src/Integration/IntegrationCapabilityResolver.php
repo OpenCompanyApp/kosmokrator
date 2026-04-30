@@ -53,18 +53,22 @@ final class IntegrationCapabilityResolver
         $compatibility['cli_setup_supported'] = $cliSetupSupported;
         $compatibility['cli_runtime_supported'] = $cliRuntimeSupported;
 
-        $authStrategy = (string) (
+        $authStrategy = $this->stringCapability(
             $providerCapabilities['auth_strategy']
-            ?? $providerSeo['auth_strategy']
-            ?? $raw['auth_strategy']
-            ?? $raw['auth']
-            ?? 'none'
+                ?? $providerSeo['auth_strategy']
+                ?? $raw['auth_strategy']
+                ?? $raw['auth']
+                ?? null,
+            'strategy',
+            'none',
         );
-        $auth = (string) (
+        $auth = $this->stringCapability(
             $providerCapabilities['auth']
-            ?? $providerSeo['auth']
-            ?? $raw['auth']
-            ?? $authStrategy
+                ?? $providerSeo['auth']
+                ?? $raw['auth']
+                ?? null,
+            'legacy_auth_type',
+            $authStrategy,
         );
         $hostAvailability = is_array($raw['host_availability'] ?? null) ? $raw['host_availability'] : [];
         $runtimeRequirements = is_array($raw['runtime_requirements'] ?? null) ? $raw['runtime_requirements'] : [];
@@ -237,6 +241,26 @@ final class IntegrationCapabilityResolver
 
         if (is_string($value)) {
             return in_array(strtolower($value), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        return $default;
+    }
+
+    private function stringCapability(mixed $value, string $preferredArrayKey, string $default): string
+    {
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+
+        if (! is_array($value)) {
+            return $default;
+        }
+
+        foreach ([$preferredArrayKey, 'strategy', 'legacy_auth_type', 'type', 'mode'] as $key) {
+            $candidate = $value[$key] ?? null;
+            if (is_string($candidate) && $candidate !== '') {
+                return $candidate;
+            }
         }
 
         return $default;

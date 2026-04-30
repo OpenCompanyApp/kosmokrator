@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Integration;
 
+use Kosmokrator\Integration\Runtime\IntegrationToolMetadata;
 use Kosmokrator\Settings\SettingsManager;
 use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
@@ -202,11 +203,12 @@ class IntegrationManager
 
         foreach ($this->getActiveProviders() as $name => $provider) {
             $tools = [];
-            foreach ($provider->tools() as $slug => $meta) {
+            foreach (IntegrationToolMetadata::forProvider($provider) as $slug => $meta) {
                 $tools[] = [
                     'slug' => $slug,
-                    'name' => $slug,
+                    'name' => (string) ($meta['name'] ?? $slug),
                     'description' => $meta['description'] ?? '',
+                    'parameters' => $meta['parameters'] ?? [],
                 ];
             }
 

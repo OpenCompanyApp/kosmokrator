@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6892142b665515042d777766a94cb7c2",
+    "content-hash": "7a1e44f4bf1598aa77b60bc8154e4c30",
     "packages": [
         {
             "name": "amphp/amp",
@@ -3865,6 +3865,59 @@
                 "agents",
                 "integrations",
                 "opencompany",
+                "tools"
+            ],
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "opencompanyapp/integration-instantly",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "integrations/packages/instantly",
+                "reference": "df426e10a82f56f2532d88247633ebdc636adfd3"
+            },
+            "require": {
+                "opencompanyapp/integration-core": "^2.0 || @dev",
+                "php": "^8.2"
+            },
+            "replace": {
+                "opencompanyapp/ai-tool-instantly": "self.version"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenCompany\\Integrations\\Instantly\\InstantlyServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenCompany\\Integrations\\Instantly\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "OpenCompany",
+                    "homepage": "https://github.com/OpenCompanyApp"
+                }
+            ],
+            "description": "Instantly.ai integration for Laravel — cold email outreach, campaigns, leads, analytics, and deliverability.",
+            "keywords": [
+                "analytics",
+                "campaigns",
+                "email",
+                "instantly",
+                "leads",
+                "opencompany",
+                "outreach",
                 "tools"
             ],
             "transport-options": {
@@ -9737,6 +9790,7 @@
         "opencompanyapp/integration-clickup": 20,
         "opencompanyapp/integration-coingecko": 20,
         "opencompanyapp/integration-core": 20,
+        "opencompanyapp/integration-instantly": 20,
         "opencompanyapp/integration-plane": 20,
         "opencompanyapp/integration-plausible": 20,
         "opencompanyapp/prism-relay": 20,

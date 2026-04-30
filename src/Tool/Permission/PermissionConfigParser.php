@@ -28,12 +28,37 @@ class PermissionConfigParser
         'web_search', 'web_fetch',
     ];
 
+    /** Commands that are denied even in Prometheus mode. */
+    public const DEFAULT_BLOCKED_COMMANDS = [
+        'rm -rf *',
+        'rm -fr *',
+        'rm -r *',
+        'sudo rm *',
+        'mkfs*',
+        'dd *of=*',
+        'shred *',
+        'truncate -s 0 *',
+        'git reset --hard*',
+        'git clean -fd*',
+        'git clean -df*',
+        'git push --force*',
+        'git push -f*',
+        'chmod -R 777 *',
+        'chown -R *',
+        'docker system prune*',
+        'kubectl delete *',
+    ];
+
     public function parse(Repository $config): array
     {
         $rules = [];
 
         $approvalRequired = $config->get('kosmo.tools.approval_required', []);
-        $blockedCommands = $config->get('kosmo.tools.bash.blocked_commands', []);
+        $configuredBlockedCommands = $config->get('kosmo.tools.bash.blocked_commands', []);
+        $blockedCommands = array_values(array_unique([
+            ...self::DEFAULT_BLOCKED_COMMANDS,
+            ...$configuredBlockedCommands,
+        ]));
         $blockedPaths = $config->get('kosmo.tools.blocked_paths', []);
         $safeCommands = $config->get('kosmo.tools.guardian_safe_commands', []);
         $defaultMode = $config->get('kosmo.tools.default_permission_mode', 'guardian');

@@ -11,6 +11,7 @@
 /.playwright-cli
 /builds
 /.kosmokrator
+/.kosmo
 /storage
 /website/node_modules
 /website/dist

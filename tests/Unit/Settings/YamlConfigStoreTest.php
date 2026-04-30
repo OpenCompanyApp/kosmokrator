@@ -220,6 +220,24 @@ final class YamlConfigStoreTest extends TestCase
         $this->assertSame('autonomous', $data['kosmo']['agent']['mode']);
     }
 
+    public function test_set_rejects_non_array_intermediate_values(): void
+    {
+        $data = [
+            'kosmo' => [
+                'agent' => 'manual',
+            ],
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot set nested config path kosmo.agent.mode: kosmo.agent is not a map.');
+
+        try {
+            $this->store->set($data, 'kosmo.agent.mode', 'autonomous');
+        } finally {
+            $this->assertSame(['kosmo' => ['agent' => 'manual']], $data);
+        }
+    }
+
     // ---------------------------------------------------------------
     // unset()
     // ---------------------------------------------------------------

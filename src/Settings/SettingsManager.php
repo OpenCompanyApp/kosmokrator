@@ -233,10 +233,13 @@ final class SettingsManager
      */
     public function setRaw(string $path, mixed $value, string $scope = 'project'): void
     {
+        $definition = $this->schema->definitionForPath($path);
+        $normalized = $definition !== null ? $this->normalizeValue($definition, $value) : $value;
+
         $paths = new SettingsPaths($this->projectRoot);
         [$targetPath] = $this->configTarget($paths, $scope);
-        $this->store->update($targetPath, function (array $data) use ($path, $value): array {
-            $this->store->set($data, $path, $value);
+        $this->store->update($targetPath, function (array $data) use ($path, $normalized): array {
+            $this->store->set($data, $path, $normalized);
 
             return $data;
         });
@@ -336,11 +339,66 @@ final class SettingsManager
         }
 
         return match ($definition->type) {
-            'number' => is_numeric($value) ? (str_contains((string) $value, '.') ? (float) $value : (int) $value) : $value,
-            'toggle' => in_array(strtolower((string) $value), ['1', 'true', 'on', 'yes'], true) ? 'on' : (in_array(strtolower((string) $value), ['0', 'false', 'off', 'no'], true) ? 'off' : (string) $value),
+            'number' => $this->normalizeNumber($definition, $value),
+            'choice' => $this->normalizeChoice($definition, $value),
+            'toggle' => $this->normalizeToggle($definition, $value),
             'string_list', 'json', 'yaml' => (new SettingValueParser)->parse($definition, $value),
             default => $value,
         };
+    }
+
+    private function normalizeNumber(SettingDefinition $definition, mixed $value): int|float|null
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (! is_int($value) && ! is_float($value) && ! (is_string($value) && is_numeric($value))) {
+            throw new \InvalidArgumentException("Invalid value for [{$definition->id}]: expected a number.");
+        }
+
+        return str_contains((string) $value, '.') ? (float) $value : (int) $value;
+    }
+
+    private function normalizeChoice(SettingDefinition $definition, mixed $value): ?string
+    {
+        if (($value === null || $value === '') && $definition->default === null) {
+            return null;
+        }
+
+        if (! is_scalar($value)) {
+            throw new \InvalidArgumentException("Invalid value for [{$definition->id}]: expected one of {$this->formatOptions($definition)}.");
+        }
+
+        $normalized = (string) $value;
+        if (! in_array($normalized, $definition->options, true)) {
+            throw new \InvalidArgumentException("Invalid value for [{$definition->id}]: expected one of {$this->formatOptions($definition)}.");
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeToggle(SettingDefinition $definition, mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'on' : 'off';
+        }
+
+        $normalized = strtolower((string) $value);
+        if (in_array($normalized, ['1', 'true', 'on', 'yes'], true)) {
+            return 'on';
+        }
+
+        if (in_array($normalized, ['0', 'false', 'off', 'no'], true)) {
+            return 'off';
+        }
+
+        throw new \InvalidArgumentException("Invalid value for [{$definition->id}]: expected one of {$this->formatOptions($definition)}.");
+    }
+
+    private function formatOptions(SettingDefinition $definition): string
+    {
+        return implode(', ', array_map(static fn (string $option): string => "'{$option}'", $definition->options));
     }
 
     /** Convert a mixed setting value to its string representation. */

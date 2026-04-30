@@ -38,6 +38,21 @@ final class SettingsSchema
     }
 
     /**
+     * @param  string  $path  Dot-path used in config files, e.g. kosmo.agent.max_tokens.
+     * @return SettingDefinition|null The matching definition, or null for intentionally free-form paths.
+     */
+    public function definitionForPath(string $path): ?SettingDefinition
+    {
+        foreach ($this->definitions() as $definition) {
+            if ($definition->path === $path) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  string  $id  A setting ID, possibly an alias
      * @return string The canonical dot-path ID
      */

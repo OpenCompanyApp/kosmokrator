@@ -17,9 +17,12 @@ use Kosmokrator\Provider\IntegrationServiceProvider;
 use Kosmokrator\Provider\LlmServiceProvider;
 use Kosmokrator\Provider\LoggingServiceProvider;
 use Kosmokrator\Provider\McpServiceProvider;
+use Kosmokrator\Provider\ServiceProvider;
 use Kosmokrator\Provider\SessionServiceProvider;
 use Kosmokrator\Provider\ToolServiceProvider;
 use Kosmokrator\Provider\WebServiceProvider;
+use Kosmokrator\Session\Database as SessionDatabase;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Revolt\EventLoop;
 use Symfony\Component\Console\Application;
 
@@ -47,37 +50,53 @@ class Kernel
         $this->container = new LaravelApp($this->basePath);
         Container::setInstance($this->container);
 
-        $this->loadEnv();
+        try {
+            $this->loadEnv();
 
+            $providers = $this->serviceProviders($this->container);
+
+            // Register phase: all bindings
+            foreach ($providers as $provider) {
+                $provider->register();
+            }
+
+            // Boot phase: post-registration hooks (e.g. SQLite settings injection)
+            foreach ($providers as $provider) {
+                $provider->boot();
+            }
+
+            $this->registerFacades();
+            $this->buildConsole();
+            $this->registerRevoltErrorHandler();
+        } catch (\Throwable $e) {
+            $this->cleanupFailedBoot();
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Build the service provider list in boot order.
+     *
+     * @return ServiceProvider[]
+     */
+    protected function serviceProviders(Container $container): array
+    {
         // Order matters: config first, then logging, database, core infra, LLM, tools, session
-        $providers = [
-            new ConfigServiceProvider($this->container, $this->basePath),
-            new LoggingServiceProvider($this->container),
-            new DatabaseServiceProvider($this->container),
-            new CoreServiceProvider($this->container, $this->basePath),
-            new LlmServiceProvider($this->container),
-            new IntegrationServiceProvider($this->container, $this->basePath),
-            new WebServiceProvider($this->container),
-            new ToolServiceProvider($this->container),
-            new SessionServiceProvider($this->container),
-            new McpServiceProvider($this->container),
-            new EventServiceProvider($this->container),
-            new AgentServiceProvider($this->container),
+        return [
+            new ConfigServiceProvider($container, $this->basePath),
+            new LoggingServiceProvider($container),
+            new DatabaseServiceProvider($container),
+            new CoreServiceProvider($container, $this->basePath),
+            new LlmServiceProvider($container),
+            new IntegrationServiceProvider($container, $this->basePath),
+            new WebServiceProvider($container),
+            new ToolServiceProvider($container),
+            new SessionServiceProvider($container),
+            new McpServiceProvider($container),
+            new EventServiceProvider($container),
+            new AgentServiceProvider($container),
         ];
-
-        // Register phase: all bindings
-        foreach ($providers as $provider) {
-            $provider->register();
-        }
-
-        // Boot phase: post-registration hooks (e.g. SQLite settings injection)
-        foreach ($providers as $provider) {
-            $provider->boot();
-        }
-
-        $this->registerFacades();
-        $this->buildConsole();
-        $this->registerRevoltErrorHandler();
     }
 
     /** @return Application The Symfony console application ready to run */
@@ -90,6 +109,19 @@ class Kernel
     public function getContainer(): Container
     {
         return $this->container;
+    }
+
+    /**
+     * Tear down resources resolved during normal execution.
+     */
+    public function shutdown(): void
+    {
+        if (! isset($this->container)) {
+            return;
+        }
+
+        $this->cleanupResolved(SessionDatabase::class, 'close');
+        $this->cleanupResolved(ShellSessionManager::class, 'killAll');
     }
 
     /** Load .env file from the base path if it exists. */
@@ -149,5 +181,46 @@ class Kernel
 
             throw $e;
         });
+    }
+
+    /**
+     * Tear down resources and global container/facade state after a failed boot.
+     *
+     * This keeps a provider failure from leaving a half-registered container in
+     * the process, which matters for tests, SDK callers, workers, and retries.
+     */
+    private function cleanupFailedBoot(): void
+    {
+        if (! isset($this->container)) {
+            return;
+        }
+
+        $this->shutdown();
+
+        $this->container->flush();
+        Container::setInstance(null);
+        Facade::clearResolvedInstances();
+        Facade::setFacadeApplication(null);
+
+        unset($this->container, $this->console);
+    }
+
+    /**
+     * Run a best-effort cleanup method only when the service already resolved.
+     */
+    private function cleanupResolved(string $abstract, string $method): void
+    {
+        try {
+            if (! $this->container->bound($abstract) || ! $this->container->resolved($abstract)) {
+                return;
+            }
+
+            $instance = $this->container->make($abstract);
+            if (is_object($instance) && method_exists($instance, $method)) {
+                $instance->{$method}();
+            }
+        } catch (\Throwable) {
+            // Preserve the original boot failure.
+        }
     }
 }

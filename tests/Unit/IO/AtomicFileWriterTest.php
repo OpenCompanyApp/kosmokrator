@@ -46,4 +46,21 @@ final class AtomicFileWriterTest extends TestCase
 
         $this->assertSame('new', file_get_contents($path));
     }
+
+    public function test_failed_rename_cleans_up_temporary_file(): void
+    {
+        $dir = sys_get_temp_dir().'/kosmo-atomic-'.bin2hex(random_bytes(4));
+        $target = $dir.'/target';
+        $this->paths = [$dir, $target];
+        mkdir($target, 0700, true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Failed to rename temporary file to: {$target}");
+
+        try {
+            AtomicFileWriter::write($target, 'new', 0700);
+        } finally {
+            $this->assertSame([], glob($dir.'/.kosmo_tmp_*') ?: []);
+        }
+    }
 }

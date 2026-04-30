@@ -45,6 +45,8 @@ final class SettingsPaths
      */
     public function projectReadPath(): ?string
     {
+        $this->migrateProjectConfigIfNeeded();
+
         foreach ($this->projectCandidates() as $path) {
             if (file_exists($path)) {
                 return $path;
@@ -62,6 +64,8 @@ final class SettingsPaths
         if ($this->projectRoot === null || $this->projectRoot === '') {
             return null;
         }
+
+        $this->migrateProjectConfigIfNeeded();
 
         return self::projectDirectory($this->projectRoot).'/config.yaml';
     }
@@ -136,5 +140,32 @@ final class SettingsPaths
         }
 
         @copy($old, $new);
+    }
+
+    private function migrateProjectConfigIfNeeded(): void
+    {
+        if ($this->projectRoot === null || $this->projectRoot === '') {
+            return;
+        }
+
+        $new = self::projectDirectory($this->projectRoot).'/config.yaml';
+        if (file_exists($new)) {
+            return;
+        }
+
+        foreach (array_slice($this->projectCandidates(), 1) as $old) {
+            if (! file_exists($old)) {
+                continue;
+            }
+
+            $dir = dirname($new);
+            if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
+                return;
+            }
+
+            @copy($old, $new);
+
+            return;
+        }
     }
 }

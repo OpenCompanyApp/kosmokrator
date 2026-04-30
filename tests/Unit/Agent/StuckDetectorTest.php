@@ -156,6 +156,48 @@ class StuckDetectorTest extends TestCase
         $this->assertSame('nudge', $this->detector->check($calls));
     }
 
+    public function test_large_batch_detects_repeated_prefix_before_final_window_slice(): void
+    {
+        $calls = [
+            new ToolCall(id: 'tc_same_1', name: 'grep', arguments: '{"pattern": "same"}'),
+            new ToolCall(id: 'tc_same_2', name: 'grep', arguments: '{"pattern": "same"}'),
+            new ToolCall(id: 'tc_same_3', name: 'grep', arguments: '{"pattern": "same"}'),
+        ];
+        for ($i = 0; $i < 8; $i++) {
+            $calls[] = new ToolCall(id: "tc_unique_{$i}", name: 'grep', arguments: json_encode(['pattern' => "unique_{$i}"]));
+        }
+
+        $this->assertSame('nudge', $this->detector->check($calls));
+        $this->assertCount(8, $this->detector->getWindow());
+    }
+
+    public function test_latest_tied_signature_is_treated_as_stuck(): void
+    {
+        $detector = new StuckDetector(windowSize: 6, repetitionThreshold: 2, cooldownThreshold: 10);
+        $A = new ToolCall(id: 'tc_a', name: 'grep', arguments: '{"pattern": "a"}');
+        $B = new ToolCall(id: 'tc_b', name: 'grep', arguments: '{"pattern": "b"}');
+
+        $this->assertSame('ok', $detector->check([$A]));
+        $this->assertSame('nudge', $detector->check([$A]));
+        $this->assertSame('ok', $detector->check([$B]));
+        $this->assertSame('ok', $detector->check([$B]));
+        $this->assertSame('final_notice', $detector->check([$B]));
+    }
+
+    public function test_cooldown_does_not_reset_while_repeated_pattern_remains_in_window(): void
+    {
+        $A = new ToolCall(id: 'tc_a', name: 'grep', arguments: '{"pattern": "a"}');
+        $B = new ToolCall(id: 'tc_b', name: 'grep', arguments: '{"pattern": "b"}');
+
+        $this->assertSame('ok', $this->detector->check([$A]));
+        $this->assertSame('ok', $this->detector->check([$A]));
+        $this->assertSame('nudge', $this->detector->check([$A]));
+        $this->assertSame('ok', $this->detector->check([$B]));
+        $this->assertSame('ok', $this->detector->check([$B]));
+
+        $this->assertSame(1, $this->detector->getEscalation());
+    }
+
     public function test_oscillation_pattern_detected(): void
     {
         // Small window + quick cooldown so As age out and Bs trigger a second nudge
@@ -181,9 +223,13 @@ class StuckDetectorTest extends TestCase
         $this->assertSame('ok', $detector->check([$A]));      // window=[A]
         $this->assertSame('ok', $detector->check([$A]));      // window=[A,A]
         $this->assertSame('nudge', $detector->check([$A]));   // window=[A,A,A] → nudge, escalation=1
-        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,A,B] → A=3 but latest B≠A, recovering, cooldown=1
-        $this->assertSame(1, $detector->getEscalation());     // Not reset — need 2 diverse turns (cooldownThreshold=2)
-        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, diverse, cooldown=2 → reset
-        $this->assertSame(0, $detector->getEscalation());     // Reset — 2 diverse turns met cooldownThreshold
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,A,B] → A=3 remains in window, no cooldown
+        $this->assertSame(1, $detector->getEscalation());
+        $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, cooldown=1
+        $this->assertSame(1, $detector->getEscalation());     // Not reset — need 2 truly diverse windows
+
+        $C = new ToolCall(id: 'tc_3', name: 'glob', arguments: '{"pattern": "*.md"}');
+        $this->assertSame('ok', $detector->check([$C]));      // window=[A,B,B,C] → max=2, cooldown=2 → reset
+        $this->assertSame(0, $detector->getEscalation());
     }
 }

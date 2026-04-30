@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+git submodule sync -- integrations
+git submodule update --init integrations
+git -C integrations fetch origin main --prune
+
+if git -C integrations show-ref --verify --quiet refs/heads/main; then
+    git -C integrations checkout main
+else
+    git -C integrations checkout -b main --track origin/main
+fi
+
+git -C integrations pull --ff-only origin main
+
+if [[ "${SKIP_COMPOSER_UPDATE:-0}" == "1" ]]; then
+    exit 0
+fi
+
+integration_packages=()
+while IFS= read -r package_name; do
+    integration_packages+=("$package_name")
+done < <(php -r '
+$lock = json_decode((string) file_get_contents("composer.lock"), true);
+foreach (($lock["packages"] ?? []) as $package) {
+    $name = $package["name"] ?? "";
+    if (is_string($name) && str_starts_with($name, "opencompanyapp/integration-")) {
+        echo $name.PHP_EOL;
+    }
+}
+')
+
+if (( ${#integration_packages[@]} == 0 )); then
+    echo "No opencompanyapp/integration-* packages found in composer.lock."
+    exit 0
+fi
+
+COMPOSER_MIRROR_PATH_REPOS="${COMPOSER_MIRROR_PATH_REPOS:-1}" \
+    composer update "${integration_packages[@]}" --with-dependencies --no-interaction
+
+COMPOSER_MIRROR_PATH_REPOS="${COMPOSER_MIRROR_PATH_REPOS:-1}" \
+    composer reinstall "${integration_packages[@]}" --no-interaction

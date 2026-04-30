@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Command\Slash;
 
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
@@ -43,6 +44,9 @@ class NewCommand implements SlashCommand
         $ctx->agentLoop->history()->clear();
         $ctx->agentLoop->resetSessionCost();
         $ctx->permissions->resetGrants();
+        $ctx->agentLoop->setMode(AgentMode::Edit);
+        $ctx->sessionManager->setSetting('agent.mode', AgentMode::Edit->value);
+        $ctx->ui->showMode(AgentMode::Edit->label(), AgentMode::Edit->color());
         $ctx->permissions->setPermissionMode(PermissionMode::Guardian);
         $ctx->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
         $ctx->ui->clearConversation();

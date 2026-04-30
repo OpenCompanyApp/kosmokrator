@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Unit\Command\Slash;
 
 use Illuminate\Config\Repository;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Command\Slash\ResumeCommand;
 use Kosmokrator\Command\SlashCommandAction;
@@ -194,6 +195,96 @@ class ResumeCommandTest extends TestCase
         $result = $this->command->execute('abc', $ctx);
 
         $this->assertSame(SlashCommandAction::Continue, $result->action);
+    }
+
+    public function test_execute_restores_canonical_agent_mode(): void
+    {
+        $sessionData = ['id' => 'sess-plan', 'title' => 'Plan session'];
+
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->expects($this->exactly(2))->method('findSession')
+            ->willReturnMap([['plan', $sessionData], ['sess-plan', $sessionData]]);
+        $sessionManager->expects($this->once())->method('resumeSession')->with('sess-plan')->willReturn(
+            $history = $this->createStub(ConversationHistory::class)
+        );
+        $sessionManager->expects($this->once())->method('getSetting')->with('agent.mode')->willReturn('plan');
+
+        $history->method('messages')->willReturn([]);
+        $history->method('count')->willReturn(1);
+
+        $agentLoop = $this->createMock(AgentLoop::class);
+        $agentLoop->expects($this->once())->method('setMode')->with(AgentMode::Plan);
+
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->once())->method('showMode')->with(AgentMode::Plan->label(), AgentMode::Plan->color());
+
+        $ctx = $this->makeContext(ui: $ui, agentLoop: $agentLoop, sessionManager: $sessionManager);
+
+        $this->command->execute('plan', $ctx);
+    }
+
+    public function test_execute_restores_legacy_agent_mode(): void
+    {
+        $sessionData = ['id' => 'sess-ask', 'title' => 'Ask session'];
+
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->expects($this->exactly(2))->method('findSession')
+            ->willReturnMap([['ask', $sessionData], ['sess-ask', $sessionData]]);
+        $sessionManager->expects($this->once())->method('resumeSession')->with('sess-ask')->willReturn(
+            $history = $this->createStub(ConversationHistory::class)
+        );
+        $sessionManager->expects($this->exactly(2))->method('getSetting')
+            ->willReturnMap([
+                ['agent.mode', null],
+                ['mode', 'ask'],
+            ]);
+
+        $history->method('messages')->willReturn([]);
+        $history->method('count')->willReturn(1);
+
+        $agentLoop = $this->createMock(AgentLoop::class);
+        $agentLoop->expects($this->once())->method('setMode')->with(AgentMode::Ask);
+
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->once())->method('showMode')->with(AgentMode::Ask->label(), AgentMode::Ask->color());
+
+        $ctx = $this->makeContext(ui: $ui, agentLoop: $agentLoop, sessionManager: $sessionManager);
+
+        $this->command->execute('ask', $ctx);
+    }
+
+    public function test_execute_ignores_invalid_stored_agent_mode(): void
+    {
+        $sessionData = ['id' => 'sess-invalid', 'title' => 'Invalid mode session'];
+
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->expects($this->exactly(2))->method('findSession')
+            ->willReturnMap([['invalid', $sessionData], ['sess-invalid', $sessionData]]);
+        $sessionManager->expects($this->once())->method('resumeSession')->with('sess-invalid')->willReturn(
+            $history = $this->createStub(ConversationHistory::class)
+        );
+        $sessionManager->expects($this->once())->method('getSetting')->with('agent.mode')->willReturn('turbo');
+
+        $history->method('messages')->willReturn([]);
+        $history->method('count')->willReturn(1);
+
+        $agentLoop = $this->createMock(AgentLoop::class);
+        $agentLoop->expects($this->never())->method('setMode');
+
+        $notices = [];
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->exactly(2))->method('showNotice')->willReturnCallback(
+            static function (string $notice) use (&$notices): void {
+                $notices[] = $notice;
+            },
+        );
+
+        $ctx = $this->makeContext(ui: $ui, agentLoop: $agentLoop, sessionManager: $sessionManager);
+
+        $this->command->execute('invalid', $ctx);
+
+        $this->assertContains('Ignored invalid stored agent mode: turbo', $notices);
+        $this->assertContains('Resumed: Invalid mode session (1 messages)', $notices);
     }
 
     public function test_execute_with_args_not_found_shows_notice(): void

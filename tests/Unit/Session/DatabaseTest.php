@@ -86,6 +86,48 @@ class DatabaseTest extends TestCase
         $this->assertSame(1, (int) $count['cnt']);
     }
 
+    public function test_close_truncates_wal_and_closes_connection(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'kosmo-db-');
+        $this->assertIsString($path);
+
+        try {
+            $db = new Database($path);
+            $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('sess1', '/project', 'model', '2026-04-09T00:00:00+00:00', '2026-04-09T00:00:00+00:00')");
+
+            $db->close();
+
+            $this->expectException(\RuntimeException::class);
+            $db->connection();
+        } finally {
+            $this->assertTrue(! file_exists($path.'-wal') || filesize($path.'-wal') === 0);
+            @unlink($path);
+            @unlink($path.'-wal');
+            @unlink($path.'-shm');
+            @unlink($path.'.init.lock');
+        }
+    }
+
+    public function test_destructor_truncates_file_database_wal(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'kosmo-db-');
+        $this->assertIsString($path);
+
+        try {
+            $db = new Database($path);
+            $db->connection()->exec("INSERT INTO sessions (id, project, model, created_at, updated_at) VALUES ('sess1', '/project', 'model', '2026-04-09T00:00:00+00:00', '2026-04-09T00:00:00+00:00')");
+            unset($db);
+            gc_collect_cycles();
+
+            $this->assertTrue(! file_exists($path.'-wal') || filesize($path.'-wal') === 0);
+        } finally {
+            @unlink($path);
+            @unlink($path.'-wal');
+            @unlink($path.'-shm');
+            @unlink($path.'.init.lock');
+        }
+    }
+
     private function currentSchemaVersion(): int
     {
         $constant = (new \ReflectionClass(Database::class))->getReflectionConstant('SCHEMA_VERSION');

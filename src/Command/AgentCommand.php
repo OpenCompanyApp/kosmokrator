@@ -3,10 +3,12 @@
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
 use Kosmokrator\Audio\CompletionSound;
+use Kosmokrator\Bootstrap\BootstrapSignalGuard;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Sdk\AgentBuilder as SdkAgentBuilder;
@@ -178,12 +180,12 @@ class AgentCommand extends Command
             pcntl_signal(SIGINT, function () use ($agent) {
                 $agent->cancel('Interrupted by SIGINT');
                 $this->container->make(ShellSessionManager::class)->killAll();
-                exit(130);
+                exit(BootstrapSignalGuard::exitCodeForSignal(SIGINT));
             });
             pcntl_signal(SIGTERM, function () use ($agent) {
                 $agent->cancel('Interrupted by SIGTERM');
                 $this->container->make(ShellSessionManager::class)->killAll();
-                exit(143);
+                exit(BootstrapSignalGuard::exitCodeForSignal(SIGTERM));
             });
         }
 
@@ -278,11 +280,11 @@ class AgentCommand extends Command
         // Install signal handlers for graceful cleanup on SIGINT/SIGTERM.
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
-            $signalHandler = function () use ($session) {
+            $signalHandler = function (int $signal) use ($session): never {
                 $session->orchestrator?->cancelAll();
                 $this->container->make(ShellSessionManager::class)->killAll();
                 $session->ui->teardown();
-                exit(0);
+                exit(BootstrapSignalGuard::exitCodeForSignal($signal));
             };
             pcntl_signal(SIGINT, $signalHandler);
             pcntl_signal(SIGTERM, $signalHandler);
@@ -313,13 +315,22 @@ class AgentCommand extends Command
         $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models, $providers);
         $nextInput = null;
         $nextInputShown = false;
+        $deferredImmediateInputs = [];
 
         // Dispatch immediate slash commands (e.g. /guardian) even while the agent is mid-run.
-        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx, $session): bool {
+        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx, $session, &$deferredImmediateInputs): bool {
             $command = $registry->resolve($input);
             if ($command === null || ! $command->immediate()) {
                 return false;
             }
+
+            if ($this->shouldDeferImmediateCommand($command, $session->agentLoop)) {
+                $deferredImmediateInputs[] = $input;
+                $session->ui->showNotice($command->name().' will apply after the current agent turn.');
+
+                return true;
+            }
+
             $args = $registry->extractArgs($input, $command);
             $result = $command->execute($args, $ctx);
 
@@ -423,6 +434,10 @@ class AgentCommand extends Command
             }
             $session->agentLoop->run($input);
 
+            if ($this->drainDeferredImmediateCommands($deferredImmediateInputs, $registry, $ctx)->action === SlashCommandAction::Quit) {
+                break;
+            }
+
             // Auto-continue: if background subagents are running, wait for them
             // to finish, then feed their results back to the LLM automatically
             // so it can synthesize without requiring the user to type anything.
@@ -443,6 +458,10 @@ class AgentCommand extends Command
 
                 if (! $backgroundWaitInterrupted && $session->agentLoop->hasPendingBackgroundResults()) {
                     $session->agentLoop->run('[system: all background agents have completed — their results follow]');
+
+                    if ($this->drainDeferredImmediateCommands($deferredImmediateInputs, $registry, $ctx)->action === SlashCommandAction::Quit) {
+                        break;
+                    }
                 }
             }
 
@@ -512,6 +531,33 @@ class AgentCommand extends Command
         $session->ui->teardown();
 
         return Command::SUCCESS;
+    }
+
+    private function shouldDeferImmediateCommand(SlashCommand $command, AgentLoop $agentLoop): bool
+    {
+        return $agentLoop->isRunning() && $command instanceof DefersWhileAgentRuns;
+    }
+
+    /**
+     * @param  list<string>  $inputs
+     */
+    private function drainDeferredImmediateCommands(array &$inputs, SlashCommandRegistry $registry, SlashCommandContext $ctx): SlashCommandResult
+    {
+        while ($inputs !== []) {
+            $input = array_shift($inputs);
+            $command = $registry->resolve($input);
+            if ($command === null) {
+                continue;
+            }
+
+            $args = $registry->extractArgs($input, $command);
+            $result = $command->execute($args, $ctx);
+            if ($result->action !== SlashCommandAction::Continue) {
+                return $result;
+            }
+        }
+
+        return SlashCommandResult::continue();
     }
 
     /**

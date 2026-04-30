@@ -79,6 +79,8 @@ class AgentLoop
 
     private int $lastHeadlessTurns = 0;
 
+    private bool $running = false;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -215,6 +217,11 @@ class AgentLoop
         return $this->mode;
     }
 
+    public function isRunning(): bool
+    {
+        return $this->running;
+    }
+
     private function applyModeFilter(): void
     {
         $allowed = $this->mode->allowedTools();
@@ -232,6 +239,7 @@ class AgentLoop
      */
     public function run(string $userInput): void
     {
+        $this->running = true;
         $this->webCache?->advanceTurn();
         $this->log->debug('User input', ['input' => $userInput]);
         $this->history->addUser($userInput);
@@ -411,6 +419,7 @@ class AgentLoop
 
             // Unreachable — loop exits via return
         } finally {
+            $this->running = false;
             // Guarantee phase resets to Idle when run() exits (idempotent if already Idle)
             SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
         }
@@ -424,6 +433,7 @@ class AgentLoop
      */
     public function runHeadless(string $task): string
     {
+        $this->running = true;
         $this->log->debug('Headless agent started', ['task' => mb_substr($task, 0, 100), 'depth' => $this->agentContext?->depth]);
         $this->history->addUser($task);
 
@@ -616,6 +626,7 @@ class AgentLoop
                 return $fullText;
             }
         } finally {
+            $this->running = false;
             $this->log->debug('Headless agent exiting, resetting phase');
             SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
         }

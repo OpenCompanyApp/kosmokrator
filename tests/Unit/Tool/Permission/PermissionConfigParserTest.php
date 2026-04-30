@@ -30,7 +30,7 @@ class PermissionConfigParserTest extends TestCase
         $this->assertSame('file_write', $askRules[0]->toolName);
         $this->assertSame([], $askRules[0]->denyPatterns);
         $this->assertSame('bash', $askRules[2]->toolName);
-        $this->assertSame([], $askRules[2]->denyPatterns);
+        $this->assertContains('rm -rf *', $askRules[2]->denyPatterns);
     }
 
     public function test_parses_blocked_commands_as_deny_patterns(): void
@@ -54,7 +54,10 @@ class PermissionConfigParserTest extends TestCase
         $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
         $this->assertCount(1, $askRules);
         $this->assertSame('bash', $askRules[0]->toolName);
-        $this->assertSame(['rm -rf /', 'rm -rf ~', 'mkfs*'], $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf *', $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf /', $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf ~', $askRules[0]->denyPatterns);
+        $this->assertContains('mkfs*', $askRules[0]->denyPatterns);
     }
 
     public function test_shell_start_and_shell_write_also_receive_blocked_command_patterns(): void
@@ -76,8 +79,30 @@ class PermissionConfigParserTest extends TestCase
 
         $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
         $this->assertCount(2, $askRules);
-        $this->assertSame(['rm -rf /', 'mkfs*'], $askRules[0]->denyPatterns);
-        $this->assertSame(['rm -rf /', 'mkfs*'], $askRules[1]->denyPatterns);
+        $this->assertContains('rm -rf *', $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf /', $askRules[0]->denyPatterns);
+        $this->assertContains('mkfs*', $askRules[0]->denyPatterns);
+        $this->assertSame($askRules[0]->denyPatterns, $askRules[1]->denyPatterns);
+    }
+
+    public function test_default_blocked_commands_are_applied_when_config_omits_them(): void
+    {
+        $config = new Repository([
+            'kosmo' => [
+                'tools' => [
+                    'approval_required' => ['bash'],
+                    'bash' => ['timeout' => 120],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser;
+        $result = $parser->parse($config);
+        $askRules = array_values(array_filter($result['rules'], fn ($r) => $r->action === PermissionAction::Ask));
+
+        $this->assertContains('rm -rf *', $askRules[0]->denyPatterns);
+        $this->assertContains('git reset --hard*', $askRules[0]->denyPatterns);
+        $this->assertContains('kubectl delete *', $askRules[0]->denyPatterns);
     }
 
     public function test_empty_config_returns_default_safe_rules(): void

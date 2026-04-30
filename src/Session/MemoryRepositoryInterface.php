@@ -61,6 +61,7 @@ interface MemoryRepositoryInterface
      * @param  string|null  $memoryClass  New retention class, or null to keep existing
      * @param  bool|null  $pinned  New pinned status, or null to keep existing
      * @param  string|null  $expiresAt  New expiry timestamp, or null to keep existing
+     * @param  bool  $clearExpiresAt  Clear the existing expiry timestamp
      */
     public function update(
         int $id,
@@ -69,6 +70,7 @@ interface MemoryRepositoryInterface
         ?string $memoryClass = null,
         ?bool $pinned = null,
         ?string $expiresAt = null,
+        bool $clearExpiresAt = false,
     ): void;
 
     /**

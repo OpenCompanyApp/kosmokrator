@@ -15,8 +15,9 @@ use Kosmokrator\Tool\Permission\PermissionResult;
  *
  * Positioned before SessionGrantCheck so a session-wide tool grant cannot
  * silently approve newly requested paths outside the project root. Prometheus
- * mode still bypasses this check. In Guardian and Argus modes, outside-project
- * paths trigger an Ask prompt so the user can approve or deny.
+ * mode auto-approves normal tool policy but still cannot bypass this boundary.
+ * In Guardian and Argus modes, outside-project paths trigger an Ask prompt so
+ * the user can approve or deny.
  */
 class ProjectBoundaryCheck implements PermissionCheck
 {
@@ -62,9 +63,11 @@ class ProjectBoundaryCheck implements PermissionCheck
             return null;
         }
 
-        // Prometheus mode is exempt from boundary enforcement
         if (($this->modeResolver)() === PermissionMode::Prometheus) {
-            return null;
+            return new PermissionResult(
+                PermissionAction::Deny,
+                "Path '".basename($path)."' is outside the project root. Prometheus mode cannot bypass project boundary checks.",
+            );
         }
 
         return new PermissionResult(
@@ -87,7 +90,7 @@ class ProjectBoundaryCheck implements PermissionCheck
         // If PathResolver can't resolve (deeply nested new path), walk up the
         // directory tree until we find an existing ancestor to resolve.
         if ($resolved === null) {
-            $resolved = self::resolveViaAncestors($path);
+            $resolved = PathResolver::resolveViaExistingAncestor($path);
         }
 
         if ($resolved === null) {
@@ -105,33 +108,5 @@ class ProjectBoundaryCheck implements PermissionCheck
         }
 
         return false;
-    }
-
-    /**
-     * Walk up the directory tree to find the first existing ancestor, then
-     * reconstruct the full path relative to that ancestor.
-     */
-    private static function resolveViaAncestors(string $path): ?string
-    {
-        $trail = [];
-        $current = $path;
-
-        while (true) {
-            $parent = dirname($current);
-            if ($parent === $current) {
-                break; // Reached filesystem root
-            }
-
-            $trail[] = basename($current);
-            $resolved = realpath($parent);
-
-            if ($resolved !== false) {
-                return $resolved.'/'.implode('/', array_reverse($trail));
-            }
-
-            $current = $parent;
-        }
-
-        return null;
     }
 }

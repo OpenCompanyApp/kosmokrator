@@ -171,6 +171,20 @@ class ConfigCommandTest extends TestCase
         $this->assertStringContainsString('Unknown setting [unknown]', $this->tester->getDisplay());
     }
 
+    public function test_set_invalid_number_returns_json_failure(): void
+    {
+        $exit = $this->tester->execute([
+            'action' => 'set',
+            'key' => 'agent.max_tokens',
+            'value' => 'abc',
+            '--json' => true,
+        ]);
+
+        $this->assertSame(1, $exit);
+        $this->assertJson($this->tester->getDisplay());
+        $this->assertStringContainsString('Invalid value for [agent.max_tokens]: expected a number.', $this->tester->getDisplay());
+    }
+
     // ── Unset action ──────────────────────────────────────────────────
 
     public function test_unset_without_key_returns_invalid(): void

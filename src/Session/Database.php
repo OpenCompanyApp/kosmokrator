@@ -13,9 +13,13 @@ use Kosmokrator\Settings\SettingsPaths;
  */
 class Database
 {
-    private \PDO $pdo;
+    private ?\PDO $pdo = null;
 
-    private const SCHEMA_VERSION = 10;
+    private bool $closed = false;
+
+    private bool $isMemory = false;
+
+    private const SCHEMA_VERSION = 11;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -41,8 +45,8 @@ class Database
             }
         }
 
-        $isMemory = $path === ':memory:';
-        if (! $isMemory) {
+        $this->isMemory = $path === ':memory:';
+        if (! $this->isMemory) {
             $initLock = fopen($path.'.init.lock', 'c');
             if ($initLock === false || ! flock($initLock, LOCK_EX)) {
                 throw new \RuntimeException("Unable to lock database initialization: {$path}");
@@ -54,7 +58,7 @@ class Database
             $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
 
-            if (! $isMemory) {
+            if (! $this->isMemory) {
                 $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
                 $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
             }
@@ -72,6 +76,10 @@ class Database
     /** @return \PDO The raw PDO connection for direct queries. */
     public function connection(): \PDO
     {
+        if ($this->pdo === null) {
+            throw new \RuntimeException('Database connection is closed.');
+        }
+
         return $this->pdo;
     }
 
@@ -81,7 +89,7 @@ class Database
      */
     public function checkpoint(): void
     {
-        $this->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        $this->connection()->exec('PRAGMA wal_checkpoint(TRUNCATE)');
     }
 
     /**
@@ -89,11 +97,26 @@ class Database
      */
     public function close(): void
     {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->closed = true;
+
         try {
-            $this->checkpoint();
+            if (! $this->isMemory && $this->pdo !== null) {
+                $this->checkpoint();
+            }
         } catch (\Throwable) {
             // Best-effort checkpoint — ignore errors during shutdown
+        } finally {
+            $this->pdo = null;
         }
+    }
+
+    public function __destruct()
+    {
+        $this->close();
     }
 
     /** Creates or migrates the schema to the current version. */
@@ -105,6 +128,7 @@ class Database
         try {
             $stmt = $this->pdo->query('SELECT version FROM schema_version LIMIT 1');
             $row = $stmt->fetch();
+            $stmt->closeCursor();
             $currentVersion = $row ? (int) $row['version'] : 0;
 
             if ($currentVersion === 0) {
@@ -169,7 +193,7 @@ class Database
             CREATE TABLE IF NOT EXISTS memories (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 project     TEXT,
-                session_id  TEXT REFERENCES sessions(id),
+                session_id  TEXT REFERENCES sessions(id) ON DELETE CASCADE,
                 type        TEXT NOT NULL,
                 memory_class TEXT NOT NULL DEFAULT \'durable\',
                 title       TEXT NOT NULL,
@@ -182,15 +206,7 @@ class Database
             )
         ');
 
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)');
-
-        // Composite index for memory lookups filtered by project + expiry
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
-        // Index for expired memory pruning
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_expires_at ON memories(expires_at)');
-        // Index for memory type and class lookups
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
+        $this->createMemoryIndexes();
         // Index for session listing by project
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_updated ON sessions(project, updated_at DESC)');
 
@@ -385,6 +401,11 @@ class Database
             $this->addColumnIfMissing('gateway_approvals', 'requester_user_id', 'TEXT');
             $this->addColumnIfMissing('gateway_approvals', 'requester_username', 'TEXT');
         }
+
+        if ($from < 11) {
+            // v11: session-scoped memories must not block session deletion.
+            $this->ensureMemoriesSessionCascade();
+        }
     }
 
     /** Adds a column to a table only if it does not already exist. */
@@ -439,6 +460,74 @@ class Database
             END
             SQL
         );
+    }
+
+    private function createMemoryIndexes(): void
+    {
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_expires_at ON memories(expires_at)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
+    }
+
+    private function ensureMemoriesSessionCascade(): void
+    {
+        if ($this->memoriesSessionForeignKeyCascades()) {
+            return;
+        }
+
+        $this->pdo->exec('ALTER TABLE memories RENAME TO memories_old');
+        $this->pdo->exec('
+            CREATE TABLE memories (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                project     TEXT,
+                session_id  TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+                type        TEXT NOT NULL,
+                memory_class TEXT NOT NULL DEFAULT \'durable\',
+                title       TEXT NOT NULL,
+                content     TEXT NOT NULL,
+                pinned      INTEGER NOT NULL DEFAULT 0,
+                expires_at  TEXT,
+                last_surfaced_at TEXT,
+                created_at  TEXT,
+                updated_at  TEXT
+            )
+        ');
+        $this->pdo->exec('
+            INSERT INTO memories (
+                id, project, session_id, type, memory_class, title, content,
+                pinned, expires_at, last_surfaced_at, created_at, updated_at
+            )
+            SELECT
+                id, project, session_id, type,
+                COALESCE(memory_class, \'durable\'),
+                title, content,
+                COALESCE(pinned, 0),
+                expires_at, last_surfaced_at, created_at, updated_at
+            FROM memories_old
+            WHERE session_id IS NULL
+               OR EXISTS (SELECT 1 FROM sessions WHERE sessions.id = memories_old.session_id)
+        ');
+        $this->pdo->exec('DROP TABLE memories_old');
+        $this->createMemoryIndexes();
+    }
+
+    private function memoriesSessionForeignKeyCascades(): bool
+    {
+        $stmt = $this->pdo->query('PRAGMA foreign_key_list(memories)');
+        $rows = $stmt->fetchAll();
+        $stmt->closeCursor();
+
+        foreach ($rows as $row) {
+            if (($row['from'] ?? null) === 'session_id'
+                && ($row['table'] ?? null) === 'sessions'
+                && strtoupper((string) ($row['on_delete'] ?? '')) === 'CASCADE') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function createSwarmMetadataSchema(): void

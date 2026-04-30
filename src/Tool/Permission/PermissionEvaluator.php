@@ -89,9 +89,9 @@ class PermissionEvaluator
     }
 
     /** Mark a tool as session-approved so future calls skip the Ask prompt. */
-    public function grantSession(string $toolName): void
+    public function grantSession(string $toolName, array $args = []): void
     {
-        $this->grants->grant($toolName);
+        $this->grants->grant($toolName, $args);
     }
 
     /** Clear all session grants. */

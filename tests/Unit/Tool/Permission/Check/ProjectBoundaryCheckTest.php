@@ -162,14 +162,16 @@ class ProjectBoundaryCheckTest extends TestCase
         $this->assertNull($result);
     }
 
-    // --- Prometheus exempt ---
+    // --- Prometheus boundary enforcement ---
 
-    public function test_prometheus_mode_exempt(): void
+    public function test_prometheus_mode_denies_outside_project(): void
     {
         $check = $this->makeCheck(mode: PermissionMode::Prometheus);
 
         $result = $check->evaluate('file_write', ['path' => '/etc/test', 'content' => 'x']);
-        $this->assertNull($result);
+        $this->assertNotNull($result);
+        $this->assertSame(PermissionAction::Deny, $result->action);
+        $this->assertStringContainsString('cannot bypass project boundary', $result->reason);
     }
 
     public function test_argus_mode_asks(): void

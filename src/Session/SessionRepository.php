@@ -177,44 +177,54 @@ class SessionRepository implements SessionRepositoryInterface
     public function cleanup(int $olderThanDays, int $keepPerProject = 5): int
     {
         $pdo = $this->db->connection();
+        $startedTransaction = false;
 
-        // Use ROW_NUMBER to correctly partition per project, then exclude protected sessions
-        $stmt = $pdo->prepare('
-            SELECT id FROM sessions
-            WHERE updated_at < :cutoff
-              AND id NOT IN (
-                  SELECT id FROM (
-                      SELECT id, ROW_NUMBER() OVER (PARTITION BY project ORDER BY updated_at DESC) AS rn
-                      FROM sessions
-                  ) ranked
-                  WHERE rn <= :keep
-              )
-        ');
-        $cutoff = number_format(microtime(true) - ($olderThanDays * 86400), 6, '.', '');
-        $stmt->bindValue('cutoff', $cutoff);
-        $stmt->bindValue('keep', $keepPerProject, \PDO::PARAM_INT);
-        $stmt->execute();
-
-        $ids = array_map(fn (array $row): string => $row['id'], $stmt->fetchAll());
-
-        if ($ids === []) {
-            return 0;
+        if (! $pdo->inTransaction()) {
+            $pdo->exec('BEGIN IMMEDIATE');
+            $startedTransaction = true;
         }
 
-        // Delete messages and sessions in bulk
-        $pdo->beginTransaction();
-
         try {
-            $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $stmt = $pdo->prepare("DELETE FROM messages WHERE session_id IN ({$placeholders})");
-            $stmt->execute($ids);
+            // Use ROW_NUMBER to correctly partition per project, then exclude protected sessions.
+            // The candidate read and deletes share one transaction so cleanup cannot race itself.
+            $stmt = $pdo->prepare('
+                SELECT id FROM sessions
+                WHERE updated_at < :cutoff
+                  AND id NOT IN (
+                      SELECT id FROM (
+                          SELECT id, ROW_NUMBER() OVER (PARTITION BY project ORDER BY updated_at DESC) AS rn
+                          FROM sessions
+                      ) ranked
+                      WHERE rn <= :keep
+                  )
+            ');
+            $cutoff = number_format(microtime(true) - ($olderThanDays * 86400), 6, '.', '');
+            $stmt->bindValue('cutoff', $cutoff);
+            $stmt->bindValue('keep', $keepPerProject, \PDO::PARAM_INT);
+            $stmt->execute();
 
-            $stmt = $pdo->prepare("DELETE FROM sessions WHERE id IN ({$placeholders})");
-            $stmt->execute($ids);
+            $ids = array_map(fn (array $row): string => $row['id'], $stmt->fetchAll());
 
-            $pdo->commit();
+            if ($ids !== []) {
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $stmt = $pdo->prepare("DELETE FROM messages WHERE session_id IN ({$placeholders})");
+                $stmt->execute($ids);
+
+                $stmt = $pdo->prepare("DELETE FROM sessions WHERE id IN ({$placeholders})");
+                $stmt->execute($ids);
+            }
+
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
         } catch (\Throwable $e) {
-            $pdo->rollBack();
+            if ($startedTransaction) {
+                try {
+                    $pdo->rollBack();
+                } catch (\Throwable) {
+                    // Preserve the cleanup failure that triggered rollback.
+                }
+            }
             throw $e;
         }
 

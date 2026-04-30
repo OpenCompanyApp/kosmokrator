@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Command\Slash;
 
+use Kosmokrator\Command\DefersWhileAgentRuns;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
@@ -12,7 +13,7 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 /**
  * Switches to Prometheus permission mode where all tool calls are auto-approved.
  */
-class PrometheusCommand implements SlashCommand
+class PrometheusCommand implements DefersWhileAgentRuns, SlashCommand
 {
     public function name(): string
     {
@@ -40,7 +41,7 @@ class PrometheusCommand implements SlashCommand
         $ctx->ui->playPrometheus();
         $ctx->permissions->setPermissionMode(PermissionMode::Prometheus);
         $ctx->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color());
-        $ctx->sessionManager->setSetting('permission_mode', 'prometheus');
+        $ctx->sessionManager->setSetting('tools.default_permission_mode', 'prometheus');
         $ctx->ui->showNotice('⚡ Prometheus unbound — all tools auto-approved.');
 
         return SlashCommandResult::continue();

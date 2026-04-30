@@ -532,7 +532,7 @@ class ToolExecutorTest extends TestCase
         $permissions = $this->createMock(PermissionEvaluator::class);
         $permissions->method('evaluate')
             ->willReturn(new PermissionResult(PermissionAction::Ask));
-        $permissions->expects($this->once())->method('grantSession')->with('bash');
+        $permissions->expects($this->once())->method('grantSession')->with('bash', ['command' => 'ls']);
 
         $this->ui->method('askToolPermission')->willReturn('always');
 

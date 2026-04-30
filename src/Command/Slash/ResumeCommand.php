@@ -79,12 +79,17 @@ class ResumeCommand implements SlashCommand
             $ctx->agentLoop->setHistory($history);
             $ctx->permissions->resetGrants();
 
-            // Re-apply stored mode setting
-            $modeSetting = $ctx->sessionManager->getSetting('mode');
+            // Re-apply stored mode setting. Legacy sessions used the short "mode" key.
+            $modeSetting = $ctx->sessionManager->getSetting('agent.mode')
+                ?? $ctx->sessionManager->getSetting('mode');
             if ($modeSetting !== null) {
-                $mode = AgentMode::from($modeSetting);
-                $ctx->agentLoop->setMode($mode);
-                $ctx->ui->showMode($mode->label(), $mode->color());
+                $mode = AgentMode::tryFrom($modeSetting);
+                if ($mode !== null) {
+                    $ctx->agentLoop->setMode($mode);
+                    $ctx->ui->showMode($mode->label(), $mode->color());
+                } else {
+                    $ctx->ui->showNotice("Ignored invalid stored agent mode: {$modeSetting}");
+                }
             }
 
             $ctx->ui->clearConversation();

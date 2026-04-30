@@ -22,6 +22,8 @@ trait AnimationSignalHandler
 {
     private static bool $sigintHandlerInstalled = false;
 
+    private static mixed $previousSigintHandler = null;
+
     /**
      * Install a SIGINT handler that throws IntroSkippedException.
      *
@@ -34,6 +36,9 @@ trait AnimationSignalHandler
             return;
         }
 
+        self::$previousSigintHandler = \function_exists('pcntl_signal_get_handler')
+            ? pcntl_signal_get_handler(SIGINT)
+            : SIG_DFL;
         self::$sigintHandlerInstalled = true;
         pcntl_signal(SIGINT, function (): void {
             throw new IntroSkippedException('Animation interrupted by SIGINT');
@@ -41,7 +46,7 @@ trait AnimationSignalHandler
     }
 
     /**
-     * Restore the default SIGINT handler.
+     * Restore the SIGINT handler that was active before the animation started.
      */
     protected function restoreSignalHandler(): void
     {
@@ -49,7 +54,8 @@ trait AnimationSignalHandler
             return;
         }
 
-        pcntl_signal(SIGINT, SIG_DFL);
+        pcntl_signal(SIGINT, self::$previousSigintHandler ?? SIG_DFL);
+        self::$previousSigintHandler = null;
         self::$sigintHandlerInstalled = false;
     }
 }

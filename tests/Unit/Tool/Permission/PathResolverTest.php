@@ -64,4 +64,33 @@ class PathResolverTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame(realpath('src'), $result);
     }
+
+    public function test_detects_symlink_component(): void
+    {
+        $tmpDir = sys_get_temp_dir().'/path_resolver_'.uniqid();
+        $target = $tmpDir.'/target';
+        $link = $tmpDir.'/link';
+
+        try {
+            mkdir($target, 0755, true);
+            symlink($target, $link);
+
+            $this->assertTrue(PathResolver::containsSymlinkComponent($link.'/new-file.txt'));
+            $this->assertNull(PathResolver::resolveForMutation($link.'/new-file.txt'));
+        } finally {
+            @unlink($link);
+            @rmdir($target);
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function test_resolves_via_existing_ancestor(): void
+    {
+        $path = __DIR__.'/missing/deep/file.txt';
+
+        $this->assertSame(
+            realpath(__DIR__).'/missing/deep/file.txt',
+            PathResolver::resolveViaExistingAncestor($path),
+        );
+    }
 }

@@ -23,7 +23,7 @@ class SessionGrantCheck implements PermissionCheck
 
     public function evaluate(string $toolName, array $args): ?PermissionResult
     {
-        if ($this->grants->isGranted($toolName)) {
+        if ($this->grants->isGranted($toolName, $args)) {
             return new PermissionResult(PermissionAction::Allow);
         }
 

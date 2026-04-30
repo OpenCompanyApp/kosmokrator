@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui;
 use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\TuiAnimationManager;
+use Kosmokrator\UI\Tui\TuiScheduler;
 use PHPUnit\Framework\TestCase;
 
 final class TuiAnimationManagerTest extends TestCase
@@ -224,5 +225,97 @@ final class TuiAnimationManagerTest extends TestCase
         $manager->clearCompacting();
 
         $this->assertFalse($this->state->getHasCompactingLoader());
+    }
+
+    public function test_clear_compacting_restores_task_suppressed_thinking_without_stopping_driver(): void
+    {
+        $cancelled = [];
+        $scheduler = TuiScheduler::fromCallbacks(
+            static fn (callable $callback, float $intervalSeconds): string => 'breath-timer',
+            static function (string $id) use (&$cancelled): void {
+                $cancelled[] = $id;
+            },
+        );
+        $this->state = new TuiStateStore;
+        $manager = new TuiAnimationManager(
+            state: $this->state,
+            subagentTickCallback: static function (): void {},
+            subagentCleanupCallback: static function (): void {},
+            renderCallback: static function (): void {},
+            forceRenderCallback: static function (): void {},
+            scheduler: $scheduler,
+        );
+
+        $this->state->setHasTasks(true);
+        $manager->setPhase(AgentPhase::Thinking);
+        $thinkingPhrase = $manager->getThinkingPhrase();
+        $this->assertFalse($this->state->getHasThinkingLoader());
+
+        $manager->showCompacting();
+        $manager->clearCompacting();
+
+        $this->assertSame(AgentPhase::Thinking, $manager->getCurrentPhase());
+        $this->assertSame($thinkingPhrase, $manager->getThinkingPhrase());
+        $this->assertFalse($this->state->getHasThinkingLoader());
+        $this->assertFalse($this->state->getHasCompactingLoader());
+        $this->assertSame([], $cancelled);
+    }
+
+    public function test_clear_compacting_from_idle_stops_driver_and_clears_phrase(): void
+    {
+        $cancelled = [];
+        $scheduler = TuiScheduler::fromCallbacks(
+            static fn (callable $callback, float $intervalSeconds): string => 'breath-timer',
+            static function (string $id) use (&$cancelled): void {
+                $cancelled[] = $id;
+            },
+        );
+        $this->state = new TuiStateStore;
+        $manager = new TuiAnimationManager(
+            state: $this->state,
+            subagentTickCallback: static function (): void {},
+            subagentCleanupCallback: static function (): void {},
+            renderCallback: static function (): void {},
+            forceRenderCallback: static function (): void {},
+            scheduler: $scheduler,
+        );
+
+        $manager->showCompacting();
+        $manager->clearCompacting();
+
+        $this->assertSame(AgentPhase::Idle, $manager->getCurrentPhase());
+        $this->assertNull($manager->getThinkingPhrase());
+        $this->assertSame(['breath-timer'], $cancelled);
+    }
+
+    public function test_teardown_stops_breathing_timer_and_clears_loader_signals(): void
+    {
+        $cancelled = [];
+        $scheduler = TuiScheduler::fromCallbacks(
+            static fn (callable $callback, float $intervalSeconds): string => 'breath-timer',
+            static function (string $id) use (&$cancelled): void {
+                $cancelled[] = $id;
+            },
+        );
+        $this->state = new TuiStateStore;
+        $manager = new TuiAnimationManager(
+            state: $this->state,
+            subagentTickCallback: static function (): void {},
+            subagentCleanupCallback: static function (): void {},
+            renderCallback: static function (): void {},
+            forceRenderCallback: static function (): void {},
+            scheduler: $scheduler,
+        );
+
+        $manager->setPhase(AgentPhase::Thinking);
+        $this->assertTrue($this->state->getHasThinkingLoader());
+
+        $manager->teardown();
+
+        $this->assertSame(['breath-timer'], $cancelled);
+        $this->assertFalse($this->state->getHasThinkingLoader());
+        $this->assertFalse($this->state->getHasCompactingLoader());
+        $this->assertNull($this->state->getThinkingPhrase());
+        $this->assertNull($this->state->getBreathColor());
     }
 }

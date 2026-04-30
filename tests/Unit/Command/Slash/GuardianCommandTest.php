@@ -78,7 +78,7 @@ class GuardianCommandTest extends TestCase
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
             ->method('setSetting')
-            ->with('permission_mode', 'guardian');
+            ->with('tools.default_permission_mode', 'guardian');
 
         $ctx = $this->makeContext(sessionManager: $sessionManager);
 

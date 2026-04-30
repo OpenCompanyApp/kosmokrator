@@ -286,7 +286,23 @@ tools:
   bash:
     timeout: 120
     blocked_commands:
-      - "rm -rf /"
+      - "rm -rf *"
+      - "rm -fr *"
+      - "rm -r *"
+      - "sudo rm *"
+      - "mkfs*"
+      - "dd *of=*"
+      - "shred *"
+      - "truncate -s 0 *"
+      - "git reset --hard*"
+      - "git clean -fd*"
+      - "git clean -df*"
+      - "git push --force*"
+      - "git push -f*"
+      - "chmod -R 777 *"
+      - "chown -R *"
+      - "docker system prune*"
+      - "kubectl delete *"
   shell:
     wait_ms: 100
     idle_ttl: 300
@@ -316,8 +332,9 @@ tools:
     - "php vendor/bin/phpunit*"
     - "php vendor/bin/pint*"
     - "composer *"
-    - "npm *"
-    - "npx *"
+    - "npm ls*"
+    - "npm view*"
+    - "npm outdated*"
     - "node *"
     - "python *"
     - "cargo *"

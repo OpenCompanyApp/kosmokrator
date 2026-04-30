@@ -3,6 +3,7 @@
 namespace Kosmokrator\Tests\Unit\Agent;
 
 use Amp\CancelledException;
+use Amp\DeferredFuture;
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\SubagentOrchestrator;
@@ -433,6 +434,27 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertSame('done', $this->orchestrator->getStats('dep-consumer')->status);
     }
 
+    public function test_failed_dependency_injected_error_is_sanitized(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'sensitive dependency', AgentType::Explore, 'await', 'dep-sensitive', [], null,
+            fn ($ctx, $task) => throw new \RuntimeException('Provider failed in /Users/rutger/app/Secret.php with token sk-1234567890abcdef'),
+        );
+
+        $future = $this->orchestrator->spawnAgent(
+            $this->rootContext, 'consumer', AgentType::Explore, 'await', 'dep-sensitive-consumer', ['dep-sensitive'], null,
+            function ($ctx, $task) {
+                $this->assertStringContainsString('Provider failed', $task);
+                $this->assertStringNotContainsString('/Users/rutger', $task);
+                $this->assertStringNotContainsString('sk-1234567890abcdef', $task);
+
+                return 'sanitized';
+            },
+        );
+
+        $this->assertSame('sanitized', $future->await());
+    }
+
     public function test_degraded_dependency_gets_warning(): void
     {
         // Agent A returns an error string (not an exception)
@@ -716,17 +738,37 @@ class SubagentOrchestratorTest extends TestCase
             function ($ctx, $task) use (&$attempt) {
                 $attempt++;
 
-                return ToolCallMapper::ERROR_PREFIX.'something broke';
+                return ToolCallMapper::ERROR_PREFIX.'temporary provider overload';
             },
         );
 
         $result = $future->await();
-        $this->assertSame(ToolCallMapper::ERROR_PREFIX.'something broke', $result);
+        $this->assertSame(ToolCallMapper::ERROR_PREFIX.'temporary provider overload', $result);
         $this->assertSame(3, $attempt); // original + 2 retries
 
         $stats = $orchestrator->getStats('exhaust-1');
         $this->assertSame('done', $stats->status);
         $this->assertSame(2, $stats->retries);
+    }
+
+    public function test_generic_error_result_is_not_retried(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'permanent failure result', AgentType::Explore, 'await', 'noretry-result', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+
+                return ToolCallMapper::ERROR_PREFIX.'something broke';
+            },
+        );
+
+        $this->assertSame(ToolCallMapper::ERROR_PREFIX.'something broke', $future->await());
+        $this->assertSame(1, $attempt);
+        $this->assertSame(0, $orchestrator->getStats('noretry-result')->retries);
     }
 
     public function test_stats_track_retry_count(): void
@@ -777,6 +819,31 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertSame('recovered from exception', $result);
         $this->assertSame(2, $attempt);
         $this->assertSame(1, $orchestrator->getStats('exc-retry')->retries);
+    }
+
+    public function test_generic_runtime_exception_is_not_retried(): void
+    {
+        $orchestrator = new SubagentOrchestrator(new NullLogger, 3, 10, 2, retryDelayFunction: fn () => 0.0);
+        $context = new AgentContext(AgentType::General, 0, 3, $orchestrator, 'root', '');
+
+        $attempt = 0;
+        $future = $orchestrator->spawnAgent(
+            $context, 'generic runtime error', AgentType::Explore, 'await', 'noretry-runtime', [], null,
+            function ($ctx, $task) use (&$attempt) {
+                $attempt++;
+
+                throw new \RuntimeException('database invariant failed');
+            },
+        );
+
+        try {
+            $future->await();
+        } catch (\RuntimeException $e) {
+            $this->assertSame('database invariant failed', $e->getMessage());
+        }
+
+        $this->assertSame(1, $attempt);
+        $this->assertSame(0, $orchestrator->getStats('noretry-runtime')->retries);
     }
 
     public function test_non_retryable_exception_skips_retry(): void
@@ -1140,6 +1207,23 @@ class SubagentOrchestratorTest extends TestCase
         $results = $this->orchestrator->collectPendingResults('root');
         $this->assertArrayHasKey('fail-bg', $results);
         $this->assertStringContainsString('boom', $results['fail-bg']);
+    }
+
+    public function test_background_failure_result_is_sanitized(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'fail with sensitive internals', AgentType::Explore, 'background', 'fail-sensitive', [], null,
+            fn ($ctx, $task) => throw new \RuntimeException('Provider failed in /Users/rutger/app/Secret.php with token sk-1234567890abcdef'),
+        );
+
+        \Amp\delay(0.05);
+
+        $results = $this->orchestrator->collectPendingResults('root');
+        $this->assertArrayHasKey('fail-sensitive', $results);
+        $this->assertStringContainsString('Provider failed', $results['fail-sensitive']);
+        $this->assertStringNotContainsString('/Users/rutger', $results['fail-sensitive']);
+        $this->assertStringNotContainsString('sk-1234567890abcdef', $results['fail-sensitive']);
+        $this->assertStringNotContainsString('/Users/rutger', $this->orchestrator->getStats('fail-sensitive')->error);
     }
 
     // --- H2: Cycle detection ---
@@ -1508,7 +1592,7 @@ class SubagentOrchestratorTest extends TestCase
         // Agent A completes and gets pruned (stats removed from $this->stats).
         // Agent B is then spawned with depends_on=['pruned-A'].
         // The cycle detector should treat pruned agents as leaves (no outgoing deps),
-        // and the dependency resolution should throw "Unknown dependency" at runtime.
+        // and dependency resolution should use the retained compact result.
 
         $this->orchestrator->spawnAgent(
             $this->rootContext, 'prunable', AgentType::Explore, 'await', 'prune-dep-A', [], null,
@@ -1523,13 +1607,36 @@ class SubagentOrchestratorTest extends TestCase
         // (cycle detector treats pruned agents as leaves)
         $future = $this->orchestrator->spawnAgent(
             $this->rootContext, 'depends-on-pruned', AgentType::Explore, 'await', 'prune-dep-B', ['prune-dep-A'], null,
-            fn ($ctx, $task) => 'should not reach',
+            function ($ctx, $task) {
+                $this->assertStringContainsString("[Agent 'prune-dep-A']:", $task);
+                $this->assertStringContainsString('result-A', $task);
+
+                return 'used pruned dependency';
+            },
         );
 
-        // But at runtime, the dependency lookup in $this->agents should fail
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage("Unknown dependency agent: 'prune-dep-A'");
-        $future->await();
+        $this->assertSame('used pruned dependency', $future->await());
+    }
+
+    public function test_cycle_detection_uses_pruned_dependency_graph(): void
+    {
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'A waits for future B', AgentType::Explore, 'background', 'pruned-cycle-A', ['pruned-cycle-B'], null,
+            fn ($ctx, $task) => 'unreachable',
+        );
+
+        \Amp\delay(0.05);
+        $this->orchestrator->collectPendingResults('root');
+        $this->assertSame(1, $this->orchestrator->pruneCompleted());
+        $this->assertNull($this->orchestrator->getStats('pruned-cycle-A'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Circular dependency');
+
+        $this->orchestrator->spawnAgent(
+            $this->rootContext, 'B closes cycle through pruned A', AgentType::Explore, 'await', 'pruned-cycle-B', ['pruned-cycle-A'], null,
+            fn ($ctx, $task) => 'unreachable',
+        );
     }
 
     // --- Root agent slot management ---
@@ -1542,11 +1649,20 @@ class SubagentOrchestratorTest extends TestCase
         $childRan = false;
         $reclaimed = false;
         $contenderRan = false;
+        $contender = null;
+        $releaseParent = new DeferredFuture;
 
         $parent = $orchestrator->spawnAgent(
             $context, 'parent', AgentType::General, 'await', 'yield-parent', [], null,
-            function (AgentContext $ctx, string $task) use ($orchestrator, &$childRan, &$reclaimed) {
-                $orchestrator->yieldSlot($ctx->id);
+            function (AgentContext $ctx, string $task) use ($orchestrator, &$childRan, &$reclaimed, &$contenderRan, &$contender, $releaseParent) {
+                $contender = $orchestrator->spawnAgent(
+                    $ctx, 'queued background contender', AgentType::Explore, 'background', 'yield-contender', [], null,
+                    function () use (&$contenderRan) {
+                        $contenderRan = true;
+
+                        return 'contender done';
+                    },
+                );
 
                 $child = $orchestrator->spawnAgent(
                     $ctx, 'child', AgentType::Explore, 'await', 'yield-child', [], null,
@@ -1557,12 +1673,14 @@ class SubagentOrchestratorTest extends TestCase
                     },
                 );
 
+                $orchestrator->yieldSlot($ctx->id);
+
                 $this->assertSame('child done', $child->await());
 
                 $orchestrator->reclaimSlot($ctx->id);
                 $reclaimed = true;
 
-                \Amp\delay(0.05);
+                $releaseParent->getFuture()->await();
 
                 return 'parent done';
             },
@@ -1575,21 +1693,13 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertTrue($childRan);
         $this->assertTrue($reclaimed);
 
-        $contender = $orchestrator->spawnAgent(
-            $context, 'contender', AgentType::Explore, 'await', 'yield-contender', [], null,
-            function () use (&$contenderRan) {
-                $contenderRan = true;
-
-                return 'contender done';
-            },
-        );
-
         \Amp\delay(0.01);
         $this->assertFalse($contenderRan, 'Reclaimed parent slot should block new work until the parent finishes.');
 
+        $releaseParent->complete();
         $this->assertSame('parent done', $parent->await());
+        $this->assertNotNull($contender);
         $this->assertSame('contender done', $contender->await());
-        $this->assertTrue($contenderRan);
     }
 
     public function test_yield_slot_is_idempotent_and_reclaim_without_yield_is_noop(): void

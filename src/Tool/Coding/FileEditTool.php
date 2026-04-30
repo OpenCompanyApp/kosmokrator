@@ -62,7 +62,7 @@ class FileEditTool extends AbstractTool
         // Validate path stays within project root
         if ($this->projectRoot !== null) {
             try {
-                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot, $this->allowedPaths);
+                $path = PathValidator::resolveAndValidatePath($path, $this->projectRoot, $this->allowedPaths, false);
             } catch (Throwable $e) {
                 return ToolResult::error($e->getMessage());
             }

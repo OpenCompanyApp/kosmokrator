@@ -77,6 +77,53 @@ final class SettingsPathsTest extends TestCase
         $this->assertSame('/tmp/my-project/.kosmo/config.yaml', $paths->projectWritePath());
     }
 
+    public function test_project_write_path_migrates_legacy_project_config_before_writes(): void
+    {
+        $projectRoot = sys_get_temp_dir().'/kosmokrator_project_test_'.uniqid();
+        $legacy = $projectRoot.'/.kosmokrator.yaml';
+        $canonical = $projectRoot.'/.kosmo/config.yaml';
+
+        mkdir($projectRoot, 0777, true);
+        file_put_contents($legacy, "agent:\n  mode: plan\n");
+
+        try {
+            $paths = new SettingsPaths($projectRoot);
+
+            $this->assertSame($canonical, $paths->projectWritePath());
+            $this->assertFileExists($canonical);
+            $this->assertSame(file_get_contents($legacy), file_get_contents($canonical));
+        } finally {
+            @unlink($canonical);
+            @rmdir($projectRoot.'/.kosmo');
+            @unlink($legacy);
+            @rmdir($projectRoot);
+        }
+    }
+
+    public function test_project_read_path_prefers_migrated_canonical_copy(): void
+    {
+        $projectRoot = sys_get_temp_dir().'/kosmokrator_project_test_'.uniqid();
+        $legacy = $projectRoot.'/.kosmokrator/config.yaml';
+        $canonical = $projectRoot.'/.kosmo/config.yaml';
+
+        mkdir(dirname($legacy), 0777, true);
+        file_put_contents($legacy, "agent:\n  mode: ask\n");
+
+        try {
+            $paths = new SettingsPaths($projectRoot);
+
+            $this->assertSame($canonical, $paths->projectReadPath());
+            $this->assertFileExists($canonical);
+            $this->assertSame(file_get_contents($legacy), file_get_contents($canonical));
+        } finally {
+            @unlink($canonical);
+            @rmdir($projectRoot.'/.kosmo');
+            @unlink($legacy);
+            @rmdir(dirname($legacy));
+            @rmdir($projectRoot);
+        }
+    }
+
     public function test_global_read_path_returns_null_when_no_config_files_exist(): void
     {
         $home = sys_get_temp_dir().'/kosmokrator_test_'.uniqid();

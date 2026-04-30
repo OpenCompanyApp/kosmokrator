@@ -207,6 +207,7 @@ final class ConfigCommand extends Command
         try {
             $parsed = (new SettingValueParser)->parse($definition, $value);
             $this->validateChoice($definition->id, $parsed, $catalog, $provider);
+            $settings->set($definition->id, $parsed, $scope);
         } catch (\Throwable $e) {
             if ($json) {
                 $this->writeJson($output, ['success' => false, 'error' => $e->getMessage()]);
@@ -217,7 +218,6 @@ final class ConfigCommand extends Command
             return Command::FAILURE;
         }
 
-        $settings->set($definition->id, $parsed, $scope);
         if ($json) {
             $this->writeJson($output, [
                 'success' => true,

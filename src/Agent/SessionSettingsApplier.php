@@ -26,22 +26,22 @@ final class SessionSettingsApplier
      */
     public function apply(LlmClientInterface $llm, PermissionEvaluator $permissions): void
     {
-        $temp = $this->sessionManager->getSetting('temperature');
+        $temp = $this->setting('agent.temperature', 'temperature');
         if ($temp !== null) {
             $llm->setTemperature((float) $temp);
         }
 
-        $maxTokens = $this->sessionManager->getSetting('max_tokens');
+        $maxTokens = $this->setting('agent.max_tokens', 'max_tokens');
         if ($maxTokens !== null) {
             $llm->setMaxTokens((int) $maxTokens);
         }
 
-        $reasoningEffort = $this->sessionManager->getSetting('reasoning_effort');
+        $reasoningEffort = $this->setting('agent.reasoning_effort', 'reasoning_effort');
         if ($reasoningEffort !== null) {
             $llm->setReasoningEffort($reasoningEffort);
         }
 
-        $permMode = $this->sessionManager->getSetting('permission_mode');
+        $permMode = $this->setting('tools.default_permission_mode', 'permission_mode');
         if ($permMode !== null) {
             $mode = PermissionMode::tryFrom($permMode);
             if ($mode !== null) {
@@ -57,9 +57,15 @@ final class SessionSettingsApplier
 
         // Wire configurable max retries
         if ($llm instanceof RetryableLlmClient) {
-            $maxRetries = (int) ($this->sessionManager->getSetting('max_retries')
+            $maxRetries = (int) ($this->setting('agent.max_retries', 'max_retries')
                 ?? $this->config['agent']['max_retries'] ?? 0);
             $llm->setMaxAttempts($maxRetries);
         }
+    }
+
+    private function setting(string $canonical, string $legacy): ?string
+    {
+        return $this->sessionManager->getSetting($canonical)
+            ?? $this->sessionManager->getSetting($legacy);
     }
 }

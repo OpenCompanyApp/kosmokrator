@@ -167,6 +167,7 @@ class MessageRepository implements MessageRepositoryInterface
                 role: 'system',
                 content: $summary,
             );
+            $this->deleteCompacted($sessionId);
 
             if ($startedTransaction) {
                 $pdo->commit();
@@ -178,9 +179,6 @@ class MessageRepository implements MessageRepositoryInterface
 
             throw $e;
         }
-
-        // Purge previously compacted messages to prevent DB bloat
-        $this->deleteCompacted($sessionId);
     }
 
     /**

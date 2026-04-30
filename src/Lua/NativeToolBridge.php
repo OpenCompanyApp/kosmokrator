@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Lua;
 
+use Kosmokrator\Agent\AgentMode;
+use Kosmokrator\Tool\Permission\PermissionAction;
+use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Lua\Sandbox;
 
@@ -12,6 +15,8 @@ use Lua\Sandbox;
  * into the Lua `app.tools.*` namespace.
  *
  * Uses a lazy closure to avoid circular dependency with ToolRegistry.
+ * Native tool calls are governed by the same permission evaluator as direct
+ * agent tool calls when one is provided.
  */
 class NativeToolBridge
 {
@@ -26,6 +31,9 @@ class NativeToolBridge
      */
     public function __construct(
         \Closure $registryResolver,
+        private readonly ?PermissionEvaluator $permissions = null,
+        private readonly ?AgentMode $agentMode = null,
+        private readonly bool $force = false,
     ) {
         $this->registryResolver = $registryResolver;
     }
@@ -46,6 +54,10 @@ class NativeToolBridge
         if ($tool === null) {
             throw new \RuntimeException("Unknown native tool: {$toolName}. Use lua_list_docs to discover available tools.");
         }
+
+        $this->assertAvailableInMode($toolName);
+        $this->assertReadOnlyModeAllows($toolName, $args);
+        $this->assertPermissionAllows($toolName, $args);
 
         $result = $tool->execute($args);
 
@@ -87,6 +99,9 @@ class NativeToolBridge
             $name = $tool->name();
             // Exclude Lua tools themselves (avoid recursion) and interactive prompt tools
             if (in_array($name, ['execute_lua', 'lua_list_docs', 'lua_search_docs', 'lua_read_doc', 'ask_user', 'ask_choice'], true)) {
+                continue;
+            }
+            if ($this->agentMode !== null && ! in_array($name, $this->agentMode->allowedTools(), true)) {
                 continue;
             }
 
@@ -172,5 +187,53 @@ class NativeToolBridge
             end
             rawset(app, 'tools', setmetatable({}, __tools_mt))
         ")->call();
+    }
+
+    private function assertAvailableInMode(string $toolName): void
+    {
+        if ($this->agentMode === null) {
+            return;
+        }
+
+        if (in_array($toolName, $this->agentMode->allowedTools(), true)) {
+            return;
+        }
+
+        throw new \RuntimeException("Native tool '{$toolName}' is not available in {$this->agentMode->label()} mode.");
+    }
+
+    private function assertReadOnlyModeAllows(string $toolName, array $args): void
+    {
+        if ($this->agentMode === null || $this->agentMode === AgentMode::Edit || $this->permissions === null) {
+            return;
+        }
+
+        if (! in_array($toolName, ['bash', 'shell_start', 'shell_write'], true)) {
+            return;
+        }
+
+        $input = (string) ($args['command'] ?? $args['input'] ?? '');
+        if ($this->permissions->isMutativeCommand($input)) {
+            throw new \RuntimeException("Native tool '{$toolName}' was blocked in {$this->agentMode->label()} mode because it appears to modify state.");
+        }
+    }
+
+    private function assertPermissionAllows(string $toolName, array $args): void
+    {
+        if ($this->permissions === null || $this->force) {
+            return;
+        }
+
+        $result = $this->permissions->evaluate($toolName, $args);
+
+        if ($result->action === PermissionAction::Allow) {
+            return;
+        }
+
+        if ($result->action === PermissionAction::Deny) {
+            throw new \RuntimeException($result->reason ?? "Native tool '{$toolName}' is blocked by policy.");
+        }
+
+        throw new \RuntimeException("Native tool '{$toolName}' requires approval and cannot prompt from inside execute_lua. Call the tool directly, adjust permissions, or switch permission mode intentionally.");
     }
 }

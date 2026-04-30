@@ -204,6 +204,46 @@ final class SettingsManagerTest extends TestCase
         }
     }
 
+    public function test_set_rejects_invalid_number_value(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid value for [agent.max_tokens]: expected a number.');
+
+        $this->manager->set('agent.max_tokens', 'abc', 'global');
+    }
+
+    public function test_set_rejects_invalid_choice_value(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Invalid value for [agent.reasoning_effort]: expected one of 'off', 'low', 'medium', 'high'.");
+
+        $this->manager->set('agent.reasoning_effort', 'turbo', 'global');
+    }
+
+    public function test_set_raw_validates_known_schema_path(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Invalid value for [agent.reasoning_effort]: expected one of 'off', 'low', 'medium', 'high'.");
+
+        $this->manager->setRaw('kosmo.agent.reasoning_effort', 'turbo', 'global');
+    }
+
+    public function test_set_raw_normalizes_known_schema_path(): void
+    {
+        $this->manager->setRaw('kosmo.agent.max_tokens', '1234', 'global');
+        $this->manager->setRaw('kosmo.ui.show_reasoning', true, 'global');
+
+        $this->assertSame(1234, $this->manager->getRaw('kosmo.agent.max_tokens'));
+        $this->assertSame('on', $this->manager->getRaw('kosmo.ui.show_reasoning'));
+    }
+
+    public function test_set_raw_keeps_unknown_paths_free_form(): void
+    {
+        $this->manager->setRaw('kosmo.provider_state.testprovider.last_model', ['model' => 'gpt-5'], 'global');
+
+        $this->assertSame(['model' => 'gpt-5'], $this->manager->getRaw('kosmo.provider_state.testprovider.last_model'));
+    }
+
     // ── getRaw() ───────────────────────────────────────────────────────
 
     public function test_get_raw_reads_from_config_repository(): void

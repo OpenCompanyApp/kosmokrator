@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Provider;
 
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\LuaDocService;
@@ -175,7 +176,11 @@ class ToolServiceProvider extends ServiceProvider
 
                 // Set lazy resolver for native tool bridge (app.tools.* in Lua)
                 // Must be deferred — $registry is still being built here
-                ExecuteLuaTool::setNativeBridgeResolver(fn () => new NativeToolBridge(fn () => $registry));
+                ExecuteLuaTool::setNativeBridgeResolver(fn (?AgentMode $mode = null) => new NativeToolBridge(
+                    fn () => $registry,
+                    $this->container->make(PermissionEvaluator::class),
+                    $mode,
+                ));
             }
 
             return $registry;

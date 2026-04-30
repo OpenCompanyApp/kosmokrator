@@ -23,6 +23,12 @@ final class TuiAnimationManager
 {
     private readonly BreathingDriver $breathingDriver;
 
+    private ?string $phaseBeforeCompacting = null;
+
+    private ?string $phraseBeforeCompacting = null;
+
+    private bool $thinkingLoaderBeforeCompacting = false;
+
     private const THINKING_PHRASES = [
         '◈ Consulting the Oracle at Delphi...',
         '♃ Aligning the celestial spheres...',
@@ -128,6 +134,12 @@ final class TuiAnimationManager
      */
     public function showCompacting(): void
     {
+        if ($this->state->getPhase() !== 'compacting') {
+            $this->phaseBeforeCompacting = $this->state->getPhase();
+            $this->phraseBeforeCompacting = $this->state->getThinkingPhrase();
+            $this->thinkingLoaderBeforeCompacting = $this->state->getHasThinkingLoader();
+        }
+
         $phrase = self::COMPACTION_PHRASES[array_rand(self::COMPACTION_PHRASES)];
         $this->state->setPhase('compacting');
         $this->state->setThinkingPhrase($phrase);
@@ -145,11 +157,20 @@ final class TuiAnimationManager
     {
         $this->state->setHasCompactingLoader(false);
         if ($this->state->getPhase() === 'compacting') {
-            $this->state->setPhase('idle');
+            $restoredPhase = $this->phaseBeforeCompacting ?? 'idle';
+            $this->state->setPhase($restoredPhase);
+            $this->state->setThinkingPhrase($restoredPhase === 'idle' ? null : $this->phraseBeforeCompacting);
+            $this->state->setHasThinkingLoader($restoredPhase !== 'idle' && $this->thinkingLoaderBeforeCompacting);
         }
-        if (! $this->state->getHasThinkingLoader()) {
+
+        $hasActiveAnimationPhase = in_array($this->state->getPhase(), ['thinking', 'tools'], true);
+        if (! $this->state->getHasThinkingLoader() && ! $hasActiveAnimationPhase) {
             $this->breathingDriver->stop();
         }
+
+        $this->phaseBeforeCompacting = null;
+        $this->phraseBeforeCompacting = null;
+        $this->thinkingLoaderBeforeCompacting = false;
         ($this->forceRenderCallback)();
     }
 
@@ -161,6 +182,21 @@ final class TuiAnimationManager
     public function ensureSpinnersRegistered(): void
     {
         ThinkingLoaderWidget::registerSpinners();
+    }
+
+    /**
+     * Stop all animation timers and clear transient loader signals.
+     */
+    public function teardown(): void
+    {
+        $this->breathingDriver->stop();
+        $this->state->setHasThinkingLoader(false);
+        $this->state->setHasCompactingLoader(false);
+        $this->state->setThinkingPhrase(null);
+        $this->state->setBreathColor(null);
+        $this->phaseBeforeCompacting = null;
+        $this->phraseBeforeCompacting = null;
+        $this->thinkingLoaderBeforeCompacting = false;
     }
 
     /**

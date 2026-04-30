@@ -624,6 +624,12 @@ HELP;
 
     public function teardown(): void
     {
+        if (isset($this->animationManager)) {
+            $this->animationManager->teardown();
+        }
+        if (isset($this->subagentDisplay)) {
+            $this->subagentDisplay->cleanup();
+        }
         $this->reactiveBridge?->stop();
 
         if ($this->tui->isRunning()) {

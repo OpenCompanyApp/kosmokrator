@@ -33,18 +33,26 @@ final class AtomicFileWriter
             throw new \RuntimeException("Failed to create directory for: {$path}");
         }
 
-        $tmpPath = $dir.'/.kosmo_tmp_'.getmypid().'_'.mt_rand();
-
-        if (file_put_contents($tmpPath, $content) === false) {
-            @unlink($tmpPath);
-
-            throw new \RuntimeException("Failed to write temporary file for: {$path}");
+        $tmpPath = tempnam($dir, '.kosmo_tmp_');
+        if ($tmpPath === false) {
+            throw new \RuntimeException("Failed to create temporary file for: {$path}");
         }
 
-        if (! @rename($tmpPath, $path)) {
-            @unlink($tmpPath);
+        $renamed = false;
+        try {
+            if (file_put_contents($tmpPath, $content) === false) {
+                throw new \RuntimeException("Failed to write temporary file for: {$path}");
+            }
 
-            throw new \RuntimeException("Failed to rename temporary file to: {$path}");
+            if (! @rename($tmpPath, $path)) {
+                throw new \RuntimeException("Failed to rename temporary file to: {$path}");
+            }
+
+            $renamed = true;
+        } finally {
+            if (! $renamed && is_file($tmpPath)) {
+                @unlink($tmpPath);
+            }
         }
     }
 }

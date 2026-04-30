@@ -46,23 +46,27 @@ final class StuckDetector
      */
     public function check(array $toolCalls): string
     {
-        // Build signatures and add to rolling window
-        foreach ($toolCalls as $tc) {
-            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode(ToolCallMapper::safeArguments($tc), JSON_INVALID_UTF8_SUBSTITUTE));
-        }
-        $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
+        $isStuck = false;
 
-        // Count occurrences of every unique signature in the window
+        // Build signatures and add to rolling window. Evaluate after each call
+        // so a large multi-tool batch cannot hide a repeated prefix by pushing
+        // it out of the final sliced window.
+        foreach ($toolCalls as $tc) {
+            $latestSig = $this->signature($tc);
+            $this->toolCallWindow[] = $latestSig;
+            $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
+
+            $counts = array_count_values($this->toolCallWindow);
+            if (($counts[$latestSig] ?? 0) >= $this->repetitionThreshold) {
+                $isStuck = true;
+            }
+        }
+
         $counts = array_count_values($this->toolCallWindow);
         $maxCount = $counts !== [] ? max($counts) : 0;
 
-        // Only consider stuck if the latest call matches the dominant repeated signature
-        $latestSig = end($this->toolCallWindow);
-        $dominantSig = $maxCount > 0 ? array_search($maxCount, $counts, true) : null;
-        $isStuck = $maxCount >= $this->repetitionThreshold && $latestSig === $dominantSig;
-
         if (! $isStuck) {
-            if ($this->stuckEscalation > 0) {
+            if ($this->stuckEscalation > 0 && $maxCount < $this->repetitionThreshold) {
                 $this->cooldownCounter++;
                 if ($this->cooldownCounter >= $this->cooldownThreshold) {
                     $this->stuckEscalation = 0;
@@ -148,5 +152,10 @@ final class StuckDetector
     public function getWindow(): array
     {
         return $this->toolCallWindow;
+    }
+
+    private function signature(ToolCall $toolCall): string
+    {
+        return $toolCall->name.':'.md5(json_encode(ToolCallMapper::safeArguments($toolCall), JSON_INVALID_UTF8_SUBSTITUTE));
     }
 }

@@ -132,17 +132,26 @@ final class YamlConfigStore
     public function set(array &$data, string $path, mixed $value): void
     {
         $segments = explode('.', $path);
+        $leaf = array_pop($segments);
+        if ($leaf === null || $leaf === '') {
+            return;
+        }
+
         $current = &$data;
 
-        foreach ($segments as $segment) {
-            if (! isset($current[$segment]) || ! is_array($current[$segment])) {
+        foreach ($segments as $index => $segment) {
+            if (! array_key_exists($segment, $current)) {
                 $current[$segment] = [];
+            } elseif (! is_array($current[$segment])) {
+                $prefix = implode('.', array_slice($segments, 0, $index + 1));
+
+                throw new \RuntimeException("Cannot set nested config path {$path}: {$prefix} is not a map.");
             }
 
             $current = &$current[$segment];
         }
 
-        $current = $value;
+        $current[$leaf] = $value;
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Command\Slash;
 
+use Kosmokrator\Command\DefersWhileAgentRuns;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
@@ -12,7 +13,7 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 /**
  * Switches the session to Argus permission mode (all writes require approval).
  */
-class ArgusCommand implements SlashCommand
+class ArgusCommand implements DefersWhileAgentRuns, SlashCommand
 {
     public function name(): string
     {
@@ -46,7 +47,7 @@ class ArgusCommand implements SlashCommand
     {
         $ctx->permissions->setPermissionMode(PermissionMode::Argus);
         $ctx->ui->setPermissionMode(PermissionMode::Argus->statusLabel(), PermissionMode::Argus->color());
-        $ctx->sessionManager->setSetting('permission_mode', 'argus');
+        $ctx->sessionManager->setSetting('tools.default_permission_mode', 'argus');
         $ctx->ui->showNotice('◉ Argus mode — all write operations require approval.');
 
         return SlashCommandResult::continue();

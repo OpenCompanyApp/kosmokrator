@@ -1,0 +1,51 @@
+name: Update Integrations
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update integrations submodule
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, posix, mbstring, sqlite3, pdo_sqlite, curl, openssl, dom, xml
+          tools: composer:v2
+
+      - name: Update integrations
+        run: bin/update-integrations
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/update-integrations
+          base: dev
+          delete-branch: true
+          commit-message: Update integrations submodule
+          title: Update integrations submodule
+          body: |
+            Updates the `integrations` submodule to the latest `main` commit and refreshes Composer path-package lock references.
+
+            The normal CI workflow validates runtime startup, tests, PHPStan, Pint, PHAR packaging, and website generation.
+          add-paths: |
+            .gitmodules
+            integrations
+            composer.lock

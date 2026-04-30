@@ -281,7 +281,7 @@ final class ToolExecutor
             }
 
             if ($decision === 'always') {
-                $this->permissions->grantSession($toolCall->name);
+                $this->permissions->grantSession($toolCall->name, $args);
             }
             if ($decision === 'guardian') {
                 $this->permissions->setPermissionMode(PermissionMode::Guardian);
@@ -308,6 +308,9 @@ final class ToolExecutor
 
             if ($toolCall->name === 'shell_start') {
                 $args['read_only'] = $mode !== AgentMode::Edit;
+            }
+            if ($toolCall->name === 'execute_lua') {
+                $args['_agent_mode'] = $mode->value;
             }
 
             $stats?->markTool($toolCall->name);

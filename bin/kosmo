@@ -77,6 +77,8 @@ use Kosmokrator\Command\Web\WebDoctorCommand;
 use Kosmokrator\Command\Web\WebFetchCommand;
 use Kosmokrator\Command\Web\WebProvidersCommand;
 use Kosmokrator\Command\Web\WebSearchCommand;
+use Kosmokrator\Bootstrap\BootstrapErrorRenderer;
+use Kosmokrator\Bootstrap\BootstrapSignalGuard;
 use Kosmokrator\Integration\Runtime\IntegrationCatalog;
 use Kosmokrator\Kernel;
 use Kosmokrator\Mcp\McpConfigStore;
@@ -95,8 +97,21 @@ if (class_exists(Provider::class)) {
 }
 
 // Boot the kernel
+$signalGuard = BootstrapSignalGuard::install();
+$signalGuard->block();
 $kernel = new Kernel(dirname(__DIR__));
-$kernel->boot();
+try {
+    $kernel->boot();
+} catch (Throwable $e) {
+    $signalGuard->unblockAndDispatch();
+
+    exit(BootstrapErrorRenderer::render(
+        $e,
+        STDERR,
+        in_array(strtolower((string) getenv('KOSMO_BOOT_DEBUG')), ['1', 'true', 'yes'], true),
+    ));
+}
+$signalGuard->unblockAndDispatch();
 
 // Register commands
 $console = $kernel->getConsole();
@@ -208,6 +223,10 @@ if (! $isExplicitCommand) {
 }
 
 // Run
-$status = $console->run();
+try {
+    $status = $console->run();
+} finally {
+    $kernel->shutdown();
+}
 
 exit($status);

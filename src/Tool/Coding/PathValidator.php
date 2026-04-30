@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
+use Kosmokrator\Tool\Permission\PathResolver;
+
 /**
  * Validates that file paths stay within the project root or allowed paths.
  *
@@ -18,35 +20,31 @@ final class PathValidator
      * @param  string  $path  The file path to validate (relative or absolute)
      * @param  string  $projectRoot  The project root directory to contain the path
      * @param  string[]  $allowedPaths  Additional allowed path prefixes (pre-resolved to realpaths)
+     * @param  bool  $allowSymlinkComponents  Whether existing symlink path segments may be followed
      * @return string The resolved absolute path
      *
      * @throws \RuntimeException if the path escapes the project root and all allowed paths
      */
-    public static function resolveAndValidatePath(string $path, string $projectRoot, array $allowedPaths = []): string
-    {
+    public static function resolveAndValidatePath(
+        string $path,
+        string $projectRoot,
+        array $allowedPaths = [],
+        bool $allowSymlinkComponents = true,
+    ): string {
         // Resolve project root to its realpath (macOS /var → /private/var, etc.)
         $resolvedRoot = realpath($projectRoot) ?: $projectRoot;
 
-        $resolved = realpath($path);
-
-        if ($resolved === false) {
-            // File doesn't exist yet — walk up the directory tree to find an existing ancestor
-            $dir = dirname($path);
-            $basename = basename($path);
-            $parts = [];
-
-            while ($dir !== '/' && $dir !== '.' && realpath($dir) === false) {
-                $parts[] = basename($dir);
-                $dir = dirname($dir);
-            }
-
-            $resolvedDir = realpath($dir);
-            if ($resolvedDir !== false) {
-                $resolved = $resolvedDir.'/'.implode('/', array_reverse($parts)).($parts !== [] ? '/' : '').$basename;
-            }
+        if (! $allowSymlinkComponents && PathResolver::containsSymlinkComponent($path, $resolvedRoot)) {
+            throw new \RuntimeException("Path uses a symlink component and cannot be safely mutated: {$path}");
         }
 
-        if ($resolved === false) {
+        $resolved = PathResolver::resolve($path);
+
+        if ($resolved === null) {
+            $resolved = PathResolver::resolveViaExistingAncestor($path);
+        }
+
+        if ($resolved === null) {
             throw new \RuntimeException("Path escapes project root: {$path}");
         }
 

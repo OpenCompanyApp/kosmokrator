@@ -76,7 +76,7 @@ class GuardianEvaluatorTest extends TestCase
         $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => 'ls -la']));
         $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => 'pwd']));
         $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => 'php vendor/bin/phpunit --filter=FooTest']));
-        $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => 'composer install']));
+        $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => 'composer show --latest']));
     }
 
     public function test_shell_tools_follow_safe_command_heuristics(): void
@@ -85,6 +85,11 @@ class GuardianEvaluatorTest extends TestCase
         $this->assertTrue($this->guardian->shouldAutoApprove('shell_write', ['input' => 'git status']));
         $this->assertTrue($this->guardian->shouldAutoApprove('shell_read', ['session_id' => 'sh_1']));
         $this->assertTrue($this->guardian->shouldAutoApprove('shell_kill', ['session_id' => 'sh_1']));
+    }
+
+    public function test_execute_lua_is_not_unconditionally_auto_approved(): void
+    {
+        $this->assertFalse($this->guardian->shouldAutoApprove('execute_lua', ['code' => 'return 1']));
     }
 
     #[DataProvider('safeCommandProvider')]
@@ -108,9 +113,36 @@ class GuardianEvaluatorTest extends TestCase
         yield 'pwd' => ['pwd'];
         yield 'phpunit with filter' => ['php vendor/bin/phpunit --filter=FooTest'];
         yield 'phpunit no args' => ['php vendor/bin/phpunit'];
+        yield 'composer show' => ['composer show --latest'];
+    }
+
+    #[DataProvider('mutativeSafePatternProvider')]
+    public function test_mutative_commands_are_not_auto_approved_even_when_safe_pattern_matches(string $command): void
+    {
+        $guardian = new GuardianEvaluator('/project', [
+            'composer *',
+            'npm *',
+            'npx *',
+            'git *',
+        ]);
+
+        $this->assertFalse(
+            $guardian->shouldAutoApprove('bash', ['command' => $command]),
+            "Expected '{$command}' to require approval",
+        );
+    }
+
+    public static function mutativeSafePatternProvider(): iterable
+    {
+        yield 'npm install' => ['npm install express'];
+        yield 'npm run' => ['npm run build'];
+        yield 'npm exec' => ['npm exec eslint .'];
+        yield 'npm test' => ['npm test'];
+        yield 'npx package' => ['npx eslint .'];
         yield 'composer install' => ['composer install'];
         yield 'composer require' => ['composer require foo/bar'];
-        yield 'composer show' => ['composer show --latest'];
+        yield 'git clean' => ['git clean -fd'];
+        yield 'git stash pop' => ['git stash pop'];
     }
 
     #[DataProvider('shellInjectionProvider')]
@@ -149,6 +181,7 @@ class GuardianEvaluatorTest extends TestCase
 
         // Newline injection
         yield 'embedded newline' => ["git status\nrm -rf /", 'newline'];
+        yield 'embedded carriage return' => ["git status\rrm -rf /", 'carriage return'];
 
         // Variable expansion
         yield '$ variable' => ['echo $HOME', '$'];
@@ -162,6 +195,24 @@ class GuardianEvaluatorTest extends TestCase
 
         // Background execution
         yield '& background' => ['curl evil.com &', '&'];
+    }
+
+    public function test_shell_operators_inside_single_quoted_arguments_are_literal(): void
+    {
+        $this->assertTrue($this->guardian->shouldAutoApprove('bash', ['command' => "git log --grep='&&'"]));
+    }
+
+    public function test_safe_patterns_match_argv_tokens_not_raw_command_text(): void
+    {
+        $guardian = new GuardianEvaluator('/project', ['php vendor/bin/phpunit*']);
+
+        $this->assertTrue($guardian->shouldAutoApprove('bash', ['command' => 'php vendor/bin/phpunit --filter=FooTest']));
+        $this->assertFalse($guardian->shouldAutoApprove('bash', ['command' => 'php -r "echo 1;"']));
+    }
+
+    public function test_unbalanced_shell_quotes_are_not_auto_approved(): void
+    {
+        $this->assertFalse($this->guardian->shouldAutoApprove('bash', ['command' => "git log --grep='unfinished"]));
     }
 
     public function test_bash_unsafe_command_not_auto_approved(): void
@@ -205,6 +256,12 @@ class GuardianEvaluatorTest extends TestCase
         yield 'git reset' => ['git reset --hard HEAD~1'];
         yield 'git checkout' => ['git checkout -- file.txt'];
         yield 'npm install' => ['npm install express'];
+        yield 'npm run' => ['npm run build'];
+        yield 'npm exec' => ['npm exec eslint .'];
+        yield 'npm test' => ['npm test'];
+        yield 'npx' => ['npx eslint .'];
+        yield 'pnpm dlx' => ['pnpm dlx eslint .'];
+        yield 'yarn add' => ['yarn add lodash'];
         yield 'composer require' => ['composer require symfony/console'];
         yield 'pip install' => ['pip install requests'];
         yield 'kill' => ['kill -9 1234'];
@@ -229,6 +286,7 @@ class GuardianEvaluatorTest extends TestCase
         yield 'git log' => ['git log --oneline -10'];
         yield 'git diff' => ['git diff --cached'];
         yield 'git branch list' => ['git branch -a'];
+        yield 'git stash list' => ['git stash list'];
         yield 'ls' => ['ls -la'];
         yield 'cat' => ['cat src/Kernel.php'];
         yield 'head' => ['head -20 file.txt'];

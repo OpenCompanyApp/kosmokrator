@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui;
 
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Kosmokrator\UI\Tui\SubagentDisplayManager;
+use Kosmokrator\UI\Tui\TuiScheduler;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Tui\Widget\CancellableLoaderWidget;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -22,7 +23,7 @@ final class SubagentDisplayManagerTest extends TestCase
 
     private bool $spinnersEnsured;
 
-    private function createManager(): SubagentDisplayManager
+    private function createManager(?TuiScheduler $scheduler = null): SubagentDisplayManager
     {
         $this->conversation = new ContainerWidget;
         $this->spinnersEnsured = false;
@@ -34,6 +35,7 @@ final class SubagentDisplayManagerTest extends TestCase
                 $this->spinnersEnsured = true;
             },
             log: null,
+            scheduler: $scheduler,
         );
     }
 
@@ -112,6 +114,26 @@ final class SubagentDisplayManagerTest extends TestCase
         $this->assertTrue($manager->hasRunningAgents());
 
         $manager->cleanup();
+        $this->assertFalse($manager->hasRunningAgents());
+    }
+
+    public function test_cleanup_after_running_cancels_elapsed_timer(): void
+    {
+        $cancelled = [];
+        $scheduler = TuiScheduler::fromCallbacks(
+            static fn (callable $callback, float $intervalSeconds): string => 'subagent-elapsed-timer',
+            static function (string $id) use (&$cancelled): void {
+                $cancelled[] = $id;
+            },
+        );
+        $manager = $this->createManager($scheduler);
+        $manager->showRunning([
+            ['args' => ['type' => 'explore', 'task' => 'Search'], 'id' => 'agent-1'],
+        ]);
+
+        $manager->cleanup();
+
+        $this->assertSame(['subagent-elapsed-timer'], $cancelled);
         $this->assertFalse($manager->hasRunningAgents());
     }
 
@@ -268,9 +290,12 @@ final class SubagentDisplayManagerTest extends TestCase
     public function test_tick_tree_refresh_after_batch_is_noop(): void
     {
         $manager = $this->createManager();
-        $called = false;
-        $manager->setTreeProvider(function () use (&$called): array {
-            $called = true;
+        $state = new class
+        {
+            public bool $called = false;
+        };
+        $manager->setTreeProvider(function () use ($state): array {
+            $state->called = true;
 
             return [];
         });
@@ -284,9 +309,9 @@ final class SubagentDisplayManagerTest extends TestCase
             ],
         ]);
 
-        $called = false;
+        $state->called = false;
         $manager->tickTreeRefresh();
-        $this->assertFalse($called); // Provider should NOT be called after batch
+        $this->assertFalse($state->called); // Provider should NOT be called after batch
     }
 
     public function test_refresh_tree_with_empty_removes_existing_tree(): void

@@ -50,6 +50,43 @@ final class PathValidatorTest extends TestCase
         );
     }
 
+    public function test_rejects_symlink_component_when_mutation_requires_plain_path(): void
+    {
+        $target = $this->projectRoot.'/target';
+        $link = $this->projectRoot.'/link';
+        mkdir($target, 0755, true);
+        symlink($target, $link);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('symlink component');
+
+        PathValidator::resolveAndValidatePath($link.'/file.txt', $this->projectRoot, [], false);
+    }
+
+    public function test_allows_symlink_component_for_read_validation_when_target_stays_inside_project(): void
+    {
+        $target = $this->projectRoot.'/target';
+        $link = $this->projectRoot.'/link';
+        mkdir($target, 0755, true);
+        file_put_contents($target.'/file.txt', 'ok');
+        symlink($target, $link);
+
+        self::assertSame(
+            realpath($target.'/file.txt'),
+            PathValidator::resolveAndValidatePath($link.'/file.txt', $this->projectRoot),
+        );
+    }
+
+    public function test_allows_deep_new_path_inside_project_root(): void
+    {
+        $path = $this->projectRoot.'/missing/deep/file.txt';
+
+        self::assertSame(
+            realpath($this->projectRoot).'/missing/deep/file.txt',
+            PathValidator::resolveAndValidatePath($path, $this->projectRoot),
+        );
+    }
+
     private function removeDir(string $dir): void
     {
         if (! is_dir($dir)) {
@@ -63,8 +100,8 @@ final class PathValidatorTest extends TestCase
 
         foreach ($items as $item) {
             $item->isDir() && ! $item->isLink()
-                ? rmdir($item->getRealPath())
-                : unlink($item->getRealPath());
+                ? rmdir($item->getPathname())
+                : unlink($item->getPathname());
         }
 
         rmdir($dir);

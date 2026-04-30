@@ -29,8 +29,8 @@ final class AtomicFileWriter
     {
         $dir = dirname($path);
 
-        if (! is_dir($dir)) {
-            mkdir($dir, $permissions, true);
+        if (! is_dir($dir) && ! mkdir($dir, $permissions, true) && ! is_dir($dir)) {
+            throw new \RuntimeException("Failed to create directory for: {$path}");
         }
 
         $tmpPath = $dir.'/.kosmo_tmp_'.getmypid().'_'.mt_rand();

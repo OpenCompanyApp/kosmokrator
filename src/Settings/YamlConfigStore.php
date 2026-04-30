@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Settings;
 
+use Kosmokrator\IO\AtomicFileWriter;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -69,9 +70,7 @@ final class YamlConfigStore
         }
 
         // Atomic write: write to temp file then rename
-        $tmpPath = $dir.'/'.basename($path).'.tmp.'.uniqid('', true);
-        file_put_contents($tmpPath, Yaml::dump($data, 8, 2, Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE));
-        rename($tmpPath, $path);
+        AtomicFileWriter::write($path, Yaml::dump($data, 8, 2, Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE), 0700);
     }
 
     /**

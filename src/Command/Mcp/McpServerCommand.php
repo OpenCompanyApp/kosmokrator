@@ -61,7 +61,7 @@ final class McpServerCommand extends Command
         } elseif (! ($result['success'] ?? false)) {
             $output->writeln('<error>'.($result['error'] ?? 'MCP call failed.').'</error>');
         } else {
-            $output->writeln(is_string($result['data']) ? $result['data'] : (json_encode($result['data'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: ''));
+            $output->writeln(is_string($result['data']) ? $result['data'] : $this->jsonEncode($result['data']));
         }
 
         return ($result['success'] ?? false) ? Command::SUCCESS : Command::FAILURE;

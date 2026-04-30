@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Mcp;
 
+use Kosmokrator\IO\AtomicFileWriter;
 use Kosmokrator\Settings\ConfigCompatibility;
 use Kosmokrator\Settings\SettingsPaths;
 
@@ -233,12 +234,16 @@ final class McpConfigStore
      */
     private function saveJson(string $path, array $data): void
     {
-        $dir = dirname($path);
-        $this->ensureDirectory($dir);
+        try {
+            $content = json_encode(
+                $data,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            )."\n";
+        } catch (\JsonException $e) {
+            throw new \RuntimeException('Failed to encode MCP config JSON: '.$e->getMessage(), previous: $e);
+        }
 
-        $tmp = $path.'.tmp.'.uniqid('', true);
-        file_put_contents($tmp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
-        rename($tmp, $path);
+        AtomicFileWriter::write($path, $content, 0700);
     }
 
     /**

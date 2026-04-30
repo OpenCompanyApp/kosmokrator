@@ -39,7 +39,7 @@ class DatabaseTest extends TestCase
 
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
         $this->assertNotFalse($version);
-        $this->assertEquals(9, $version['version']);
+        $this->assertSame($this->currentSchemaVersion(), (int) $version['version']);
     }
 
     public function test_swarm_agents_schema_tracks_spooled_output_metadata(): void
@@ -62,7 +62,7 @@ class DatabaseTest extends TestCase
 
         // Creating a second Database on the same connection shouldn't fail
         $version = $pdo->query('SELECT version FROM schema_version LIMIT 1')->fetch();
-        $this->assertEquals(9, $version['version']);
+        $this->assertSame($this->currentSchemaVersion(), (int) $version['version']);
     }
 
     public function test_foreign_keys_enabled(): void
@@ -84,5 +84,14 @@ class DatabaseTest extends TestCase
 
         $count = $pdo->query("SELECT COUNT(*) AS cnt FROM messages_fts WHERE messages_fts MATCH 'jwt*'")->fetch();
         $this->assertSame(1, (int) $count['cnt']);
+    }
+
+    private function currentSchemaVersion(): int
+    {
+        $constant = (new \ReflectionClass(Database::class))->getReflectionConstant('SCHEMA_VERSION');
+
+        $this->assertNotFalse($constant);
+
+        return (int) $constant->getValue();
     }
 }

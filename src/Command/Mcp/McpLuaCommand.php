@@ -68,7 +68,7 @@ final class McpLuaCommand extends Command
             if ($result->lua->result !== null && $result->lua->result !== []) {
                 $output->writeln(is_string($result->lua->result)
                     ? $result->lua->result
-                    : (json_encode($result->lua->result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: ''));
+                    : $this->jsonEncode($result->lua->result));
             }
             if ($result->lua->error !== null) {
                 $output->writeln('<error>'.$result->lua->error.'</error>');

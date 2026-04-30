@@ -348,6 +348,8 @@ class AgentLoop
                             $toolCalls, $this->tools, $this->allTools,
                             $this->mode, $this->agentContext, $this->stats,
                         );
+                    } catch (CancelledException $e) {
+                        throw $e;
                     } catch (\Throwable $e) {
                         $toolResults = $this->handleToolExecutionError($e, $toolCalls, interactive: true);
                     }
@@ -539,7 +541,7 @@ class AgentLoop
 
                     $this->log->error('Headless agent error', ['error' => $e->getMessage(), ...$this->logContext($round)]);
 
-                    return 'Error: '.$e->getMessage();
+                    throw new Exception\HeadlessRunFailedException(ErrorSanitizer::sanitize($e->getMessage()), previous: $e);
                 }
 
                 if ($fullText !== '') {
@@ -554,6 +556,8 @@ class AgentLoop
                             $toolCalls, $this->tools, $this->allTools,
                             $this->mode, $this->agentContext, $this->stats,
                         );
+                    } catch (CancelledException $e) {
+                        throw $e;
                     } catch (\Throwable $e) {
                         $toolResults = $this->handleToolExecutionError($e, $toolCalls, interactive: false);
                     }
@@ -906,6 +910,10 @@ class AgentLoop
      */
     private function handleToolExecutionError(\Throwable $e, array $toolCalls, bool $interactive): array
     {
+        if ($e instanceof CancelledException) {
+            throw $e;
+        }
+
         $this->log->error($interactive ? 'Tool execution failed' : 'Headless tool execution failed', ['error' => $e->getMessage(), ...$this->logContext()]);
 
         if ($interactive) {

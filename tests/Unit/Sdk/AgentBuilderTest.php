@@ -116,6 +116,7 @@ final class AgentBuilderTest extends TestCase
 
     public function test_mcp_client_uses_project_root_without_agent_run(): void
     {
+        putenv('KOSMO_MCP_ALLOW_FORCE=1');
         $server = dirname(__DIR__, 2).'/fixtures/mcp/fake_stdio_server.php';
         file_put_contents($this->project.'/.mcp.json', json_encode([
             'mcpServers' => [
@@ -132,10 +133,12 @@ final class AgentBuilderTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('project-root', $result['data']);
         $agent->close();
+        putenv('KOSMO_MCP_ALLOW_FORCE');
     }
 
     public function test_mcp_client_uses_runtime_server_overlay_without_agent_run(): void
     {
+        putenv('KOSMO_MCP_ALLOW_FORCE=1');
         $server = dirname(__DIR__, 2).'/fixtures/mcp/fake_stdio_server.php';
 
         $agent = AgentBuilder::create()
@@ -148,6 +151,7 @@ final class AgentBuilderTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('runtime-overlay', $result['data']);
         $agent->close();
+        putenv('KOSMO_MCP_ALLOW_FORCE');
     }
 
     private function kernelWithFakeLlm(?RecordingLlmClient $llm = null): Kernel

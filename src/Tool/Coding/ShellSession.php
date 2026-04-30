@@ -15,6 +15,8 @@ use Amp\Process\Process;
  */
 final class ShellSession
 {
+    private const MAX_BUFFER_BYTES = 1_048_576;
+
     /** Accumulated stdout+stderr output. */
     private string $buffer = '';
 
@@ -53,6 +55,7 @@ final class ShellSession
         }
 
         $this->buffer .= $chunk;
+        $this->capBuffer();
         $this->touch();
     }
 
@@ -62,6 +65,7 @@ final class ShellSession
         // Ensure a leading newline if the buffer doesn't already end with one
         $prefix = ($this->buffer !== '' && ! str_ends_with($this->buffer, "\n")) ? "\n" : '';
         $this->buffer .= $prefix.$line."\n";
+        $this->capBuffer();
         $this->touch();
     }
 
@@ -113,6 +117,18 @@ final class ShellSession
     public function touch(): void
     {
         $this->lastActiveAt = microtime(true);
+    }
+
+    private function capBuffer(): void
+    {
+        $length = strlen($this->buffer);
+        if ($length <= self::MAX_BUFFER_BYTES) {
+            return;
+        }
+
+        $drop = $length - self::MAX_BUFFER_BYTES;
+        $this->buffer = substr($this->buffer, $drop);
+        $this->readOffset = max(0, $this->readOffset - $drop);
     }
 
     /** Mark this session as having been explicitly killed. */

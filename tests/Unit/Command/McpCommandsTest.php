@@ -92,7 +92,11 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(1, $blocked['exit']);
         $this->assertStringContainsString('not trusted', $blocked['json']['error']);
 
-        $forced = $this->runKosmo(['mcp:call', 'fake.echo', '--message=ok', '--force', '--json']);
+        $forcedBlocked = $this->runKosmo(['mcp:call', 'fake.echo', '--message=blocked', '--force', '--json']);
+        $this->assertSame(1, $forcedBlocked['exit']);
+        $this->assertStringContainsString('force bypass is disabled', $forcedBlocked['json']['error']);
+
+        $forced = $this->runKosmo(['mcp:call', 'fake.echo', '--message=ok', '--force', '--json'], ['KOSMO_MCP_ALLOW_FORCE' => '1']);
         $this->assertSame(0, $forced['exit']);
         $this->assertSame('ok', $forced['json']['data']);
         $this->assertTrue($forced['json']['meta']['permission_bypassed']);
@@ -105,7 +109,7 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(1, $luaBlocked['exit']);
         $this->assertStringContainsString('not trusted', $luaBlocked['json']['error']);
 
-        $luaForced = $this->runKosmo(['mcp:lua', '--eval', 'dump(app.mcp.fake.echo({message="lua-force"}))', '--force', '--json']);
+        $luaForced = $this->runKosmo(['mcp:lua', '--eval', 'dump(app.mcp.fake.echo({message="lua-force"}))', '--force', '--json'], ['KOSMO_MCP_ALLOW_FORCE' => '1']);
         $this->assertSame(0, $luaForced['exit']);
         $this->assertSame('lua-force', $luaForced['json']['output']);
     }
@@ -195,6 +199,7 @@ final class McpCommandsTest extends TestCase
             '--force',
         ], $this->project, [
             'HOME' => $this->home,
+            'KOSMO_MCP_ALLOW_FORCE' => '1',
         ]);
         $process->setInput(implode("\n", [
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}',
@@ -244,6 +249,7 @@ YAML);
             '--force',
         ], $this->project, [
             'HOME' => $this->home,
+            'KOSMO_MCP_ALLOW_FORCE' => '1',
         ]);
         $process->setInput(implode("\n", [
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}',
@@ -302,10 +308,11 @@ YAML);
      * @param  list<string>  $args
      * @return array{exit: int, output: string, json: array<string, mixed>}
      */
-    private function runKosmo(array $args): array
+    private function runKosmo(array $args, array $env = []): array
     {
         $process = new Process(array_merge(['php', $this->root.'/bin/kosmo'], $args), $this->project, [
             'HOME' => $this->home,
+            ...$env,
         ]);
         $process->setTimeout(15);
         $process->run();

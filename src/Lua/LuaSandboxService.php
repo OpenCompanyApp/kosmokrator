@@ -42,11 +42,16 @@ class LuaSandboxService
             $this->registerPhpFunctions($sandbox, $phpFunctions);
         }
 
+        $this->registerJsonGlobals($sandbox);
+        $this->rejectProtectedBridgeAssignments($code);
+
         foreach ($globals as $name => $value) {
+            if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name) || str_starts_with($name, '__')) {
+                throw new \InvalidArgumentException("Invalid Lua global name: {$name}");
+            }
+
             $this->runChunk($sandbox, "{$name} = ".$this->phpToLua($value));
         }
-
-        $this->registerJsonGlobals($sandbox);
 
         $start = microtime(true);
 
@@ -272,7 +277,7 @@ class LuaSandboxService
                 if ($isSequential) {
                     $parts[] = $this->phpToLua($v);
                 } else {
-                    $key = is_int($k) ? "[{$k}]" : $k;
+                    $key = is_int($k) ? "[{$k}]" : '['.$this->phpToLua((string) $k).']';
                     $parts[] = "{$key} = ".$this->phpToLua($v);
                 }
             }
@@ -378,6 +383,13 @@ class LuaSandboxService
                 end,
             }
         ');
+    }
+
+    private function rejectProtectedBridgeAssignments(string $code): void
+    {
+        if (preg_match('/(?:^|[;\r\n])\s*__[A-Za-z0-9_]*\s*=/', $code) === 1) {
+            throw new \InvalidArgumentException('Lua code may not assign __-prefixed bridge globals.');
+        }
     }
 
     private function runChunk(Sandbox $sandbox, string $code): mixed

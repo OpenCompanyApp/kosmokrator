@@ -67,12 +67,8 @@ class StuckDetectorTest extends TestCase
         $this->detector->check([$same]);
         $this->assertSame('nudge', $this->detector->check([$same]));
 
-        // Window is [A,A,A] → A=3 ≥ 3 → still stuck.
-        // Need enough UNIQUE calls to push the old As out of the window
-        // AND meet the cooldown threshold (2 consecutive diverse turns).
-        // Each unique call has a different signature, so max count stays 1.
         for ($i = 0; $i < 8; $i++) {
-            $unique = new ToolCall(id: "tc_{$i}", name: 'grep', arguments: json_encode(['pattern' => "unique_{$i}"]));
+            $unique = new ToolCall(id: "tc_{$i}", name: 'tool_'.$i, arguments: json_encode(['pattern' => "unique_{$i}"]));
             $this->detector->check([$unique]);
         }
 
@@ -105,7 +101,7 @@ class StuckDetectorTest extends TestCase
     {
         // Fill window with diverse calls, then repeat one
         for ($i = 0; $i < 8; $i++) {
-            $call = new ToolCall(id: "tc_{$i}", name: 'grep', arguments: json_encode(['pattern' => "unique_{$i}"]));
+            $call = new ToolCall(id: "tc_{$i}", name: 'tool_'.$i, arguments: json_encode(['pattern' => "unique_{$i}"]));
             $this->detector->check([$call]);
         }
 
@@ -164,7 +160,7 @@ class StuckDetectorTest extends TestCase
             new ToolCall(id: 'tc_same_3', name: 'grep', arguments: '{"pattern": "same"}'),
         ];
         for ($i = 0; $i < 8; $i++) {
-            $calls[] = new ToolCall(id: "tc_unique_{$i}", name: 'grep', arguments: json_encode(['pattern' => "unique_{$i}"]));
+            $calls[] = new ToolCall(id: "tc_unique_{$i}", name: 'tool_'.$i, arguments: json_encode(['pattern' => "unique_{$i}"]));
         }
 
         $this->assertSame('nudge', $this->detector->check($calls));
@@ -175,7 +171,7 @@ class StuckDetectorTest extends TestCase
     {
         $detector = new StuckDetector(windowSize: 6, repetitionThreshold: 2, cooldownThreshold: 10);
         $A = new ToolCall(id: 'tc_a', name: 'grep', arguments: '{"pattern": "a"}');
-        $B = new ToolCall(id: 'tc_b', name: 'grep', arguments: '{"pattern": "b"}');
+        $B = new ToolCall(id: 'tc_b', name: 'glob', arguments: '{"pattern": "b"}');
 
         $this->assertSame('ok', $detector->check([$A]));
         $this->assertSame('nudge', $detector->check([$A]));
@@ -187,7 +183,7 @@ class StuckDetectorTest extends TestCase
     public function test_cooldown_does_not_reset_while_repeated_pattern_remains_in_window(): void
     {
         $A = new ToolCall(id: 'tc_a', name: 'grep', arguments: '{"pattern": "a"}');
-        $B = new ToolCall(id: 'tc_b', name: 'grep', arguments: '{"pattern": "b"}');
+        $B = new ToolCall(id: 'tc_b', name: 'glob', arguments: '{"pattern": "b"}');
 
         $this->assertSame('ok', $this->detector->check([$A]));
         $this->assertSame('ok', $this->detector->check([$A]));
@@ -228,7 +224,7 @@ class StuckDetectorTest extends TestCase
         $this->assertSame('ok', $detector->check([$B]));      // window=[A,A,B,B] → max=2, cooldown=1
         $this->assertSame(1, $detector->getEscalation());     // Not reset — need 2 truly diverse windows
 
-        $C = new ToolCall(id: 'tc_3', name: 'glob', arguments: '{"pattern": "*.md"}');
+        $C = new ToolCall(id: 'tc_3', name: 'bash', arguments: '{"command": "pwd"}');
         $this->assertSame('ok', $detector->check([$C]));      // window=[A,B,B,C] → max=2, cooldown=2 → reset
         $this->assertSame(0, $detector->getEscalation());
     }

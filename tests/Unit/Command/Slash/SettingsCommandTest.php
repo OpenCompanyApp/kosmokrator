@@ -401,14 +401,13 @@ final class SettingsCommandTest extends TestCase
         $command->execute('', $ctx);
         $command->execute('', $ctx);
 
-        $this->assertSame(
-            [
-                ['scope' => 'global', 'key' => 'integration.github.accounts', 'value' => json_encode(['default' => true])],
-                ['scope' => 'global', 'key' => 'integration.github.accounts.default.api_key', 'value' => 'ghp_new_secret'],
-                ['scope' => 'global', 'key' => 'integration.github.accounts.default.base_url', 'value' => 'https://api.github.example'],
-            ],
-            $settingsRepository->setCalls,
-        );
+        $this->assertSame('global', $settingsRepository->setCalls[0]['scope']);
+        $this->assertSame('integration.github.accounts', $settingsRepository->setCalls[0]['key']);
+        $this->assertSame(json_encode(['default' => true]), $settingsRepository->setCalls[0]['value']);
+        $this->assertSame('integration.github.accounts.default.api_key', $settingsRepository->setCalls[1]['key']);
+        $this->assertStringStartsWith('enc:v1:', $settingsRepository->setCalls[1]['value']);
+        $this->assertSame('integration.github.accounts.default.base_url', $settingsRepository->setCalls[2]['key']);
+        $this->assertStringStartsWith('enc:v1:', $settingsRepository->setCalls[2]['value']);
         $this->assertSame(
             [
                 ['scope' => 'global', 'key' => 'integration.github.accounts.default.api_key'],

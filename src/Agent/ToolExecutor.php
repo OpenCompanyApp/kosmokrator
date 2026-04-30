@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\CancelledException;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
@@ -67,6 +68,7 @@ final class ToolExecutor
         $approved = [];
         $denied = [];
         $autoApproved = [];
+        $deferredAsk = [];
         $seenAskTool = false;
 
         foreach ($toolCalls as $toolCall) {
@@ -102,7 +104,7 @@ final class ToolExecutor
                 $seenAskTool = true;
             }
 
-            [$permDenied, $wasAutoApproved] = $this->checkPermission($toolCall, $args);
+            [$permDenied, $wasAutoApproved, $shouldAskLater] = $this->checkPermission($toolCall, $args, deferAsk: true);
             if ($permDenied !== null) {
                 $denied[$toolCall->id] = $permDenied;
 
@@ -133,6 +135,12 @@ final class ToolExecutor
 
                     continue;
                 }
+            }
+
+            if ($shouldAskLater) {
+                $deferredAsk[] = [$toolCall, $tool, $args];
+
+                continue;
             }
 
             $approved[] = [$toolCall, $tool, $args];
@@ -217,6 +225,28 @@ final class ToolExecutor
             }
         }
 
+        foreach ($deferredAsk as [$toolCall, $tool, $args]) {
+            [$permDenied] = $this->checkPermission($toolCall, $args);
+            if ($permDenied !== null) {
+                $denied[$toolCall->id] = $permDenied;
+
+                continue;
+            }
+
+            if ($toolCall->name !== 'subagent') {
+                SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
+            }
+
+            $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode);
+            $agentContext?->orchestrator->persistStats($stats);
+
+            if ($toolCall->name !== 'subagent') {
+                SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
+            }
+
+            $this->collectResult($toolCall, $args, $result, $agentContext, $subagentBatch, $results);
+        }
+
         // Merge approved and denied results in original tool call order
         $approvedById = [];
         foreach ($results as $r) {
@@ -248,12 +278,12 @@ final class ToolExecutor
     /**
      * Check permission for a tool call and handle UI for denied/asked cases.
      *
-     * @return array{?ToolResult, bool} [denied result or null, was auto-approved]
+     * @return array{?ToolResult, bool, bool} [denied result or null, was auto-approved, should ask later]
      */
-    private function checkPermission(ToolCall $toolCall, array $args): array
+    private function checkPermission(ToolCall $toolCall, array $args, bool $deferAsk = false): array
     {
         if ($this->permissions === null) {
-            return [null, false];
+            return [null, false, false];
         }
 
         $permResult = $this->permissions->evaluate($toolCall->name, $args);
@@ -265,10 +295,14 @@ final class ToolExecutor
             SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
             SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
-            return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output), false];
+            return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output), false, false];
         }
 
         if ($permResult->action === PermissionAction::Ask) {
+            if ($deferAsk) {
+                return [null, false, true];
+            }
+
             SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
             $decision = $this->ui->askToolPermission($toolCall->name, $args);
 
@@ -277,7 +311,7 @@ final class ToolExecutor
                 $this->log->info('Tool denied by user', ['tool' => $toolCall->name]);
                 SafeDisplay::call(fn () => $this->ui->showToolResult($toolCall->name, $output, false), $this->log);
 
-                return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output), false];
+                return [ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $output), false, false];
             }
 
             if ($decision === 'always') {
@@ -292,10 +326,10 @@ final class ToolExecutor
                 SafeDisplay::call(fn () => $this->ui->setPermissionMode(PermissionMode::Prometheus->statusLabel(), PermissionMode::Prometheus->color()), $this->log);
             }
 
-            return [null, false];
+            return [null, false, false];
         }
 
-        return [null, $permResult->autoApproved];
+        return [null, $permResult->autoApproved, false];
     }
 
     /**
@@ -334,6 +368,8 @@ final class ToolExecutor
             }
 
             return $result;
+        } catch (CancelledException $e) {
+            throw $e;
         } catch (\RuntimeException $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
@@ -361,6 +397,10 @@ final class ToolExecutor
     private function partitionConcurrentGroups(array $approved): array
     {
         if (count($approved) <= 1) {
+            if ($approved === []) {
+                return [];
+            }
+
             return [$approved];
         }
 

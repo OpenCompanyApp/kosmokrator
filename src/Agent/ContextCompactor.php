@@ -227,44 +227,62 @@ PROMPT;
     {
         $lines = [];
         $totalChars = 0;
+        $truncatedOlder = false;
 
-        foreach ($messages as $message) {
-            $newLines = [];
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            $newLines = $this->formatMessage($messages[$i]);
+            $messageChars = array_sum(array_map(static fn (string $line): int => strlen($line) + 1, $newLines));
 
-            if ($message instanceof UserMessage) {
-                $newLines[] = '[user]: '.$this->truncate($message->content, 2000);
-            } elseif ($message instanceof AssistantMessage) {
-                if ($message->toolCalls !== []) {
-                    foreach ($message->toolCalls as $tc) {
-                        $args = ToolCallMapper::safeArguments($tc);
-                        $argStr = $this->formatToolArgs($args);
-                        $newLines[] = "[assistant → tool_call]: {$tc->name}({$argStr})";
-                    }
-                }
-                if ($message->content !== '') {
-                    $newLines[] = '[assistant]: '.$this->truncate($message->content, 2000);
-                }
-            } elseif ($message instanceof ToolResultMessage) {
-                foreach ($message->toolResults as $tr) {
-                    $result = is_string($tr->result) ? $tr->result : json_encode($tr->result, JSON_INVALID_UTF8_SUBSTITUTE);
-                    $newLines[] = '[tool_result]: '.$this->truncate($result, 200);
-                }
-            } elseif ($message instanceof SystemMessage) {
-                $newLines[] = '[system]: '.$this->truncate($message->content, 500);
+            if ($newLines === []) {
+                continue;
             }
 
-            foreach ($newLines as $line) {
-                $totalChars += strlen($line) + 1;
-                if ($totalChars > self::MAX_FORMAT_CHARS) {
-                    $lines[] = '[... older messages truncated for compaction]';
-
-                    return implode("\n", $lines);
-                }
-                $lines[] = $line;
+            if ($totalChars > 0 && $totalChars + $messageChars > self::MAX_FORMAT_CHARS) {
+                $truncatedOlder = true;
+                break;
             }
+
+            array_unshift($lines, ...$newLines);
+            $totalChars += $messageChars;
+        }
+
+        if ($truncatedOlder) {
+            array_unshift($lines, '[... older messages truncated for compaction]');
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function formatMessage(Message $message): array
+    {
+        $newLines = [];
+
+        if ($message instanceof UserMessage) {
+            $newLines[] = '[user]: '.$this->truncate($message->content, 2000);
+        } elseif ($message instanceof AssistantMessage) {
+            if ($message->toolCalls !== []) {
+                foreach ($message->toolCalls as $tc) {
+                    $args = ToolCallMapper::safeArguments($tc);
+                    $argStr = $this->formatToolArgs($args);
+                    $newLines[] = "[assistant -> tool_call]: {$tc->name}({$argStr})";
+                }
+            }
+            if ($message->content !== '') {
+                $newLines[] = '[assistant]: '.$this->truncate($message->content, 2000);
+            }
+        } elseif ($message instanceof ToolResultMessage) {
+            foreach ($message->toolResults as $tr) {
+                $result = is_string($tr->result) ? $tr->result : json_encode($tr->result, JSON_INVALID_UTF8_SUBSTITUTE);
+                $newLines[] = '[tool_result]: '.$this->truncate($result, 1000);
+            }
+        } elseif ($message instanceof SystemMessage) {
+            $newLines[] = '[system]: '.$this->truncate($message->content, 500);
+        }
+
+        return $newLines;
     }
 
     /**
@@ -274,14 +292,14 @@ PROMPT;
     {
         $parts = [];
         foreach ($args as $key => $value) {
-            // Omit potentially large content payloads from the transcript
             if (in_array($key, ['content', 'old_string', 'new_string'], true)) {
-                $parts[] = "{$key}: [...]";
+                $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
+                $parts[] = "{$key}: ".$this->truncate((string) $display, $key === 'content' ? 2000 : 1000);
 
                 continue;
             }
             $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
-            $parts[] = "{$key}: {$this->truncate($display, 100)}";
+            $parts[] = "{$key}: {$this->truncate((string) $display, 250)}";
         }
 
         return implode(', ', $parts);

@@ -11,6 +11,7 @@ class YamlCredentialResolver implements CredentialResolver
 {
     public function __construct(
         private readonly SettingsRepositoryInterface $settingsRepo,
+        private readonly CredentialCipher $cipher = new CredentialCipher,
     ) {}
 
     public function get(string $integration, string $key, mixed $default = null, ?string $account = null): mixed
@@ -21,7 +22,7 @@ class YamlCredentialResolver implements CredentialResolver
 
         $value = $this->settingsRepo->get('global', $prefix);
 
-        return $value ?? $default;
+        return $this->cipher->decrypt($value) ?? $default;
     }
 
     public function isConfigured(string $integration, ?string $account = null): bool
@@ -72,7 +73,7 @@ class YamlCredentialResolver implements CredentialResolver
             ? "integration.{$integration}.accounts.{$account}.{$key}"
             : "integration.{$integration}.accounts.default.{$key}";
 
-        $this->settingsRepo->set('global', $prefix, $value);
+        $this->settingsRepo->set('global', $prefix, $this->cipher->encrypt($value));
     }
 
     public function delete(string $integration, string $key, ?string $account = null): void

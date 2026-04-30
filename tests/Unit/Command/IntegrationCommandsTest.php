@@ -85,7 +85,10 @@ final class IntegrationCommandsTest extends TestCase
         $data = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         $this->assertTrue($data['success']);
         $this->assertSame('work', $data['account']);
-        $this->assertSame('ghp_secret', $this->settingsRepository->get('global', 'integration.github.accounts.work.api_key'));
+        $stored = $this->settingsRepository->get('global', 'integration.github.accounts.work.api_key');
+        $this->assertIsString($stored);
+        $this->assertStringStartsWith('enc:v1:', $stored);
+        $this->assertSame('ghp_secret', $this->container->make(YamlCredentialResolver::class)->get('github', 'api_key', account: 'work'));
         $this->assertTrue($this->settingsManager->getRaw('kosmo.integrations.github.enabled'));
         $this->assertSame('allow', $this->settingsManager->getRaw('kosmo.integrations.github.permissions.read'));
         $this->assertSame('deny', $this->settingsManager->getRaw('kosmo.integrations.github.permissions.write'));

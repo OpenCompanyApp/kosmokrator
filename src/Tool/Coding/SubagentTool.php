@@ -9,8 +9,6 @@ use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 
-use function Amp\Future\await;
-
 /**
  * Spawns child agents that run their own autonomous tool loops.
  *
@@ -265,15 +263,21 @@ class SubagentTool extends AbstractTool
         $orchestrator->yieldSlot($this->parentContext->id);
 
         try {
-            $results = await($futures);
-        } catch (\Throwable $e) {
-            return ToolResult::error('Batch execution failed: '.$e->getMessage());
+            $results = [];
+            $failures = [];
+            foreach ($futures as $agentId => $future) {
+                try {
+                    $results[$agentId] = $future->await();
+                } catch (\Throwable $e) {
+                    $failures[$agentId] = $e->getMessage();
+                }
+            }
         } finally {
             $orchestrator->reclaimSlot($this->parentContext->id);
         }
 
         $lines = [];
-        $lines[] = 'Batch complete: '.count($results).' agents finished.';
+        $lines[] = 'Batch complete: '.count($results).' agents finished, '.count($failures).' failed.';
         $lines[] = '';
 
         foreach ($results as $agentId => $result) {
@@ -290,7 +294,23 @@ class SubagentTool extends AbstractTool
             $lines[] = '';
         }
 
-        return ToolResult::success(implode("\n", $lines));
+        foreach ($failures as $agentId => $error) {
+            $spec = null;
+            foreach ($specs as $s) {
+                if ($s['id'] === $agentId) {
+                    $spec = $s;
+                    break;
+                }
+            }
+            $type = $spec !== null ? $spec['type']->value : 'unknown';
+            $lines[] = "--- Agent '{$agentId}' ({$type}) FAILED ---";
+            $lines[] = $error;
+            $lines[] = '';
+        }
+
+        return $failures === []
+            ? ToolResult::success(implode("\n", $lines))
+            : ToolResult::error(implode("\n", $lines));
     }
 
     /**

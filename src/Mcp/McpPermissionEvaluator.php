@@ -17,6 +17,7 @@ final class McpPermissionEvaluator
 
     public function assertTrusted(McpServerConfig $server, bool $force = false): void
     {
+        $force = $this->normalizeForce($force);
         if ($this->isTrusted($server, $force)) {
             return;
         }
@@ -26,6 +27,7 @@ final class McpPermissionEvaluator
 
     public function isTrusted(McpServerConfig $server, bool $force = false): bool
     {
+        $force = $this->normalizeForce($force);
         if ($force || ! str_starts_with($server->source, 'project')) {
             return true;
         }
@@ -38,6 +40,7 @@ final class McpPermissionEvaluator
 
     public function assertAllowed(McpServerConfig $server, McpToolDefinition $tool, bool $force = false): void
     {
+        $force = $this->normalizeForce($force);
         $this->assertTrusted($server, $force);
         $operation = $tool->operation();
         $permission = $this->permission($server->name, $operation);
@@ -53,6 +56,7 @@ final class McpPermissionEvaluator
 
     public function assertReadAllowed(McpServerConfig $server, bool $force = false): void
     {
+        $force = $this->normalizeForce($force);
         $this->assertTrusted($server, $force);
         $permission = $this->permission($server->name, 'read');
 
@@ -90,5 +94,22 @@ final class McpPermissionEvaluator
     public function fingerprint(McpServerConfig $server): string
     {
         return hash('sha256', json_encode($server->toPortableArray(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
+    }
+
+    private function normalizeForce(bool $force): bool
+    {
+        if (! $force) {
+            return false;
+        }
+
+        $allowed = $this->settings->getRaw('kosmo.mcp.allow_force_bypass')
+            ?? $this->settings->getRaw('mcp.allow_force_bypass')
+            ?? getenv('KOSMO_MCP_ALLOW_FORCE');
+
+        if (in_array($allowed, [true, 'true', '1', 1, 'yes', 'on'], true)) {
+            return true;
+        }
+
+        throw new \RuntimeException('MCP --force bypass is disabled. Set kosmo.mcp.allow_force_bypass=true only for trusted automation.');
     }
 }

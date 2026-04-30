@@ -156,6 +156,33 @@ final class StuckDetector
 
     private function signature(ToolCall $toolCall): string
     {
-        return $toolCall->name.':'.md5(json_encode(ToolCallMapper::safeArguments($toolCall), JSON_INVALID_UTF8_SUBSTITUTE));
+        $parts = [];
+        foreach (ToolCallMapper::safeArguments($toolCall) as $key => $value) {
+            $key = (string) $key;
+            $parts[$key] = $this->isPathLikeArg($key) ? '*' : $this->signatureValue($value);
+        }
+        ksort($parts);
+
+        return $toolCall->name.':'.json_encode($parts, JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    private function isPathLikeArg(string $key): bool
+    {
+        return in_array($key, ['path', 'file', 'filename', 'cwd', 'dir', 'directory'], true)
+            || str_ends_with($key, '_path')
+            || str_ends_with($key, '_file');
+    }
+
+    private function signatureValue(mixed $value): string
+    {
+        if (is_scalar($value) || $value === null) {
+            return mb_substr((string) $value, 0, 120);
+        }
+
+        if (is_array($value)) {
+            return 'array:'.implode(',', array_map('strval', array_keys($value)));
+        }
+
+        return get_debug_type($value);
     }
 }

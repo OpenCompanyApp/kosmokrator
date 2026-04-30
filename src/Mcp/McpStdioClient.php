@@ -149,12 +149,7 @@ final class McpStdioClient
             throw new \RuntimeException("MCP server '{$this->config->name}' is missing a command.");
         }
 
-        $env = $_ENV;
-        foreach ($_SERVER as $key => $value) {
-            if (is_string($value)) {
-                $env[$key] = $value;
-            }
-        }
+        $env = $this->baseEnvironment();
         foreach ($this->config->env as $key => $value) {
             $env[$key] = $this->secrets->resolveValue($this->config->name, $value);
         }
@@ -174,6 +169,26 @@ final class McpStdioClient
 
         stream_set_blocking($this->pipes[1], false);
         stream_set_blocking($this->pipes[2], false);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function baseEnvironment(): array
+    {
+        if (getenv('KOSMO_MCP_INHERIT_ENV') === '1') {
+            return array_filter(array_merge($_ENV, $_SERVER), 'is_string');
+        }
+
+        $env = [];
+        foreach (['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL'] as $key) {
+            $value = getenv($key);
+            if (is_string($value) && $value !== '') {
+                $env[$key] = $value;
+            }
+        }
+
+        return $env;
     }
 
     /**

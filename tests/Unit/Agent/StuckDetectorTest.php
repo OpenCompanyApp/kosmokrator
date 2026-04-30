@@ -40,6 +40,62 @@ class StuckDetectorTest extends TestCase
         $this->assertSame('nudge', $this->detector->check([$call]));
     }
 
+    public function test_same_tool_name_with_changing_args_triggers_nudge(): void
+    {
+        for ($i = 0; $i < 9; $i++) {
+            $call = new ToolCall(id: "tc_{$i}", name: 'grep', arguments: json_encode(['pattern' => "unique_{$i}"]));
+            $this->assertSame('ok', $this->detector->check([$call]));
+        }
+
+        $call = new ToolCall(id: 'tc_10', name: 'grep', arguments: '{"pattern": "unique_10"}');
+        $this->assertSame('nudge', $this->detector->check([$call]));
+        $this->assertSame('same tool name repeated with changing arguments', $this->detector->getReason());
+    }
+
+    public function test_read_search_churn_after_write_progress_triggers_nudge(): void
+    {
+        $tools = [
+            ['bash', ['command' => 'phpunit']],
+            ['file_read', ['path' => 'src/A.php']],
+            ['glob', ['pattern' => '*.php']],
+            ['grep', ['pattern' => 'foo']],
+            ['web_search', ['query' => 'foo']],
+            ['session_search', ['query' => 'foo']],
+            ['memory_search', ['query' => 'foo']],
+            ['web_fetch', ['url' => 'https://example.com']],
+            ['lua_read_doc', ['name' => 'foo']],
+        ];
+
+        foreach ($tools as $i => [$name, $args]) {
+            $call = new ToolCall(id: "tc_{$i}", name: $name, arguments: json_encode($args));
+            $this->assertSame('ok', $this->detector->check([$call]));
+        }
+
+        $call = new ToolCall(id: 'tc_9', name: 'session_read', arguments: '{"id": "s1"}');
+        $this->assertSame('nudge', $this->detector->check([$call]));
+        $this->assertSame('read/search churn without progress', $this->detector->getReason());
+    }
+
+    public function test_repeated_streamed_text_triggers_nudge(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->detector->observeText('The same streamed sentence keeps repeating without useful progress.');
+        }
+
+        $this->assertSame('nudge', $this->detector->check([]));
+        $this->assertSame('repeated streamed content', $this->detector->getReason());
+    }
+
+    public function test_repeated_reasoning_text_triggers_nudge(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $this->detector->observeThinking('I should inspect the same files again before doing anything.');
+        }
+
+        $this->assertSame('nudge', $this->detector->check([]));
+        $this->assertSame('repeated reasoning content', $this->detector->getReason());
+    }
+
     public function test_full_escalation_sequence(): void
     {
         $call = new ToolCall(id: 'tc_1', name: 'grep', arguments: '{"pattern": "same"}');

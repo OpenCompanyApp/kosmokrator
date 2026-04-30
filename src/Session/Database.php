@@ -19,7 +19,7 @@ class Database
 
     private bool $isMemory = false;
 
-    private const SCHEMA_VERSION = 11;
+    private const SCHEMA_VERSION = 12;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -406,6 +406,26 @@ class Database
             // v11: session-scoped memories must not block session deletion.
             $this->ensureMemoriesSessionCascade();
         }
+
+        if ($from < 12) {
+            if (! $this->tableExists('swarm_agents')) {
+                $this->createSwarmMetadataSchema();
+            } else {
+                $this->addColumnIfMissing('swarm_agents', 'current_tool', 'TEXT');
+                $this->addColumnIfMissing('swarm_agents', 'last_activity_description', 'TEXT');
+                $this->addColumnIfMissing('swarm_agents', 'provider', 'TEXT');
+                $this->addColumnIfMissing('swarm_agents', 'model', 'TEXT');
+                $this->createSwarmEventsSchema();
+            }
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name");
+        $stmt->execute(['name' => $table]);
+
+        return $stmt->fetch() !== false;
     }
 
     /** Adds a column to a table only if it does not already exist. */
@@ -550,7 +570,11 @@ class Database
                 retries               INTEGER NOT NULL DEFAULT 0,
                 queue_reason          TEXT,
                 last_tool             TEXT,
+                current_tool          TEXT,
                 last_message_preview  TEXT,
+                last_activity_description TEXT,
+                provider              TEXT,
+                model                 TEXT,
                 next_retry_at         TEXT,
                 output_ref            TEXT,
                 output_bytes          INTEGER NOT NULL DEFAULT 0,
@@ -567,6 +591,27 @@ class Database
         );
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_agents_session_status ON swarm_agents(root_session_id, status, updated_at DESC)');
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_agents_session_parent ON swarm_agents(root_session_id, parent_id)');
+        $this->createSwarmEventsSchema();
+    }
+
+    private function createSwarmEventsSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS swarm_events (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                root_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                agent_id        TEXT NOT NULL,
+                event_type      TEXT NOT NULL,
+                status          TEXT,
+                message         TEXT,
+                payload_json    TEXT,
+                created_at      TEXT NOT NULL
+            )
+            SQL
+        );
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_agent ON swarm_events(root_session_id, agent_id, id)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_type ON swarm_events(root_session_id, event_type, id)');
     }
 
     private function rebuildMessagesFtsIndex(): void

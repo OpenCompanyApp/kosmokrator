@@ -65,6 +65,9 @@ class SubagentOrchestrator
     /** @var array<string, true> Global slots donated by yielded agents for awaited children or reclaim */
     private array $donatedGlobalSlots = [];
 
+    /** @var array<string, string> Last status persisted to append-only swarm events */
+    private array $lastPersistedStatus = [];
+
     /**
      * @var list<array{id: string, parent_id: ?string, mode: string, deferred: DeferredFuture<Lock>}>
      */
@@ -746,6 +749,14 @@ class SubagentOrchestrator
         return $this->stats[$id] ?? null;
     }
 
+    public function hasKnownAgent(string $id): bool
+    {
+        return isset($this->agents[$id])
+            || isset($this->stats[$id])
+            || array_key_exists($id, $this->dependencyResults)
+            || array_key_exists($id, $this->dependencyGraph);
+    }
+
     public function persistStats(?SubagentStats $stats): void
     {
         if ($stats === null || $this->metadataStore === null || $this->rootSessionIdProvider === null) {
@@ -759,6 +770,32 @@ class SubagentOrchestrator
             }
 
             $this->metadataStore->upsertAgent($stats, $rootSessionId);
+            if (($this->lastPersistedStatus[$stats->id] ?? null) !== $stats->status) {
+                $this->metadataStore->appendEvent(
+                    $rootSessionId,
+                    $stats->id,
+                    'status',
+                    $stats->status,
+                    $stats->lastActivityDescription,
+                    [
+                        'parent_id' => $stats->parentId,
+                        'type' => $stats->agentType,
+                        'mode' => $stats->mode,
+                        'group' => $stats->group,
+                        'tool_calls' => $stats->toolCalls,
+                        'tokens_in' => $stats->tokensIn,
+                        'tokens_out' => $stats->tokensOut,
+                        'retries' => $stats->retries,
+                        'queue_reason' => $stats->queueReason,
+                        'last_tool' => $stats->lastTool,
+                        'current_tool' => $stats->currentTool,
+                        'provider' => $stats->provider,
+                        'model' => $stats->model,
+                        'error' => $stats->error,
+                    ],
+                );
+                $this->lastPersistedStatus[$stats->id] = $stats->status;
+            }
         } catch (\Throwable $e) {
             $this->log->debug('Failed to persist subagent metadata', [
                 'agent_id' => $stats->id,

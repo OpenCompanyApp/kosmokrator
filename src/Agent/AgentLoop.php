@@ -486,6 +486,7 @@ class AgentLoop
 
                 try {
                     $cancellation = $this->ui->getCancellation();
+                    $this->stats?->touchActivity('calling model');
                     $responseData = $this->callLlm($cancellation);
                     $trimAttempts = 0;
 
@@ -581,6 +582,7 @@ class AgentLoop
                         $this->log->warning('Headless agent force-returned', [
                             'round' => $round,
                             'escalation' => $this->stuckDetector->getEscalation(),
+                            'reason' => $this->stuckDetector->getReason(),
                             'window' => $this->stuckDetector->getWindow(),
                         ]);
                         if ($this->stats !== null) {
@@ -594,6 +596,7 @@ class AgentLoop
                         $this->history->addUser('[SYSTEM] You appear to be repeating the same actions. Consolidate your findings and return a final response.');
                         $this->log->info('Stuck nudge injected', [
                             'round' => $round,
+                            'reason' => $this->stuckDetector->getReason(),
                             'window' => $this->stuckDetector->getWindow(),
                             'escalation' => $this->stuckDetector->getEscalation(),
                         ]);
@@ -602,6 +605,7 @@ class AgentLoop
                         $this->history->addUser('[SYSTEM] FINAL NOTICE: You are still looping. Return your findings NOW. Do NOT make any more tool calls.');
                         $this->log->warning('Stuck final notice injected', [
                             'round' => $round,
+                            'reason' => $this->stuckDetector->getReason(),
                             'window' => $this->stuckDetector->getWindow(),
                             'escalation' => $this->stuckDetector->getEscalation(),
                         ]);
@@ -843,6 +847,7 @@ class AgentLoop
      */
     private function callLlm(?Cancellation $cancellation): ResponseData
     {
+        $this->stats?->markModel($this->llm->getProvider(), $this->contextManager->getModelName());
         if ($this->llm->supportsStreaming()) {
             [$fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent] =
                 $this->streamResponse($this->history->messages(), $this->tools, $cancellation);
@@ -851,6 +856,8 @@ class AgentLoop
         }
 
         $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+        $this->stats?->touchActivity('received model response');
+        $this->stuckDetector->observeText($response->text);
         $reasoningContent = $this->shouldRetainReasoning()
             ? $this->capReasoningContent($response->reasoningContent)
             : '';
@@ -1128,6 +1135,8 @@ class AgentLoop
             if ($event->type === 'text_delta') {
                 $fullText .= $event->delta;
                 $lineBuffer .= $event->delta;
+                $this->stats?->touchActivity('streaming model text');
+                $this->stuckDetector->observeText($event->delta);
 
                 // Flush line-by-line: yield complete lines to the renderer
                 while (($nl = strpos($lineBuffer, "\n")) !== false) {
@@ -1146,6 +1155,8 @@ class AgentLoop
                     SafeDisplay::call(fn () => $this->ui->streamChunk($partial), $this->log);
                 }
             } elseif ($event->type === 'thinking_delta') {
+                $this->stats?->touchActivity('streaming model reasoning');
+                $this->stuckDetector->observeThinking($event->delta);
                 if ($retainReasoning && ! $reasoningTruncated) {
                     [$reasoningContent, $reasoningTruncated] = $this->appendReasoningContent(
                         $reasoningContent,
@@ -1153,6 +1164,7 @@ class AgentLoop
                     );
                 }
             } elseif ($event->type === 'tool_call') {
+                $this->stats?->touchActivity('received tool call');
                 $toolCalls[] = new ToolCall(
                     id: $event->toolCall['id'],
                     name: $event->toolCall['name'],

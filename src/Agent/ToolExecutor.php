@@ -348,23 +348,27 @@ final class ToolExecutor
             }
 
             $stats?->markTool($toolCall->name);
-            $output = $tool->handle(...$args);
-            \Amp\delay(0);
-            $stats?->incrementToolCalls();
-            $outputStr = ToolCallMapper::normalizeToolOutput($output);
+            try {
+                $output = $tool->handle(...$args);
+                \Amp\delay(0);
+                $stats?->incrementToolCalls();
+                $outputStr = ToolCallMapper::normalizeToolOutput($output);
 
-            if ($this->truncator !== null) {
-                $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
-            }
+                if ($this->truncator !== null) {
+                    $outputStr = $this->truncator->truncate($outputStr, $toolCall->id);
+                }
 
-            $this->log->debug('Tool execution complete', [
-                'tool' => $toolCall->name,
-                'output_length' => strlen($outputStr),
-            ]);
+                $this->log->debug('Tool execution complete', [
+                    'tool' => $toolCall->name,
+                    'output_length' => strlen($outputStr),
+                ]);
 
-            $result = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
-            if ($this->isMutativeFileTool($toolCall->name) && ! ToolCallMapper::isErrorResult($result)) {
-                FileReadTool::resetGlobalCache();
+                $result = ToolCallMapper::toToolResult($toolCall->id, $toolCall->name, $args, $outputStr);
+                if ($this->isMutativeFileTool($toolCall->name) && ! ToolCallMapper::isErrorResult($result)) {
+                    FileReadTool::resetGlobalCache();
+                }
+            } finally {
+                $stats?->clearCurrentTool();
             }
 
             return $result;

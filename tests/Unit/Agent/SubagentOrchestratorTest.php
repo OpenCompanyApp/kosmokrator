@@ -78,6 +78,12 @@ class SubagentOrchestratorTest extends TestCase
         $this->assertSame('done', $loaded['persisted-1']->status);
         $this->assertSame('persist me', $loaded['persisted-1']->task);
 
+        $events = $store->eventsForSession('session-1', 'persisted-1');
+        $statuses = array_column($events, 'status');
+        $this->assertContains('queued', $statuses);
+        $this->assertContains('running', $statuses);
+        $this->assertContains('done', $statuses);
+
         $orchestrator->cancelAll();
     }
 

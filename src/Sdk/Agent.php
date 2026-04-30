@@ -41,10 +41,37 @@ final class Agent
      */
     public function stream(string $prompt): \Generator
     {
-        $result = $this->run($prompt);
+        if (! $this->renderer instanceof EventRenderer) {
+            $result = $this->run($prompt);
 
-        foreach ($result->events as $event) {
-            yield $event;
+            foreach ($result->events as $event) {
+                yield $event;
+            }
+
+            return;
+        }
+
+        $queue = new \SplQueue;
+        $removeListener = $this->renderer->addEventListener(static function (AgentEvent $event) use ($queue): void {
+            $queue->enqueue($event);
+        });
+
+        $future = \Amp\async(fn (): AgentResult => $this->run($prompt));
+
+        try {
+            while (! $future->isComplete() || ! $queue->isEmpty()) {
+                while (! $queue->isEmpty()) {
+                    yield $queue->dequeue();
+                }
+
+                if (! $future->isComplete()) {
+                    \Amp\delay(0.01);
+                }
+            }
+
+            $future->await();
+        } finally {
+            $removeListener();
         }
     }
 

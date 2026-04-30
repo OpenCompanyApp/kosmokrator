@@ -438,31 +438,13 @@ class AgentCommand extends Command
                 break;
             }
 
-            // Auto-continue: if background subagents are running, wait for them
-            // to finish, then feed their results back to the LLM automatically
-            // so it can synthesize without requiring the user to type anything.
-            $backgroundWaitInterrupted = false;
-            if ($session->agentLoop->hasActiveBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
-                while ($session->agentLoop->hasActiveBackgroundAgents()) {
-                    \Amp\delay(0.25);
-
-                    $queued = $session->ui->consumeQueuedMessage();
-                    if ($queued !== null) {
-                        $nextInput = $queued;
-                        $nextInputShown = true;
-                        $backgroundWaitInterrupted = true;
-
-                        break;
-                    }
-                }
-
-                if (! $backgroundWaitInterrupted && $session->agentLoop->hasPendingBackgroundResults()) {
-                    $session->agentLoop->run('[system: all background agents have completed — their results follow]');
-
-                    if ($this->drainDeferredImmediateCommands($deferredImmediateInputs, $registry, $ctx)->action === SlashCommandAction::Quit) {
-                        break;
-                    }
-                }
+            // Background swarms detach from the prompt loop. Their results are
+            // injected on the next agent turn, and /agents remains available for
+            // live inspection while they run.
+            if ($session->agentLoop->hasActiveBackgroundAgents()) {
+                $session->ui->showNotice('Background agents are still running. Use /agents to inspect progress; results will be injected on the next turn.');
+            } elseif ($session->agentLoop->hasPendingBackgroundResults()) {
+                $session->ui->showNotice('Background agent results are ready and will be injected on the next turn.');
             }
 
             // Completion sound: compose and play a musical piece reflecting what happened

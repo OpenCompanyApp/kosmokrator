@@ -303,6 +303,66 @@ class SubagentToolTest extends TestCase
         $this->assertNull($this->orchestrator->getStats('agent-1'));
     }
 
+    public function test_batch_sorts_forward_dependencies_before_spawning(): void
+    {
+        $sequence = [];
+        $tool = new SubagentTool($this->makeContext(), function (AgentContext $childCtx, string $task) use (&$sequence): string {
+            $sequence[] = $childCtx->id;
+
+            return "executed: {$task}";
+        });
+
+        $result = \Amp\async(fn () => $tool->execute(['agents' => [
+            ['task' => 'consumer', 'id' => 'consumer', 'depends_on' => ['producer']],
+            ['task' => 'producer', 'id' => 'producer'],
+        ]]))->await();
+
+        $this->assertTrue($result->success);
+        $this->assertSame(['producer', 'consumer'], $sequence);
+        $this->assertStringContainsString("Agent 'producer'", $result->output);
+        $this->assertStringContainsString("Agent 'consumer'", $result->output);
+    }
+
+    public function test_batch_rejects_unknown_dependency_before_spawning(): void
+    {
+        $ran = 0;
+        $tool = new SubagentTool($this->makeContext(), function () use (&$ran): string {
+            $ran++;
+
+            return 'should not run';
+        });
+
+        $result = $tool->execute(['agents' => [
+            ['task' => 'consumer', 'id' => 'consumer', 'depends_on' => ['missing']],
+        ]]);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString("depends on unknown agent 'missing'", $result->output);
+        $this->assertSame(0, $ran);
+        $this->assertNull($this->orchestrator->getStats('consumer'));
+    }
+
+    public function test_batch_rejects_circular_dependencies_before_spawning(): void
+    {
+        $ran = 0;
+        $tool = new SubagentTool($this->makeContext(), function () use (&$ran): string {
+            $ran++;
+
+            return 'should not run';
+        });
+
+        $result = $tool->execute(['agents' => [
+            ['task' => 'A', 'id' => 'a', 'depends_on' => ['b']],
+            ['task' => 'B', 'id' => 'b', 'depends_on' => ['a']],
+        ]]);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('Circular dependency in batch', $result->output);
+        $this->assertSame(0, $ran);
+        $this->assertNull($this->orchestrator->getStats('a'));
+        $this->assertNull($this->orchestrator->getStats('b'));
+    }
+
     public function test_batch_rejects_spawn_at_max_depth(): void
     {
         $ctx = $this->makeContext(AgentType::General, 2); // depth 2, maxDepth 3 → canSpawn = false

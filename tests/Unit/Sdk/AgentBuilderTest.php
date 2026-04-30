@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Sdk;
 
+use Amp\Cancellation;
 use Kosmokrator\Kernel;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\LlmStreamingEvent;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Sdk\AgentBuilder;
 use Kosmokrator\Sdk\Event\RunCompleted;
+use Kosmokrator\Sdk\Event\TextDelta;
 use Kosmokrator\Sdk\Event\ToolCallCompleted;
 use Kosmokrator\Sdk\Event\ToolCallStarted;
 use Kosmokrator\Sdk\Renderer\CollectingRenderer;
@@ -103,6 +107,100 @@ final class AgentBuilderTest extends TestCase
         $this->assertNotEmpty($events);
     }
 
+    public function test_stream_yields_events_before_run_completes(): void
+    {
+        $marker = (object) ['completed' => false];
+        $llm = new class($marker) implements LlmClientInterface
+        {
+            private string $provider = 'test';
+
+            private string $model = 'test-model';
+
+            public function __construct(private readonly \stdClass $marker) {}
+
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+            {
+                return new LlmResponse('unused', FinishReason::Stop, [], 1, 1);
+            }
+
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                yield LlmStreamingEvent::textDelta("live\n");
+                \Amp\delay(0.05);
+                $this->marker->completed = true;
+                yield LlmStreamingEvent::streamEnd(3, 2, finishReason: FinishReason::Stop);
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return true;
+            }
+
+            public function setSystemPrompt(string $prompt): void {}
+
+            public function getProvider(): string
+            {
+                return $this->provider;
+            }
+
+            public function setProvider(string $provider): void
+            {
+                $this->provider = $provider;
+            }
+
+            public function getModel(): string
+            {
+                return $this->model;
+            }
+
+            public function setModel(string $model): void
+            {
+                $this->model = $model;
+            }
+
+            public function getTemperature(): int|float|null
+            {
+                return null;
+            }
+
+            public function setTemperature(int|float|null $temperature): void {}
+
+            public function getMaxTokens(): ?int
+            {
+                return null;
+            }
+
+            public function setMaxTokens(?int $maxTokens): void {}
+
+            public function getReasoningEffort(): string
+            {
+                return 'medium';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+        };
+
+        $kernel = $this->kernelWithFakeLlm($llm);
+        $events = [];
+
+        $agent = AgentBuilder::fromContainer($kernel->getContainer())
+            ->forProject($this->project)
+            ->withoutSessionPersistence()
+            ->withRenderer(new CollectingRenderer)
+            ->build();
+
+        foreach ($agent->stream('Run live stream') as $event) {
+            $events[] = $event;
+            if ($event instanceof TextDelta) {
+                $this->assertFalse($marker->completed);
+            }
+        }
+
+        $this->assertTrue($marker->completed);
+        $this->assertNotEmpty(array_filter($events, fn ($event): bool => $event instanceof TextDelta));
+        $this->assertNotEmpty(array_filter($events, fn ($event): bool => $event instanceof RunCompleted));
+    }
+
     public function test_collecting_renderer_reset_refreshes_cancelled_token(): void
     {
         $renderer = new CollectingRenderer;
@@ -154,7 +252,7 @@ final class AgentBuilderTest extends TestCase
         putenv('KOSMO_MCP_ALLOW_FORCE');
     }
 
-    private function kernelWithFakeLlm(?RecordingLlmClient $llm = null): Kernel
+    private function kernelWithFakeLlm(?LlmClientInterface $llm = null): Kernel
     {
         $llm ??= new RecordingLlmClient;
         $kernel = new Kernel(dirname(__DIR__, 3));

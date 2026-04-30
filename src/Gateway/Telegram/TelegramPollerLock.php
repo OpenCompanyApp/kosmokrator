@@ -19,7 +19,7 @@ final class TelegramPollerLock
     public static function acquire(string $token): self
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
-        $dir = rtrim($home, '/').'/.kosmokrator/data';
+        $dir = rtrim($home, '/').'/.kosmo/data';
         if (! is_dir($dir)) {
             mkdir($dir, 0700, true);
         }

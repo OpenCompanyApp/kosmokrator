@@ -86,7 +86,7 @@ final class McpJsonRpcStdioServer
                     'prompts' => ['listChanged' => false],
                 ],
                 'serverInfo' => [
-                    'name' => 'kosmokrator',
+                    'name' => 'kosmo',
                     'version' => $this->version,
                 ],
             ],

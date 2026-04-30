@@ -56,8 +56,8 @@ final class PlaneIntegrationRuntimeTest extends TestCase
         $docs = new IntegrationDocService($catalog);
         $text = $docs->render('plane.create_issue');
 
-        $this->assertStringContainsString('kosmokrator integrations:plane create_issue --project-id=123 --name=value', $text);
-        $this->assertStringContainsString('kosmokrator integrations:call plane.create_issue --project-id=123 --name=value', $text);
+        $this->assertStringContainsString('kosmo integrations:plane create_issue --project-id=123 --name=value', $text);
+        $this->assertStringContainsString('kosmo integrations:call plane.create_issue --project-id=123 --name=value', $text);
         $this->assertStringContainsString('local result = app.integrations.plane.create_issue', $text);
 
         $json = json_decode($docs->render('plane.create_issue', 'json'), true);
@@ -186,9 +186,9 @@ final class PlaneIntegrationRuntimeTest extends TestCase
             store: new YamlConfigStore,
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
-        $settings->setRaw('integrations.plane.enabled', true, 'global');
-        $settings->setRaw('integrations.plane.permissions.read', 'allow', 'global');
-        $settings->setRaw('integrations.plane.permissions.write', $writePermission, 'global');
+        $settings->setRaw('kosmo.integrations.plane.enabled', true, 'global');
+        $settings->setRaw('kosmo.integrations.plane.permissions.read', 'allow', 'global');
+        $settings->setRaw('kosmo.integrations.plane.permissions.write', $writePermission, 'global');
 
         $defaultCredentials = [
             'api_key' => 'test-api-key',

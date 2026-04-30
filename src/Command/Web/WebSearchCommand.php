@@ -51,9 +51,9 @@ final class WebSearchCommand extends Command
 
             $response = $provider->search(new WebSearchRequest(
                 query: (string) $input->getArgument('query'),
-                maxResults: max(1, (int) ($input->getOption('max-results') ?: $config->get('kosmokrator.web.search.max_results', 8))),
-                timeoutSeconds: max(1, (int) $config->get('kosmokrator.web.search.timeout_seconds', 30)),
-                outputLimitChars: max(1000, (int) $config->get('kosmokrator.web.search.output_limit_chars', 60000)),
+                maxResults: max(1, (int) ($input->getOption('max-results') ?: $config->get('kosmo.web.search.max_results', 8))),
+                timeoutSeconds: max(1, (int) $config->get('kosmo.web.search.timeout_seconds', 30)),
+                outputLimitChars: max(1000, (int) $config->get('kosmo.web.search.output_limit_chars', 60000)),
                 mode: is_string($input->getOption('mode')) ? $input->getOption('mode') : null,
             ));
         } catch (\Throwable $e) {

@@ -1,5 +1,5 @@
 ---
-import '../styles/custom.css';
+import '../styles/tailwind.css';
 
 const asciiLogo = `██╗  ██╗ ██████╗ ███████╗███╗   ███╗ ██████╗ ██╗  ██╗██████╗  █████╗ ████████╗ ██████╗ ██████╗
 ██║ ██╔╝██╔═══██╗██╔════╝████╗ ████║██╔═══██╗██║ ██╔╝██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗
@@ -9,7 +9,7 @@ const asciiLogo = `██╗  ██╗ ██████╗ ██████
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝`;
 
 const surfaceSnippets = {
-  terminal: `kosmokrator
+  terminal: `kosmo
 
 > fix the failing tests and explain the change
 
@@ -18,12 +18,12 @@ const surfaceSnippets = {
 ● running vendor/bin/phpunit --filter TokenVerifierTest
 
 Done. 2 files changed, tests passing.`,
-  headless: `kosmokrator -p "review this branch" \\
+  headless: `kosmo -p "review this branch" \\
   --mode plan \\
   --permission-mode guardian \\
   -o stream-json
 
-kosmokrator integrations:plane list_issues \\
+kosmo integrations:plane list_issues \\
   --account work \\
   --json`,
   sdk: `use Kosmokrator\\Sdk\\AgentBuilder;
@@ -34,13 +34,13 @@ $result = AgentBuilder::create()
     ->withPermissionMode('guardian')
     ->build()
     ->collect('Implement the missing tests');`,
-  acp: `kosmokrator acp --cwd /repo
+  acp: `kosmo acp --cwd /repo
 
 // newline-delimited JSON-RPC over stdio
 // session/prompt
 // session/request_permission
-// kosmokrator/subagents/tree
-// kosmokrator/tool/result`,
+// kosmo/subagents/tree
+// kosmo/tool/result`,
 };
 ---
 
@@ -59,37 +59,41 @@ $result = AgentBuilder::create()
     <meta property="og:image" content="/og-image.svg" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
-  <body class="home-page">
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="KosmoKrator home">
+  <body class="min-h-screen overflow-x-hidden text-kosmo-text font-sans bg-[radial-gradient(circle_at_8%_10%,rgba(220,20,60,0.18),transparent_28rem),radial-gradient(circle_at_92%_20%,rgba(255,92,117,0.12),transparent_26rem),linear-gradient(180deg,#07070d_0%,#0c0c14_58%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100vw-2rem))] mx-auto flex items-center justify-between gap-4 py-4 max-[920px]:flex-col max-[920px]:items-start">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
         <img src="/favicon.svg" alt="" width="28" height="28" />
         <span>KosmoKrator</span>
       </a>
-      <nav class="main-nav" aria-label="Main navigation">
-        <a href="/docs/getting-started">Docs</a>
-        <a href="/docs/installation">Install</a>
-        <a href="/docs/headless">Headless</a>
-        <a href="/docs/acp">ACP</a>
-        <a href="/docs/changelog">Changelog</a>
-        <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+      <nav class="flex flex-wrap items-center gap-4 justify-end max-[920px]:justify-start max-[560px]:w-full max-[560px]:gap-2.5" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/getting-started">Docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/installation">Install</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/integrations">Integrations</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/headless">Headless</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/acp">ACP</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/changelog">Changelog</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
       </nav>
     </header>
 
     <main>
-      <section class="hero-section">
-        <div class="hero-copy">
-          <pre class="ascii-logo" aria-label="KosmoKrator ASCII logo">{asciiLogo}</pre>
-          <p class="eyebrow">Terminal AI coding agent for real repositories</p>
-          <h1>The coding agent you run from the terminal.</h1>
-          <p class="hero-lead">
+      <section class="grid grid-cols-[minmax(0,1fr)_minmax(360px,520px)] items-center gap-[clamp(2rem,5vw,5rem)] w-[min(1180px,calc(100vw-2rem))] mx-auto pt-16 pb-18 max-[920px]:w-[min(100vw-1.25rem,720px)] max-[920px]:grid-cols-1 max-[920px]:pt-8">
+        <div class="min-w-0">
+          <pre
+            class="overflow-x-auto w-max max-w-full mb-8 p-0 border-0 bg-transparent text-kosmo-crimson font-mono font-bold text-[clamp(0.28rem,0.72vw,0.5rem)] leading-[1.18]"
+            aria-label="KosmoKrator ASCII logo"
+          >{asciiLogo}</pre>
+          <p class="mb-3 text-kosmo-hot text-xs font-extrabold tracking-[0.14em] uppercase">Terminal AI coding agent for real repositories</p>
+          <h1 class="max-w-[720px] m-0 leading-none text-[clamp(2.85rem,5.4vw,4.75rem)] tracking-normal">The coding agent you run from the terminal.</h1>
+          <p class="max-w-[760px] mt-5 text-kosmo-muted leading-relaxed text-[clamp(1.03rem,1.55vw,1.24rem)] tracking-normal">
             KosmoKrator gives you a shell-first agent with TUI and ANSI renderers, permissions,
             persistent sessions, context management, Lua code mode, integrations, MCP, ACP,
             a PHP SDK, and parallel subagents.
           </p>
-          <div class="hero-actions">
-            <a class="button primary" href="/docs/installation">Install KosmoKrator</a>
-            <a class="button secondary" href="/docs/getting-started">Read the docs</a>
-            <span class="github-star-embed">
+          <div class="flex flex-wrap gap-3 mt-8">
+            <a class="inline-flex items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href="/docs/installation">Install KosmoKrator</a>
+            <a class="inline-flex items-center justify-center min-h-[44px] px-4 py-3 border border-kosmo-border rounded-md text-kosmo-text font-bold no-underline bg-white/[0.05]" href="/docs/getting-started">Read the docs</a>
+            <span class="self-center inline-flex items-center justify-center min-h-[32px]">
               <a
                 class="github-button"
                 href="https://github.com/OpenCompanyApp/kosmokrator"
@@ -102,12 +106,15 @@ $result = AgentBuilder::create()
           </div>
         </div>
 
-        <div class="surface-panel" aria-label="KosmoKrator runtime examples">
-          <div class="surface-tabs" role="tablist" aria-label="Runtime surfaces">
+        <div class="min-w-0 max-w-full overflow-hidden border border-kosmo-border rounded-[10px] bg-kosmo-surface shadow-[0_24px_70px_rgba(0,0,0,0.34)]" aria-label="KosmoKrator runtime examples">
+          <div class="grid grid-cols-4 border-b border-white/[0.08] max-[560px]:grid-cols-2" role="tablist" aria-label="Runtime surfaces">
             {Object.keys(surfaceSnippets).map((key, index) => (
               <button
                 type="button"
-                class="surface-tab"
+                class:list={[
+                  'min-h-[44px] border-0 border-r border-white/[0.08] uppercase cursor-pointer last:border-r-0 font-bold text-xs font-mono',
+                  index === 0 ? 'bg-kosmo-crimson/15 text-kosmo-text' : 'bg-white/[0.03] text-kosmo-muted',
+                ]}
                 data-surface-tab={key}
                 role="tab"
                 aria-selected={index === 0 ? 'true' : 'false'}
@@ -121,87 +128,97 @@ $result = AgentBuilder::create()
           {Object.entries(surfaceSnippets).map(([key, snippet], index) => (
             <pre
               id={`surface-${key}`}
-              class:list={['surface-snippet', index === 0 && 'active']}
+              class:list={[
+                index === 0 ? 'block' : 'hidden',
+                'min-h-[430px] m-0 p-5 overflow-auto bg-kosmo-code-bg-2 whitespace-pre',
+                'text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.75]',
+                'max-[560px]:min-h-[330px] max-[560px]:text-[0.78rem] max-[560px]:whitespace-pre-wrap max-[560px]:[overflow-wrap:anywhere]',
+              ]}
               data-surface-panel={key}
               role="tabpanel"
               aria-labelledby={`tab-${key}`}
               hidden={index !== 0}
-            ><code>{snippet}</code></pre>
+            ><code class="font-[inherit]">{snippet}</code></pre>
           ))}
         </div>
       </section>
 
-      <section class="section-band install-band" id="install">
-        <div class="section-heading">
-          <p class="eyebrow">Install</p>
-          <h2>Choose the runtime package that matches the machine.</h2>
+      <section class="w-[min(1180px,calc(100vw-2rem))] mx-auto py-18 border-t border-white/[0.08] max-[920px]:w-[min(100vw-1.25rem,720px)]" id="install">
+        <div class="grid gap-2 max-w-[760px] mb-5">
+          <p class="mb-3 text-kosmo-hot text-xs font-extrabold tracking-[0.14em] uppercase">Install</p>
+          <h2 class="m-0 leading-tight text-[clamp(2rem,4vw,3.2rem)] tracking-normal">Choose the runtime package that matches the machine.</h2>
         </div>
-        <div class="install-tabs-home" aria-label="Install methods">
-          <div class="install-tab-list" role="tablist" aria-label="Install methods">
-            <button type="button" role="tab" aria-selected="true" aria-controls="install-static" id="install-tab-static" data-install-tab="static">Static binary</button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="install-phar" id="install-tab-phar" data-install-tab="phar">PHAR</button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="install-source" id="install-tab-source" data-install-tab="source">Source checkout</button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="install-termux" id="install-tab-termux" data-install-tab="termux">Termux</button>
+        <div class="overflow-hidden border border-white/10 rounded-lg bg-white/[0.04]" aria-label="Install methods">
+          <div class="grid grid-cols-4 border-b border-white/10 max-[560px]:grid-cols-2" role="tablist" aria-label="Install methods">
+            <button type="button" role="tab" aria-selected="true" aria-controls="install-static" id="install-tab-static" data-install-tab="static" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-kosmo-crimson/15 text-kosmo-text cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Static binary</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-phar" id="install-tab-phar" data-install-tab="phar" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">PHAR</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-source" id="install-tab-source" data-install-tab="source" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Source checkout</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-termux" id="install-tab-termux" data-install-tab="termux" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Termux</button>
           </div>
-          <section id="install-static" class="install-panel-home active" role="tabpanel" aria-labelledby="install-tab-static" data-install-panel="static">
-            <h3>Static binary</h3>
-            <p>No PHP dependency. Recommended for normal terminal use on macOS and Linux.</p>
-            <pre><code>curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash</code></pre>
+          <section id="install-static" class="p-5 block" role="tabpanel" aria-labelledby="install-tab-static" data-install-panel="static">
+            <h3 class="m-0 mb-2 text-kosmo-text text-base">Static binary</h3>
+            <p class="max-w-[720px] m-0 mb-4 text-kosmo-muted text-[0.94rem] leading-relaxed">No PHP dependency. Recommended for normal terminal use on macOS and Linux.</p>
+            <pre class="overflow-x-auto m-0 p-4 rounded-md bg-kosmo-code-bg-2 text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.65]"><code>curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash</code></pre>
           </section>
-          <section id="install-phar" class="install-panel-home" role="tabpanel" aria-labelledby="install-tab-phar" data-install-panel="phar" hidden>
-            <h3>PHAR</h3>
-            <p>Single PHP archive for systems with PHP 8.4 and the required extensions.</p>
-            <pre><code>php kosmokrator.phar</code></pre>
+          <section id="install-phar" class="p-5 hidden" role="tabpanel" aria-labelledby="install-tab-phar" data-install-panel="phar" hidden>
+            <h3 class="m-0 mb-2 text-kosmo-text text-base">PHAR</h3>
+            <p class="max-w-[720px] m-0 mb-4 text-kosmo-muted text-[0.94rem] leading-relaxed">Single PHP archive for systems with PHP 8.4 and the required extensions.</p>
+            <pre class="overflow-x-auto m-0 p-4 rounded-md bg-kosmo-code-bg-2 text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.65]"><code>php kosmokrator.phar</code></pre>
           </section>
-          <section id="install-source" class="install-panel-home" role="tabpanel" aria-labelledby="install-tab-source" data-install-panel="source" hidden>
-            <h3>Source checkout</h3>
-            <p>Best for contributors and local development.</p>
-            <pre><code>git clone https://github.com/OpenCompanyApp/kosmokrator.git
+          <section id="install-source" class="p-5 hidden" role="tabpanel" aria-labelledby="install-tab-source" data-install-panel="source" hidden>
+            <h3 class="m-0 mb-2 text-kosmo-text text-base">Source checkout</h3>
+            <p class="max-w-[720px] m-0 mb-4 text-kosmo-muted text-[0.94rem] leading-relaxed">Best for contributors and local development.</p>
+            <pre class="overflow-x-auto m-0 p-4 rounded-md bg-kosmo-code-bg-2 text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.65] max-[560px]:whitespace-pre-wrap max-[560px]:[overflow-wrap:anywhere]"><code>git clone https://github.com/OpenCompanyApp/kosmokrator.git
 cd kosmokrator
 composer install
-bin/kosmokrator</code></pre>
+bin/kosmo</code></pre>
           </section>
-          <section id="install-termux" class="install-panel-home" role="tabpanel" aria-labelledby="install-tab-termux" data-install-panel="termux" hidden>
-            <h3>Termux</h3>
-            <p>Run the ANSI renderer on Android with PHP, Composer, and local storage access.</p>
-            <pre><code>pkg install php composer git
-bin/kosmokrator --renderer=ansi</code></pre>
+          <section id="install-termux" class="p-5 hidden" role="tabpanel" aria-labelledby="install-tab-termux" data-install-panel="termux" hidden>
+            <h3 class="m-0 mb-2 text-kosmo-text text-base">Termux</h3>
+            <p class="max-w-[720px] m-0 mb-4 text-kosmo-muted text-[0.94rem] leading-relaxed">Run the ANSI renderer on Android with PHP, Composer, and local storage access.</p>
+            <pre class="overflow-x-auto m-0 p-4 rounded-md bg-kosmo-code-bg-2 text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.65] max-[560px]:whitespace-pre-wrap max-[560px]:[overflow-wrap:anywhere]"><code>pkg install php composer git
+bin/kosmo --renderer=ansi</code></pre>
           </section>
         </div>
       </section>
 
-      <section class="section-band">
-        <div class="section-heading">
-          <p class="eyebrow">Runtime surfaces</p>
-          <h2>One agent core, several ways to operate it.</h2>
+      <section class="w-[min(1180px,calc(100vw-2rem))] mx-auto py-18 border-t border-white/[0.08] max-[920px]:w-[min(100vw-1.25rem,720px)]">
+        <div class="grid gap-2 max-w-[760px] mb-5">
+          <p class="mb-3 text-kosmo-hot text-xs font-extrabold tracking-[0.14em] uppercase">Runtime surfaces</p>
+          <h2 class="m-0 leading-tight text-[clamp(2rem,4vw,3.2rem)] tracking-normal">One agent core, several ways to operate it.</h2>
         </div>
-        <div class="feature-grid">
-          <a href="/docs/headless">
-            <strong>Headless CLI</strong>
-            <span>Use `kosmokrator -p`, JSON output, stream-json, and direct integrations/MCP commands from automation.</span>
+        <div class="grid grid-cols-4 gap-3.5 max-[920px]:grid-cols-2 max-[560px]:grid-cols-1">
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/docs/headless">
+            <strong class="block mb-2 text-kosmo-text text-base">Headless CLI</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Use `kosmo -p`, JSON output, stream-json, and direct integrations/MCP commands from automation.</span>
           </a>
-          <a href="/docs/acp">
-            <strong>ACP server</strong>
-            <span>Expose terminal-equivalent sessions, permissions, tools, subagents, integrations, MCP, and Lua over stdio.</span>
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/docs/acp">
+            <strong class="block mb-2 text-kosmo-text text-base">ACP server</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Expose terminal-equivalent sessions, permissions, tools, subagents, integrations, MCP, and Lua over stdio.</span>
           </a>
-          <a href="/docs/sdk">
-            <strong>PHP SDK</strong>
-            <span>Embed headless runs and direct runtime helpers in PHP applications without creating another engine.</span>
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/docs/sdk">
+            <strong class="block mb-2 text-kosmo-text text-base">PHP SDK</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Embed headless runs and direct runtime helpers in PHP applications without creating another engine.</span>
           </a>
-          <a href="/docs/lua">
-            <strong>Lua code mode</strong>
-            <span>Compose file tools, integrations, MCP calls, and helper functions in discoverable scripts.</span>
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/docs/lua">
+            <strong class="block mb-2 text-kosmo-text text-base">Lua code mode</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Compose file tools, integrations, MCP calls, and helper functions in discoverable scripts.</span>
+          </a>
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/integrations">
+            <strong class="block mb-2 text-kosmo-text text-base">Integration catalog</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Browse generated CLI, Lua, and MCP gateway docs for every OpenCompany integration.</span>
           </a>
         </div>
       </section>
     </main>
 
-    <footer class="site-footer">
-      <span>KosmoKrator</span>
-      <a href="/docs">Documentation</a>
-      <a href="/docs/changelog">Changelog</a>
-      <a href="/docs/architecture">Architecture</a>
-      <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+    <footer class="flex items-center gap-4 justify-start py-8 pb-12 text-kosmo-muted border-t border-white/[0.08] w-[min(1180px,calc(100vw-2rem))] mx-auto max-[920px]:w-[min(100vw-1.25rem,720px)]">
+      <span class="text-kosmo-text font-extrabold">KosmoKrator</span>
+      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs">Documentation</a>
+      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
+      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/changelog">Changelog</a>
+      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/architecture">Architecture</a>
+      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
     </footer>
 
     <script>
@@ -212,12 +229,15 @@ bin/kosmokrator --renderer=ansi</code></pre>
         tabs.forEach((tab) => {
           const selected = tab.dataset.surfaceTab === key;
           tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+          tab.classList.toggle('bg-kosmo-crimson/15', selected);
+          tab.classList.toggle('text-kosmo-text', selected);
+          tab.classList.toggle('bg-white/[0.03]', !selected);
+          tab.classList.toggle('text-kosmo-muted', !selected);
         });
 
         panels.forEach((panel) => {
           const selected = panel.dataset.surfacePanel === key;
           panel.hidden = !selected;
-          panel.classList.toggle('active', selected);
         });
       }
 
@@ -240,12 +260,15 @@ bin/kosmokrator --renderer=ansi</code></pre>
         installTabs.forEach((tab) => {
           const selected = tab.dataset.installTab === key;
           tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+          tab.classList.toggle('bg-kosmo-crimson/15', selected);
+          tab.classList.toggle('text-kosmo-text', selected);
+          tab.classList.toggle('bg-white/[0.03]', !selected);
+          tab.classList.toggle('text-kosmo-muted', !selected);
         });
 
         installPanels.forEach((panel) => {
           const selected = panel.dataset.installPanel === key;
           panel.hidden = !selected;
-          panel.classList.toggle('active', selected);
         });
       }
 

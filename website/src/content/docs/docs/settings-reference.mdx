@@ -15,8 +15,8 @@ Settings can be written to two user-editable scopes:
 
 | Scope | Path | Use for |
 | --- | --- | --- |
-| Global | `~/.kosmokrator/config.yaml` | Personal defaults, provider/model choice, secrets references, UI preference. |
-| Project | `.kosmokrator/config.yaml` or `.kosmokrator.yaml` | Repository policy, team-safe permissions, project model overrides. |
+| Global | `~/.kosmo/config.yaml` | Personal defaults, provider/model choice, secrets references, UI preference. |
+| Project | `.kosmo/config.yaml` or `.kosmo.yaml` | Repository policy, team-safe permissions, project model overrides. |
 
 Effective precedence is:
 
@@ -27,8 +27,8 @@ project override -> global override -> bundled default
 The CLI reports both the source and the effective value:
 
 ```bash
-kosmokrator settings:get agent.default_provider --json
-kosmokrator settings:list --json
+kosmo settings:get agent.default_provider --json
+kosmo settings:list --json
 ```
 
 ## Type Parsing
@@ -51,7 +51,7 @@ jq -n '{
     "tools.default_permission_mode": "guardian",
     "context.auto_compact": "on"
   }
-}' | kosmokrator settings:apply --stdin-json --project --json
+}' | kosmo settings:apply --stdin-json --project --json
 ```
 
 ## Effect Timing
@@ -81,8 +81,8 @@ jq -n '{
 Provider and model options are dynamic:
 
 ```bash
-kosmokrator settings:options agent.default_provider --json
-kosmokrator settings:options agent.default_model --provider anthropic --json
+kosmo settings:options agent.default_provider --json
+kosmo settings:options agent.default_model --provider anthropic --json
 ```
 
 ## Agent
@@ -157,7 +157,7 @@ See [Permissions](/docs/permissions) for the evaluation chain and examples.
 Integration activation, credentials, named accounts, and provider read/write policies are configured with `integrations:configure`, not through generic `settings:set`, because the command knows each provider credential schema.
 
 ```bash
-kosmokrator integrations:configure plane --account production \
+kosmo integrations:configure plane --account production \
   --set api_key="$PLANE_API_KEY" \
   --set workspace_slug=my-workspace \
   --enable \
@@ -170,10 +170,10 @@ kosmokrator integrations:configure plane --account production \
 
 | Setting | Type | Default | Effect | Description |
 | --- | --- | --- | --- | --- |
-| `mcp.permissions_default` | choice: `allow`, `ask`, `deny` | `ask` | applies now | Default read/write policy for MCP operations without server-specific policy. |
-| `mcp.servers.SERVER.permissions.read` | choice: `allow`, `ask`, `deny` | inherit default | applies now | Read policy for one server. |
-| `mcp.servers.SERVER.permissions.write` | choice: `allow`, `ask`, `deny` | inherit default | applies now | Write policy for one server. |
-| `mcp.trust.SERVER.fingerprint` | text | unset | applies now | Project server trust fingerprint written by `mcp:trust`. |
+| `kosmo.mcp.permissions_default` | choice: `allow`, `ask`, `deny` | `ask` | applies now | Default read/write policy for MCP operations without server-specific policy. |
+| `kosmo.mcp.servers.SERVER.permissions.read` | choice: `allow`, `ask`, `deny` | inherit default | applies now | Read policy for one server. |
+| `kosmo.mcp.servers.SERVER.permissions.write` | choice: `allow`, `ask`, `deny` | inherit default | applies now | Write policy for one server. |
+| `kosmo.mcp.trust.SERVER.fingerprint` | text | unset | applies now | Project server trust fingerprint written by `mcp:trust`. |
 
 Server definitions live in JSON files, not YAML settings. See [MCP](/docs/mcp).
 
@@ -226,7 +226,7 @@ The bot token is a managed secret under `gateway.telegram.token`, configured wit
 | Setting | Type | Default | Effect | Description |
 | --- | --- | --- | --- | --- |
 | `audio.completion_sound` | toggle | `off` | applies now | Compose and play a short musical piece after each agent response. |
-| `audio.soundfont` | text | `~/.kosmokrator/soundfonts/FluidR3_GM.sf2` | applies now | SoundFont path for MIDI playback. |
+| `audio.soundfont` | text | `~/.kosmo/soundfonts/FluidR3_GM.sf2` | applies now | SoundFont path for MIDI playback. |
 | `audio.llm_timeout` | number | `60` | applies now | Seconds to wait for AI music composition before fallback. |
 | `audio.max_duration` | number | `8` | applies now | Maximum length of composed piece. |
 | `audio.max_retries` | number | `1` | applies now | Composition retry count. |
@@ -238,12 +238,12 @@ The bot token is a managed secret under `gateway.telegram.token`, configured wit
 Agents and wrappers should discover rather than hard-code:
 
 ```bash
-kosmokrator settings:list --json
-kosmokrator settings:list --category web --json
-kosmokrator settings:get web.search.enabled --json
-kosmokrator settings:options tools.default_permission_mode --json
-kosmokrator settings:options agent.default_model --provider anthropic --json
-kosmokrator settings:doctor --json
+kosmo settings:list --json
+kosmo settings:list --category web --json
+kosmo settings:get web.search.enabled --json
+kosmo settings:options tools.default_permission_mode --json
+kosmo settings:options agent.default_model --provider anthropic --json
+kosmo settings:doctor --json
 ```
 
 When adding new settings in code, update this page, [Configuration](/docs/configuration), and the website navigation if a new category deserves its own guide.

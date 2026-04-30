@@ -1,5 +1,5 @@
 {
-    "main": "bin/kosmokrator",
+    "main": "bin/kosmo",
     "output": "builds/kosmokrator.phar",
     "chmod": "0755",
     "directories": [

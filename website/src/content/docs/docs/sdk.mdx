@@ -4,7 +4,7 @@ description: "Embed KosmoKrator headless runtime in PHP applications through the
 sidebar:
   order: 11
 ---
-Embed KosmoKrator's headless agent runtime directly in PHP applications. The SDK lives in the main KosmoKrator package under `Kosmokrator\Sdk` and uses the same `AgentLoop::runHeadless()` path as `kosmokrator -p`.
+Embed KosmoKrator's headless agent runtime directly in PHP applications. The SDK lives in the main KosmoKrator package under `Kosmokrator\Sdk` and uses the same `AgentLoop::runHeadless()` path as `kosmo -p`.
 
 ## Quick Start
 
@@ -37,7 +37,7 @@ The SDK is not a separate engine. It builds a normal headless KosmoKrator sessio
 
 | CLI | SDK |
 | --- | --- |
-| `kosmokrator -p "task"` | `$agent->collect('task')` |
+| `kosmo -p "task"` | `$agent->collect('task')` |
 | `--model` | `->withModel()` |
 | `--mode edit|plan|ask` | `->withMode()` |
 | `--permission-mode` | `->withPermissionMode()` |

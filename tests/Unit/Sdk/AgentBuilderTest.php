@@ -156,8 +156,8 @@ final class AgentBuilderTest extends TestCase
         $kernel = new Kernel(dirname(__DIR__, 3));
         $kernel->boot();
         $container = $kernel->getContainer();
-        $container->make('config')->set('kosmokrator.agent.default_provider', 'ollama');
-        $container->make('config')->set('kosmokrator.agent.default_model', 'test-model');
+        $container->make('config')->set('kosmo.agent.default_provider', 'ollama');
+        $container->make('config')->set('kosmo.agent.default_model', 'test-model');
         $container->instance(AsyncLlmClient::class, $llm);
         $container->instance(PrismService::class, $llm);
 

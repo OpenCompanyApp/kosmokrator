@@ -45,7 +45,7 @@ Extract a reusable debugging pattern or technique from the current conversation.
 |---|---|
 | /plan, /ralplan | /plan (consensus planning could be added) |
 | /ask | /ask |
-| /setup | `kosmokrator setup` |
+| /setup | `kosmo setup` |
 | /hud | Built-in status bar |
 | /cancel | Ctrl+C cascading cancellation |
 | /ultrawork (parallel execution) | /unleash + SubagentOrchestrator |

@@ -1335,7 +1335,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
         $lines[] = $this->boxLine('Allowed chats: '.($allowedChats !== '' ? $allowedChats : '(all)'), $width);
         $lines[] = $this->boxLine('Free-response chats: '.($freeResponse !== '' ? $freeResponse : '(none)'), $width);
         $lines[] = $this->boxLine('', $width);
-        $lines[] = $this->boxLine('Start with: php bin/kosmokrator gateway:telegram', $width);
+        $lines[] = $this->boxLine('Start with: php bin/kosmo gateway:telegram', $width);
 
         while (count($lines) < $height - 1) {
             $lines[] = $this->boxLine('', $width);

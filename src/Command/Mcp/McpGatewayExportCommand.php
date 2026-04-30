@@ -19,13 +19,13 @@ final class McpGatewayExportCommand extends Command
     protected function configure(): void
     {
         $this->configureGatewayOptions($this)
-            ->addOption('name', null, InputOption::VALUE_REQUIRED, 'MCP server name', 'kosmokrator')
+            ->addOption('name', null, InputOption::VALUE_REQUIRED, 'MCP server name', 'kosmo')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Wrap output in a JSON envelope');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $name = (string) ($input->getOption('name') ?: 'kosmokrator');
+        $name = (string) ($input->getOption('name') ?: 'kosmo');
         $config = ['mcpServers' => [$name => $this->gatewayServerConfig($input)]];
 
         if ($input->getOption('json')) {

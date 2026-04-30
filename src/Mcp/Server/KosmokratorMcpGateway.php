@@ -364,8 +364,10 @@ final class KosmokratorMcpGateway
 
         $command = basename((string) $server->command);
         $args = implode(' ', $server->args);
+        $invocation = $command.' '.$args;
 
-        return str_contains($command, 'kosmokrator') && str_contains($args, 'mcp:serve');
+        return preg_match('/\b(kosmo|kosmokrator)\b/', $invocation) === 1
+            && str_contains($args, 'mcp:serve');
     }
 
     /**
@@ -452,7 +454,7 @@ final class KosmokratorMcpGateway
 
     private function gatewayResourceUri(string $server, string $uri): string
     {
-        return 'kosmokrator://mcp/'.$server.'/'.rtrim(strtr(base64_encode($uri), '+/', '-_'), '=');
+        return 'kosmo://mcp/'.$server.'/'.rtrim(strtr(base64_encode($uri), '+/', '-_'), '=');
     }
 
     /**
@@ -460,7 +462,7 @@ final class KosmokratorMcpGateway
      */
     private function decodeGatewayResourceUri(string $uri): ?array
     {
-        if (preg_match('#^kosmokrator://mcp/([^/]+)/(.+)$#', $uri, $matches) !== 1) {
+        if (preg_match('#^(?:kosmo|kosmokrator)://mcp/([^/]+)/(.+)$#', $uri, $matches) !== 1) {
             return null;
         }
 

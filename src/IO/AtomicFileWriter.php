@@ -33,7 +33,7 @@ final class AtomicFileWriter
             mkdir($dir, $permissions, true);
         }
 
-        $tmpPath = $dir.'/.kosmokrator_tmp_'.getmypid().'_'.mt_rand();
+        $tmpPath = $dir.'/.kosmo_tmp_'.getmypid().'_'.mt_rand();
 
         if (file_put_contents($tmpPath, $content) === false) {
             @unlink($tmpPath);

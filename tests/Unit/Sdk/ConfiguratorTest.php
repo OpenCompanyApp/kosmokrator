@@ -35,10 +35,10 @@ final class ConfiguratorTest extends TestCase
         ProviderConfigurator::forProject($this->project)
             ->configure('openai', apiKey: 'sk-test', model: 'gpt-test', baseUrl: 'https://example.test/v1');
 
-        $data = Yaml::parseFile($this->project.'/.kosmokrator/config.yaml');
+        $data = Yaml::parseFile($this->project.'/.kosmo/config.yaml');
 
-        $this->assertSame('openai', $data['kosmokrator']['agent']['default_provider']);
-        $this->assertSame('gpt-test', $data['kosmokrator']['agent']['default_model']);
+        $this->assertSame('openai', $data['kosmo']['agent']['default_provider']);
+        $this->assertSame('gpt-test', $data['kosmo']['agent']['default_model']);
         $this->assertSame('sk-test', $data['prism']['providers']['openai']['api_key']);
         $this->assertSame('https://example.test/v1', $data['prism']['providers']['openai']['url']);
     }
@@ -49,12 +49,12 @@ final class ConfiguratorTest extends TestCase
             ->addStdioServer('fake', 'php', ['server.php'], ['TOKEN' => 'x'], ['read' => 'allow'], trust: true);
 
         $mcp = json_decode((string) file_get_contents($this->project.'/.mcp.json'), true);
-        $settings = Yaml::parseFile($this->project.'/.kosmokrator/config.yaml');
+        $settings = Yaml::parseFile($this->project.'/.kosmo/config.yaml');
 
         $this->assertSame('php', $mcp['mcpServers']['fake']['command']);
         $this->assertSame(['server.php'], $mcp['mcpServers']['fake']['args']);
-        $this->assertSame('allow', $settings['mcp']['servers']['fake']['permissions']['read']);
-        $this->assertArrayHasKey('fingerprint', $settings['mcp']['trust']['fake']);
+        $this->assertSame('allow', $settings['kosmo']['mcp']['servers']['fake']['permissions']['read']);
+        $this->assertArrayHasKey('fingerprint', $settings['kosmo']['mcp']['trust']['fake']);
     }
 
     private function removeDir(string $dir): void

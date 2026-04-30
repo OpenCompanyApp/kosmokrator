@@ -46,22 +46,22 @@ final class SettingsDoctorCommand extends Command
         $providerDefinition = $provider !== '' ? $providerCatalog->provider($provider) : null;
         $issues = [];
         $next = [
-            'kosmokrator settings:list --json',
-            'kosmokrator providers:list --json',
-            'kosmokrator secrets:list --json',
+            'kosmo settings:list --json',
+            'kosmo providers:list --json',
+            'kosmo secrets:list --json',
         ];
 
         if ($providerDefinition === null) {
             $issues[] = "Default provider [{$provider}] is not available.";
-            $next[] = 'kosmokrator providers:list --json';
+            $next[] = 'kosmo providers:list --json';
         } elseif ($providerDefinition->authMode === 'api_key' && trim($providerCatalog->apiKey($provider)) === '') {
             $issues[] = "Default provider [{$provider}] is missing an API key.";
-            $next[] = "kosmokrator providers:configure {$provider} --api-key ... --json";
+            $next[] = "kosmo providers:configure {$provider} --api-key ... --json";
         }
 
         if ($providerDefinition !== null && $model !== '' && ! $providerCatalog->supportsModel($provider, $model)) {
             $issues[] = "Default model [{$model}] is not advertised by provider [{$provider}].";
-            $next[] = "kosmokrator providers:models {$provider} --json";
+            $next[] = "kosmo providers:models {$provider} --json";
         }
 
         $payload = [

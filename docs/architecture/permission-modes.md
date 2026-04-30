@@ -58,7 +58,7 @@ Blocked paths and blocked command patterns always win, regardless of permission 
 
 ### Safe bash patterns
 
-Configured in `config/kosmokrator.yaml` under `tools.guardian_safe_commands`.
+Configured in `config/kosmo.yaml` under `tools.guardian_safe_commands`.
 
 Representative defaults:
 
@@ -128,4 +128,4 @@ Changing to `Guardian` or `Prometheus` applies to the current session immediatel
 - `src/Tool/Permission/PermissionMode.php`
 - `src/Tool/Permission/PermissionEvaluator.php`
 - `src/Tool/Permission/GuardianEvaluator.php`
-- `config/kosmokrator.yaml`
+- `config/kosmo.yaml`

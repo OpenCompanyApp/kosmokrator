@@ -26,8 +26,8 @@ final class AcpRendererTest extends TestCase
         $text = $this->firstFrame($frames, 'session/update', 'agent_message_chunk');
         $toolCall = $this->firstFrame($frames, 'session/update', 'tool_call');
         $toolUpdate = $this->firstFrame($frames, 'session/update', 'tool_call_update');
-        $toolStarted = $this->firstMethod($frames, 'kosmokrator/tool_started');
-        $toolCompleted = $this->firstMethod($frames, 'kosmokrator/tool_completed');
+        $toolStarted = $this->firstMethod($frames, 'kosmo/tool_started');
+        $toolCompleted = $this->firstMethod($frames, 'kosmo/tool_completed');
 
         $this->assertSame('hello', $text['params']['update']['content']['text']);
         $this->assertSame('read', $toolCall['params']['update']['kind']);
@@ -65,9 +65,9 @@ final class AcpRendererTest extends TestCase
         ]);
 
         $frames = $this->frames($output);
-        $spawn = $this->firstMethod($frames, 'kosmokrator/subagent_spawned');
-        $tree = $this->firstMethod($frames, 'kosmokrator/subagent_tree');
-        $completed = $this->firstMethod($frames, 'kosmokrator/subagent_completed');
+        $spawn = $this->firstMethod($frames, 'kosmo/subagent_spawned');
+        $tree = $this->firstMethod($frames, 'kosmo/subagent_tree');
+        $completed = $this->firstMethod($frames, 'kosmo/subagent_completed');
 
         $this->assertSame('s1', $spawn['params']['sessionId']);
         $this->assertSame('run_1', $spawn['params']['runId']);
@@ -88,7 +88,7 @@ final class AcpRendererTest extends TestCase
 
         $this->assertSame('always', $decision);
         $frames = $this->frames($output);
-        $permissionEvent = $this->firstMethod($frames, 'kosmokrator/permission_requested');
+        $permissionEvent = $this->firstMethod($frames, 'kosmo/permission_requested');
         $permissionRequest = $this->firstMethod($frames, 'session/request_permission');
         $this->assertSame('bash', $permissionEvent['params']['tool']);
         $this->assertSame('execute', $permissionRequest['params']['toolCall']['kind']);

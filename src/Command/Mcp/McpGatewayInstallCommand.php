@@ -26,14 +26,14 @@ final class McpGatewayInstallCommand extends Command
     protected function configure(): void
     {
         $this->configureGatewayOptions($this)
-            ->addOption('name', null, InputOption::VALUE_REQUIRED, 'MCP server name', 'kosmokrator')
+            ->addOption('name', null, InputOption::VALUE_REQUIRED, 'MCP server name', 'kosmo')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->store->setProjectRoot($this->projectRoot());
-        $name = (string) ($input->getOption('name') ?: 'kosmokrator');
+        $name = (string) ($input->getOption('name') ?: 'kosmo');
         $server = $this->gatewayServerConfig($input);
         $path = $this->store->writeServer(McpServerConfig::fromArray($name, $server), 'project');
 

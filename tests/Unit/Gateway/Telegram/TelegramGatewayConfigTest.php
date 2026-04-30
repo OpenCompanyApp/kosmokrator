@@ -17,7 +17,7 @@ final class TelegramGatewayConfigTest extends TestCase
     public function test_reads_session_mode_and_lists_from_settings_manager(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'gateway' => [
                     'telegram' => [
                         'enabled' => false,
@@ -29,10 +29,10 @@ final class TelegramGatewayConfigTest extends TestCase
         ]);
         $manager = new SettingsManager($config, new SettingsSchema, new YamlConfigStore(new NullLogger), __DIR__.'/../../../../config');
         $manager->setProjectRoot(null);
-        $manager->setRaw('kosmokrator.gateway.telegram.enabled', true, 'global');
-        $manager->setRaw('kosmokrator.gateway.telegram.token', 'abc123', 'global');
-        $manager->setRaw('kosmokrator.gateway.telegram.session_mode', 'chat_user', 'global');
-        $manager->setRaw('kosmokrator.gateway.telegram.allowed_users', '1,alice', 'global');
+        $manager->setRaw('kosmo.gateway.telegram.enabled', true, 'global');
+        $manager->setRaw('kosmo.gateway.telegram.token', 'abc123', 'global');
+        $manager->setRaw('kosmo.gateway.telegram.session_mode', 'chat_user', 'global');
+        $manager->setRaw('kosmo.gateway.telegram.allowed_users', '1,alice', 'global');
 
         $gateway = TelegramGatewayConfig::fromSettings($manager, $config);
 

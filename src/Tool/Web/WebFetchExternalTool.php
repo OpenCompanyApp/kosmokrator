@@ -46,7 +46,7 @@ final class WebFetchExternalTool extends AbstractTool
 
     protected function handle(array $args): ToolResult
     {
-        if (! $this->enabled('kosmokrator.web.fetch.allow_external')) {
+        if (! $this->enabled('kosmo.web.fetch.allow_external')) {
             return ToolResult::error('External web fetch is disabled. Enable web.fetch.allow_external first.');
         }
 
@@ -59,8 +59,8 @@ final class WebFetchExternalTool extends AbstractTool
         $response = $provider->fetch(new WebFetchRequest(
             url: (string) ($args['url'] ?? ''),
             format: is_string($args['format'] ?? null) ? $args['format'] : 'markdown',
-            timeoutSeconds: max(1, (int) ($args['timeout_seconds'] ?? $this->config->get('kosmokrator.web.fetch.timeout_seconds', 30))),
-            outputLimitChars: max(1000, (int) $this->config->get('kosmokrator.web.fetch.output_limit_chars', 100000)),
+            timeoutSeconds: max(1, (int) ($args['timeout_seconds'] ?? $this->config->get('kosmo.web.fetch.timeout_seconds', 30))),
+            outputLimitChars: max(1000, (int) $this->config->get('kosmo.web.fetch.output_limit_chars', 100000)),
         ));
 
         return ToolResult::successWithMetadata(WebFormatter::fetch($response), $response->toArray());

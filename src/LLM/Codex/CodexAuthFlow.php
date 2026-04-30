@@ -56,7 +56,7 @@ final class CodexAuthFlow
     {
         $pkce = $this->oauth->generatePkce();
         $state = bin2hex(random_bytes(16));
-        $port = (int) $this->config->get('kosmokrator.codex.oauth_port', 9876);
+        $port = (int) $this->config->get('kosmo.codex.oauth_port', 9876);
         $redirectUri = "http://127.0.0.1:{$port}/auth/callback";
         // Build URL ourselves — the library's buildAuthorizationUrl() includes
         // codex_cli_simplified_flow=true which makes OpenAI show a code on-screen

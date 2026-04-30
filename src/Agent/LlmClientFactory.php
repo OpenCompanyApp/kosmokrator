@@ -40,7 +40,7 @@ final class LlmClientFactory
     public function create(string $rendererType, RendererInterface $ui): LlmClientInterface
     {
         $config = $this->container->make('config');
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $provider = $config->get('kosmo.agent.default_provider', 'z');
         $this->validateAuth($provider);
 
         $registry = $this->container->make(RelayRegistry::class);
@@ -79,7 +79,7 @@ final class LlmClientFactory
         if ($authMode === 'oauth') {
             $oauth = $this->container->make(CodexOAuthService::class);
             if (! $oauth->isConfigured()) {
-                throw new AuthenticationException('Codex is not authenticated. Run `kosmokrator codex:login`.');
+                throw new AuthenticationException('Codex is not authenticated. Run `kosmo codex:login`.');
             }
         } elseif ($authMode === 'api_key') {
             $apiKey = $providers->apiKey($provider);

@@ -76,7 +76,7 @@ final class IntegrationFieldsCommand extends Command
             'compatibility_summary' => $capabilities['compatibility_summary'],
             'fields' => $fields,
             'example' => $capabilities['cli_setup_supported']
-                ? "kosmokrator integrations:configure {$providerName} --account={$account} --set key=value --enable --json"
+                ? "kosmo integrations:configure {$providerName} --account={$account} --set key=value --enable --json"
                 : null,
         ];
 

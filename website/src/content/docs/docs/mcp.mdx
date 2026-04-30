@@ -19,9 +19,9 @@ The most direct Claude Code project config is:
 ```json
 {
   "mcpServers": {
-    "kosmokrator": {
+    "kosmo": {
       "type": "stdio",
-      "command": "kosmokrator",
+      "command": "kosmo",
       "args": [
         "mcp:serve",
         "--integration=plane",
@@ -37,13 +37,13 @@ The most direct Claude Code project config is:
 The selected tools are encoded directly in the MCP config. Use repeated flags or comma-separated values:
 
 ```bash
-kosmokrator mcp:serve \
+kosmo mcp:serve \
   --integration=plane \
   --integration=clickup \
   --upstream=context7 \
   --write=deny
 
-kosmokrator mcp:serve \
+kosmo mcp:serve \
   --integrations=plane,clickup \
   --upstreams=context7,github \
   --write=allow
@@ -54,7 +54,7 @@ kosmokrator mcp:serve \
 Generate a ready-to-paste config:
 
 ```bash
-kosmokrator mcp:gateway:export \
+kosmo mcp:gateway:export \
   --integration=plane \
   --upstream=context7 \
   --write=deny \
@@ -64,7 +64,7 @@ kosmokrator mcp:gateway:export \
 Install the gateway into the current project's `.mcp.json`:
 
 ```bash
-kosmokrator mcp:gateway:install \
+kosmo mcp:gateway:install \
   --integration=plane \
   --upstream=context7 \
   --write=deny \
@@ -74,25 +74,26 @@ kosmokrator mcp:gateway:install \
 For reusable local presets, define a profile in KosmoKrator config and reference it from `.mcp.json`:
 
 ```yaml
-mcp_gateway:
-  profiles:
-    claude:
-      integrations:
-        include: [plane, clickup]
-      upstream_mcp:
-        include: [context7]
-      write_policy: deny
-      expose_resources: true
-      expose_prompts: true
-      max_result_chars: 50000
+kosmo:
+  mcp_gateway:
+    profiles:
+      claude:
+        integrations:
+          include: [plane, clickup]
+        upstream_mcp:
+          include: [context7]
+        write_policy: deny
+        expose_resources: true
+        expose_prompts: true
+        max_result_chars: 50000
 ```
 
 ```json
 {
   "mcpServers": {
-    "kosmokrator": {
+    "kosmo": {
       "type": "stdio",
-      "command": "kosmokrator",
+      "command": "kosmo",
       "args": ["mcp:serve", "--profile=claude"]
     }
   }
@@ -131,19 +132,19 @@ KosmoKrator also reads VS Code style `.vscode/mcp.json` and Cursor style `.curso
 
 ```bash
 # Write project .mcp.json
-kosmokrator mcp:add github --project --type=stdio \
+kosmo mcp:add github --project --type=stdio \
   --command=github-mcp-server --env GITHUB_TOKEN --json
 
-# Write ~/.kosmokrator/mcp.json
-kosmokrator mcp:add context7 --global --type=stdio \
+# Write ~/.kosmo/mcp.json
+kosmo mcp:add context7 --global --type=stdio \
   --command=npx --arg=-y --arg=@upstash/context7-mcp --json
 
 # Import a VS Code or Cursor file into .mcp.json
-kosmokrator mcp:import .vscode/mcp.json --project --json
+kosmo mcp:import .vscode/mcp.json --project --json
 
 # Export effective config in either shape
-kosmokrator mcp:export --format=mcpServers --json
-kosmokrator mcp:export --format=vscode --path=.vscode/mcp.json --json
+kosmo mcp:export --format=mcpServers --json
+kosmo mcp:export --format=vscode --path=.vscode/mcp.json --json
 ```
 
 ## Web Provider Presets
@@ -152,14 +153,14 @@ For common web-search MCP servers, `mcp:preset` writes a portable server entry w
 
 ```bash
 # List available presets
-kosmokrator mcp:preset list --json
+kosmo mcp:preset list --json
 
 # Add a project-level preset
-kosmokrator mcp:preset add tavily --project --json
-kosmokrator mcp:preset add firecrawl --project --json
-kosmokrator mcp:preset add exa --project --json
-kosmokrator mcp:preset add fetch --project --json
-kosmokrator mcp:preset add parallel --project --json
+kosmo mcp:preset add tavily --project --json
+kosmo mcp:preset add firecrawl --project --json
+kosmo mcp:preset add exa --project --json
+kosmo mcp:preset add fetch --project --json
+kosmo mcp:preset add parallel --project --json
 ```
 
 Presets use environment placeholders such as `${TAVILY_API_KEY}`. Store shared project config in `.mcp.json` and keep actual secrets in the shell environment or with `mcp:secret:set`.
@@ -168,23 +169,23 @@ Presets use environment placeholders such as `${TAVILY_API_KEY}`. Store shared p
 
 ```bash
 # Discovery
-kosmokrator mcp:list --json
-kosmokrator mcp:status --json
-kosmokrator mcp:trust github --project --json
-kosmokrator mcp:tools github --json
-kosmokrator mcp:schema github.search_repositories --json
+kosmo mcp:list --json
+kosmo mcp:status --json
+kosmo mcp:trust github --project --json
+kosmo mcp:tools github --json
+kosmo mcp:schema github.search_repositories --json
 
 # Generic call
-kosmokrator mcp:call github.search_repositories \
+kosmo mcp:call github.search_repositories \
   --query="kosmokrator language:php" --json
 
 # Server shortcut
-kosmokrator mcp:github search_repositories \
+kosmo mcp:github search_repositories \
   --query="kosmokrator language:php" --json
 
 # JSON payload
 printf '%s\n' '{"query":"kosmokrator"}' | \
-  kosmokrator mcp:call github.search_repositories --json
+  kosmo mcp:call github.search_repositories --json
 ```
 
 All command JSON envelopes include `success`. Runtime calls return non-zero exit codes when config, trust, permission, transport, schema, or server execution fails.
@@ -193,12 +194,12 @@ All command JSON envelopes include `success`. Runtime calls return non-zero exit
 
 ```bash
 # Dedicated MCP Lua endpoint
-kosmokrator mcp:lua --eval 'dump(app.mcp.github.search_repositories({
+kosmo mcp:lua --eval 'dump(app.mcp.github.search_repositories({
   query = "kosmokrator"
 }))' --json
 
 # Shared integration Lua endpoint also exposes app.mcp.*
-kosmokrator integrations:lua workflow.lua --json
+kosmo integrations:lua workflow.lua --json
 ```
 
 Agent-side `execute_lua` sees the same `app.mcp.*` namespace alongside `app.integrations.*` and `app.tools.*`.
@@ -228,15 +229,15 @@ Do not commit tokens into `.mcp.json`. Use environment variables for shared file
 
 ```bash
 printf %s "$GITHUB_TOKEN" | \
-  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
+  kosmo mcp:secret:set github env.GITHUB_TOKEN --stdin --json
 
-kosmokrator mcp:add github --project --type=stdio \
+kosmo mcp:add github --project --type=stdio \
   --command=github-mcp-server \
   --env GITHUB_TOKEN='${KOSMO_SECRET:mcp.github.env.GITHUB_TOKEN}' \
   --json
 
-kosmokrator mcp:secret:list github --json
-kosmokrator mcp:secret:unset github env.GITHUB_TOKEN --json
+kosmo mcp:secret:list github --json
+kosmo mcp:secret:unset github env.GITHUB_TOKEN --json
 ```
 
 ## Trust And Permissions
@@ -244,19 +245,19 @@ kosmokrator mcp:secret:unset github env.GITHUB_TOKEN --json
 Project MCP config can spawn arbitrary commands. KosmoKrator requires project MCP servers to be trusted before normal headless discovery or execution. Review `.mcp.json`, then run:
 
 ```bash
-kosmokrator mcp:trust github --project --json
+kosmo mcp:trust github --project --json
 ```
 
 Read/write policy is separate from trust. Unknown MCP tools default to `write` unless the server marks them with MCP `readOnlyHint`.
 
 ```bash
-kosmokrator mcp:add github --project --read=allow --write=ask --json
+kosmo mcp:add github --project --read=allow --write=ask --json
 
 # Headless ask cannot show a modal, so this fails unless write is allowed.
-kosmokrator mcp:call github.create_issue --title="..." --json
+kosmo mcp:call github.create_issue --title="..." --json
 
 # Trusted automation can bypass MCP trust and read/write policy for one call.
-kosmokrator mcp:call github.create_issue --title="..." --force --json
+kosmo mcp:call github.create_issue --title="..." --force --json
 ```
 
 ## Command Reference

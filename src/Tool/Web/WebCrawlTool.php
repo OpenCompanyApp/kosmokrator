@@ -45,7 +45,7 @@ final class WebCrawlTool extends AbstractTool
 
     protected function handle(array $args): ToolResult
     {
-        if (! $this->enabled('kosmokrator.web.crawl.enabled')) {
+        if (! $this->enabled('kosmo.web.crawl.enabled')) {
             return ToolResult::error('web_crawl is disabled. Enable web.crawl.enabled and configure web.crawl.provider.');
         }
 
@@ -57,9 +57,9 @@ final class WebCrawlTool extends AbstractTool
 
         $response = $provider->crawl(new WebCrawlRequest(
             url: (string) ($args['url'] ?? ''),
-            maxPages: max(1, (int) ($args['max_pages'] ?? $this->config->get('kosmokrator.web.crawl.max_pages', 20))),
-            timeoutSeconds: max(1, (int) $this->config->get('kosmokrator.web.crawl.timeout_seconds', 60)),
-            outputLimitChars: max(1000, (int) $this->config->get('kosmokrator.web.crawl.output_limit_chars', 100000)),
+            maxPages: max(1, (int) ($args['max_pages'] ?? $this->config->get('kosmo.web.crawl.max_pages', 20))),
+            timeoutSeconds: max(1, (int) $this->config->get('kosmo.web.crawl.timeout_seconds', 60)),
+            outputLimitChars: max(1000, (int) $this->config->get('kosmo.web.crawl.output_limit_chars', 100000)),
             instructions: is_string($args['instructions'] ?? null) ? $args['instructions'] : null,
         ));
 

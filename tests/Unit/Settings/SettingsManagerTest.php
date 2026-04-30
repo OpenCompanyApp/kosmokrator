@@ -24,8 +24,17 @@ final class SettingsManagerTest extends TestCase
 
     private SettingsManager $manager;
 
+    private string $originalHome;
+
+    private string $tempHome;
+
     protected function setUp(): void
     {
+        $this->originalHome = (string) getenv('HOME');
+        $this->tempHome = sys_get_temp_dir().'/kosmo-settings-manager-test-'.bin2hex(random_bytes(4));
+        mkdir($this->tempHome, 0777, true);
+        putenv("HOME={$this->tempHome}");
+
         // Use the real project config/ dir so ConfigLoader can reload properly.
         $this->projectConfigDir = dirname(__DIR__, 3).'/config';
 
@@ -49,12 +58,33 @@ final class SettingsManagerTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv("HOME={$this->originalHome}");
+        $this->removeDir($this->tempHome);
+
         // Reset the static caches in SettingsSchema so tests don't leak.
         $ref = new \ReflectionClass(SettingsSchema::class);
         $defs = $ref->getProperty('definitions');
         $defs->setValue(null, null);
         $aliases = $ref->getProperty('aliases');
         $aliases->setValue(null, null);
+    }
+
+    private function removeDir(string $dir): void
+    {
+        if (! is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $path = $dir.'/'.$item;
+            is_dir($path) ? $this->removeDir($path) : @unlink($path);
+        }
+
+        @rmdir($dir);
     }
 
     // ── resolve() ──────────────────────────────────────────────────────
@@ -103,7 +133,7 @@ final class SettingsManagerTest extends TestCase
         mkdir($tmp, 0777, true);
         $this->manager->setProjectRoot($tmp);
 
-        $this->assertSame($tmp.'/.kosmokrator/config.yaml', $this->manager->projectConfigPath());
+        $this->assertSame($tmp.'/.kosmo/config.yaml', $this->manager->projectConfigPath());
 
         // Cleanup
         rmdir($tmp);
@@ -116,7 +146,7 @@ final class SettingsManagerTest extends TestCase
         $path = $this->manager->globalConfigPath();
 
         $this->assertIsString($path);
-        $this->assertStringContainsString('.kosmokrator/config.yaml', $path);
+        $this->assertStringContainsString('.kosmo/config.yaml', $path);
     }
 
     // ── projectConfigPath() ────────────────────────────────────────────
@@ -141,7 +171,7 @@ final class SettingsManagerTest extends TestCase
     public function test_set_writes_to_global_scope(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-test-'.uniqid();
-        $globalDir = $tmpDir.'/.kosmokrator';
+        $globalDir = $tmpDir.'/.kosmo';
         mkdir($globalDir, 0777, true);
 
         // Override HOME so the global config path points to our temp dir.
@@ -159,7 +189,7 @@ final class SettingsManagerTest extends TestCase
             $manager->set('agent.default_provider', 'test-provider', 'global');
 
             // Read back via getRaw
-            $raw = $manager->getRaw('kosmokrator.agent.default_provider');
+            $raw = $manager->getRaw('kosmo.agent.default_provider');
             $this->assertSame('test-provider', $raw);
 
             // Verify the file was actually written
@@ -178,8 +208,8 @@ final class SettingsManagerTest extends TestCase
 
     public function test_get_raw_reads_from_config_repository(): void
     {
-        // The bundled config has kosmokrator.agent.default_provider = 'z'
-        $value = $this->manager->getRaw('kosmokrator.agent.default_provider');
+        // The bundled config has kosmo.agent.default_provider = 'z'
+        $value = $this->manager->getRaw('kosmo.agent.default_provider');
 
         $this->assertSame('z', $value);
     }
@@ -193,8 +223,8 @@ final class SettingsManagerTest extends TestCase
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-source-'.uniqid();
         $projectDir = $tmpDir.'/project';
-        mkdir($projectDir.'/.kosmokrator', 0777, true);
-        mkdir($tmpDir.'/.kosmokrator', 0777, true);
+        mkdir($projectDir.'/.kosmo', 0777, true);
+        mkdir($tmpDir.'/.kosmo', 0777, true);
 
         $origHome = getenv('HOME');
         putenv("HOME={$tmpDir}");
@@ -208,20 +238,20 @@ final class SettingsManagerTest extends TestCase
             );
             $manager->setProjectRoot($projectDir);
 
-            $this->assertSame('default', $manager->rawSource('kosmokrator.agent.default_provider'));
+            $this->assertSame('default', $manager->rawSource('kosmo.agent.default_provider'));
 
-            $manager->setRaw('kosmokrator.agent.default_provider', 'openai', 'global');
-            $this->assertSame('global', $manager->rawSource('kosmokrator.agent.default_provider'));
+            $manager->setRaw('kosmo.agent.default_provider', 'openai', 'global');
+            $this->assertSame('global', $manager->rawSource('kosmo.agent.default_provider'));
 
-            $manager->setRaw('kosmokrator.agent.default_provider', 'codex', 'project');
-            $this->assertSame('project', $manager->rawSource('kosmokrator.agent.default_provider'));
+            $manager->setRaw('kosmo.agent.default_provider', 'codex', 'project');
+            $this->assertSame('project', $manager->rawSource('kosmo.agent.default_provider'));
         } finally {
             putenv("HOME={$origHome}");
-            @unlink($projectDir.'/.kosmokrator/config.yaml');
-            @rmdir($projectDir.'/.kosmokrator');
+            @unlink($projectDir.'/.kosmo/config.yaml');
+            @rmdir($projectDir.'/.kosmo');
             @rmdir($projectDir);
-            @unlink($tmpDir.'/.kosmokrator/config.yaml');
-            @rmdir($tmpDir.'/.kosmokrator');
+            @unlink($tmpDir.'/.kosmo/config.yaml');
+            @rmdir($tmpDir.'/.kosmo');
             @rmdir($tmpDir.'/.config');
             @rmdir($tmpDir);
         }
@@ -232,7 +262,7 @@ final class SettingsManagerTest extends TestCase
     public function test_set_raw_and_get_raw_round_trip_with_temp_files(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-roundtrip-'.uniqid();
-        $globalDir = $tmpDir.'/.kosmokrator';
+        $globalDir = $tmpDir.'/.kosmo';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -247,16 +277,16 @@ final class SettingsManagerTest extends TestCase
             );
 
             // Write a raw value
-            $manager->setRaw('kosmokrator.provider_state.testprovider.last_model', 'gpt-5', 'global');
+            $manager->setRaw('kosmo.provider_state.testprovider.last_model', 'gpt-5', 'global');
 
             // Read it back
-            $value = $manager->getRaw('kosmokrator.provider_state.testprovider.last_model');
+            $value = $manager->getRaw('kosmo.provider_state.testprovider.last_model');
             $this->assertSame('gpt-5', $value);
 
             // Verify file on disk
             $this->assertFileExists($globalDir.'/config.yaml');
             $disk = Yaml::parse(file_get_contents($globalDir.'/config.yaml'));
-            $this->assertSame('gpt-5', $disk['kosmokrator']['provider_state']['testprovider']['last_model']);
+            $this->assertSame('gpt-5', $disk['kosmo']['provider_state']['testprovider']['last_model']);
         } finally {
             putenv("HOME={$origHome}");
             @unlink($globalDir.'/config.yaml');
@@ -271,7 +301,7 @@ final class SettingsManagerTest extends TestCase
     public function test_unset_raw_removes_value(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-unset-'.uniqid();
-        $globalDir = $tmpDir.'/.kosmokrator';
+        $globalDir = $tmpDir.'/.kosmo';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -286,13 +316,13 @@ final class SettingsManagerTest extends TestCase
             );
 
             // Write then delete
-            $manager->setRaw('kosmokrator.test_key', 'to-be-removed', 'global');
-            $this->assertSame('to-be-removed', $manager->getRaw('kosmokrator.test_key'));
+            $manager->setRaw('kosmo.test_key', 'to-be-removed', 'global');
+            $this->assertSame('to-be-removed', $manager->getRaw('kosmo.test_key'));
 
-            $manager->unsetRaw('kosmokrator.test_key', 'global');
+            $manager->unsetRaw('kosmo.test_key', 'global');
 
             // After unset, should fall back to config repo which doesn't have this key
-            $this->assertNull($manager->getRaw('kosmokrator.test_key'));
+            $this->assertNull($manager->getRaw('kosmo.test_key'));
         } finally {
             putenv("HOME={$origHome}");
             @unlink($globalDir.'/config.yaml');
@@ -307,7 +337,7 @@ final class SettingsManagerTest extends TestCase
     public function test_provider_last_model_round_trip(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-provider-'.uniqid();
-        $globalDir = $tmpDir.'/.kosmokrator';
+        $globalDir = $tmpDir.'/.kosmo';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');
@@ -348,7 +378,7 @@ final class SettingsManagerTest extends TestCase
     public function test_delete_removes_setting_from_global(): void
     {
         $tmpDir = sys_get_temp_dir().'/kk-settings-delete-'.uniqid();
-        $globalDir = $tmpDir.'/.kosmokrator';
+        $globalDir = $tmpDir.'/.kosmo';
         mkdir($globalDir, 0777, true);
 
         $origHome = getenv('HOME');

@@ -10,7 +10,7 @@ KosmoKrator is a PHP 8.4 application built around a thin-agent-loop architecture
 
 Every interaction with KosmoKrator follows the same boot path, from the CLI entry point through to the interactive REPL loop. Understanding this flow makes it easier to navigate the codebase and extend specific stages.
 
-#### bin/kosmokrator
+#### bin/kosmo
 
 CLI entry point
 
@@ -157,7 +157,7 @@ The primary built-in listener is `TokenTrackingListener`, which aggregates token
 
 ## Session Persistence
 
-KosmoKrator stores all session data in a single SQLite database at `~/.kosmokrator/data/kosmokrator.db`. The database is managed by the `Database` class in `src/Session/` and handles:
+KosmoKrator stores all session data in a single SQLite database at `~/.kosmo/data/kosmo.db`. The database is managed by the `Database` class in `src/Session/` and handles:
 
 -   **Sessions** — Conversation metadata, model configuration, and timestamps for each agent session.
 -   **Messages** — Full conversation history (user, assistant, tool calls, tool results, system messages) serialized for session resume.
@@ -174,9 +174,9 @@ KosmoKrator merges configuration from three YAML sources in order of increasing 
 
 | Priority | Source | Location | Purpose |
 | --- | --- | --- | --- |
-| 1 (lowest) | Bundled defaults | `config/kosmokrator.yaml` | Sane baseline defaults shipped with the application |
-| 2 | User global | `~/.kosmokrator/config.yaml` | Personal overrides: API keys, preferred model, theme |
-| 3 | Project-local | `.kosmokrator.yaml` or `.kosmokrator/config.yaml` | Per-project overrides: different model, plan mode default |
+| 1 (lowest) | Bundled defaults | `config/kosmo.yaml` | Sane baseline defaults shipped with the application |
+| 2 | User global | `~/.kosmo/config.yaml` | Personal overrides: API keys, preferred model, theme |
+| 3 | Project-local | `.kosmo.yaml` or `.kosmo/config.yaml` | Per-project overrides: different model, plan mode default |
 | 4 (highest) | Runtime settings | SQLite database | Changed via `/settings` during a session |
 
 Environment variables can be referenced in any YAML file using the `${VAR_NAME}` syntax. This is the recommended way to provide API keys and other secrets. Additionally, a `.env` file in the project root is loaded automatically by the Kernel via `Dotenv` during bootstrap (`Kernel.php:94-96`), making those variables available throughout the application.

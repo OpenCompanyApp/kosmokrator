@@ -16,7 +16,7 @@ trait ResolvesMcpGatewayOptions
     protected function configureGatewayOptions(Command $command): Command
     {
         return $command
-            ->addOption('profile', null, InputOption::VALUE_REQUIRED, 'Optional mcp_gateway.profiles.<name> config profile')
+            ->addOption('profile', null, InputOption::VALUE_REQUIRED, 'Optional kosmo.mcp_gateway.profiles.<name> config profile')
             ->addOption('integration', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Integration provider to expose; repeatable')
             ->addOption('integrations', null, InputOption::VALUE_REQUIRED, 'Comma-separated integration providers to expose')
             ->addOption('upstream', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Configured MCP server to proxy; repeatable')
@@ -48,7 +48,7 @@ trait ResolvesMcpGatewayOptions
      */
     protected function gatewayServerConfig(InputInterface $input): array
     {
-        [$command, $baseArgs] = $this->kosmokratorExecutable();
+        [$command, $baseArgs] = $this->kosmoExecutable();
         $args = array_merge($baseArgs, ['mcp:serve']);
 
         if (is_string($input->getOption('profile')) && $input->getOption('profile') !== '') {
@@ -130,13 +130,17 @@ trait ResolvesMcpGatewayOptions
     /**
      * @return array{0: string, 1: list<string>}
      */
-    private function kosmokratorExecutable(): array
+    private function kosmoExecutable(): array
     {
-        $argv0 = $_SERVER['argv'][0] ?? 'kosmokrator';
-        $path = is_string($argv0) ? (realpath($argv0) ?: $argv0) : 'kosmokrator';
+        $argv0 = $_SERVER['argv'][0] ?? 'kosmo';
+        $path = is_string($argv0) ? (realpath($argv0) ?: $argv0) : 'kosmo';
 
         if (is_file($path) && is_executable($path)) {
             return [$path, []];
+        }
+
+        if ($path === '' || $path === 'Standard input code') {
+            return ['kosmo', []];
         }
 
         return [PHP_BINARY, [$path]];

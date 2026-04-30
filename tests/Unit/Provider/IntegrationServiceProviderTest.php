@@ -114,7 +114,7 @@ class ExampleServiceProvider extends ServiceProvider
 }
 PHP);
 
-        putenv('KOSMOKRATOR_INTEGRATIONS_PATH='.$packagesPath);
+        putenv('KOSMO_INTEGRATIONS_PATH='.$packagesPath);
 
         $container = new Container;
         $provider = new IntegrationServiceProvider($container, $basePath);
@@ -124,6 +124,7 @@ PHP);
         $registry = $container->make(ToolProviderRegistry::class);
         $this->assertTrue($registry->has('local-monorepo'));
 
+        putenv('KOSMO_INTEGRATIONS_PATH');
         putenv('KOSMOKRATOR_INTEGRATIONS_PATH');
         unlink($srcPath.'/ExampleServiceProvider.php');
         unlink($packagePath.'/composer.json');

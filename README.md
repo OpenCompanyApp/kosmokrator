@@ -77,19 +77,25 @@ Pick the binary for your platform — no PHP required:
 ```bash
 # macOS (Apple Silicon)
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo && sudo chmod +x /usr/local/bin/kosmo
 
 # macOS (Intel)
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo && sudo chmod +x /usr/local/bin/kosmo
 
 # Linux (x86_64)
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo && sudo chmod +x /usr/local/bin/kosmo
 
 # Linux (ARM)
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo && sudo chmod +x /usr/local/bin/kosmo
+```
+
+The installer creates both commands. If you install manually and want the legacy command to keep working too, add:
+
+```bash
+sudo ln -sfn kosmo /usr/local/bin/kosmokrator
 ```
 
 ### PHAR (requires PHP 8.4+)
@@ -98,8 +104,10 @@ If you already have PHP installed, the PHAR is smaller (~5MB vs ~25MB):
 
 ```bash
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
-  -o /usr/local/bin/kosmokrator && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo && sudo chmod +x /usr/local/bin/kosmo
 ```
+
+Add `sudo ln -sfn kosmo /usr/local/bin/kosmokrator` if you also want the legacy command name.
 
 ### From source
 
@@ -107,7 +115,7 @@ sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/dow
 git clone https://github.com/OpenCompanyApp/kosmokrator.git
 cd kosmokrator
 composer install
-bin/kosmokrator setup
+bin/kosmo setup
 ```
 
 Requires PHP 8.4+ with `pcntl`, `posix`, and `mbstring` extensions, and Composer 2.x.
@@ -115,8 +123,8 @@ Requires PHP 8.4+ with `pcntl`, `posix`, and `mbstring` extensions, and Composer
 ### Getting started
 
 ```bash
-kosmokrator setup    # First run — select provider and enter API key
-kosmokrator          # Start the agent
+kosmo setup    # First run — select provider and enter API key
+kosmo          # Start the agent
 ```
 
 TUI mode requires a modern terminal (iTerm2, Kitty, Ghostty, Windows Terminal, etc.). Falls back to ANSI mode automatically on simpler terminals.
@@ -124,25 +132,25 @@ TUI mode requires a modern terminal (iTerm2, Kitty, Ghostty, Windows Terminal, e
 ## CLI Usage
 
 ```bash
-kosmokrator                         # Auto-detect renderer: TUI when available, ANSI fallback
-kosmokrator --renderer=tui          # Force TUI mode
-kosmokrator --renderer=ansi         # Force ANSI mode
-kosmokrator --no-animation          # Skip the animated intro
-kosmokrator --resume                # Resume the last session for the current project
-kosmokrator --session <id>          # Resume a specific session by ID or prefix
+kosmo                         # Auto-detect renderer: TUI when available, ANSI fallback
+kosmo --renderer=tui          # Force TUI mode
+kosmo --renderer=ansi         # Force ANSI mode
+kosmo --no-animation          # Skip the animated intro
+kosmo --resume                # Resume the last session for the current project
+kosmo --session <id>          # Resume a specific session by ID or prefix
 ```
 
-The installed binary and `bin/kosmokrator` from a source checkout expose the same command surface.
+The installed binary and `bin/kosmo` from a source checkout expose the same command surface.
 
 ## Headless Agent CLI
 
 Passing a prompt enables non-interactive execution. Use `-p`/`--print` when you want KosmoKrator to complete the task and exit:
 
 ```bash
-kosmokrator -p "Explain the routing in this repository"
-kosmokrator -p "Run the test suite and fix the failing tests" --mode edit --permission-mode guardian
-kosmokrator -p "Review this branch" --mode plan --output-format json
-kosmokrator -p "Summarize the architecture" --mode ask --output-format stream-json --no-session
+kosmo -p "Explain the routing in this repository"
+kosmo -p "Run the test suite and fix the failing tests" --mode edit --permission-mode guardian
+kosmo -p "Review this branch" --mode plan --output-format json
+kosmo -p "Summarize the architecture" --mode ask --output-format stream-json --no-session
 ```
 
 Useful headless options:
@@ -170,30 +178,30 @@ Headless mode uses `HeadlessRenderer` and the same `AgentSessionBuilder`/`AgentL
 Everything needed to run KosmoKrator without the interactive setup can be configured from the CLI:
 
 ```bash
-kosmokrator setup                         # Interactive provider/model wizard
-printf %s "$OPENAI_API_KEY" | kosmokrator setup --provider openai \
+kosmo setup                         # Interactive provider/model wizard
+printf %s "$OPENAI_API_KEY" | kosmo setup --provider openai \
   --model gpt-5.4-mini --api-key-stdin --global --json
 
-kosmokrator config show --json            # Inspect resolved configuration
-kosmokrator config paths --json           # Show global/project config paths
-kosmokrator settings:list --json          # Discover configurable settings
-kosmokrator settings:set agent.mode plan --global --json
-kosmokrator settings:options agent.default_model --provider openai --json
-kosmokrator settings:doctor --json        # Diagnose headless readiness
+kosmo config show --json            # Inspect resolved configuration
+kosmo config paths --json           # Show global/project config paths
+kosmo settings:list --json          # Discover configurable settings
+kosmo settings:set agent.mode plan --global --json
+kosmo settings:options agent.default_model --provider openai --json
+kosmo settings:doctor --json        # Diagnose headless readiness
 
-kosmokrator providers:list --json
+kosmo providers:list --json
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator providers:configure openai --api-key-stdin --model gpt-5.4-mini --global --json
-kosmokrator providers:configure codex --device --global --json
-kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --json
+  kosmo providers:configure openai --api-key-stdin --model gpt-5.4-mini --global --json
+kosmo providers:configure codex --device --global --json
+kosmo providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --json
 
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator secrets:set provider.openai.api_key --stdin --json
+  kosmo secrets:set provider.openai.api_key --stdin --json
 
 printf %s "$TELEGRAM_BOT_TOKEN" | \
-  kosmokrator gateway:telegram:configure --token-stdin --enabled on --json
-kosmokrator gateway:telegram:status --json
-kosmokrator codex:login                   # ChatGPT OAuth for the Codex provider
+  kosmo gateway:telegram:configure --token-stdin --enabled on --json
+kosmo gateway:telegram:status --json
+kosmo codex:login                   # ChatGPT OAuth for the Codex provider
 ```
 
 The `settings:*`, `providers:*`, `secrets:*`, `gateway:telegram:*`, `integrations:*`, `mcp:*`, and `web:*` commands are designed for agents and scripts: they provide discovery helpers, stable JSON output, stdin secret entry, and non-zero exit codes on failures.
@@ -204,9 +212,9 @@ KosmoKrator can run as an ACP (Agent Client Protocol) server for editors and
 IDEs that speak ACP:
 
 ```bash
-kosmokrator acp
-kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
-kosmokrator acp --yolo
+kosmo acp
+kosmo acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmo acp --yolo
 ```
 
 ACP mode uses newline-delimited JSON-RPC over stdio. Stdout is reserved for
@@ -221,28 +229,28 @@ clients that still use it. ACP `mcpServers` are added as runtime-only
 session MCP overlays and exposed through `app.mcp.*` without writing project
 `.mcp.json`.
 
-KosmoKrator also advertises `kosmokratorCapabilities` and emits namespaced
-`kosmokrator/*` notifications for wrappers that need the terminal-grade model:
+KosmoKrator also advertises `kosmoCapabilities` and emits namespaced
+`kosmo/*` notifications for wrappers that need the terminal-grade model:
 phase changes, text/thinking deltas, tool lifecycle, permission lifecycle,
 usage, runtime changes, subagent spawn/tree/dashboard/completion, integration
 events, MCP events, and errors. Direct runtime JSON-RPC methods are available
 for non-PHP apps:
 
 ```text
-kosmokrator/runtime/set
-kosmokrator/settings/set
-kosmokrator/providers/configure
-kosmokrator/integrations/list
-kosmokrator/integrations/describe
-kosmokrator/integrations/configure
-kosmokrator/integrations/call
-kosmokrator/mcp/list_servers
-kosmokrator/mcp/list_tools
-kosmokrator/mcp/schema
-kosmokrator/mcp/add_stdio_server
-kosmokrator/mcp/set_secret
-kosmokrator/mcp/call_tool
-kosmokrator/lua/execute
+kosmo/runtime/set
+kosmo/settings/set
+kosmo/providers/configure
+kosmo/integrations/list
+kosmo/integrations/describe
+kosmo/integrations/configure
+kosmo/integrations/call
+kosmo/mcp/list_servers
+kosmo/mcp/list_tools
+kosmo/mcp/schema
+kosmo/mcp/add_stdio_server
+kosmo/mcp/set_secret
+kosmo/mcp/call_tool
+kosmo/lua/execute
 ```
 
 Those methods require a session ID so project root, permissions, session MCP
@@ -253,8 +261,8 @@ Example editor configuration:
 ```json
 {
   "agent_servers": {
-    "kosmokrator": {
-      "command": "kosmokrator",
+    "kosmo": {
+      "command": "kosmo",
       "args": ["acp"]
     }
   }
@@ -264,7 +272,7 @@ Example editor configuration:
 ## Agent SDK
 
 KosmoKrator can also be embedded as a PHP library. The public SDK lives under
-`Kosmokrator\Sdk\*` and uses the same runtime path as `kosmokrator -p`:
+`Kosmokrator\Sdk\*` and uses the same runtime path as `kosmo -p`:
 
 ```php
 use Kosmokrator\Sdk\AgentBuilder;
@@ -290,23 +298,23 @@ provider/integration/MCP configuration helpers.
 KosmoKrator can run as a unified headless CLI for OpenCompany integrations. Use direct commands for single calls and Lua for multi-step workflows. The currently bundled command shortcuts include ClickUp, CoinGecko, Plane, and Plausible; the runtime is catalog-driven, so additional integration packages can expose the same command shape.
 
 ```bash
-kosmokrator integrations:list --json
-kosmokrator integrations:status --json
-kosmokrator integrations:doctor clickup --json
-kosmokrator integrations:fields clickup --json
-kosmokrator integrations:configure clickup --set api_key="$CLICKUP_API_KEY" --enable --read=allow --write=ask --json
-kosmokrator integrations:configure plane --account work --set api_key="$PLANE_API_KEY" --enable --json
-kosmokrator integrations:search "create clickup task" --json
-kosmokrator integrations:docs clickup
-kosmokrator integrations:docs clickup.create_task
-kosmokrator integrations:schema clickup.create_task
+kosmo integrations:list --json
+kosmo integrations:status --json
+kosmo integrations:doctor clickup --json
+kosmo integrations:fields clickup --json
+kosmo integrations:configure clickup --set api_key="$CLICKUP_API_KEY" --enable --read=allow --write=ask --json
+kosmo integrations:configure plane --account work --set api_key="$PLANE_API_KEY" --enable --json
+kosmo integrations:search "create clickup task" --json
+kosmo integrations:docs clickup
+kosmo integrations:docs clickup.create_task
+kosmo integrations:schema clickup.create_task
 
-kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --dry-run
-kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --force
-kosmokrator integrations:clickup create_task --list-id=123 --name="Ship it"
+kosmo integrations:call clickup.create_task --list-id=123 --name="Ship it" --dry-run
+kosmo integrations:call clickup.create_task --list-id=123 --name="Ship it" --force
+kosmo integrations:clickup create_task --list-id=123 --name="Ship it"
 
-kosmokrator integrations:lua --eval 'print(docs.read("clickup.create_task"))'
-kosmokrator integrations:lua workflow.lua --force --json
+kosmo integrations:lua --eval 'print(docs.read("clickup.create_task"))'
+kosmo integrations:lua workflow.lua --force --json
 ```
 
 Discovery commands expose credentials, activation, CLI compatibility, auth strategy, required runtime binaries, operations, and input schemas. Integrations that cannot be configured fully from the CLI are still listed because future proxy/web flows can support them.
@@ -315,23 +323,23 @@ Credentials support account aliases through `--account`, so one provider can hav
 
 ## MCP CLI
 
-KosmoKrator can call MCP servers headlessly and from Lua without registering them as native model tools. It reads the common project `.mcp.json` `mcpServers` shape, plus VS Code/Cursor `servers` files and `~/.kosmokrator/mcp.json`.
+KosmoKrator can call MCP servers headlessly and from Lua without registering them as native model tools. It reads the common project `.mcp.json` `mcpServers` shape, plus VS Code/Cursor `servers` files and `~/.kosmo/mcp.json`.
 
 Runtime execution is stdio-first. Remote HTTP servers can be used through a stdio bridge such as `mcp-remote` until native Streamable HTTP execution is added.
 
 ```bash
-kosmokrator mcp:list --json
-kosmokrator mcp:add github --project --type=stdio \
+kosmo mcp:list --json
+kosmo mcp:add github --project --type=stdio \
   --command=github-mcp-server --env GITHUB_TOKEN --read=allow --write=ask --json
-kosmokrator mcp:trust github --project --json
-kosmokrator mcp:tools github --json
-kosmokrator mcp:schema github.search_repositories --json
+kosmo mcp:trust github --project --json
+kosmo mcp:tools github --json
+kosmo mcp:schema github.search_repositories --json
 
-kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
-kosmokrator mcp:github search_repositories --query="kosmokrator" --json
-kosmokrator mcp:resources github --json
-kosmokrator mcp:prompts github --json
-kosmokrator mcp:lua workflow.lua --json
+kosmo mcp:call github.search_repositories --query="kosmokrator" --json
+kosmo mcp:github search_repositories --query="kosmokrator" --json
+kosmo mcp:resources github --json
+kosmo mcp:prompts github --json
+kosmo mcp:lua workflow.lua --json
 ```
 
 MCP project servers must be trusted before normal discovery/execution because
@@ -393,7 +401,7 @@ Type these at the prompt during a session.
 |---------|-------------|
 | `/settings` | Open the settings workspace |
 | `/agents` | Show the live subagent swarm dashboard |
-| `kosmokrator update` | Check for updates and update based on install method |
+| `kosmo update` | Check for updates and update based on install method |
 | `/feedback <text>` | Submit feedback or a bug report as a GitHub issue (requires `gh` CLI) |
 | `/tasks-clear` | Remove all tasks |
 | `/clear` | Clear the terminal screen |
@@ -620,8 +628,8 @@ Open the settings workspace with `/settings` during a session. Settings are orga
 
 Settings can be saved at two scopes:
 
-- **Project** — applies only when KosmoKrator runs in the current working directory. Stored in `.kosmokrator.yaml`.
-- **Global** — applies everywhere. Stored in `~/.kosmokrator/config.yaml`.
+- **Project** — applies only when KosmoKrator runs in the current working directory. Stored in `.kosmo.yaml`.
+- **Global** — applies everywhere. Stored in `~/.kosmo/config.yaml`.
 
 Project settings override global settings which override built-in defaults.
 
@@ -639,10 +647,10 @@ Each level cascades: depth 2+ falls back to depth 1, which falls back to the mai
 
 Configuration is loaded in layers (later overrides earlier):
 
-1. `config/kosmokrator.yaml` — bundled defaults
+1. `config/kosmo.yaml` — bundled defaults
 2. `config/prism.yaml` — bundled provider definitions
-3. `~/.kosmokrator/config.yaml` — user overrides
-4. `.kosmokrator.yaml` — project overrides (in working directory)
+3. `~/.kosmo/config.yaml` — user overrides
+4. `.kosmo/config.yaml` or `.kosmo.yaml` — project overrides discovered from the working directory upward
 
 Environment variables (`${VAR_NAME}`) are resolved in all YAML files.
 
@@ -650,8 +658,8 @@ Other runtime state is stored separately:
 
 | Path | Purpose |
 |------|---------|
-| `~/.kosmokrator/data/` | SQLite sessions, messages, memories, settings, and token accounting |
-| `~/.kosmokrator/mcp.json` | Global MCP servers in portable `mcpServers` format |
+| `~/.kosmo/data/` | SQLite sessions, messages, memories, settings, and token accounting |
+| `~/.kosmo/mcp.json` | Global MCP servers in portable `mcpServers` format |
 | `.mcp.json` | Project MCP servers in the common `mcpServers` shape |
 | `.vscode/mcp.json`, `.cursor/mcp.json` | Compatibility reads for editor `servers` MCP config |
 | Integration credential config | Global/project activation and account aliases managed by `integrations:configure` |
@@ -659,7 +667,7 @@ Other runtime state is stored separately:
 ### Key Configuration Options
 
 ```yaml
-kosmokrator:
+kosmo:
   agent:
     default_provider: z
     default_model: glm-5.1
@@ -702,7 +710,7 @@ kosmokrator:
 
   audio:
     completion_sound: true
-    soundfont: ~/.kosmokrator/soundfonts/FluidR3_GM.sf2
+    soundfont: ~/.kosmo/soundfonts/FluidR3_GM.sf2
     llm_timeout: 60
     max_duration: 8
     max_retries: 1
@@ -710,7 +718,7 @@ kosmokrator:
 
 ## Sessions & Persistence
 
-KosmoKrator persists state in SQLite under `~/.kosmokrator/data/`:
+KosmoKrator persists state in SQLite under `~/.kosmo/data/`:
 
 - **Sessions** — full conversation history with token usage tracking. Auto-titled from the first user message.
 - **Messages** — every message in each session, with role, content, and token counts.
@@ -763,7 +771,7 @@ Both renderers share `Theme` for a consistent mythology-themed aesthetic — pla
 ## Architecture
 
 ```
-bin/kosmokrator
+bin/kosmo
   → Kernel
   → AgentCommand | AcpCommand | integration/mcp/config commands | SDK entry points
   → AgentSessionBuilder

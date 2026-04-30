@@ -52,7 +52,7 @@ class DoctorCommand implements PowerCommand
             - Available memory and execution limits
 
             ### 2. Project Health
-            - Config files exist and are valid YAML (config/kosmokrator.yaml)
+            - Config files exist and are valid YAML (config/kosmo.yaml)
             - Dependencies installed (`vendor/` exists, no lock file conflicts)
             - No syntax errors in source files (`php -l` on key files)
             - Database/storage directories writable

@@ -70,7 +70,7 @@ class LlmServiceProvider extends ServiceProvider
         $this->container->singleton(Relay::class, fn () => new Relay(
             promptCacheOrchestrator: new PromptCacheOrchestrator(
                 prismManager: $this->container->make(PrismManager::class),
-                geminiCacheStore: new GeminiCacheStore($home.'/.kosmokrator/cache/gemini-cache.json'),
+                geminiCacheStore: new GeminiCacheStore($home.'/.kosmo/cache/gemini-cache.json'),
             ),
         ));
 
@@ -81,11 +81,11 @@ class LlmServiceProvider extends ServiceProvider
 
             return new RetryableLlmClient(
                 new PrismService(
-                    provider: $config->get('kosmokrator.agent.default_provider', 'z'),
-                    model: $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514'),
-                    systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-                    maxTokens: $config->get('kosmokrator.agent.max_tokens'),
-                    temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+                    provider: $config->get('kosmo.agent.default_provider', 'z'),
+                    model: $config->get('kosmo.agent.default_model', 'claude-sonnet-4-20250514'),
+                    systemPrompt: $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.'),
+                    maxTokens: $config->get('kosmo.agent.max_tokens'),
+                    temperature: $config->get('kosmo.agent.temperature', 0.0),
                     relay: $this->container->make(Relay::class),
                     registry: $this->container->make(RelayRegistry::class),
                 ),
@@ -99,17 +99,17 @@ class LlmServiceProvider extends ServiceProvider
             $config = $this->container->make('config');
             $registry = $this->container->make(RelayRegistry::class);
             $providers = $this->container->make(ProviderCatalog::class);
-            $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+            $provider = $config->get('kosmo.agent.default_provider', 'z');
             $providerUrl = rtrim($registry->url($provider), '/');
 
             return new RetryableLlmClient(
                 new AsyncLlmClient(
                     apiKey: $providers->apiKey($provider),
                     baseUrl: $providerUrl,
-                    model: $config->get('kosmokrator.agent.default_model', 'glm-5.1'),
-                    systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
-                    maxTokens: $config->get('kosmokrator.agent.max_tokens'),
-                    temperature: $config->get('kosmokrator.agent.temperature', 0.0),
+                    model: $config->get('kosmo.agent.default_model', 'glm-5.1'),
+                    systemPrompt: $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.'),
+                    maxTokens: $config->get('kosmo.agent.max_tokens'),
+                    temperature: $config->get('kosmo.agent.temperature', 0.0),
                     provider: $provider,
                     relay: $this->container->make(Relay::class),
                     registry: $this->container->make(RelayRegistry::class),

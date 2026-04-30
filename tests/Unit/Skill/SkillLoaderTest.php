@@ -16,8 +16,8 @@ class SkillLoaderTest extends TestCase
     protected function setUp(): void
     {
         $this->tmpDir = sys_get_temp_dir().'/kosmokrator_skill_test_'.uniqid();
-        // Project root with .kosmokrator/skills/ and .agents/skills/
-        mkdir($this->tmpDir.'/project/.kosmokrator/skills', 0755, true);
+        // Project root with .kosmo/skills/ and .agents/skills/
+        mkdir($this->tmpDir.'/project/.kosmo/skills', 0755, true);
         mkdir($this->tmpDir.'/project/.agents/skills', 0755, true);
         mkdir($this->tmpDir.'/user', 0755, true);
     }
@@ -34,7 +34,7 @@ class SkillLoaderTest extends TestCase
 
     public function test_parses_valid_skill_file(): void
     {
-        $dir = $this->tmpDir.'/project/.kosmokrator/skills/my-skill';
+        $dir = $this->tmpDir.'/project/.kosmo/skills/my-skill';
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', <<<'MD'
             ---
@@ -58,7 +58,7 @@ class SkillLoaderTest extends TestCase
 
     public function test_returns_null_for_missing_frontmatter(): void
     {
-        $dir = $this->tmpDir.'/project/.kosmokrator/skills/bad-skill';
+        $dir = $this->tmpDir.'/project/.kosmo/skills/bad-skill';
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', '# No frontmatter here');
 
@@ -67,7 +67,7 @@ class SkillLoaderTest extends TestCase
 
     public function test_returns_null_for_empty_file(): void
     {
-        $dir = $this->tmpDir.'/project/.kosmokrator/skills/empty';
+        $dir = $this->tmpDir.'/project/.kosmo/skills/empty';
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', '');
 
@@ -76,7 +76,7 @@ class SkillLoaderTest extends TestCase
 
     public function test_returns_null_for_missing_name(): void
     {
-        $dir = $this->tmpDir.'/project/.kosmokrator/skills/no-name';
+        $dir = $this->tmpDir.'/project/.kosmo/skills/no-name';
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', "---\ndescription: oops\n---\nContent");
 
@@ -85,7 +85,7 @@ class SkillLoaderTest extends TestCase
 
     public function test_returns_null_for_invalid_yaml(): void
     {
-        $dir = $this->tmpDir.'/project/.kosmokrator/skills/bad-yaml';
+        $dir = $this->tmpDir.'/project/.kosmo/skills/bad-yaml';
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', "---\n: [invalid\n---\nContent");
 
@@ -94,7 +94,7 @@ class SkillLoaderTest extends TestCase
 
     public function test_returns_null_for_suspicious_skill_content(): void
     {
-        $dir = $this->tmpDir.'/project/.kosmokrator/skills/bad-skill';
+        $dir = $this->tmpDir.'/project/.kosmo/skills/bad-skill';
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', <<<'MD'
             ---
@@ -110,11 +110,11 @@ class SkillLoaderTest extends TestCase
 
     public function test_loads_from_directory(): void
     {
-        $this->seedSkill('alpha', '.kosmokrator/skills');
-        $this->seedSkill('beta', '.kosmokrator/skills');
+        $this->seedSkill('alpha', '.kosmo/skills');
+        $this->seedSkill('beta', '.kosmo/skills');
 
         $skills = $this->loader()->loadFrom(
-            $this->tmpDir.'/project/.kosmokrator/skills',
+            $this->tmpDir.'/project/.kosmo/skills',
             SkillScope::Project,
         );
 
@@ -126,11 +126,11 @@ class SkillLoaderTest extends TestCase
 
     public function test_skips_directories_without_skill_md(): void
     {
-        mkdir($this->tmpDir.'/project/.kosmokrator/skills/no-skill', 0755, true);
-        file_put_contents($this->tmpDir.'/project/.kosmokrator/skills/no-skill/README.md', 'Not a skill');
+        mkdir($this->tmpDir.'/project/.kosmo/skills/no-skill', 0755, true);
+        file_put_contents($this->tmpDir.'/project/.kosmo/skills/no-skill/README.md', 'Not a skill');
 
         $skills = $this->loader()->loadFrom(
-            $this->tmpDir.'/project/.kosmokrator/skills',
+            $this->tmpDir.'/project/.kosmo/skills',
             SkillScope::Project,
         );
 
@@ -140,7 +140,7 @@ class SkillLoaderTest extends TestCase
     public function test_returns_empty_for_nonexistent_directory(): void
     {
         $loader = new SkillLoader('/nonexistent/project', '/nonexistent/user');
-        $skills = $loader->loadFrom('/nonexistent/project/.kosmokrator/skills', SkillScope::Project);
+        $skills = $loader->loadFrom('/nonexistent/project/.kosmo/skills', SkillScope::Project);
 
         $this->assertCount(0, $skills);
     }
@@ -148,7 +148,7 @@ class SkillLoaderTest extends TestCase
     public function test_kosmokrator_skills_override_user_skills(): void
     {
         $this->seedSkill('shared', 'user', scope: 'user');
-        $this->seedSkill('shared', '.kosmokrator/skills', description: 'Project version');
+        $this->seedSkill('shared', '.kosmo/skills', description: 'Project version');
 
         $all = $this->loader()->loadAll();
 
@@ -160,7 +160,7 @@ class SkillLoaderTest extends TestCase
     public function test_kosmokrator_skills_override_agents_skills(): void
     {
         $this->seedSkill('shared', '.agents/skills', description: 'Agents version');
-        $this->seedSkill('shared', '.kosmokrator/skills', description: 'Kosmokrator version');
+        $this->seedSkill('shared', '.kosmo/skills', description: 'Kosmokrator version');
 
         $all = $this->loader()->loadAll();
 
@@ -184,7 +184,7 @@ class SkillLoaderTest extends TestCase
     {
         $this->seedSkill('user-only', 'user', scope: 'user');
         $this->seedSkill('agents-only', '.agents/skills');
-        $this->seedSkill('kosmo-only', '.kosmokrator/skills');
+        $this->seedSkill('kosmo-only', '.kosmo/skills');
 
         $all = $this->loader()->loadAll();
 
@@ -199,11 +199,12 @@ class SkillLoaderTest extends TestCase
         $loader = $this->loader();
         $dirs = $loader->getDiscoveryDirs();
 
-        $this->assertCount(3, $dirs);
-        $this->assertStringContains('.kosmokrator/skills', $dirs[0]);
+        $this->assertCount(5, $dirs);
+        $this->assertStringContains('.kosmo/skills', $dirs[0]);
         $this->assertStringContains('.agents/skills', $dirs[1]);
-        // User dir is last
-        $this->assertStringEndsWith('/user', $dirs[2]);
+        $this->assertStringContains('.kosmokrator/skills', $dirs[2]);
+        $this->assertStringEndsWith('/user', $dirs[3]);
+        $this->assertStringContains('/.kosmokrator/skills', $dirs[4]);
     }
 
     private function seedSkill(

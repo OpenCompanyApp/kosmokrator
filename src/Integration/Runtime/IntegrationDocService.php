@@ -39,15 +39,15 @@ final class IntegrationDocService
         $lines[] = 'Use direct CLI calls for single operations and Lua for multi-step workflows.';
         $lines[] = '';
         $lines[] = 'Commands:';
-        $lines[] = '  kosmokrator integrations:list';
-        $lines[] = '  kosmokrator integrations:doctor clickup --json';
-        $lines[] = '  kosmokrator integrations:fields clickup --json';
-        $lines[] = '  kosmokrator integrations:configure clickup --set api_key=... --enable --read=allow --write=ask --json';
-        $lines[] = '  kosmokrator integrations:search "clickup task"';
-        $lines[] = '  kosmokrator integrations:docs clickup.create_task';
-        $lines[] = '  kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --dry-run --json';
-        $lines[] = '  kosmokrator integrations:call clickup.create_task --list-id=123 --name="Ship it" --force --json';
-        $lines[] = '  kosmokrator integrations:lua workflow.lua';
+        $lines[] = '  kosmo integrations:list';
+        $lines[] = '  kosmo integrations:doctor clickup --json';
+        $lines[] = '  kosmo integrations:fields clickup --json';
+        $lines[] = '  kosmo integrations:configure clickup --set api_key=... --enable --read=allow --write=ask --json';
+        $lines[] = '  kosmo integrations:search "clickup task"';
+        $lines[] = '  kosmo integrations:docs clickup.create_task';
+        $lines[] = '  kosmo integrations:call clickup.create_task --list-id=123 --name="Ship it" --dry-run --json';
+        $lines[] = '  kosmo integrations:call clickup.create_task --list-id=123 --name="Ship it" --force --json';
+        $lines[] = '  kosmo integrations:lua workflow.lua';
         $lines[] = '';
         $lines[] = 'Providers: '.implode(', ', $this->catalog->providers());
 
@@ -76,8 +76,8 @@ final class IntegrationDocService
 
         $lines[] = '';
         $lines[] = 'Examples:';
-        $lines[] = "  kosmokrator integrations:docs {$functions[0]->fullName()}";
-        $lines[] = "  kosmokrator integrations:schema {$functions[0]->fullName()}";
+        $lines[] = "  kosmo integrations:docs {$functions[0]->fullName()}";
+        $lines[] = "  kosmo integrations:schema {$functions[0]->fullName()}";
         $lines[] = '  '.$this->directCliExample($functions[0]);
 
         return implode("\n", $lines);
@@ -100,7 +100,7 @@ final class IntegrationDocService
         $lines[] = '  '.$this->genericCliExample($function);
         $lines[] = '';
         $lines[] = 'JSON:';
-        $lines[] = "  kosmokrator integrations:call {$function->fullName()} '".$this->sampleJson($function)."' --json";
+        $lines[] = "  kosmo integrations:call {$function->fullName()} '".$this->sampleJson($function)."' --json";
         $lines[] = '';
         $lines[] = 'Lua:';
         $lines[] = '  local result = app.integrations.'.$function->provider.'.'.$function->function.'('.$this->sampleLuaTable($function).')';
@@ -123,12 +123,12 @@ final class IntegrationDocService
 
     private function directCliExample(IntegrationFunction $function): string
     {
-        return "kosmokrator integrations:{$function->provider} {$function->function} ".$this->sampleFlags($function);
+        return "kosmo integrations:{$function->provider} {$function->function} ".$this->sampleFlags($function);
     }
 
     private function genericCliExample(IntegrationFunction $function): string
     {
-        return "kosmokrator integrations:call {$function->fullName()} ".$this->sampleFlags($function);
+        return "kosmo integrations:call {$function->fullName()} ".$this->sampleFlags($function);
     }
 
     private function sampleFlags(IntegrationFunction $function): string

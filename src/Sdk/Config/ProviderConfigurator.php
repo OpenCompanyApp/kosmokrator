@@ -37,9 +37,9 @@ final class ProviderConfigurator extends RuntimeConfigurator
         }
 
         if ($makeDefault) {
-            $settings->setRaw('kosmokrator.agent.default_provider', $provider, $scope);
+            $settings->setRaw('kosmo.agent.default_provider', $provider, $scope);
             if ($model !== null) {
-                $settings->setRaw('kosmokrator.agent.default_model', $model, $scope);
+                $settings->setRaw('kosmo.agent.default_model', $model, $scope);
             }
         }
 

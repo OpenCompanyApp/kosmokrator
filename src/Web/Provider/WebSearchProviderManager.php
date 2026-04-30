@@ -86,12 +86,12 @@ final class WebSearchProviderManager
         }
 
         $ordered = [];
-        $default = $this->settings->getRaw('kosmokrator.web.search.default_provider');
+        $default = $this->settings->getRaw('kosmo.web.search.default_provider');
         if (is_string($default) && $default !== '') {
             $ordered[] = $default;
         }
 
-        $fallbacks = $this->settings->getRaw('kosmokrator.web.search.fallback_providers');
+        $fallbacks = $this->settings->getRaw('kosmo.web.search.fallback_providers');
         if (is_array($fallbacks)) {
             foreach ($fallbacks as $fallback) {
                 if (is_string($fallback) && $fallback !== '') {

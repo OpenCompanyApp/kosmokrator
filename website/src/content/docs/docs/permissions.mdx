@@ -63,8 +63,9 @@ Switch between permission modes at any time during a session using slash command
 You can also set the default mode in your configuration file so every new session starts in your preferred mode:
 
 ```yaml
-tools:
-  default_permission_mode: guardian   # guardian | argus | prometheus
+kosmo:
+  tools:
+    default_permission_mode: guardian   # guardian | argus | prometheus
 ```
 
 ## Evaluation Chain
@@ -97,7 +98,7 @@ Headless integrations and MCP servers have their own read/write policies in addi
 | Surface | Policy Keys | Force Behavior |
 | --- | --- | --- |
 | Integrations | `integrations.permissions_default` and provider/account read/write config | `--force` bypasses integration read/write policy for the one headless call. |
-| MCP | `mcp.permissions_default`, `mcp.servers.SERVER.permissions.read`, `.write`, and `mcp.trust.SERVER.fingerprint` | `--force` bypasses MCP project trust and MCP read/write policy for the one headless call. |
+| MCP | `kosmo.mcp.permissions_default`, `kosmo.mcp.servers.SERVER.permissions.read`, `.write`, and `kosmo.mcp.trust.SERVER.fingerprint` | `--force` bypasses MCP project trust and MCP read/write policy for the one headless call. |
 
 In pure headless mode, `ask` cannot open an approval modal. Configure the relevant operation as `allow` or run trusted automation with `--force`. MCP tools marked with MCP `readOnlyHint` are treated as read operations; other MCP tools are conservatively treated as write operations.
 
@@ -192,14 +193,15 @@ Blocked paths use glob-style patterns and are checked against both the raw path 
 The default configuration blocks these patterns:
 
 ```yaml
-tools:
-  blocked_paths:
-    - "*.env"           # Environment files with secrets
-    - ".git/*"          # Git internal directory
-    - "*.pem"           # SSL/TLS certificates
-    - "*id_rsa*"        # RSA private keys
-    - "*id_ed25519*"    # Ed25519 private keys
-    - "*.key"           # Generic key files
+kosmo:
+  tools:
+    blocked_paths:
+      - "*.env"           # Environment files with secrets
+      - ".git/*"          # Git internal directory
+      - "*.pem"           # SSL/TLS certificates
+      - "*id_rsa*"        # RSA private keys
+      - "*id_ed25519*"    # Ed25519 private keys
+      - "*.key"           # Generic key files
 ```
 
 ### Adding Custom Blocked Paths
@@ -207,18 +209,19 @@ tools:
 Add your own blocked path patterns in the configuration file. Patterns use glob syntax where `*` matches any sequence of characters and `?` matches any single character.
 
 ```yaml
-tools:
-  blocked_paths:
-    - "*.env"
-    - ".git/*"
-    - "*.pem"
-    - "*id_rsa*"
-    - "*id_ed25519*"
-    - "*.key"
-    - "/etc/shadow"           # System password file
-    - "/etc/passwd"           # User database
-    - "*.credentials"         # Credential files
-    - "~/.aws/*"              # AWS configuration
+kosmo:
+  tools:
+    blocked_paths:
+      - "*.env"
+      - ".git/*"
+      - "*.pem"
+      - "*id_rsa*"
+      - "*id_ed25519*"
+      - "*.key"
+      - "/etc/shadow"           # System password file
+      - "/etc/passwd"           # User database
+      - "*.credentials"         # Credential files
+      - "~/.aws/*"              # AWS configuration
 ```
 
 Blocked paths apply to all tools that accept a `path` argument: `file_read`, `file_write`, `file_edit`, and `apply_patch`.
@@ -252,25 +255,26 @@ Permission rules are defined in the configuration and control which tools are al
 The `safe_tools` list creates unconditional Allow rules for the specified tools. These tools are auto-approved without any permission check or user prompt, regardless of the active mode (including Argus). Tools in this list skip the Mode Override Check entirely.
 
 ```yaml
-tools:
-  safe_tools:
-    - file_read
-    - glob
-    - grep
-    - task_create
-    - task_update
-    - task_list
-    - task_get
-    - shell_read
-    - shell_kill
-    - memory_save
-    - memory_search
-    - ask_user
-    - ask_choice
-    - subagent
-    - lua_list_docs
-    - lua_search_docs
-    - lua_read_doc
+kosmo:
+  tools:
+    safe_tools:
+      - file_read
+      - glob
+      - grep
+      - task_create
+      - task_update
+      - task_list
+      - task_get
+      - shell_read
+      - shell_kill
+      - memory_save
+      - memory_search
+      - ask_user
+      - ask_choice
+      - subagent
+      - lua_list_docs
+      - lua_search_docs
+      - lua_read_doc
 ```
 
 ### Denied Tools (`denied_tools`)
@@ -278,11 +282,12 @@ tools:
 The `denied_tools` list creates unconditional Deny rules for the specified tools. This is the strongest form of denial — it overrides everything, including Prometheus mode and session grants. Use it to hard-disable specific tools in a project or CI environment.
 
 ```yaml
-tools:
-  # Completely disable specific tools, overriding all modes
-  denied_tools:
-    - bash           # No shell access
-    - file_write     # Read-only project
+kosmo:
+  tools:
+    # Completely disable specific tools, overriding all modes
+    denied_tools:
+      - bash           # No shell access
+      - file_write     # Read-only project
 ```
 
 ### Approval Required (`approval_required`)
@@ -290,15 +295,16 @@ tools:
 The `approval_required` list creates Ask rules for the specified tools. These tools pass through the full evaluation chain, where the outcome depends on the active permission mode, session grants, project boundaries, and heuristics.
 
 ```yaml
-tools:
-  approval_required:
-    - file_write
-    - file_edit
-    - apply_patch
-    - bash
-    - shell_start
-    - shell_write
-    - execute_lua
+kosmo:
+  tools:
+    approval_required:
+      - file_write
+      - file_edit
+      - apply_patch
+      - bash
+      - shell_start
+      - shell_write
+      - execute_lua
 ```
 
 Note: `execute_lua` is in the approval list, but Guardian mode auto-approves it because the inner integration permissions enforce per-tool granularity within Lua scripts.
@@ -308,12 +314,13 @@ Note: `execute_lua` is in the approval list, but Guardian mode auto-approves it 
 For bash and shell tools, you can define command patterns that are always denied, regardless of mode. These are unconditional — even Prometheus mode cannot override them.
 
 ```yaml
-tools:
-  bash:
-    blocked_commands:
-      - "rm -rf /"               # Catastrophic deletion
-      - "dd if=/dev/zero*"       # Disk overwrite
-      - "mkfs*"                  # Filesystem formatting
+kosmo:
+  tools:
+    bash:
+      blocked_commands:
+        - "rm -rf /"               # Catastrophic deletion
+        - "dd if=/dev/zero*"       # Disk overwrite
+        - "mkfs*"                  # Filesystem formatting
 ```
 
 ### Safe Command Configuration
@@ -321,31 +328,32 @@ tools:
 The Guardian safe command list is fully configurable. Add or remove patterns to match your workflow:
 
 ```yaml
-tools:
-  guardian_safe_commands:
-    - "git *"
-    - "ls *"
-    - "pwd"
-    - "cat *"
-    - "head *"
-    - "tail *"
-    - "wc *"
-    - "find *"
-    - "which *"
-    - "echo *"
-    - "diff *"
-    - "php vendor/bin/phpunit*"
-    - "php vendor/bin/pint*"
-    - "composer *"
-    - "npm *"
-    - "npx *"
-    - "node *"
-    - "python *"
-    - "cargo *"
-    - "go *"
-    - "make *"
-    - "terraform plan*"          # Custom: allow terraform plan
-    - "kubectl get *"            # Custom: allow read-only kubectl
+kosmo:
+  tools:
+    guardian_safe_commands:
+      - "git *"
+      - "ls *"
+      - "pwd"
+      - "cat *"
+      - "head *"
+      - "tail *"
+      - "wc *"
+      - "find *"
+      - "which *"
+      - "echo *"
+      - "diff *"
+      - "php vendor/bin/phpunit*"
+      - "php vendor/bin/pint*"
+      - "composer *"
+      - "npm *"
+      - "npx *"
+      - "node *"
+      - "python *"
+      - "cargo *"
+      - "go *"
+      - "make *"
+      - "terraform plan*"          # Custom: allow terraform plan
+      - "kubectl get *"            # Custom: allow read-only kubectl
 ```
 
 **Tip:** Safe command patterns only apply in Guardian mode. In Argus mode, every Ask-ruled tool call asks regardless of the safe list. In Prometheus mode, Ask-ruled tool calls are auto-approved regardless of the safe list, while hard denies still apply.
@@ -361,10 +369,11 @@ Prometheus mode is exempt from boundary enforcement. Session grants do not bypas
 The `allowed_paths` configuration defines additional path prefixes that are treated as if they were inside the project root. Paths matching these prefixes bypass the project boundary check entirely.
 
 ```yaml
-tools:
-  allowed_paths:
-    - "~/.kosmokrator"    # KosmoKrator config directory
-    - "/tmp"              # Temporary files
+kosmo:
+  tools:
+    allowed_paths:
+      - "~/.kosmo"    # KosmoKrator config directory
+      - "/tmp"        # Temporary files
 ```
 
 Paths in `allowed_paths` are resolved at startup (including `~` expansion and symlink resolution), so they work correctly across different environments.
@@ -395,72 +404,73 @@ Subagents inherit the parent agent's permission mode and evaluation chain. The s
 
 ## Configuration Reference
 
-All permission-related settings live under the `tools` key in the configuration file. Settings can be defined in the global config (`config/kosmokrator.yaml`), user config (`~/.kosmokrator/config.yaml`), or project-local config (`.kosmokrator.yaml` in the working directory). Project-local settings override user settings, which override the global defaults.
+All permission-related user and project settings live under `kosmo.tools` in the configuration file. Settings can be defined in bundled defaults (`config/kosmo.yaml`), user config (`~/.kosmo/config.yaml`), or project-local config (`.kosmo.yaml` in the working directory). Project-local settings override user settings, which override the global defaults.
 
 ```yaml
-tools:
-  # Tools that are always denied, overriding all modes including Prometheus
-  denied_tools: []
-  # Example: denied_tools: [file_write, bash]
+kosmo:
+  tools:
+    # Tools that are always denied, overriding all modes including Prometheus
+    denied_tools: []
+    # Example: denied_tools: [file_write, bash]
 
-  # Tools that are always allowed without prompting (Allow rules)
-  safe_tools:
-    - file_read
-    - glob
-    - grep
-    - task_create
-    - task_update
-    - task_list
-    - task_get
-    - shell_read
-    - shell_kill
-    - memory_save
-    - memory_search
-    - ask_user
-    - ask_choice
-    - subagent
-    - lua_list_docs
-    - lua_search_docs
-    - lua_read_doc
+    # Tools that are always allowed without prompting (Allow rules)
+    safe_tools:
+      - file_read
+      - glob
+      - grep
+      - task_create
+      - task_update
+      - task_list
+      - task_get
+      - shell_read
+      - shell_kill
+      - memory_save
+      - memory_search
+      - ask_user
+      - ask_choice
+      - subagent
+      - lua_list_docs
+      - lua_search_docs
+      - lua_read_doc
 
-  # Tools that require approval (Ask rules)
-  approval_required:
-    - file_write
-    - file_edit
-    - apply_patch
-    - bash
-    - shell_start
-    - shell_write
-    - execute_lua
+    # Tools that require approval (Ask rules)
+    approval_required:
+      - file_write
+      - file_edit
+      - apply_patch
+      - bash
+      - shell_start
+      - shell_write
+      - execute_lua
 
-  # Default permission mode for new sessions
-  default_permission_mode: guardian   # guardian | argus | prometheus
+    # Default permission mode for new sessions
+    default_permission_mode: guardian   # guardian | argus | prometheus
 
-  # Paths that are always denied access (glob patterns)
-  blocked_paths:
-    - "*.env"
-    - ".git/*"
-    - "*.pem"
-    - "*id_rsa*"
-    - "*id_ed25519*"
-    - "*.key"
+    # Paths that are always denied access (glob patterns)
+    blocked_paths:
+      - "*.env"
+      - ".git/*"
+      - "*.pem"
+      - "*id_rsa*"
+      - "*id_ed25519*"
+      - "*.key"
 
-  # Paths that bypass the project boundary check
-  allowed_paths:
-    - "~/.kosmokrator"
-    - "/tmp"
+    # Paths that bypass the project boundary check
+    allowed_paths:
+      - "~/.kosmo"
+      - "/tmp"
 
-  # Bash commands blocked unconditionally (glob patterns)
-  bash:
-    blocked_commands:
-      - "rm -rf /"
+    # Bash commands blocked unconditionally (glob patterns)
+    bash:
+      blocked_commands:
+        - "rm -rf /"
 
-  # Commands auto-approved in Guardian mode (glob patterns)
-  guardian_safe_commands:
-    - "git *"
-    - "ls *"
-    - "pwd"
-    - "cat *"
-    - "composer *"
-    # ... add your own patterns
+    # Commands auto-approved in Guardian mode (glob patterns)
+    guardian_safe_commands:
+      - "git *"
+      - "ls *"
+      - "pwd"
+      - "cat *"
+      - "composer *"
+      # ... add your own patterns
 ```

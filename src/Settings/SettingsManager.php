@@ -134,7 +134,7 @@ final class SettingsManager
      */
     public function getProviderLastModel(string $provider): ?string
     {
-        return $this->getRaw("kosmokrator.provider_state.{$provider}.last_model");
+        return $this->getRaw("kosmo.provider_state.{$provider}.last_model");
     }
 
     /**
@@ -144,7 +144,7 @@ final class SettingsManager
      */
     public function setProviderLastModel(string $provider, string $model, string $scope = 'global'): void
     {
-        $this->setRaw("kosmokrator.provider_state.{$provider}.last_model", $model, $scope);
+        $this->setRaw("kosmo.provider_state.{$provider}.last_model", $model, $scope);
     }
 
     /**
@@ -185,7 +185,7 @@ final class SettingsManager
     /**
      * Read a raw config value by dot-path, respecting the project → global → default priority chain.
      *
-     * @param  string  $path  Dot-notation config path (e.g. 'kosmokrator.provider_state.openai.last_model').
+     * @param  string  $path  Dot-notation config path (e.g. 'kosmo.provider_state.openai.last_model').
      * @return mixed The raw value found, or null.
      */
     public function getRaw(string $path): mixed
@@ -301,7 +301,7 @@ final class SettingsManager
     {
         $reloaded = (new ConfigLoader($this->baseConfigPath))->load();
 
-        foreach (['app', 'kosmokrator', 'prism', 'models', 'relay'] as $key) {
+        foreach (['app', 'kosmo', 'prism', 'models', 'relay'] as $key) {
             $this->config->set($key, $reloaded->get($key, []));
         }
 

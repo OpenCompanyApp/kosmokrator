@@ -177,7 +177,7 @@ final class SettingsSchema
         $definitions = [
             new SettingDefinition(
                 id: 'ui.renderer',
-                path: 'kosmokrator.ui.renderer',
+                path: 'kosmo.ui.renderer',
                 label: 'Renderer',
                 description: 'Preferred renderer for KosmoKrator sessions.',
                 category: 'general',
@@ -188,7 +188,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'ui.theme',
-                path: 'kosmokrator.ui.theme',
+                path: 'kosmo.ui.theme',
                 label: 'Theme',
                 description: 'Terminal theme preset.',
                 category: 'general',
@@ -199,7 +199,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'ui.intro_animated',
-                path: 'kosmokrator.ui.intro_animated',
+                path: 'kosmo.ui.intro_animated',
                 label: 'Intro animation',
                 description: 'Play the startup animation before opening the REPL.',
                 category: 'general',
@@ -210,7 +210,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'ui.show_reasoning',
-                path: 'kosmokrator.ui.show_reasoning',
+                path: 'kosmo.ui.show_reasoning',
                 label: 'Show reasoning',
                 description: 'Display model reasoning/thinking content before each response.',
                 category: 'general',
@@ -221,7 +221,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.default_provider',
-                path: 'kosmokrator.agent.default_provider',
+                path: 'kosmo.agent.default_provider',
                 label: 'Default provider',
                 description: 'Default provider used when a session starts.',
                 category: 'models',
@@ -231,7 +231,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.default_model',
-                path: 'kosmokrator.agent.default_model',
+                path: 'kosmo.agent.default_model',
                 label: 'Default model',
                 description: 'Default model used when a session starts.',
                 category: 'models',
@@ -241,7 +241,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_provider',
-                path: 'kosmokrator.agent.subagent_provider',
+                path: 'kosmo.agent.subagent_provider',
                 label: 'Subagent provider',
                 description: 'Provider for depth-1 subagents. Leave empty to inherit the main agent provider.',
                 category: 'subagents',
@@ -251,7 +251,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_model',
-                path: 'kosmokrator.agent.subagent_model',
+                path: 'kosmo.agent.subagent_model',
                 label: 'Subagent model',
                 description: 'Model for depth-1 subagents. Leave empty to inherit the main agent model.',
                 category: 'subagents',
@@ -261,7 +261,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_depth2_provider',
-                path: 'kosmokrator.agent.subagent_depth2_provider',
+                path: 'kosmo.agent.subagent_depth2_provider',
                 label: 'Sub-subagent provider',
                 description: 'Provider for depth-2+ subagents. Falls back to subagent provider, then main agent provider.',
                 category: 'subagents',
@@ -271,7 +271,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_depth2_model',
-                path: 'kosmokrator.agent.subagent_depth2_model',
+                path: 'kosmo.agent.subagent_depth2_model',
                 label: 'Sub-subagent model',
                 description: 'Model for depth-2+ subagents. Falls back to subagent model, then main agent model.',
                 category: 'subagents',
@@ -281,7 +281,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.audio_provider',
-                path: 'kosmokrator.agent.audio_provider',
+                path: 'kosmo.agent.audio_provider',
                 label: 'Audio provider',
                 description: 'Provider for completion sound music composition. Leave empty to inherit the main agent provider.',
                 category: 'audio',
@@ -291,7 +291,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.audio_model',
-                path: 'kosmokrator.agent.audio_model',
+                path: 'kosmo.agent.audio_model',
                 label: 'Audio model',
                 description: 'Model for completion sound music composition. Leave empty to inherit the main agent model.',
                 category: 'audio',
@@ -301,7 +301,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.mode',
-                path: 'kosmokrator.agent.mode',
+                path: 'kosmo.agent.mode',
                 label: 'Default mode',
                 description: 'Starting mode for interactive sessions.',
                 category: 'agent',
@@ -312,7 +312,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.default_permission_mode',
-                path: 'kosmokrator.tools.default_permission_mode',
+                path: 'kosmo.tools.default_permission_mode',
                 label: 'Permission mode',
                 description: 'Default permission policy for tool calls.',
                 category: 'permissions',
@@ -323,7 +323,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.denied_tools',
-                path: 'kosmokrator.tools.denied_tools',
+                path: 'kosmo.tools.denied_tools',
                 label: 'Denied tools',
                 description: 'Tool names that are always denied, overriding permission mode.',
                 category: 'permissions',
@@ -333,7 +333,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.safe_tools',
-                path: 'kosmokrator.tools.safe_tools',
+                path: 'kosmo.tools.safe_tools',
                 label: 'Safe tools',
                 description: 'Tool names treated as safe under normal permission policy.',
                 category: 'permissions',
@@ -343,7 +343,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.approval_required',
-                path: 'kosmokrator.tools.approval_required',
+                path: 'kosmo.tools.approval_required',
                 label: 'Approval-required tools',
                 description: 'Tool names that require permission approval unless policy bypasses them.',
                 category: 'permissions',
@@ -353,7 +353,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.blocked_paths',
-                path: 'kosmokrator.tools.blocked_paths',
+                path: 'kosmo.tools.blocked_paths',
                 label: 'Blocked paths',
                 description: 'Glob patterns blocked for file tools.',
                 category: 'permissions',
@@ -363,7 +363,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.allowed_paths',
-                path: 'kosmokrator.tools.allowed_paths',
+                path: 'kosmo.tools.allowed_paths',
                 label: 'Allowed paths',
                 description: 'Path allowlist that supplements project-local access.',
                 category: 'permissions',
@@ -373,7 +373,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.guardian_safe_commands',
-                path: 'kosmokrator.tools.guardian_safe_commands',
+                path: 'kosmo.tools.guardian_safe_commands',
                 label: 'Guardian safe commands',
                 description: 'Shell command glob patterns that Guardian can auto-approve.',
                 category: 'permissions',
@@ -383,7 +383,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.bash.timeout',
-                path: 'kosmokrator.tools.bash.timeout',
+                path: 'kosmo.tools.bash.timeout',
                 label: 'Bash timeout',
                 description: 'Default bash command timeout in seconds.',
                 category: 'advanced',
@@ -393,7 +393,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.bash.blocked_commands',
-                path: 'kosmokrator.tools.bash.blocked_commands',
+                path: 'kosmo.tools.bash.blocked_commands',
                 label: 'Blocked bash commands',
                 description: 'Shell command patterns that are always denied.',
                 category: 'advanced',
@@ -403,7 +403,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.shell.wait_ms',
-                path: 'kosmokrator.tools.shell.wait_ms',
+                path: 'kosmo.tools.shell.wait_ms',
                 label: 'Shell wait milliseconds',
                 description: 'Default wait time for incremental shell sessions.',
                 category: 'advanced',
@@ -413,7 +413,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'tools.shell.idle_ttl',
-                path: 'kosmokrator.tools.shell.idle_ttl',
+                path: 'kosmo.tools.shell.idle_ttl',
                 label: 'Shell idle TTL',
                 description: 'Seconds before idle shell sessions are cleaned up.',
                 category: 'advanced',
@@ -423,7 +423,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.enabled',
-                path: 'kosmokrator.gateway.telegram.enabled',
+                path: 'kosmo.gateway.telegram.enabled',
                 label: 'Telegram gateway',
                 description: 'Enable the Telegram gateway worker.',
                 category: 'gateway',
@@ -434,7 +434,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.session_mode',
-                path: 'kosmokrator.gateway.telegram.session_mode',
+                path: 'kosmo.gateway.telegram.session_mode',
                 label: 'Session routing',
                 description: 'How Telegram group messages map to Kosmo sessions.',
                 category: 'gateway',
@@ -445,7 +445,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.allowed_users',
-                path: 'kosmokrator.gateway.telegram.allowed_users',
+                path: 'kosmo.gateway.telegram.allowed_users',
                 label: 'Allowed users',
                 description: 'Space- or comma-separated Telegram user IDs or usernames. Leave empty to allow any user that can reach the bot.',
                 category: 'gateway',
@@ -455,7 +455,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.allowed_chats',
-                path: 'kosmokrator.gateway.telegram.allowed_chats',
+                path: 'kosmo.gateway.telegram.allowed_chats',
                 label: 'Allowed chats',
                 description: 'Space- or comma-separated chat IDs allowed to talk to the bot. Leave empty to allow all chats.',
                 category: 'gateway',
@@ -465,7 +465,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.require_mention',
-                path: 'kosmokrator.gateway.telegram.require_mention',
+                path: 'kosmo.gateway.telegram.require_mention',
                 label: 'Require mention in groups',
                 description: 'In non-private chats, only respond when mentioned or replied to unless the chat is marked as free-response.',
                 category: 'gateway',
@@ -476,7 +476,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.free_response_chats',
-                path: 'kosmokrator.gateway.telegram.free_response_chats',
+                path: 'kosmo.gateway.telegram.free_response_chats',
                 label: 'Free-response chats',
                 description: 'Space- or comma-separated chat IDs where the bot may answer without an explicit mention.',
                 category: 'gateway',
@@ -486,7 +486,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'gateway.telegram.poll_timeout_seconds',
-                path: 'kosmokrator.gateway.telegram.poll_timeout_seconds',
+                path: 'kosmo.gateway.telegram.poll_timeout_seconds',
                 label: 'Poll timeout',
                 description: 'Long-poll timeout in seconds for Telegram update fetches.',
                 category: 'gateway',
@@ -496,7 +496,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'integrations.permissions_default',
-                path: 'kosmokrator.integrations.permissions_default',
+                path: 'kosmo.integrations.permissions_default',
                 label: 'Integration default permission',
                 description: 'Default read/write permission for integrations without explicit policy.',
                 category: 'integrations',
@@ -507,7 +507,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'mcp.permissions_default',
-                path: 'kosmokrator.mcp.permissions_default',
+                path: 'kosmo.mcp.permissions_default',
                 label: 'MCP default permission',
                 description: 'Default read/write permission for MCP server operations without explicit policy.',
                 category: 'mcp',
@@ -518,7 +518,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.search.enabled',
-                path: 'kosmokrator.web.search.enabled',
+                path: 'kosmo.web.search.enabled',
                 label: 'Web search',
                 description: 'Enable the optional external web_search tool.',
                 category: 'web',
@@ -529,7 +529,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.search.provider',
-                path: 'kosmokrator.web.search.provider',
+                path: 'kosmo.web.search.provider',
                 label: 'Search provider',
                 description: 'Default provider for web_search.',
                 category: 'web',
@@ -540,7 +540,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.search.max_results',
-                path: 'kosmokrator.web.search.max_results',
+                path: 'kosmo.web.search.max_results',
                 label: 'Search max results',
                 description: 'Default number of web_search results.',
                 category: 'web',
@@ -550,7 +550,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.fetch.provider',
-                path: 'kosmokrator.web.fetch.provider',
+                path: 'kosmo.web.fetch.provider',
                 label: 'Fetch provider',
                 description: 'Default fetch provider. Native keeps the built-in web_fetch path.',
                 category: 'web',
@@ -561,7 +561,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.fetch.allow_external',
-                path: 'kosmokrator.web.fetch.allow_external',
+                path: 'kosmo.web.fetch.allow_external',
                 label: 'External fetch',
                 description: 'Allow web_fetch_external and web_extract provider calls.',
                 category: 'web',
@@ -572,7 +572,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.crawl.enabled',
-                path: 'kosmokrator.web.crawl.enabled',
+                path: 'kosmo.web.crawl.enabled',
                 label: 'Web crawl',
                 description: 'Enable the optional web_crawl tool.',
                 category: 'web',
@@ -583,7 +583,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.crawl.provider',
-                path: 'kosmokrator.web.crawl.provider',
+                path: 'kosmo.web.crawl.provider',
                 label: 'Crawl provider',
                 description: 'Default provider for web_crawl.',
                 category: 'web',
@@ -594,7 +594,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.native.provider',
-                path: 'kosmokrator.web.native.provider',
+                path: 'kosmo.web.native.provider',
                 label: 'Native search provider',
                 description: 'Provider-native web search backend for web_search.',
                 category: 'web',
@@ -605,7 +605,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.native.mode',
-                path: 'kosmokrator.web.native.mode',
+                path: 'kosmo.web.native.mode',
                 label: 'Native search mode',
                 description: 'Cached uses provider-managed web search when supported; live asks for fresh external access.',
                 category: 'web',
@@ -616,7 +616,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.tavily.enabled',
-                path: 'kosmokrator.web.providers.tavily.enabled',
+                path: 'kosmo.web.providers.tavily.enabled',
                 label: 'Tavily',
                 description: 'Enable Tavily as an external web provider.',
                 category: 'web',
@@ -627,7 +627,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.firecrawl.enabled',
-                path: 'kosmokrator.web.providers.firecrawl.enabled',
+                path: 'kosmo.web.providers.firecrawl.enabled',
                 label: 'Firecrawl',
                 description: 'Enable Firecrawl as an external web provider.',
                 category: 'web',
@@ -638,7 +638,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.exa.enabled',
-                path: 'kosmokrator.web.providers.exa.enabled',
+                path: 'kosmo.web.providers.exa.enabled',
                 label: 'Exa',
                 description: 'Enable Exa as an external web provider.',
                 category: 'web',
@@ -649,7 +649,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.brave.enabled',
-                path: 'kosmokrator.web.providers.brave.enabled',
+                path: 'kosmo.web.providers.brave.enabled',
                 label: 'Brave Search',
                 description: 'Enable Brave Search as an external web provider.',
                 category: 'web',
@@ -660,7 +660,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.parallel.enabled',
-                path: 'kosmokrator.web.providers.parallel.enabled',
+                path: 'kosmo.web.providers.parallel.enabled',
                 label: 'Parallel',
                 description: 'Enable Parallel as an external web provider.',
                 category: 'web',
@@ -671,7 +671,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.jina.enabled',
-                path: 'kosmokrator.web.providers.jina.enabled',
+                path: 'kosmo.web.providers.jina.enabled',
                 label: 'Jina Reader',
                 description: 'Enable Jina Reader/Search as an external web provider.',
                 category: 'web',
@@ -682,7 +682,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.searxng.enabled',
-                path: 'kosmokrator.web.providers.searxng.enabled',
+                path: 'kosmo.web.providers.searxng.enabled',
                 label: 'SearXNG',
                 description: 'Enable a configured SearXNG instance as an external web provider.',
                 category: 'web',
@@ -693,7 +693,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.searxng.base_url',
-                path: 'kosmokrator.web.providers.searxng.base_url',
+                path: 'kosmo.web.providers.searxng.base_url',
                 label: 'SearXNG URL',
                 description: 'Base URL for a trusted SearXNG instance.',
                 category: 'web',
@@ -703,7 +703,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.perplexity.enabled',
-                path: 'kosmokrator.web.providers.perplexity.enabled',
+                path: 'kosmo.web.providers.perplexity.enabled',
                 label: 'Perplexity',
                 description: 'Enable Perplexity as an external web search provider.',
                 category: 'web',
@@ -714,7 +714,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.openai_native.enabled',
-                path: 'kosmokrator.web.providers.openai_native.enabled',
+                path: 'kosmo.web.providers.openai_native.enabled',
                 label: 'OpenAI native search',
                 description: 'Enable OpenAI Responses web search as a web provider.',
                 category: 'web',
@@ -725,7 +725,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.providers.anthropic_native.enabled',
-                path: 'kosmokrator.web.providers.anthropic_native.enabled',
+                path: 'kosmo.web.providers.anthropic_native.enabled',
                 label: 'Anthropic native search',
                 description: 'Enable Anthropic server-side web search as a web provider.',
                 category: 'web',
@@ -736,7 +736,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.search.default_provider',
-                path: 'kosmokrator.web.search.default_provider',
+                path: 'kosmo.web.search.default_provider',
                 label: 'Web search provider',
                 description: 'Default provider used by web_search when no provider override is passed.',
                 category: 'advanced',
@@ -747,7 +747,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.fetch.default_provider',
-                path: 'kosmokrator.web.fetch.default_provider',
+                path: 'kosmo.web.fetch.default_provider',
                 label: 'Web fetch provider',
                 description: 'Default provider used by web_fetch when no provider override is passed.',
                 category: 'advanced',
@@ -758,7 +758,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'web.fetch.max_chars',
-                path: 'kosmokrator.web.fetch.max_chars',
+                path: 'kosmo.web.fetch.max_chars',
                 label: 'Web fetch max chars',
                 description: 'Default maximum number of characters returned by web_fetch before chunking.',
                 category: 'advanced',
@@ -768,7 +768,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.memories',
-                path: 'kosmokrator.context.memories',
+                path: 'kosmo.context.memories',
                 label: 'Memories',
                 description: 'Enable memory recall and persistence features.',
                 category: 'context_memory',
@@ -779,7 +779,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.auto_compact',
-                path: 'kosmokrator.context.auto_compact',
+                path: 'kosmo.context.auto_compact',
                 label: 'Auto compact',
                 description: 'Compact context automatically before hitting the model limit.',
                 category: 'context_memory',
@@ -790,7 +790,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.compact_threshold',
-                path: 'kosmokrator.context.compact_threshold',
+                path: 'kosmo.context.compact_threshold',
                 label: 'Compact threshold',
                 description: 'Legacy threshold percentage for compaction fallback.',
                 category: 'context_memory',
@@ -800,7 +800,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.reserve_output_tokens',
-                path: 'kosmokrator.context.reserve_output_tokens',
+                path: 'kosmo.context.reserve_output_tokens',
                 label: 'Reserved output tokens',
                 description: 'Headroom reserved for the assistant response.',
                 category: 'context_memory',
@@ -810,7 +810,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.warning_buffer_tokens',
-                path: 'kosmokrator.context.warning_buffer_tokens',
+                path: 'kosmo.context.warning_buffer_tokens',
                 label: 'Warning buffer',
                 description: 'When remaining input budget drops below this, show warnings.',
                 category: 'context_memory',
@@ -820,7 +820,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.auto_compact_buffer_tokens',
-                path: 'kosmokrator.context.auto_compact_buffer_tokens',
+                path: 'kosmo.context.auto_compact_buffer_tokens',
                 label: 'Auto compact buffer',
                 description: 'When remaining input budget drops below this, auto compact.',
                 category: 'context_memory',
@@ -830,7 +830,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.blocking_buffer_tokens',
-                path: 'kosmokrator.context.blocking_buffer_tokens',
+                path: 'kosmo.context.blocking_buffer_tokens',
                 label: 'Blocking buffer',
                 description: 'Hard stop buffer to prevent overrunning the model context window.',
                 category: 'context_memory',
@@ -840,7 +840,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.prune_protect',
-                path: 'kosmokrator.context.prune_protect',
+                path: 'kosmo.context.prune_protect',
                 label: 'Prune protect',
                 description: 'Recent tool-result tokens protected from micro pruning.',
                 category: 'context_memory',
@@ -850,7 +850,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.prune_min_savings',
-                path: 'kosmokrator.context.prune_min_savings',
+                path: 'kosmo.context.prune_min_savings',
                 label: 'Prune minimum savings',
                 description: 'Minimum savings required before a prune pass is accepted.',
                 category: 'context_memory',
@@ -860,7 +860,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.max_output_lines',
-                path: 'kosmokrator.context.max_output_lines',
+                path: 'kosmo.context.max_output_lines',
                 label: 'Max output lines',
                 description: 'Maximum number of tool-output lines retained in context.',
                 category: 'context_memory',
@@ -870,7 +870,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'context.max_output_bytes',
-                path: 'kosmokrator.context.max_output_bytes',
+                path: 'kosmo.context.max_output_bytes',
                 label: 'Max output bytes',
                 description: 'Maximum bytes of tool output retained in context.',
                 category: 'context_memory',
@@ -880,7 +880,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.reasoning_effort',
-                path: 'kosmokrator.agent.reasoning_effort',
+                path: 'kosmo.agent.reasoning_effort',
                 label: 'Reasoning effort',
                 description: 'Controls extended thinking/reasoning for supported models. Off disables reasoning params entirely.',
                 category: 'agent',
@@ -891,7 +891,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.system_prompt',
-                path: 'kosmokrator.agent.system_prompt',
+                path: 'kosmo.agent.system_prompt',
                 label: 'System prompt',
                 description: 'Base system prompt used for agent sessions.',
                 category: 'advanced',
@@ -901,7 +901,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.temperature',
-                path: 'kosmokrator.agent.temperature',
+                path: 'kosmo.agent.temperature',
                 label: 'Temperature',
                 description: 'Sampling temperature for supported models.',
                 category: 'agent',
@@ -911,7 +911,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.max_tokens',
-                path: 'kosmokrator.agent.max_tokens',
+                path: 'kosmo.agent.max_tokens',
                 label: 'Max output tokens',
                 description: 'Override the model default output token limit.',
                 category: 'agent',
@@ -921,7 +921,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.max_retries',
-                path: 'kosmokrator.agent.max_retries',
+                path: 'kosmo.agent.max_retries',
                 label: 'Max retries',
                 description: 'Retry limit for transient provider failures.',
                 category: 'agent',
@@ -931,7 +931,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_max_depth',
-                path: 'kosmokrator.agent.subagent_max_depth',
+                path: 'kosmo.agent.subagent_max_depth',
                 label: 'Subagent max depth',
                 description: 'Maximum depth for spawned agent trees.',
                 category: 'subagents',
@@ -941,7 +941,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_concurrency',
-                path: 'kosmokrator.agent.subagent_concurrency',
+                path: 'kosmo.agent.subagent_concurrency',
                 label: 'Subagent concurrency',
                 description: 'Maximum concurrent subagents.',
                 category: 'subagents',
@@ -951,7 +951,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_max_retries',
-                path: 'kosmokrator.agent.subagent_max_retries',
+                path: 'kosmo.agent.subagent_max_retries',
                 label: 'Subagent retries',
                 description: 'Retry limit for transient subagent failures.',
                 category: 'subagents',
@@ -961,7 +961,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'agent.subagent_idle_watchdog_seconds',
-                path: 'kosmokrator.agent.subagent_idle_watchdog_seconds',
+                path: 'kosmo.agent.subagent_idle_watchdog_seconds',
                 label: 'Idle watchdog seconds',
                 description: 'Cancel only when a running subagent stops making progress updates for too long. Set 0 to disable.',
                 category: 'subagents',
@@ -971,7 +971,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'audio.completion_sound',
-                path: 'kosmokrator.audio.completion_sound',
+                path: 'kosmo.audio.completion_sound',
                 label: 'Play completion sound',
                 description: 'Compose and play a short musical piece after each agent response. The music reflects what happened.',
                 category: 'audio',
@@ -982,17 +982,17 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'audio.soundfont',
-                path: 'kosmokrator.audio.soundfont',
+                path: 'kosmo.audio.soundfont',
                 label: 'Soundfont path',
                 description: 'Path to the SoundFont (.sf2) file for MIDI playback.',
                 category: 'audio',
                 type: 'text',
                 effect: 'applies_now',
-                default: '~/.kosmokrator/soundfonts/FluidR3_GM.sf2',
+                default: '~/.kosmo/soundfonts/FluidR3_GM.sf2',
             ),
             new SettingDefinition(
                 id: 'audio.llm_timeout',
-                path: 'kosmokrator.audio.llm_timeout',
+                path: 'kosmo.audio.llm_timeout',
                 label: 'Composition timeout (seconds)',
                 description: 'Seconds to wait for AI music composition before falling back to a built-in omen.',
                 category: 'audio',
@@ -1002,7 +1002,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'audio.max_duration',
-                path: 'kosmokrator.audio.max_duration',
+                path: 'kosmo.audio.max_duration',
                 label: 'Max duration (seconds)',
                 description: 'Maximum length of the composed musical piece.',
                 category: 'audio',
@@ -1012,7 +1012,7 @@ final class SettingsSchema
             ),
             new SettingDefinition(
                 id: 'audio.max_retries',
-                path: 'kosmokrator.audio.max_retries',
+                path: 'kosmo.audio.max_retries',
                 label: 'Composition retries',
                 description: 'Number of times to retry if the LLM fails to generate a valid music script.',
                 category: 'audio',

@@ -31,7 +31,7 @@ class ConfigCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->tmpDir = sys_get_temp_dir().'/kosmokrator_test_config_'.uniqid();
-        mkdir($this->tmpDir.'/.kosmokrator', 0777, true);
+        mkdir($this->tmpDir.'/.kosmo', 0777, true);
 
         $this->schema = new SettingsSchema;
         $store = new YamlConfigStore;

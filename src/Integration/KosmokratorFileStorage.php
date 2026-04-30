@@ -15,7 +15,7 @@ class KosmokratorFileStorage implements AgentFileStorage
         string $mimeType,
         ?string $subfolder = null,
     ): array {
-        $baseDir = getcwd().'/.kosmokrator/output';
+        $baseDir = getcwd().'/.kosmo/output';
         $dir = $subfolder !== null
             ? $baseDir.'/'.$subfolder
             : $baseDir;

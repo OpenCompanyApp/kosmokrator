@@ -118,11 +118,11 @@ final class AgentRuntimeFactory
         }
 
         if ($options->provider !== null) {
-            $config->set('kosmokrator.agent.default_provider', $options->provider);
+            $config->set('kosmo.agent.default_provider', $options->provider);
         }
 
         if ($options->model !== null) {
-            $config->set('kosmokrator.agent.default_model', $options->model);
+            $config->set('kosmo.agent.default_model', $options->model);
         }
 
         if ($options->apiKey !== null && $options->provider !== null) {

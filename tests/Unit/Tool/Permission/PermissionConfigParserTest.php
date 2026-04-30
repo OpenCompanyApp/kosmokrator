@@ -12,7 +12,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_approval_required_list(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['file_write', 'file_edit', 'bash'],
                     'bash' => ['timeout' => 120],
@@ -36,7 +36,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_blocked_commands_as_deny_patterns(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'bash' => [
@@ -60,7 +60,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_shell_start_and_shell_write_also_receive_blocked_command_patterns(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['shell_start', 'shell_write'],
                     'bash' => [
@@ -97,7 +97,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_blocked_paths(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'blocked_paths' => ['*.env', '.git/*', '/etc/*'],
@@ -114,7 +114,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_missing_blocked_paths_defaults_to_empty(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                 ],
@@ -130,7 +130,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_guardian_safe_commands(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'guardian_safe_commands' => ['git *', 'ls *', 'pwd'],
@@ -147,7 +147,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_default_permission_mode(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'default_permission_mode' => 'argus',
@@ -175,7 +175,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_safe_tools_parsed_as_allow_rules(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'safe_tools' => ['file_read', 'glob', 'grep'],
                     'approval_required' => ['bash'],
@@ -197,7 +197,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_safe_tools_come_before_ask_rules(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'safe_tools' => ['file_read'],
                     'approval_required' => ['file_write'],
@@ -219,7 +219,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_custom_safe_tools_override_defaults(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'safe_tools' => ['my_custom_tool'],
                 ],

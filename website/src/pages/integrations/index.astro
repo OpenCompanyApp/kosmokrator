@@ -1,0 +1,137 @@
+---
+import '../../styles/tailwind.css';
+import { getIntegrations, integrationUrl } from '../../lib/integrations-catalog';
+
+const integrations = getIntegrations();
+const categories = [...new Set(integrations.map((integration) => integration.category))].sort();
+const totalTools = integrations.reduce((sum, integration) => sum + integration.tools.length, 0);
+const cliReady = integrations.filter((integration) => integration.cli_runtime_supported).length;
+const mcpReady = integrations.filter((integration) => integration.seo.mcp_gateway_supported).length;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Integration CLI and MCP Catalog - KosmoKrator</title>
+    <meta name="description" content="Browse KosmoKrator integrations with Lua, headless CLI, and MCP gateway setup documentation for AI agents." />
+    <meta property="og:title" content="KosmoKrator Integration Catalog" />
+    <meta property="og:description" content="Per-integration docs for Lua, CLI setup, and MCP gateway usage." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100vw-2rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem]">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="flex flex-wrap items-center justify-end gap-4" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/getting-started">Docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/integrations">Integration CLI</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/mcp">MCP</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="https://github.com/OpenCompanyApp/integrations">Contribute</a>
+      </nav>
+    </header>
+
+    <main class="w-[min(1180px,calc(100vw-2rem))] mx-auto py-12 pb-20">
+      <section class="max-w-[900px] mb-8">
+        <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">Integration catalog</p>
+        <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">CLI, Lua, and MCP docs for every KosmoKrator integration.</h1>
+        <p class="text-kosmo-muted leading-[1.7]">
+          These pages are generated from the OpenCompany integrations catalog. They are written for humans
+          and AI agents that need exact function names, credential fields, setup commands, and MCP gateway instructions.
+        </p>
+        <div class="flex flex-wrap gap-[0.7rem] mt-[1.3rem]" aria-label="Catalog statistics">
+          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{integrations.length}</strong> integrations</span>
+          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{totalTools}</strong> functions</span>
+          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{cliReady}</strong> CLI runtime-ready</span>
+          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{mcpReady}</strong> MCP gateway-ready</span>
+        </div>
+      </section>
+
+      <section class="flex flex-wrap items-end gap-[0.7rem] my-8" aria-label="Integration filters">
+        <label class="grid gap-[0.45rem] min-w-[min(100%,260px)] p-[0.8rem] border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
+          <span class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">Search</span>
+          <input
+            class="min-h-[42px] border border-white/[0.14] rounded-[7px] bg-white/[0.05] text-kosmo-text font-[inherit]"
+            type="search"
+            id="integration-search"
+            placeholder="ClickUp, Slack, Mermaid, database..."
+          />
+        </label>
+        <label class="grid gap-[0.45rem] min-w-[min(100%,260px)] p-[0.8rem] border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
+          <span class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">Category</span>
+          <select
+            class="min-h-[42px] border border-white/[0.14] rounded-[7px] bg-white/[0.05] text-kosmo-text font-[inherit]"
+            id="integration-category"
+          >
+            <option value="">All categories</option>
+            {categories.map((category) => <option value={category}>{category}</option>)}
+          </select>
+        </label>
+      </section>
+
+      <p class="-mt-2 text-kosmo-muted text-sm" id="integration-count">
+        Showing <strong>{integrations.length}</strong> integrations
+      </p>
+
+      <section class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4" id="integration-grid">
+        {integrations.map((integration) => (
+          <article
+            class="grid gap-3 p-[1.1rem] border border-kosmo-white-border rounded-lg bg-kosmo-surface"
+            data-name={`${integration.name} ${integration.slug} ${integration.description}`.toLowerCase()}
+            data-category={integration.category}
+          >
+            <div>
+              <p class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">{integration.category}</p>
+              <h2 class="mt-[0.2rem] text-xl"><a class="text-kosmo-text no-underline" href={integrationUrl(integration)}>{integration.name}</a></h2>
+              <p class="text-kosmo-muted leading-[1.55]">{integration.description}</p>
+            </div>
+            <dl class="flex flex-wrap gap-3 m-0">
+              <div class="grid gap-[0.15rem]"><dt class="m-0 text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">Functions</dt><dd class="m-0 text-kosmo-text">{integration.tools.length}</dd></div>
+              <div class="grid gap-[0.15rem]"><dt class="m-0 text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">Auth</dt><dd class="m-0 text-kosmo-text">{integration.auth_strategy_label}</dd></div>
+              <div class="grid gap-[0.15rem]"><dt class="m-0 text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">CLI</dt><dd class="m-0 text-kosmo-text">{integration.cli_runtime_supported ? 'runtime-ready' : 'limited'}</dd></div>
+            </dl>
+            <nav class="flex flex-wrap gap-[0.55rem] self-end" aria-label={`${integration.name} documentation`}>
+              <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'lua')}>Lua</a>
+              <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'cli')}>CLI</a>
+              <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'mcp')}>MCP</a>
+            </nav>
+          </article>
+        ))}
+      </section>
+    </main>
+
+    <script>
+      const search = document.querySelector('#integration-search');
+      const category = document.querySelector('#integration-category');
+      const grid = document.querySelector('#integration-grid');
+      const cards = Array.from(grid ? grid.children : []);
+      const countEl = document.querySelector('#integration-count');
+      const total = cards.length;
+
+      function applyFilters() {
+        const query = search.value.trim().toLowerCase();
+        const selectedCategory = category.value;
+        let visible = 0;
+
+        cards.forEach((card) => {
+          const matchesQuery = !query || card.dataset.name.includes(query);
+          const matchesCategory = !selectedCategory || card.dataset.category === selectedCategory;
+          card.hidden = !(matchesQuery && matchesCategory);
+          if (!card.hidden) visible++;
+        });
+
+        if (countEl) {
+          countEl.innerHTML = visible === total
+            ? `Showing <strong>${total}</strong> integrations`
+            : `Showing <strong>${visible}</strong> of ${total} integrations`;
+        }
+      }
+
+      search.addEventListener('input', applyFilters);
+      category.addEventListener('change', applyFilters);
+    </script>
+  </body>
+</html>

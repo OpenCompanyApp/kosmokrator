@@ -18,7 +18,7 @@ use Kosmokrator\UI\Ansi\AnsiAnimation;
  * - **json**: Single JSON blob on stdout at teardown, progress on stderr.
  * - **stream-json**: NDJSON events on stdout as they happen.
  *
- * The stdout/stderr split ensures `result=$(kosmokrator -p "task")` captures
+ * The stdout/stderr split ensures `result=$(kosmo -p "task")` captures
  * only the final response, while diagnostics are visible in the terminal.
  */
 class HeadlessRenderer implements RendererInterface

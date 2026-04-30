@@ -1,9 +1,13 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   site: 'https://kosmokrator.dev',
   trailingSlash: 'never',
+  vite: {
+    plugins: [tailwindcss()],
+  },
   integrations: [
     starlight({
       title: 'KosmoKrator',

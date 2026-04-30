@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Mcp;
 
+use Kosmokrator\Settings\ConfigCompatibility;
+use Kosmokrator\Settings\SettingsPaths;
+
 final class McpConfigStore
 {
     private ?string $projectRoot = null;
@@ -168,9 +171,12 @@ final class McpConfigStore
 
     public function globalPath(): string
     {
-        $home = $this->home ?: (getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir());
+        return SettingsPaths::globalDirectory(ConfigCompatibility::CANONICAL_ROOT, $this->home).'/mcp.json';
+    }
 
-        return rtrim($home, '/').'/.kosmokrator/mcp.json';
+    public function legacyGlobalPath(): string
+    {
+        return SettingsPaths::globalDirectory(ConfigCompatibility::LEGACY_ROOT, $this->home).'/mcp.json';
     }
 
     /**
@@ -178,7 +184,8 @@ final class McpConfigStore
      */
     public function candidatePaths(): array
     {
-        $paths = ['global' => $this->globalPath()];
+        $this->migrateGlobalConfigIfNeeded();
+        $paths = ['global-legacy' => $this->legacyGlobalPath(), 'global' => $this->globalPath()];
         $root = $this->projectRoot ?: getcwd();
         if (is_string($root) && $root !== '') {
             $root = rtrim($root, '/');
@@ -264,5 +271,22 @@ final class McpConfigStore
         if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
             throw new \RuntimeException("Unable to create directory: {$dir}");
         }
+    }
+
+    private function migrateGlobalConfigIfNeeded(): void
+    {
+        $new = $this->globalPath();
+        $old = $this->legacyGlobalPath();
+
+        if (file_exists($new) || ! file_exists($old)) {
+            return;
+        }
+
+        $dir = dirname($new);
+        if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
+            return;
+        }
+
+        @copy($old, $new);
     }
 }

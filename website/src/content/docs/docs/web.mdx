@@ -81,12 +81,12 @@ Options:
 All web settings are available through `settings:*`:
 
 ```bash
-kosmokrator settings:list --category web --json
-kosmokrator settings:set web.search.enabled on --project --json
-kosmokrator settings:set web.search.provider tavily --project --json
-kosmokrator settings:set web.fetch.allow_external on --project --json
-kosmokrator settings:set web.crawl.provider firecrawl --project --json
-kosmokrator settings:set web.providers.searxng.base_url https://search.example.internal --project --json
+kosmo settings:list --category web --json
+kosmo settings:set web.search.enabled on --project --json
+kosmo settings:set web.search.provider tavily --project --json
+kosmo settings:set web.fetch.allow_external on --project --json
+kosmo settings:set web.crawl.provider firecrawl --project --json
+kosmo settings:set web.providers.searxng.base_url https://search.example.internal --project --json
 ```
 
 Important settings:
@@ -141,7 +141,7 @@ OpenAI and Anthropic native web search can be enabled as web providers:
 ```bash
 kosmokrator web:configure openai_native --api-key-env OPENAI_API_KEY --enable --search --global --json
 kosmokrator web:configure anthropic_native --api-key-env ANTHROPIC_API_KEY --enable --search --global --json
-kosmokrator settings:set web.native.mode live --global --json
+kosmo settings:set web.native.mode live --global --json
 ```
 
 Use native search when you want the model provider to own search grounding. Use Tavily/Exa/Brave/etc. when you want search results as explicit tool output for inspection, scripting, and deterministic tests.
@@ -161,8 +161,8 @@ External web providers send URLs, queries, and sometimes extracted content to th
 ```bash
 kosmokrator web:providers --json
 kosmokrator web:doctor --json
-kosmokrator settings:get web.search.enabled --json
-kosmokrator settings:get web.search.provider --json
+kosmo settings:get web.search.enabled --json
+kosmo settings:get web.search.provider --json
 ```
 
 Common issues:

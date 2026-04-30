@@ -41,7 +41,7 @@ class KernelTest extends TestCase
         // Isolate HOME so Kernel's logger writes to a temp dir, not real home
         self::$originalHome = getenv('HOME') ?: null;
         self::$fakeHome = sys_get_temp_dir().'/kosmokrator_kernel_test_'.uniqid();
-        mkdir(self::$fakeHome.'/.kosmokrator/logs', 0755, true);
+        mkdir(self::$fakeHome.'/.kosmo/logs', 0755, true);
         putenv('HOME='.self::$fakeHome);
         $_ENV['HOME'] = self::$fakeHome;
 

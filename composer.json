@@ -126,5 +126,5 @@
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
-    "bin": ["bin/kosmokrator"]
+    "bin": ["bin/kosmo", "bin/kosmokrator"]
 }

@@ -292,7 +292,7 @@ tools:
     - "*id_ed25519*"
     - "*.key"
   allowed_paths:
-    - "~/.kosmokrator"
+    - "~/.kosmo"
     - "/tmp"
   default_permission_mode: guardian
   guardian_safe_commands:
@@ -332,14 +332,14 @@ context:
 
 session:
   auto_save: true
-  history_dir: ~/.kosmokrator/sessions
+  history_dir: ~/.kosmo/sessions
 
 codex:
   oauth_port: 9876
 
 audio:
   completion_sound: true
-  soundfont: "~/.kosmokrator/soundfonts/FluidR3_GM.sf2"
+  soundfont: "~/.kosmo/soundfonts/FluidR3_GM.sf2"
   llm_timeout: 60
   max_duration: 8
   max_retries: 1

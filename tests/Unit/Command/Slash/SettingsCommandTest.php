@@ -260,7 +260,7 @@ final class SettingsCommandTest extends TestCase
         $this->assertSame('gpt-5.4', $llm->getModel());
         $this->assertSame('openai-key', $llm->apiKey);
         $this->assertSame('https://api.openai.com/v1', $llm->baseUrl);
-        $this->assertFileExists($this->projectDir.'/.kosmokrator/config.yaml');
+        $this->assertFileExists($this->projectDir.'/.kosmo/config.yaml');
     }
 
     public function test_settings_view_includes_integration_credentials_and_project_sources(): void
@@ -274,8 +274,8 @@ final class SettingsCommandTest extends TestCase
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
         $settingsManager->setProjectRoot($this->projectDir);
-        $settingsManager->setRaw('integrations.github.enabled', true, 'project');
-        $settingsManager->setRaw('integrations.github.permissions.read', 'deny', 'project');
+        $settingsManager->setRaw('kosmo.integrations.github.enabled', true, 'project');
+        $settingsManager->setRaw('kosmo.integrations.github.permissions.read', 'deny', 'project');
 
         $settingsRepository = $this->memorySettingsRepository([
             'global' => [

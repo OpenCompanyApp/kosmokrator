@@ -51,9 +51,9 @@ final class WebCrawlCommand extends Command
 
             $response = $provider->crawl(new WebCrawlRequest(
                 url: (string) $input->getArgument('url'),
-                maxPages: max(1, (int) ($input->getOption('max-pages') ?: $config->get('kosmokrator.web.crawl.max_pages', 20))),
-                timeoutSeconds: max(1, (int) $config->get('kosmokrator.web.crawl.timeout_seconds', 60)),
-                outputLimitChars: max(1000, (int) $config->get('kosmokrator.web.crawl.output_limit_chars', 100000)),
+                maxPages: max(1, (int) ($input->getOption('max-pages') ?: $config->get('kosmo.web.crawl.max_pages', 20))),
+                timeoutSeconds: max(1, (int) $config->get('kosmo.web.crawl.timeout_seconds', 60)),
+                outputLimitChars: max(1000, (int) $config->get('kosmo.web.crawl.output_limit_chars', 100000)),
                 instructions: is_string($input->getOption('instructions')) ? $input->getOption('instructions') : null,
             ));
         } catch (\Throwable $e) {

@@ -13,9 +13,9 @@ use Kosmokrator\Settings\SettingsManager;
  */
 final class ModelSwitcherHistory
 {
-    private const RECENT_MODELS_KEY = 'kosmokrator.model_switcher.recent_models';
+    private const RECENT_MODELS_KEY = 'kosmo.model_switcher.recent_models';
 
-    private const RECENT_PROVIDERS_KEY = 'kosmokrator.model_switcher.recent_providers';
+    private const RECENT_PROVIDERS_KEY = 'kosmo.model_switcher.recent_providers';
 
     private const RECENT_MODELS_LIMIT = 6;
 

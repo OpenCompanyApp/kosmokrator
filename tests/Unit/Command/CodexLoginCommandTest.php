@@ -35,7 +35,7 @@ class CodexLoginCommandTest extends TestCase
         $authFlow = new CodexAuthFlow(
             $this->oauth,
             $this->tokenStore,
-            new Repository(['kosmokrator' => ['codex' => ['oauth_port' => 9876]]]),
+            new Repository(['kosmo' => ['codex' => ['oauth_port' => 9876]]]),
         );
 
         $this->container = $this->createMock(Container::class);

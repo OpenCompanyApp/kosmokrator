@@ -21,7 +21,7 @@ final class McpPermissionEvaluator
             return;
         }
 
-        throw new \RuntimeException("Project MCP server '{$server->name}' is not trusted. Run `kosmokrator mcp:trust {$server->name} --project --json` after reviewing .mcp.json, or pass --force for trusted automation.");
+        throw new \RuntimeException("Project MCP server '{$server->name}' is not trusted. Run `kosmo mcp:trust {$server->name} --project --json` after reviewing .mcp.json, or pass --force for trusted automation.");
     }
 
     public function isTrusted(McpServerConfig $server, bool $force = false): bool
@@ -30,8 +30,8 @@ final class McpPermissionEvaluator
             return true;
         }
 
-        $trusted = $this->settings->getRaw("mcp.trust.{$server->name}.fingerprint")
-            ?? $this->settings->getRaw("kosmokrator.mcp.trust.{$server->name}.fingerprint");
+        $trusted = $this->settings->getRaw("kosmo.mcp.trust.{$server->name}.fingerprint")
+            ?? $this->settings->getRaw("mcp.trust.{$server->name}.fingerprint");
 
         return $trusted === $this->fingerprint($server);
     }
@@ -47,7 +47,7 @@ final class McpPermissionEvaluator
         }
 
         if ($permission === 'ask' && ! $force && $this->toolPermissions?->getPermissionMode() !== PermissionMode::Prometheus) {
-            throw new \RuntimeException("MCP server '{$server->name}' {$operation} requires approval. In headless mode configure `mcp.servers.{$server->name}.permissions.{$operation}` or pass --force for trusted automation.");
+            throw new \RuntimeException("MCP server '{$server->name}' {$operation} requires approval. In headless mode configure `kosmo.mcp.servers.{$server->name}.permissions.{$operation}` or pass --force for trusted automation.");
         }
     }
 
@@ -61,20 +61,20 @@ final class McpPermissionEvaluator
         }
 
         if ($permission === 'ask' && ! $force && $this->toolPermissions?->getPermissionMode() !== PermissionMode::Prometheus) {
-            throw new \RuntimeException("MCP server '{$server->name}' read requires approval. Configure `mcp.servers.{$server->name}.permissions.read` or pass --force for trusted automation.");
+            throw new \RuntimeException("MCP server '{$server->name}' read requires approval. Configure `kosmo.mcp.servers.{$server->name}.permissions.read` or pass --force for trusted automation.");
         }
     }
 
     public function permission(string $server, string $operation): string
     {
-        $value = $this->settings->getRaw("mcp.servers.{$server}.permissions.{$operation}")
-            ?? $this->settings->getRaw("kosmokrator.mcp.servers.{$server}.permissions.{$operation}");
+        $value = $this->settings->getRaw("kosmo.mcp.servers.{$server}.permissions.{$operation}")
+            ?? $this->settings->getRaw("mcp.servers.{$server}.permissions.{$operation}");
         if (in_array($value, ['allow', 'ask', 'deny'], true)) {
             return $value;
         }
 
-        $default = $this->settings->getRaw('mcp.permissions_default')
-            ?? $this->settings->getRaw('kosmokrator.mcp.permissions_default');
+        $default = $this->settings->getRaw('kosmo.mcp.permissions_default')
+            ?? $this->settings->getRaw('mcp.permissions_default');
 
         return in_array($default, ['allow', 'ask', 'deny'], true) ? $default : 'ask';
     }
@@ -82,7 +82,7 @@ final class McpPermissionEvaluator
     public function trust(McpServerConfig $server, string $scope = 'project'): string
     {
         $fingerprint = $this->fingerprint($server);
-        $this->settings->setRaw("mcp.trust.{$server->name}.fingerprint", $fingerprint, $scope);
+        $this->settings->setRaw("kosmo.mcp.trust.{$server->name}.fingerprint", $fingerprint, $scope);
 
         return $fingerprint;
     }

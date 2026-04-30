@@ -73,7 +73,7 @@ DESC;
             provider: $this->nullableString($args['provider'] ?? null),
             mode: $this->enumValue((string) ($args['mode'] ?? 'main'), ['metadata', 'outline', 'main', 'full', 'section', 'match', 'chunk'], 'main'),
             format: $this->enumValue((string) ($args['format'] ?? 'markdown'), ['markdown', 'text', 'html'], 'markdown'),
-            maxChars: max(50, min(50_000, (int) ($args['max_chars'] ?? ($this->settings->getRaw('kosmokrator.web.fetch.max_chars') ?? 12_000)))),
+            maxChars: max(50, min(50_000, (int) ($args['max_chars'] ?? ($this->settings->getRaw('kosmo.web.fetch.max_chars') ?? 12_000)))),
             summarize: filter_var($args['summarize'] ?? false, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
             prompt: $this->nullableString($args['prompt'] ?? null),
             heading: $this->nullableString($args['heading'] ?? null),

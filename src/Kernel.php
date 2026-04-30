@@ -26,7 +26,7 @@ use Symfony\Component\Console\Application;
 /**
  * Application kernel — wires the Laravel DI container and orchestrates the full
  * boot sequence: env, config, database, LLM/Prism, tool registry, and console.
- * This is the single entry point invoked by the bin/kosmokrator script.
+ * This is the single entry point invoked by the bin/kosmo script.
  */
 class Kernel
 {

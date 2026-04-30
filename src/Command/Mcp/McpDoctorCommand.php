@@ -51,11 +51,11 @@ final class McpDoctorCommand extends Command
             ], $store->readSources()),
             'servers' => $servers,
             'next_commands' => [
-                'kosmokrator mcp:list --json',
-                'kosmokrator mcp:tools SERVER --json',
-                'kosmokrator mcp:schema SERVER.TOOL --json',
-                'kosmokrator mcp:call SERVER.TOOL --json',
-                'kosmokrator mcp:lua --eval \'dump(mcp.servers())\' --json',
+                'kosmo mcp:list --json',
+                'kosmo mcp:tools SERVER --json',
+                'kosmo mcp:schema SERVER.TOOL --json',
+                'kosmo mcp:call SERVER.TOOL --json',
+                'kosmo mcp:lua --eval \'dump(mcp.servers())\' --json',
             ],
         ];
 

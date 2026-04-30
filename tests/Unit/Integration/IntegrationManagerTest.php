@@ -239,12 +239,12 @@ final class IntegrationManagerTest extends TestCase
         $registry = new ToolProviderRegistry;
         $previousHome = getenv('HOME');
         $tempHome = sys_get_temp_dir().'/kosmo-settings-test-'.bin2hex(random_bytes(4));
-        mkdir($tempHome.'/.kosmokrator', 0777, true);
+        mkdir($tempHome.'/.kosmo', 0777, true);
         putenv("HOME={$tempHome}");
 
         try {
             $settings = new SettingsManager(
-                config: new Repository(['kosmokrator' => ['integrations' => ['permissions_default' => 'deny']]]),
+                config: new Repository(['kosmo' => ['integrations' => ['permissions_default' => 'deny']]]),
                 schema: new SettingsSchema,
                 store: new YamlConfigStore,
                 baseConfigPath: dirname(__DIR__, 4).'/config',
@@ -269,7 +269,7 @@ final class IntegrationManagerTest extends TestCase
             store: new YamlConfigStore,
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
-        $settings->setRaw("integrations.{$integration}.enabled", true, 'global');
+        $settings->setRaw("kosmo.integrations.{$integration}.enabled", true, 'global');
 
         return $settings;
     }

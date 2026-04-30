@@ -61,16 +61,17 @@ jobs:
           tmp_home="$(mktemp -d)"
           tmp_cwd="$(mktemp -d)"
           cd "$tmp_cwd"
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" --version
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" list --raw
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" web:providers --json
           HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" --version
-          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" list --raw
-          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" smoke:startup --json
-          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" web:providers --json
 
       - name: Command help smoke
         run: |
           tmp_home="$(mktemp -d)"
-          php "$GITHUB_WORKSPACE/bin/kosmokrator" list --raw | awk '{ print $1 }' | while read -r command; do
-            HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" "$command" --help >/dev/null
+          php "$GITHUB_WORKSPACE/bin/kosmo" list --raw | awk '{ print $1 }' | while read -r command; do
+            HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" "$command" --help >/dev/null
           done
 
       - name: Build website docs
@@ -85,7 +86,7 @@ jobs:
           tmp_home="$(mktemp -d)"
           tmp_cwd="$(mktemp -d)"
           cd "$tmp_cwd"
-          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" smoke:startup --json
         env:
           COMPOSER_MIRROR_PATH_REPOS: 1
 

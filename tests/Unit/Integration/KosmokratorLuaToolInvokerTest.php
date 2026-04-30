@@ -76,7 +76,7 @@ final class KosmokratorLuaToolInvokerTest extends TestCase
             store: new YamlConfigStore,
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
-        $settings->setRaw('integrations.plane.permissions.write', 'ask', 'global');
+        $settings->setRaw('kosmo.integrations.plane.permissions.write', 'ask', 'global');
 
         $credentials = $this->createStub(CredentialResolver::class);
         $integrationManager = new IntegrationManager($registry, $settings, $credentials);
@@ -145,7 +145,7 @@ final class KosmokratorLuaToolInvokerTest extends TestCase
             store: new YamlConfigStore,
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
-        $settings->setRaw('integrations.plane.permissions.write', 'ask', 'global');
+        $settings->setRaw('kosmo.integrations.plane.permissions.write', 'ask', 'global');
 
         $credentials = $this->createStub(CredentialResolver::class);
         $integrationManager = new IntegrationManager($registry, $settings, $credentials);

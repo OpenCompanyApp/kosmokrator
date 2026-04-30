@@ -279,9 +279,9 @@ class ProjectBoundaryCheckTest extends TestCase
             $this->markTestSkipped('HOME not set');
         }
 
-        $kosmoDir = $home.'/.kosmokrator';
+        $kosmoDir = $home.'/.kosmo';
         if (! is_dir($kosmoDir)) {
-            $this->markTestSkipped('~/.kosmokrator does not exist');
+            $this->markTestSkipped('~/.kosmo does not exist');
         }
 
         $check = $this->makeCheck([realpath($kosmoDir)]);

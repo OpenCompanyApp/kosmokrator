@@ -320,7 +320,7 @@ class IntegrationServiceProvider extends ServiceProvider
     private function localMonorepoPackageRoots(): array
     {
         $roots = [];
-        $configured = getenv('KOSMOKRATOR_INTEGRATIONS_PATH');
+        $configured = getenv('KOSMO_INTEGRATIONS_PATH') ?: getenv('KOSMOKRATOR_INTEGRATIONS_PATH');
         if (is_string($configured) && $configured !== '') {
             $roots[] = $configured;
         }

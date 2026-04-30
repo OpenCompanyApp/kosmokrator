@@ -90,21 +90,24 @@ final class AcpAgentServer
             'session/set_mode' => $this->setMode($params),
             'session/set_model', 'session/unstable_set_model' => $this->setModel($params),
             'session/set_config_option' => $this->setConfigOption($params),
-            'kosmokrator/capabilities' => ['kosmokratorCapabilities' => AcpKosmokratorProtocol::capabilities()],
-            'kosmokrator/integrations/list' => $this->listIntegrations($params),
-            'kosmokrator/integrations/describe' => $this->describeIntegration($params),
-            'kosmokrator/integrations/call' => $this->callIntegration($params),
-            'kosmokrator/mcp/list_servers' => $this->listMcpServers($params),
-            'kosmokrator/mcp/list_tools' => $this->listMcpTools($params),
-            'kosmokrator/mcp/schema' => $this->mcpSchema($params),
-            'kosmokrator/mcp/call_tool' => $this->callMcpTool($params),
-            'kosmokrator/lua/execute' => $this->executeLua($params),
-            'kosmokrator/runtime/set' => $this->setRuntime($params),
-            'kosmokrator/settings/set' => $this->setSetting($params),
-            'kosmokrator/providers/configure' => $this->configureProvider($params),
-            'kosmokrator/integrations/configure' => $this->configureIntegration($params),
-            'kosmokrator/mcp/add_stdio_server' => $this->addMcpStdioServer($params),
-            'kosmokrator/mcp/set_secret' => $this->setMcpSecret($params),
+            'kosmo/capabilities', 'kosmokrator/capabilities' => [
+                'kosmoCapabilities' => AcpKosmokratorProtocol::capabilities(),
+                'kosmokratorCapabilities' => AcpKosmokratorProtocol::capabilities(),
+            ],
+            'kosmo/integrations/list', 'kosmokrator/integrations/list' => $this->listIntegrations($params),
+            'kosmo/integrations/describe', 'kosmokrator/integrations/describe' => $this->describeIntegration($params),
+            'kosmo/integrations/call', 'kosmokrator/integrations/call' => $this->callIntegration($params),
+            'kosmo/mcp/list_servers', 'kosmokrator/mcp/list_servers' => $this->listMcpServers($params),
+            'kosmo/mcp/list_tools', 'kosmokrator/mcp/list_tools' => $this->listMcpTools($params),
+            'kosmo/mcp/schema', 'kosmokrator/mcp/schema' => $this->mcpSchema($params),
+            'kosmo/mcp/call_tool', 'kosmokrator/mcp/call_tool' => $this->callMcpTool($params),
+            'kosmo/lua/execute', 'kosmokrator/lua/execute' => $this->executeLua($params),
+            'kosmo/runtime/set', 'kosmokrator/runtime/set' => $this->setRuntime($params),
+            'kosmo/settings/set', 'kosmokrator/settings/set' => $this->setSetting($params),
+            'kosmo/providers/configure', 'kosmokrator/providers/configure' => $this->configureProvider($params),
+            'kosmo/integrations/configure', 'kosmokrator/integrations/configure' => $this->configureIntegration($params),
+            'kosmo/mcp/add_stdio_server', 'kosmokrator/mcp/add_stdio_server' => $this->addMcpStdioServer($params),
+            'kosmo/mcp/set_secret', 'kosmokrator/mcp/set_secret' => $this->setMcpSecret($params),
             default => throw JsonRpcException::methodNotFound($method),
         };
     }
@@ -140,12 +143,13 @@ final class AcpAgentServer
                     'close' => new \stdClass,
                 ],
             ],
+            'kosmoCapabilities' => AcpKosmokratorProtocol::capabilities(),
             'kosmokratorCapabilities' => AcpKosmokratorProtocol::capabilities(),
             'authMethods' => [
                 [
-                    'id' => 'kosmokrator-provider',
+                    'id' => 'kosmo-provider',
                     'name' => 'KosmoKrator provider credentials',
-                    'description' => 'Configure credentials with `kosmokrator providers:configure` or `kosmokrator setup`.',
+                    'description' => 'Configure credentials with `kosmo providers:configure` or `kosmo setup`.',
                 ],
             ],
         ];
@@ -480,10 +484,10 @@ final class AcpAgentServer
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot($state->cwd);
         if (($params['trust'] ?? false) === true) {
-            $settings->setRaw("mcp.trust.{$name}.fingerprint", $this->container->make(McpPermissionEvaluator::class)->fingerprint($server), $scope);
+            $settings->setRaw("kosmo.mcp.trust.{$name}.fingerprint", $this->container->make(McpPermissionEvaluator::class)->fingerprint($server), $scope);
         }
         foreach ($permissions as $operation => $permission) {
-            $settings->setRaw("mcp.servers.{$name}.permissions.{$operation}", $permission, $scope);
+            $settings->setRaw("kosmo.mcp.servers.{$name}.permissions.{$operation}", $permission, $scope);
         }
         $this->sessions->refreshRuntime($state);
 

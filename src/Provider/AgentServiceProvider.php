@@ -37,13 +37,13 @@ class AgentServiceProvider extends ServiceProvider
                 models: $this->container->make(ModelCatalog::class),
                 taskStore: $this->container->make(TaskStore::class),
                 log: $this->container->make(LoggerInterface::class),
-                config: $config->get('kosmokrator', []),
+                config: $config->get('kosmo', []),
             );
         });
 
         $this->container->singleton(SubagentPipelineFactory::class, function () {
             $config = $this->container->make('config');
-            $kosmokratorConfig = $config->get('kosmokrator', []);
+            $kosmoConfig = $config->get('kosmo', []);
             $prismProviders = $config->get('prism.providers', []);
 
             return new SubagentPipelineFactory(
@@ -53,7 +53,7 @@ class AgentServiceProvider extends ServiceProvider
                 models: $this->container->make(ModelCatalog::class),
                 relay: $this->container->make(Relay::class),
                 log: $this->container->make(LoggerInterface::class),
-                config: array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]),
+                config: array_merge($kosmoConfig, ['prism_providers' => $prismProviders]),
             );
         });
 
@@ -62,7 +62,7 @@ class AgentServiceProvider extends ServiceProvider
 
             return new SessionSettingsApplier(
                 sessionManager: $this->container->make(SessionManager::class),
-                config: $config->get('kosmokrator', []),
+                config: $config->get('kosmo', []),
             );
         });
 

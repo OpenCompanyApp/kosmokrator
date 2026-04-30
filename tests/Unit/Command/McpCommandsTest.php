@@ -141,7 +141,7 @@ final class McpCommandsTest extends TestCase
         ]);
 
         $this->assertSame(0, $export['exit'], $export['output']);
-        $server = $export['json']['config']['mcpServers']['kosmokrator'] ?? null;
+        $server = $export['json']['config']['mcpServers']['kosmo'] ?? null;
         $this->assertIsArray($server);
         $this->assertSame('stdio', $server['type']);
         $this->assertContains('mcp:serve', $server['args']);
@@ -159,8 +159,8 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(0, $install['exit'], $install['output']);
         $this->assertFileExists($this->project.'/.mcp.json');
         $installed = json_decode((string) file_get_contents($this->project.'/.mcp.json'), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertContains('mcp:serve', $installed['mcpServers']['kosmokrator']['args']);
-        $this->assertContains('--integration=plane', $installed['mcpServers']['kosmokrator']['args']);
+        $this->assertContains('mcp:serve', $installed['mcpServers']['kosmo']['args']);
+        $this->assertContains('--integration=plane', $installed['mcpServers']['kosmo']['args']);
     }
 
     public function test_gateway_export_with_profile_does_not_override_profile_write_policy(): void
@@ -172,7 +172,7 @@ final class McpCommandsTest extends TestCase
         ]);
 
         $this->assertSame(0, $export['exit'], $export['output']);
-        $args = $export['json']['config']['mcpServers']['kosmokrator']['args'];
+        $args = $export['json']['config']['mcpServers']['kosmo']['args'];
         $this->assertContains('--profile=claude', $args);
         $this->assertNotContains('--write=deny', $args);
     }
@@ -183,12 +183,12 @@ final class McpCommandsTest extends TestCase
         file_put_contents($this->project.'/.mcp.json', json_encode([
             'mcpServers' => [
                 'fake-server' => ['command' => 'php', 'args' => [$server]],
-                'kosmokrator' => ['command' => 'kosmokrator', 'args' => ['mcp:serve', '--upstream=fake-server']],
+                'kosmo' => ['command' => 'kosmo', 'args' => ['mcp:serve', '--upstream=fake-server']],
             ],
         ], JSON_PRETTY_PRINT));
 
         $process = new Process([
-            'php', $this->root.'/bin/kosmokrator',
+            'php', $this->root.'/bin/kosmo',
             'mcp:serve',
             '--upstream=fake-server',
             '--write=allow',
@@ -211,7 +211,7 @@ final class McpCommandsTest extends TestCase
         $lines = array_values(array_filter(explode("\n", trim($process->getOutput()))));
         $responses = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), $lines);
 
-        $this->assertSame('kosmokrator', $responses[0]['result']['serverInfo']['name']);
+        $this->assertSame('kosmo', $responses[0]['result']['serverInfo']['name']);
         $toolNames = array_column($responses[1]['result']['tools'], 'name');
         $this->assertContains('mcp__fake_server__echo', $toolNames);
         $this->assertSame('from gateway', $responses[2]['result']['structuredContent']['value']);
@@ -221,23 +221,24 @@ final class McpCommandsTest extends TestCase
     public function test_gateway_profile_write_policy_is_not_overridden_by_missing_cli_write_option(): void
     {
         $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';
-        mkdir($this->project.'/.kosmokrator', 0777, true);
+        mkdir($this->project.'/.kosmo', 0777, true);
         file_put_contents($this->project.'/.mcp.json', json_encode([
             'mcpServers' => [
                 'fake-server' => ['command' => 'php', 'args' => [$server]],
             ],
         ], JSON_PRETTY_PRINT));
-        file_put_contents($this->project.'/.kosmokrator/config.yaml', <<<'YAML'
-mcp_gateway:
-  profiles:
-    claude:
-      upstream_mcp:
-        include: [fake-server]
-      write_policy: allow
+        file_put_contents($this->project.'/.kosmo/config.yaml', <<<'YAML'
+kosmo:
+  mcp_gateway:
+    profiles:
+      claude:
+        upstream_mcp:
+          include: [fake-server]
+        write_policy: allow
 YAML);
 
         $process = new Process([
-            'php', $this->root.'/bin/kosmokrator',
+            'php', $this->root.'/bin/kosmo',
             'mcp:serve',
             '--profile=claude',
             '--force',
@@ -267,7 +268,7 @@ YAML);
 
         foreach (['one', 'two', 'three'] as $name) {
             $processes[$name] = new Process([
-                'php', $this->root.'/bin/kosmokrator',
+                'php', $this->root.'/bin/kosmo',
                 'mcp:add', $name,
                 '--project',
                 '--type=stdio',
@@ -303,7 +304,7 @@ YAML);
      */
     private function runKosmo(array $args): array
     {
-        $process = new Process(array_merge(['php', $this->root.'/bin/kosmokrator'], $args), $this->project, [
+        $process = new Process(array_merge(['php', $this->root.'/bin/kosmo'], $args), $this->project, [
             'HOME' => $this->home,
         ]);
         $process->setTimeout(15);

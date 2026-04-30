@@ -7,7 +7,8 @@ namespace Kosmokrator\Agent;
 /**
  * Discovers and concatenates instruction files (global, project, directory) into a single
  * prompt suffix appended to the system prompt by AgentSessionBuilder.
- * Supports KOSMOKRATOR.md, AGENTS.md, and ~/.kosmokrator/instructions.md.
+ * Supports KOSMOKRATOR.md, AGENTS.md, and ~/.kosmo/instructions.md.
+ * Legacy ~/.kosmokrator and .kosmokrator instruction paths are still read.
  *
  * @see AgentSessionBuilder
  */
@@ -17,9 +18,9 @@ class InstructionLoader
      * Discover and load instruction files in priority order.
      *
      * Search order:
-     *  1. ~/.kosmokrator/instructions.md  (global user instructions)
+     *  1. ~/.kosmo/instructions.md  (global user instructions)
      *  2. {git_root}/KOSMOKRATOR.md       (project-level, committed)
-     *  3. {git_root}/.kosmokrator/instructions.md (project-level, gitignore-able)
+     *  3. {git_root}/.kosmo/instructions.md (project-level, gitignore-able)
      *  4. {git_root}/AGENTS.md            (cross-tool agent instructions)
      *  5. {cwd}/KOSMOKRATOR.md            (subdirectory override, if cwd ≠ git root)
      */
@@ -32,10 +33,12 @@ class InstructionLoader
 
         // 1. Global user instructions
         if ($home !== null) {
-            $global = $home.'/.kosmokrator/instructions.md';
-            $content = self::readFile($global);
-            if ($content !== null) {
-                $sections[] = "# User Instructions\n".$content;
+            foreach ([$home.'/.kosmo/instructions.md', $home.'/.kosmokrator/instructions.md'] as $global) {
+                $content = self::readFile($global);
+                if ($content !== null) {
+                    $sections[] = "# User Instructions\n".$content;
+                    break;
+                }
             }
         }
 
@@ -49,11 +52,14 @@ class InstructionLoader
             }
         }
 
-        // 3. Project .kosmokrator/instructions.md at git root
+        // 3. Project .kosmo/instructions.md at git root
         if ($gitRoot !== null) {
-            $content = self::readFile($gitRoot.'/.kosmokrator/instructions.md');
-            if ($content !== null) {
-                $sections[] = "# Project Instructions\n".$content;
+            foreach ([$gitRoot.'/.kosmo/instructions.md', $gitRoot.'/.kosmokrator/instructions.md'] as $path) {
+                $content = self::readFile($path);
+                if ($content !== null) {
+                    $sections[] = "# Project Instructions\n".$content;
+                    break;
+                }
             }
         }
 

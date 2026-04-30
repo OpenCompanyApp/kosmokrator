@@ -41,40 +41,46 @@ If you prefer to download manually, pick the binary for your platform. Each is a
 
 ```bash
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-aarch64 \
-  -o /usr/local/bin/kosmokrator \
-  && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo \
+  && sudo chmod +x /usr/local/bin/kosmo
 ```
 
 ### macOS — Intel (x86\_64)
 
 ```bash
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-macos-x86_64 \
-  -o /usr/local/bin/kosmokrator \
-  && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo \
+  && sudo chmod +x /usr/local/bin/kosmo
 ```
 
 ### Linux — x86\_64
 
 ```bash
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-x86_64 \
-  -o /usr/local/bin/kosmokrator \
-  && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo \
+  && sudo chmod +x /usr/local/bin/kosmo
 ```
 
 ### Linux — ARM (aarch64)
 
 ```bash
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
-  -o /usr/local/bin/kosmokrator \
-  && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo \
+  && sudo chmod +x /usr/local/bin/kosmo
 ```
 
-**Tip:** If `/usr/local/bin` is not in your `$PATH`, or you prefer a user-local install, use `~/.local/bin/kosmokrator` instead. Make sure the directory exists and is on your `$PATH`.
+**Tip:** If `/usr/local/bin` is not in your `$PATH`, or you prefer a user-local install, use `~/.local/bin/kosmo` instead. Make sure the directory exists and is on your `$PATH`.
+
+The install script creates both `kosmo` and the legacy `kosmokrator` command. Manual installs only create `kosmo` unless you add the compatibility symlink yourself:
+
+```bash
+sudo ln -sfn kosmo /usr/local/bin/kosmokrator
+```
 
 After downloading, verify the binary works:
 
 ```bash
-kosmokrator --version
+kosmo --version
 ```
 
 ## PHAR Package
@@ -90,9 +96,11 @@ The PHAR (PHP Archive) build packages the entire application into a single `.pha
 
 ```bash
 sudo curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
-  -o /usr/local/bin/kosmokrator \
-  && sudo chmod +x /usr/local/bin/kosmokrator
+  -o /usr/local/bin/kosmo \
+  && sudo chmod +x /usr/local/bin/kosmo
 ```
+
+Add `sudo ln -sfn kosmo /usr/local/bin/kosmokrator` if you also want the legacy command name.
 
 Because the PHAR is a standard PHP archive, you can also run it directly with the PHP interpreter if you prefer not to place it on your `$PATH`:
 
@@ -123,13 +131,13 @@ composer install
 Once installed, run KosmoKrator directly from the repository:
 
 ```bash
-bin/kosmokrator
+bin/kosmo
 ```
 
 You can optionally symlink the entry point to a directory on your `$PATH` for convenience:
 
 ```bash
-ln -s "$(pwd)/bin/kosmokrator" /usr/local/bin/kosmokrator
+ln -s "$(pwd)/bin/kosmo" /usr/local/bin/kosmo
 ```
 
 ### Running the tests
@@ -149,7 +157,7 @@ php vendor/bin/pint
 The very first time you launch KosmoKrator, you need to configure at least one LLM provider. The built-in setup wizard walks you through the process interactively.
 
 ```bash
-kosmokrator setup
+kosmo setup
 ```
 
 The setup wizard will guide you through three steps:
@@ -158,14 +166,14 @@ The setup wizard will guide you through three steps:
 2.  **Model selection** — Pick a default model from the provider's available options. You can override this per-session or per-depth later via the configuration file.
 3.  **API key entry** — Enter the API key for your chosen provider. For OAuth-based providers (e.g., Codex), the wizard will open a browser-based device flow instead of prompting for a key. Keys are stored locally and never transmitted anywhere other than the provider's own API endpoint.
 
-All settings are written to `~/.kosmokrator/config.yaml`. You can edit this file directly at any time, or re-run `kosmokrator setup` to walk through the wizard again.
+All settings are written to `~/.kosmo/config.yaml`. You can edit this file directly at any time, or re-run `kosmo setup` to walk through the wizard again.
 
 **Tip:** You can also configure providers through the in-app settings dialog. Once KosmoKrator is running, use the `/settings` command to open the interactive settings workspace.
 
 After setup completes, start KosmoKrator normally:
 
 ```bash
-kosmokrator
+kosmo
 ```
 
 KosmoKrator will auto-detect your terminal capabilities and choose the best renderer — the full TUI if your terminal supports it, or the ANSI fallback otherwise.
@@ -184,7 +192,7 @@ KosmoKrator accepts a number of command-line flags that control startup behavior
 Example combining several flags:
 
 ```bash
-kosmokrator --renderer=ansi --no-animation --resume
+kosmo --renderer=ansi --no-animation --resume
 ```
 
 ## Updating
@@ -192,7 +200,7 @@ kosmokrator --renderer=ansi --no-animation --resume
 KosmoKrator includes a built-in update command. From your shell, run:
 
 ```bash
-kosmokrator update
+kosmo update
 ```
 
 This checks GitHub Releases for a newer version and follows the right update path for your installation method. Static binary and PHAR installs update in place. Source installs print the exact manual update commands.
@@ -252,7 +260,7 @@ On macOS and some Linux distributions, `/usr/local/bin` requires elevated privil
 
 ```bash
 mkdir -p ~/.local/bin
-# Then use ~/.local/bin/kosmokrator as the download target
+# Then use ~/.local/bin/kosmo as the download target
 ```
 
 Make sure `~/.local/bin` is on your `$PATH` by adding this to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
@@ -266,7 +274,7 @@ export PATH="$HOME/.local/bin:$PATH"
 On macOS, the first time you run a downloaded binary, Gatekeeper may prevent execution. To allow it, run:
 
 ```lua
-xattr -d com.apple.quarantine /usr/local/bin/kosmokrator
+xattr -d com.apple.quarantine /usr/local/bin/kosmo
 ```
 
 ### Missing PHP extensions (PHAR / source)

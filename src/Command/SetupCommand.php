@@ -73,7 +73,7 @@ class SetupCommand extends Command
             return Command::FAILURE;
         }
 
-        $output->writeln('<info>Setup complete. Run `kosmokrator` to start.</info>');
+        $output->writeln('<info>Setup complete. Run `kosmo` to start.</info>');
 
         return Command::SUCCESS;
     }

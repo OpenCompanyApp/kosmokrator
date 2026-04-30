@@ -9,7 +9,7 @@ KosmoKrator persists useful state so terminal, headless CLI, SDK, ACP, Telegram 
 
 ## What Is Persisted
 
-State is stored under `~/.kosmokrator/data` in SQLite-backed repositories.
+State is stored under `~/.kosmo/data` in SQLite-backed repositories.
 
 | Data | Purpose |
 | --- | --- |
@@ -25,7 +25,7 @@ State is stored under `~/.kosmokrator/data` in SQLite-backed repositories.
 Interactive:
 
 ```bash
-kosmokrator
+kosmo
 /rename Payment refactor
 /compact
 /sessions
@@ -37,10 +37,10 @@ kosmokrator
 Headless:
 
 ```bash
-kosmokrator -p "Explain the auth flow"
-kosmokrator -p "Continue the previous task" --continue
-kosmokrator -p "Use this exact session" --session sess_abc123
-kosmokrator -p "One-off analysis" --no-session
+kosmo -p "Explain the auth flow"
+kosmo -p "Continue the previous task" --continue
+kosmo -p "Use this exact session" --session sess_abc123
+kosmo -p "One-off analysis" --no-session
 ```
 
 SDK:
@@ -96,9 +96,9 @@ Manual compaction:
 Settings:
 
 ```bash
-kosmokrator settings:get context.auto_compact --json
-kosmokrator settings:set context.auto_compact on --global --json
-kosmokrator settings:set context.reserve_output_tokens 16000 --project --json
+kosmo settings:get context.auto_compact --json
+kosmo settings:set context.auto_compact on --global --json
+kosmo settings:set context.reserve_output_tokens 16000 --project --json
 ```
 
 See [Context](/docs/context) for the full pipeline.
@@ -140,7 +140,7 @@ Mode behavior:
 Disable memory features:
 
 ```bash
-kosmokrator settings:set context.memories off --global --json
+kosmo settings:set context.memories off --global --json
 ```
 
 ## Naming Sessions
@@ -166,8 +166,8 @@ Use `/sessions` to inspect prior sessions. If a session contains sensitive outpu
 Secrets are not stored as plain session settings by provider configuration commands. Use the secret store for API keys:
 
 ```bash
-kosmokrator secrets:list --json
-kosmokrator secrets:status provider.openai.api_key --json
+kosmo secrets:list --json
+kosmo secrets:status provider.openai.api_key --json
 ```
 
 ## Troubleshooting

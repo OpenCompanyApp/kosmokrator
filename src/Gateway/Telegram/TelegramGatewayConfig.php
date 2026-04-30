@@ -28,50 +28,50 @@ final readonly class TelegramGatewayConfig
 
     public static function fromSettings(SettingsManager $settings, Repository $config, ?SettingsRepositoryInterface $repository = null): self
     {
-        $enabled = self::toBool(($repository?->get('global', 'kosmokrator.gateway.telegram.enabled'))
-            ?? $settings->getRaw('kosmokrator.gateway.telegram.enabled')
-            ?? $config->get('kosmokrator.gateway.telegram.enabled', false));
+        $enabled = self::toBool(($repository?->get('global', 'kosmo.gateway.telegram.enabled'))
+            ?? $settings->getRaw('kosmo.gateway.telegram.enabled')
+            ?? $config->get('kosmo.gateway.telegram.enabled', false));
 
-        $token = trim((string) (
-            $repository?->get('global', 'kosmokrator.gateway.telegram.token')
-            ?? $settings->getRaw('kosmokrator.gateway.telegram.token')
-            ?? $config->get('kosmokrator.gateway.telegram.token', '')
-            ?? getenv('KOSMOKRATOR_TELEGRAM_BOT_TOKEN')
-            ?: ''
-        ));
+        $token = trim((string) self::firstNonEmpty([
+            $repository?->get('global', 'kosmo.gateway.telegram.token'),
+            $settings->getRaw('kosmo.gateway.telegram.token'),
+            $config->get('kosmo.gateway.telegram.token'),
+            getenv('KOSMO_TELEGRAM_BOT_TOKEN'),
+            getenv('KOSMOKRATOR_TELEGRAM_BOT_TOKEN'),
+        ]));
 
         return new self(
             enabled: $enabled,
             token: $token,
             sessionMode: (string) (
-                ($repository?->get('global', 'kosmokrator.gateway.telegram.session_mode'))
-                ?? $settings->getRaw('kosmokrator.gateway.telegram.session_mode')
-                ?? $config->get('kosmokrator.gateway.telegram.session_mode', 'thread')
+                ($repository?->get('global', 'kosmo.gateway.telegram.session_mode'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.session_mode')
+                ?? $config->get('kosmo.gateway.telegram.session_mode', 'thread')
             ),
             allowedUsers: self::toList(
-                ($repository?->get('global', 'kosmokrator.gateway.telegram.allowed_users'))
-                ?? $settings->getRaw('kosmokrator.gateway.telegram.allowed_users')
-                ?? $config->get('kosmokrator.gateway.telegram.allowed_users', [])
+                ($repository?->get('global', 'kosmo.gateway.telegram.allowed_users'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.allowed_users')
+                ?? $config->get('kosmo.gateway.telegram.allowed_users', [])
             ),
             allowedChats: self::toList(
-                ($repository?->get('global', 'kosmokrator.gateway.telegram.allowed_chats'))
-                ?? $settings->getRaw('kosmokrator.gateway.telegram.allowed_chats')
-                ?? $config->get('kosmokrator.gateway.telegram.allowed_chats', [])
+                ($repository?->get('global', 'kosmo.gateway.telegram.allowed_chats'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.allowed_chats')
+                ?? $config->get('kosmo.gateway.telegram.allowed_chats', [])
             ),
             requireMention: self::toBool(
-                ($repository?->get('global', 'kosmokrator.gateway.telegram.require_mention'))
-                ?? $settings->getRaw('kosmokrator.gateway.telegram.require_mention')
-                ?? $config->get('kosmokrator.gateway.telegram.require_mention', true)
+                ($repository?->get('global', 'kosmo.gateway.telegram.require_mention'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.require_mention')
+                ?? $config->get('kosmo.gateway.telegram.require_mention', true)
             ),
             freeResponseChats: self::toList(
-                ($repository?->get('global', 'kosmokrator.gateway.telegram.free_response_chats'))
-                ?? $settings->getRaw('kosmokrator.gateway.telegram.free_response_chats')
-                ?? $config->get('kosmokrator.gateway.telegram.free_response_chats', [])
+                ($repository?->get('global', 'kosmo.gateway.telegram.free_response_chats'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.free_response_chats')
+                ?? $config->get('kosmo.gateway.telegram.free_response_chats', [])
             ),
             pollTimeoutSeconds: max(1, (int) (
-                ($repository?->get('global', 'kosmokrator.gateway.telegram.poll_timeout_seconds'))
-                ?? $settings->getRaw('kosmokrator.gateway.telegram.poll_timeout_seconds')
-                ?? $config->get('kosmokrator.gateway.telegram.poll_timeout_seconds', 20)
+                ($repository?->get('global', 'kosmo.gateway.telegram.poll_timeout_seconds'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.poll_timeout_seconds')
+                ?? $config->get('kosmo.gateway.telegram.poll_timeout_seconds', 20)
             )),
         );
     }
@@ -79,11 +79,11 @@ final readonly class TelegramGatewayConfig
     public function validate(): void
     {
         if (! $this->enabled) {
-            throw new \RuntimeException('Telegram gateway is disabled. Set kosmokrator.gateway.telegram.enabled to true.');
+            throw new \RuntimeException('Telegram gateway is disabled. Set kosmo.gateway.telegram.enabled to true.');
         }
 
         if ($this->token === '') {
-            throw new \RuntimeException('Telegram gateway token is not configured. Set kosmokrator.gateway.telegram.token or KOSMOKRATOR_TELEGRAM_BOT_TOKEN.');
+            throw new \RuntimeException('Telegram gateway token is not configured. Set kosmo.gateway.telegram.token or KOSMO_TELEGRAM_BOT_TOKEN.');
         }
 
         if (! in_array($this->sessionMode, ['chat', 'chat_user', 'thread', 'thread_user'], true)) {
@@ -142,5 +142,25 @@ final readonly class TelegramGatewayConfig
         }
 
         return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
+     * @param  list<mixed>  $values
+     */
+    private static function firstNonEmpty(array $values): mixed
+    {
+        foreach ($values as $value) {
+            if ($value === false || $value === null) {
+                continue;
+            }
+
+            if (is_string($value) && trim($value) === '') {
+                continue;
+            }
+
+            return $value;
+        }
+
+        return '';
     }
 }

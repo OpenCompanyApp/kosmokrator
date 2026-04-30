@@ -24,14 +24,14 @@ The fastest path. Most Android devices use ARM, so download the `aarch64` binary
 pkg install -y curl
 
 curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator-linux-aarch64 \
-  -o $PREFIX/bin/kosmokrator \
-  && chmod +x $PREFIX/bin/kosmokrator
+  -o $PREFIX/bin/kosmo \
+  && chmod +x $PREFIX/bin/kosmo
 ```
 
 Verify:
 
 ```bash
-kosmokrator --version
+kosmo --version
 ```
 
 **Tip:** Termux uses `$PREFIX/bin` (typically `/data/data/com.termux/files/usr/bin`) instead of `/usr/local/bin`. There is no `sudo` — Termux packages are installed in user space.
@@ -44,8 +44,8 @@ If you prefer the PHAR, install PHP first:
 pkg install -y php curl
 
 curl -fSL https://github.com/OpenCompanyApp/kosmokrator/releases/latest/download/kosmokrator.phar \
-  -o $PREFIX/bin/kosmokrator \
-  && chmod +x $PREFIX/bin/kosmokrator
+  -o $PREFIX/bin/kosmo \
+  && chmod +x $PREFIX/bin/kosmo
 ```
 
 Termux's PHP package ships with `curl`, `mbstring`, `openssl`, and `pdo_sqlite` built in. Verify with:
@@ -81,13 +81,13 @@ composer install
 Run directly from the checkout:
 
 ```bash
-php bin/kosmokrator --renderer=ansi
+php bin/kosmo --renderer=ansi
 ```
 
 Or symlink for convenience:
 
 ```bash
-ln -s "$(pwd)/bin/kosmokrator" $PREFIX/bin/kosmokrator
+ln -s "$(pwd)/bin/kosmo" $PREFIX/bin/kosmo
 ```
 
 **Tip:** If Composer runs out of memory, set `COMPOSER_MEMORY_LIMIT=-1 composer install` to remove the cap.
@@ -97,13 +97,13 @@ ln -s "$(pwd)/bin/kosmokrator" $PREFIX/bin/kosmokrator
 Run the setup wizard to configure your LLM provider:
 
 ```bash
-kosmokrator setup
+kosmo setup
 ```
 
 Then start a session. Use ANSI mode for the most reliable experience:
 
 ```bash
-kosmokrator --renderer=ansi
+kosmo --renderer=ansi
 ```
 
 The ANSI renderer works well in Termux and does not depend on `stty` or `pcntl` features that may behave differently on Android.
@@ -115,7 +115,7 @@ The ANSI renderer works well in Termux and does not depend on `stty` or `pcntl` 
 | `ansi` | Recommended | Pure escape codes, works everywhere, readline input |
 | `tui` | Experimental | Requires `stty` and a terminal that correctly reports size. May work in Termux but can be glitchy on some devices. |
 
-If you want to try the TUI renderer, launch with `kosmokrator --renderer=tui` and fall back to ANSI if you encounter display issues.
+If you want to try the TUI renderer, launch with `kosmo --renderer=tui` and fall back to ANSI if you encounter display issues.
 
 ## Keyboard Tips
 
@@ -127,7 +127,7 @@ A hardware keyboard or [Hacker's Keyboard](https://play.google.com/store/apps/de
 
 ## Storage & Sessions
 
-By default, KosmoKrator stores its SQLite database and configuration in `~/.kosmokrator/`. In Termux, `~` resolves to `/data/data/com.termux/files/home`, which is private to the Termux app.
+By default, KosmoKrator stores its SQLite database and configuration in `~/.kosmo/`. In Termux, `~` resolves to `/data/data/com.termux/files/home`, which is private to the Termux app.
 
 If you need to access project files on shared storage (Downloads, Documents, etc.), grant Termux storage access first:
 
@@ -148,7 +148,7 @@ This warning is harmless. The ANSI renderer handles it gracefully. If you see pe
 Ensure the storage directory is writable:
 
 ```bash
-chmod -R 775 ~/.kosmokrator/
+chmod -R 775 ~/.kosmo/
 ```
 
 If running from source, also check the project's `storage/` directory:

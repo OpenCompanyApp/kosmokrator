@@ -1,0 +1,213 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Kosmokrator\Command\AgentCommand;
+use Kosmokrator\Command\AcpCommand;
+use Kosmokrator\Command\AuthCommand;
+use Kosmokrator\Command\CodexLoginCommand;
+use Kosmokrator\Command\CodexLogoutCommand;
+use Kosmokrator\Command\CodexStatusCommand;
+use Kosmokrator\Command\ConfigCommand;
+use Kosmokrator\Command\Gateway\TelegramConfigureCommand;
+use Kosmokrator\Command\Gateway\TelegramStatusCommand;
+use Kosmokrator\Command\Integration\IntegrationCallCommand;
+use Kosmokrator\Command\Integration\IntegrationConfigureCommand;
+use Kosmokrator\Command\Integration\IntegrationDocsCommand;
+use Kosmokrator\Command\Integration\IntegrationDoctorCommand;
+use Kosmokrator\Command\Integration\IntegrationExamplesCommand;
+use Kosmokrator\Command\Integration\IntegrationFieldsCommand;
+use Kosmokrator\Command\Integration\IntegrationListCommand;
+use Kosmokrator\Command\Integration\IntegrationLuaCommand;
+use Kosmokrator\Command\Integration\IntegrationProviderCommand;
+use Kosmokrator\Command\Integration\IntegrationSchemaCommand;
+use Kosmokrator\Command\Integration\IntegrationSearchCommand;
+use Kosmokrator\Command\Integration\IntegrationStatusCommand;
+use Kosmokrator\Command\Mcp\McpAddCommand;
+use Kosmokrator\Command\Mcp\McpCallCommand;
+use Kosmokrator\Command\Mcp\McpDoctorCommand;
+use Kosmokrator\Command\Mcp\McpEnableCommand;
+use Kosmokrator\Command\Mcp\McpExamplesCommand;
+use Kosmokrator\Command\Mcp\McpExportCommand;
+use Kosmokrator\Command\Mcp\McpGatewayExportCommand;
+use Kosmokrator\Command\Mcp\McpGatewayInstallCommand;
+use Kosmokrator\Command\Mcp\McpImportCommand;
+use Kosmokrator\Command\Mcp\McpListCommand;
+use Kosmokrator\Command\Mcp\McpLuaCommand;
+use Kosmokrator\Command\Mcp\McpPromptsCommand;
+use Kosmokrator\Command\Mcp\McpPresetCommand;
+use Kosmokrator\Command\Mcp\McpRemoveCommand;
+use Kosmokrator\Command\Mcp\McpResourcesCommand;
+use Kosmokrator\Command\Mcp\McpSchemaCommand;
+use Kosmokrator\Command\Mcp\McpServeCommand;
+use Kosmokrator\Command\Mcp\McpSecretCommand;
+use Kosmokrator\Command\Mcp\McpServerCommand;
+use Kosmokrator\Command\Mcp\McpStatusCommand;
+use Kosmokrator\Command\Mcp\McpToolsCommand;
+use Kosmokrator\Command\Mcp\McpTrustCommand;
+use Kosmokrator\Command\Provider\ProvidersConfigureCommand;
+use Kosmokrator\Command\Provider\ProvidersCustomDeleteCommand;
+use Kosmokrator\Command\Provider\ProvidersCustomListCommand;
+use Kosmokrator\Command\Provider\ProvidersCustomUpsertCommand;
+use Kosmokrator\Command\Provider\ProvidersListCommand;
+use Kosmokrator\Command\Provider\ProvidersLogoutCommand;
+use Kosmokrator\Command\Provider\ProvidersModelsCommand;
+use Kosmokrator\Command\Provider\ProvidersStatusCommand;
+use Kosmokrator\Command\Secrets\SecretsListCommand;
+use Kosmokrator\Command\Secrets\SecretsSetCommand;
+use Kosmokrator\Command\Secrets\SecretsStatusCommand;
+use Kosmokrator\Command\Secrets\SecretsUnsetCommand;
+use Kosmokrator\Command\Settings\SettingsApplyCommand;
+use Kosmokrator\Command\Settings\SettingsDoctorCommand;
+use Kosmokrator\Command\Settings\SettingsExamplesCommand;
+use Kosmokrator\Command\Settings\SettingsGetCommand;
+use Kosmokrator\Command\Settings\SettingsListCommand;
+use Kosmokrator\Command\Settings\SettingsOptionsCommand;
+use Kosmokrator\Command\Settings\SettingsSetCommand;
+use Kosmokrator\Command\Settings\SettingsUnsetCommand;
+use Kosmokrator\Command\SetupCommand;
+use Kosmokrator\Command\SmokeStartupCommand;
+use Kosmokrator\Command\TelegramGatewayCommand;
+use Kosmokrator\Command\TelegramGatewayWorkerCommand;
+use Kosmokrator\Command\UpdateCommand;
+use Kosmokrator\Command\Web\WebConfigureCommand;
+use Kosmokrator\Command\Web\WebCrawlCommand;
+use Kosmokrator\Command\Web\WebDoctorCommand;
+use Kosmokrator\Command\Web\WebFetchCommand;
+use Kosmokrator\Command\Web\WebProvidersCommand;
+use Kosmokrator\Command\Web\WebSearchCommand;
+use Kosmokrator\Integration\Runtime\IntegrationCatalog;
+use Kosmokrator\Kernel;
+use Kosmokrator\Mcp\McpConfigStore;
+use NunoMaduro\Collision\Provider;
+
+define('KOSMOKRATOR_START', microtime(true));
+
+// Autoloader
+$autoloader = require file_exists(__DIR__.'/../vendor/autoload.php')
+    ? __DIR__.'/../vendor/autoload.php'
+    : __DIR__.'/../../../autoload.php';
+
+// Pretty error rendering (dev)
+if (class_exists(Provider::class)) {
+    (new Provider)->register();
+}
+
+// Boot the kernel
+$kernel = new Kernel(dirname(__DIR__));
+$kernel->boot();
+
+// Register commands
+$console = $kernel->getConsole();
+$console->addCommand(new AgentCommand($kernel->getContainer()));
+$console->addCommand(new AcpCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
+$console->addCommand(new CodexLoginCommand($kernel->getContainer()));
+$console->addCommand(new CodexStatusCommand($kernel->getContainer()));
+$console->addCommand(new CodexLogoutCommand($kernel->getContainer()));
+$console->addCommand(new SetupCommand($kernel->getContainer()));
+$console->addCommand(new ConfigCommand($kernel->getContainer()));
+$console->addCommand(new AuthCommand($kernel->getContainer()));
+$console->addCommand(new SettingsListCommand($kernel->getContainer()));
+$console->addCommand(new SettingsGetCommand($kernel->getContainer()));
+$console->addCommand(new SettingsSetCommand($kernel->getContainer()));
+$console->addCommand(new SettingsUnsetCommand($kernel->getContainer()));
+$console->addCommand(new SettingsApplyCommand($kernel->getContainer()));
+$console->addCommand(new SettingsOptionsCommand($kernel->getContainer()));
+$console->addCommand(new SettingsDoctorCommand($kernel->getContainer()));
+$console->addCommand(new SettingsExamplesCommand);
+$console->addCommand(new ProvidersListCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersModelsCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersStatusCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersConfigureCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersLogoutCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersCustomListCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersCustomUpsertCommand($kernel->getContainer()));
+$console->addCommand(new ProvidersCustomDeleteCommand($kernel->getContainer()));
+$console->addCommand(new SecretsListCommand($kernel->getContainer()));
+$console->addCommand(new SecretsStatusCommand($kernel->getContainer()));
+$console->addCommand(new SecretsSetCommand($kernel->getContainer()));
+$console->addCommand(new SecretsUnsetCommand($kernel->getContainer()));
+$console->addCommand(new UpdateCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
+$console->addCommand(new TelegramGatewayCommand($kernel->getContainer()));
+$console->addCommand(new TelegramGatewayWorkerCommand($kernel->getContainer()));
+$console->addCommand(new TelegramConfigureCommand($kernel->getContainer()));
+$console->addCommand(new TelegramStatusCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationListCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationStatusCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationSearchCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationDocsCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationFieldsCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationDoctorCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationConfigureCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationSchemaCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationExamplesCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationCallCommand($kernel->getContainer()));
+$console->addCommand(new IntegrationLuaCommand($kernel->getContainer()));
+$console->addCommand(new McpListCommand($kernel->getContainer()));
+$console->addCommand(new McpStatusCommand($kernel->getContainer()));
+$console->addCommand(new McpAddCommand($kernel->getContainer()));
+$console->addCommand(new McpRemoveCommand($kernel->getContainer()));
+$console->addCommand(new McpEnableCommand($kernel->getContainer(), true));
+$console->addCommand(new McpEnableCommand($kernel->getContainer(), false));
+$console->addCommand(new McpTrustCommand($kernel->getContainer()));
+$console->addCommand(new McpToolsCommand($kernel->getContainer()));
+$console->addCommand(new McpSchemaCommand($kernel->getContainer()));
+$console->addCommand(new McpCallCommand($kernel->getContainer()));
+$console->addCommand(new McpLuaCommand($kernel->getContainer()));
+$console->addCommand(new McpSecretCommand($kernel->getContainer(), 'set'));
+$console->addCommand(new McpSecretCommand($kernel->getContainer(), 'list'));
+$console->addCommand(new McpSecretCommand($kernel->getContainer(), 'unset'));
+$console->addCommand(new McpResourcesCommand($kernel->getContainer(), false));
+$console->addCommand(new McpResourcesCommand($kernel->getContainer(), true));
+$console->addCommand(new McpPromptsCommand($kernel->getContainer(), false));
+$console->addCommand(new McpPromptsCommand($kernel->getContainer(), true));
+$console->addCommand(new McpDoctorCommand($kernel->getContainer()));
+$console->addCommand(new McpExamplesCommand);
+$console->addCommand(new McpImportCommand($kernel->getContainer()));
+$console->addCommand(new McpExportCommand($kernel->getContainer()));
+$console->addCommand(new McpPresetCommand($kernel->getContainer()));
+$console->addCommand(new McpServeCommand($kernel->getContainer(), $console->getVersion() ?? 'dev'));
+$console->addCommand(new McpGatewayExportCommand);
+$console->addCommand(new McpGatewayInstallCommand($kernel->getContainer()->make(McpConfigStore::class)));
+$console->addCommand(new WebProvidersCommand($kernel->getContainer()));
+$console->addCommand(new WebConfigureCommand($kernel->getContainer()));
+$console->addCommand(new WebDoctorCommand($kernel->getContainer()));
+$console->addCommand(new WebSearchCommand($kernel->getContainer()));
+$console->addCommand(new WebFetchCommand($kernel->getContainer()));
+$console->addCommand(new WebCrawlCommand($kernel->getContainer()));
+$console->addCommand(new SmokeStartupCommand($kernel->getContainer()));
+
+foreach ($kernel->getContainer()->make(IntegrationCatalog::class)->locallyRunnableProviderNames() as $provider) {
+    $console->addCommand(new IntegrationProviderCommand($kernel->getContainer(), $provider));
+}
+
+foreach ($kernel->getContainer()->make(McpConfigStore::class)->effectiveServers(false) as $server => $_config) {
+    $console->addCommand(new McpServerCommand($kernel->getContainer(), $server));
+}
+
+// Default to agent in single-command mode unless another explicit command is requested.
+// 'agent' is removed from the explicit list so that `kosmokrator agent "prompt"`
+// enters single-command mode correctly (positional prompt binds to the command).
+$args = $_SERVER['argv'] ?? [];
+$explicitCommands = ['setup', 'config', 'auth', 'update', 'acp', 'smoke:startup', 'gateway:telegram', 'gateway:telegram:worker', 'codex:login', 'codex:status', 'codex:logout', 'list', 'help', '_complete', 'completion'];
+$requestedCommand = $args[1] ?? null;
+$isExplicitCommand = is_string($requestedCommand)
+    && ! str_starts_with($requestedCommand, '-')
+    && (in_array($requestedCommand, $explicitCommands, true)
+        || str_starts_with($requestedCommand, 'integrations:')
+        || str_starts_with($requestedCommand, 'settings:')
+        || str_starts_with($requestedCommand, 'providers:')
+        || str_starts_with($requestedCommand, 'secrets:')
+        || str_starts_with($requestedCommand, 'mcp:')
+        || str_starts_with($requestedCommand, 'web:')
+        || str_starts_with($requestedCommand, 'gateway:telegram:'));
+
+if (! $isExplicitCommand) {
+    $console->setDefaultCommand('agent', true);
+}
+
+// Run
+$status = $console->run();
+
+exit($status);

@@ -123,7 +123,7 @@ Open the interactive settings workspace. Navigate through categories (LLM, permi
 
 Clear the terminal display. This only clears the visual output — it does not affect the conversation history or context window. The agent retains full memory of the session.
 
-#### `kosmokrator update`
+#### `kosmo update`
 
 Check for new KosmoKrator versions from the shell. Static binary and PHAR installs update in place. Source installs are detected and you get the exact manual update commands to run.
 
@@ -131,156 +131,156 @@ Check for new KosmoKrator versions from the shell. Static binary and PHAR instal
 
 These commands are run directly from your terminal rather than inside the interactive REPL.
 
-#### `kosmokrator update`
+#### `kosmo update`
 
 Check GitHub Releases for a newer version. Static binary and PHAR installs can replace themselves in place. Source installs print the exact `git pull` and `composer install` commands to run.
 
-#### `kosmokrator setup`
+#### `kosmo setup`
 
 Run the interactive first-time configuration flow. It selects a provider, stores credentials, and writes the default provider/model settings used by future sessions.
 
-#### `kosmokrator config`
+#### `kosmo config`
 
 Inspect and edit resolved settings from the shell. Supports `show`, `get`, `set`, `unset`, `paths`, and `edit`, with `--global` and `--project` to choose where overrides are written. Add `--json` to `show`, `get`, `set`, `unset`, or `paths` for machine-readable output.
 
 ```bash
-kosmokrator config show
-kosmokrator config show --json
-kosmokrator config paths --json
-kosmokrator config get agent.default_model --json
-kosmokrator config set agent.default_model glm-5.1 --provider z --global --json
-kosmokrator config edit --project
+kosmo config show
+kosmo config show --json
+kosmo config paths --json
+kosmo config get agent.default_model --json
+kosmo config set agent.default_model glm-5.1 --provider z --global --json
+kosmo config edit --project
 ```
 
-#### `kosmokrator settings:*`
+#### `kosmo settings:*`
 
 Agent-friendly configuration commands backed by the same schema as `/settings`. They expose categories, labels, descriptions, current values, sources, effects, valid options, and YAML target paths.
 
 ```bash
-kosmokrator settings:list --json
-kosmokrator settings:list --category permissions --json
-kosmokrator settings:get tools.default_permission_mode --json
-kosmokrator settings:options agent.default_model --provider openai --json
-kosmokrator settings:set agent.mode plan --global --json
-kosmokrator settings:set tools.safe_tools "file_read,glob,grep" --project --json
+kosmo settings:list --json
+kosmo settings:list --category permissions --json
+kosmo settings:get tools.default_permission_mode --json
+kosmo settings:options agent.default_model --provider openai --json
+kosmo settings:set agent.mode plan --global --json
+kosmo settings:set tools.safe_tools "file_read,glob,grep" --project --json
 jq -n '{settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.4-mini"}}' | \
-  kosmokrator settings:apply --stdin-json --global --json
-kosmokrator settings:unset agent.mode --project --json
-kosmokrator settings:doctor --json
-kosmokrator settings:examples --json
+  kosmo settings:apply --stdin-json --global --json
+kosmo settings:unset agent.mode --project --json
+kosmo settings:doctor --json
+kosmo settings:examples --json
 ```
 
-#### `kosmokrator providers:*`
+#### `kosmo providers:*`
 
 Configure LLM providers, discover models, manage custom OpenAI-compatible endpoints, and inspect authentication status without opening the setup TUI. Provider commands never echo raw API keys in JSON or text output.
 
 ```bash
-kosmokrator providers:list --json
-kosmokrator providers:models openai --json
-kosmokrator providers:status openai --json
+kosmo providers:list --json
+kosmo providers:models openai --json
+kosmo providers:status openai --json
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json
-kosmokrator providers:configure codex --device --global --json
-kosmokrator providers:logout openai --json
-kosmokrator providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --global --json
-kosmokrator providers:custom:list --json
-kosmokrator providers:custom:delete local_ai --json
+  kosmo providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json
+kosmo providers:configure codex --device --global --json
+kosmo providers:logout openai --json
+kosmo providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --global --json
+kosmo providers:custom:list --json
+kosmo providers:custom:delete local_ai --json
 ```
 
-#### `kosmokrator secrets:*`
+#### `kosmo secrets:*`
 
 Store and inspect managed secrets headlessly. Supported keys currently use `provider.&lt;id&gt;.api_key` for LLM providers and `gateway.telegram.token` for the Telegram gateway.
 
 ```bash
-printf %s "$OPENAI_API_KEY" | kosmokrator secrets:set provider.openai.api_key --stdin --json
-kosmokrator secrets:status provider.openai.api_key --json
-kosmokrator secrets:list --json
-kosmokrator secrets:unset provider.openai.api_key --json
+printf %s "$OPENAI_API_KEY" | kosmo secrets:set provider.openai.api_key --stdin --json
+kosmo secrets:status provider.openai.api_key --json
+kosmo secrets:list --json
+kosmo secrets:unset provider.openai.api_key --json
 ```
 
-#### `kosmokrator auth`
+#### `kosmo auth`
 
 Manage provider authentication. Use `status` to inspect providers, `login` to store an API key or run OAuth, and `logout` to remove stored credentials.
 
 ```bash
-kosmokrator auth status
-printf %s "$OPENAI_API_KEY" | kosmokrator auth login openai --api-key-stdin --json
-kosmokrator auth login openai --api-key-env OPENAI_API_KEY --json
-kosmokrator auth login codex --device
-kosmokrator auth logout openai --json
+kosmo auth status
+printf %s "$OPENAI_API_KEY" | kosmo auth login openai --api-key-stdin --json
+kosmo auth login openai --api-key-env OPENAI_API_KEY --json
+kosmo auth login codex --device
+kosmo auth logout openai --json
 ```
 
-#### `kosmokrator codex:*`
+#### `kosmo codex:*`
 
 Convenience commands for the Codex provider's ChatGPT OAuth flow. These map to the same credential store used by `auth login codex`.
 
 ```bash
-kosmokrator codex:login
-kosmokrator codex:login --device
-kosmokrator codex:status
-kosmokrator codex:logout
+kosmo codex:login
+kosmo codex:login --device
+kosmo codex:status
+kosmo codex:logout
 ```
 
-#### `kosmokrator integrations:*`
+#### `kosmo integrations:*`
 
 Run OpenCompany integrations directly from the shell without starting an agent session. This surface is intended for scripts, CI jobs, and other coding CLIs that need a unified local integration layer.
 
 ```bash
-kosmokrator integrations:list --json
-kosmokrator integrations:status --json
-kosmokrator integrations:doctor plane --json
-kosmokrator integrations:fields plane --json
-kosmokrator integrations:configure plane --set api_key="$PLANE_API_KEY" --enable --json
-kosmokrator integrations:search "plane issue" --json
-kosmokrator integrations:docs plane.create_issue
-kosmokrator integrations:schema plane.create_issue
-kosmokrator integrations:call plane.create_issue --project-id=PROJECT_UUID --name="Check" --dry-run --json
-kosmokrator integrations:call plane.list_issues --project-id=PROJECT_UUID --json
-kosmokrator integrations:plane list_issues --project-id=PROJECT_UUID --json
-kosmokrator integrations:lua workflow.lua --force --json
+kosmo integrations:list --json
+kosmo integrations:status --json
+kosmo integrations:doctor plane --json
+kosmo integrations:fields plane --json
+kosmo integrations:configure plane --set api_key="$PLANE_API_KEY" --enable --json
+kosmo integrations:search "plane issue" --json
+kosmo integrations:docs plane.create_issue
+kosmo integrations:schema plane.create_issue
+kosmo integrations:call plane.create_issue --project-id=PROJECT_UUID --name="Check" --dry-run --json
+kosmo integrations:call plane.list_issues --project-id=PROJECT_UUID --json
+kosmo integrations:plane list_issues --project-id=PROJECT_UUID --json
+kosmo integrations:lua workflow.lua --force --json
 ```
 
 See [Integrations CLI](/docs/integrations) for the complete command reference, argument passing rules, Lua endpoint, JSON result envelopes, headless configuration, permissions, account aliases, and external coding CLI patterns.
 
-#### `kosmokrator mcp:*`
+#### `kosmo mcp:*`
 
 Configure and call Model Context Protocol servers headlessly. KosmoKrator reads common `.mcp.json` `mcpServers` files, plus VS Code/Cursor `servers` files, and exposes MCP tools through direct commands and Lua as `app.mcp.*`.
 
 ```bash
-kosmokrator mcp:list --json
-kosmokrator mcp:add github --project --type=stdio \
+kosmo mcp:list --json
+kosmo mcp:add github --project --type=stdio \
   --command=github-mcp-server --env GITHUB_TOKEN --read=allow --write=ask --json
-kosmokrator mcp:trust github --project --json
-kosmokrator mcp:tools github --json
-kosmokrator mcp:schema github.search_repositories --json
-kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
-kosmokrator mcp:github search_repositories --query="kosmokrator" --json
-kosmokrator mcp:resources github --json
-kosmokrator mcp:prompts github --json
-kosmokrator mcp:gateway:export --integration=plane --upstream=context7 --json
-kosmokrator mcp:gateway:install --integration=plane --upstream=context7 --json
+kosmo mcp:trust github --project --json
+kosmo mcp:tools github --json
+kosmo mcp:schema github.search_repositories --json
+kosmo mcp:call github.search_repositories --query="kosmokrator" --json
+kosmo mcp:github search_repositories --query="kosmokrator" --json
+kosmo mcp:resources github --json
+kosmo mcp:prompts github --json
+kosmo mcp:gateway:export --integration=plane --upstream=context7 --json
+kosmo mcp:gateway:install --integration=plane --upstream=context7 --json
 printf %s "$GITHUB_TOKEN" | \
-  kosmokrator mcp:secret:set github env.GITHUB_TOKEN --stdin --json
-kosmokrator mcp:lua workflow.lua --json
-kosmokrator mcp:doctor --json
+  kosmo mcp:secret:set github env.GITHUB_TOKEN --stdin --json
+kosmo mcp:lua workflow.lua --json
+kosmo mcp:doctor --json
 ```
 
 Project MCP servers must be trusted before normal discovery or execution. Headless `ask` permissions fail because there is no approval modal; configure read/write policies or use `--force` for a trusted automation call that should bypass MCP trust and read/write policy. `mcp:serve` runs KosmoKrator as a stdio MCP gateway for clients such as Claude Code; select exposed integrations and upstream MCP servers with `--integration` and `--upstream`. See [MCP](/docs/mcp) for the full command, gateway, and Lua reference.
 
-#### `kosmokrator acp`
+#### `kosmo acp`
 
 Start the Agent Client Protocol stdio server for editors and IDEs. ACP mode uses the same agent runtime as the terminal UI, including sessions, permissions, Lua, integrations, MCP, memory, tasks, and subagents.
 
 ```bash
-kosmokrator acp
-kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
-kosmokrator acp --model gpt-5.4-mini
-kosmokrator acp --yolo
+kosmo acp
+kosmo acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmo acp --model gpt-5.4-mini
+kosmo acp --yolo
 ```
 
 ACP clients can create, load, list, prompt, cancel, and close sessions. Permission prompts are bridged to `session/request_permission`, and client-provided stdio `mcpServers` are available as runtime-only Lua namespaces under `app.mcp.*`. See [ACP](/docs/acp) for editor config snippets and protocol notes.
 
-#### `kosmokrator gateway:telegram`
+#### `kosmo gateway:telegram`
 
 Start the Telegram gateway worker. This turns KosmoKrator into a Telegram bot surface backed by the normal agent/session runtime. The gateway keeps a linked session per configured chat route, supports typing indicators, streamed replies, queued follow-up messages, and inline approval buttons.
 
@@ -290,23 +290,23 @@ Typical flow:
 /settings → Gateway
 enable Telegram, store bot token, set allowlist
 
-kosmokrator gateway:telegram
+kosmo gateway:telegram
 ```
 
 The gateway can also be configured headlessly:
 
 ```bash
-printf %s "$TELEGRAM_BOT_TOKEN" | kosmokrator gateway:telegram:configure \
+printf %s "$TELEGRAM_BOT_TOKEN" | kosmo gateway:telegram:configure \
   --token-stdin \
   --enabled on \
   --session-mode thread_user \
   --allowed-users "123456789,@maintainer" \
   --global --json
 
-kosmokrator gateway:telegram:status --json
+kosmo gateway:telegram:status --json
 ```
 
-The internal worker command `kosmokrator gateway:telegram:worker` is process-managed by the main gateway and is not intended for normal manual use.
+The internal worker command `kosmo gateway:telegram:worker` is process-managed by the main gateway and is not intended for normal manual use.
 
 ## Telegram Gateway Commands
 
@@ -398,7 +398,7 @@ Complete reference table of all slash commands, their arguments, and description
 | `/tasks-clear` | None | Clear all tracked tasks. |
 | `/theogony` | None | Replay the animated intro sequence. (alias: `/cosmogony`) |
 
-Shell-level commands are documented separately above. The main operational ones are `kosmokrator update` and `kosmokrator gateway:telegram`.
+Shell-level commands are documented separately above. The main operational ones are `kosmo update` and `kosmo gateway:telegram`.
 
 ## Power Commands
 
@@ -547,9 +547,9 @@ Complete reference table of all power commands.
 
 Skill commands are prefixed with `$` and invoke reusable, customizable skill templates. Skills are auto-discovered from several directories at runtime:
 
--   `.kosmokrator/skills/` — project-level skills
+-   `.kosmo/skills/` — project-level skills
 -   `.agents/skills/` — alternative project-level location
--   `~/.kosmokrator/skills/` — user-level skills (available in all projects)
+-   `~/.kosmo/skills/` — user-level skills (available in all projects)
 
 Each skill is a directory containing a `SKILL.md` file that defines the prompt template and metadata. Invoking a skill injects its prompt into the LLM conversation with your arguments filled in.
 

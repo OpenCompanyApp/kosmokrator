@@ -38,7 +38,7 @@ final class YamlConfigStore
         }
 
         try {
-            return Yaml::parse($content) ?? [];
+            return $this->normalizeNamespaces(Yaml::parse($content) ?? []);
         } catch (ParseException $e) {
             $this->log?->warning("Failed to parse YAML config file {$path}: ".$e->getMessage());
 
@@ -104,7 +104,7 @@ final class YamlConfigStore
      * Retrieve a value from a nested array using dot notation.
      *
      * @param  array<string, mixed>  $data  Config array to search
-     * @param  string  $path  Dot-separated key path (e.g. "kosmokrator.agent.mode")
+     * @param  string  $path  Dot-separated key path (e.g. "kosmo.agent.mode")
      * @return mixed The value at the given path, or null if not found
      */
     public function get(array $data, string $path): mixed
@@ -192,5 +192,14 @@ final class YamlConfigStore
         if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
             throw new \RuntimeException("Unable to create directory: {$dir}");
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeNamespaces(array $data): array
+    {
+        return ConfigCompatibility::normalizeKosmoNamespace($data);
     }
 }

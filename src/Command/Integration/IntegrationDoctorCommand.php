@@ -61,16 +61,16 @@ final class IntegrationDoctorCommand extends Command
             $functions = $functionsByProvider[$name] ?? [];
             $next = [];
             if ($missing !== [] && $capabilities['cli_setup_supported']) {
-                $next[] = 'kosmokrator integrations:fields '.$name.' --json';
-                $next[] = 'kosmokrator integrations:configure '.$name.' --set '.implode('=... --set ', $missing).'=... --json';
+                $next[] = 'kosmo integrations:fields '.$name.' --json';
+                $next[] = 'kosmo integrations:configure '.$name.' --set '.implode('=... --set ', $missing).'=... --json';
             }
             if (! $capabilities['cli_setup_supported']) {
-                $next[] = 'kosmokrator integrations:docs '.$name;
+                $next[] = 'kosmo integrations:docs '.$name;
             } elseif (! $enabled) {
-                $next[] = 'kosmokrator integrations:configure '.$name.' --enable --json';
+                $next[] = 'kosmo integrations:configure '.$name.' --enable --json';
             }
             if ($configured && $enabled && $functions !== []) {
-                $next[] = 'kosmokrator integrations:docs '.$functions[0]->fullName();
+                $next[] = 'kosmo integrations:docs '.$functions[0]->fullName();
             }
 
             $data[$name] = [

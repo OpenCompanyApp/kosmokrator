@@ -72,8 +72,8 @@ final class McpConfigurator extends RuntimeConfigurator
     private function setRawSetting(string $path, mixed $value, string $scope): void
     {
         $file = $scope === 'global'
-            ? rtrim(getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir(), '/').'/.kosmokrator/config.yaml'
-            : rtrim($this->cwd ?: (getcwd() ?: sys_get_temp_dir()), '/').'/.kosmokrator/config.yaml';
+            ? rtrim(getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir(), '/').'/.kosmo/config.yaml'
+            : rtrim($this->cwd ?: (getcwd() ?: sys_get_temp_dir()), '/').'/.kosmo/config.yaml';
 
         $dir = dirname($file);
         if (! is_dir($dir)) {
@@ -86,7 +86,7 @@ final class McpConfigurator extends RuntimeConfigurator
         }
 
         $cursor = &$data;
-        foreach (explode('.', $path) as $segment) {
+        foreach (explode('.', 'kosmo.'.$path) as $segment) {
             if (! is_array($cursor)) {
                 $cursor = [];
             }

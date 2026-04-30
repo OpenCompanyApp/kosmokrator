@@ -273,7 +273,7 @@ class AnsiDeepInit implements AnsiAnimation
             ['  │       ├── Coding/', 'dim'],
             ['  │       └── Permission/', 'dim'],
             ['  ├── config/', 'white'],
-            ['  │   └── ○ kosmokrator.yaml', 'gold'],
+            ['  │   └── ○ kosmo.yaml', 'gold'],
             ['  ├── tests/', 'white'],
             ['  └── ○ composer.json', 'gold'],
         ];

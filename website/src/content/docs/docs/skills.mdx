@@ -15,9 +15,9 @@ Precedence, highest first:
 
 | Path | Scope | Notes |
 | --- | --- | --- |
-| `.kosmokrator/skills/&lt;name&gt;/SKILL.md` | project | Canonical project-local path. |
+| `.kosmo/skills/&lt;name&gt;/SKILL.md` | project | Canonical project-local path. |
 | `.agents/skills/&lt;name&gt;/SKILL.md` | project | Ecosystem-compatible project path. |
-| `~/.kosmokrator/skills/&lt;name&gt;/SKILL.md` | user | Personal global skills. |
+| `~/.kosmo/skills/&lt;name&gt;/SKILL.md` | user | Personal global skills. |
 
 If the same skill name exists in multiple paths, the higher-precedence project skill wins.
 
@@ -60,7 +60,7 @@ Type these in the KosmoKrator prompt, not in your shell:
 | --- | --- |
 | `$` | List skills. |
 | `$list` or `$skills` | List skills. |
-| `$create &lt;name&gt;` | Create a project skill template under `.kosmokrator/skills`. |
+| `$create &lt;name&gt;` | Create a project skill template under `.kosmo/skills`. |
 | `$show &lt;name&gt;` | Show skill content and path. |
 | `$edit &lt;name&gt;` | Ask the agent to help edit the skill file. |
 | `$delete &lt;name&gt;` | Delete the skill directory. |
@@ -96,7 +96,7 @@ The active agent mode and permission mode still apply. A skill cannot bypass Pla
 Project skills are best for workflows everyone on a repository should share:
 
 ```text
-.kosmokrator/
+.kosmo/
   skills/
     release-check/
       SKILL.md
@@ -116,7 +116,7 @@ Good project skill examples:
 User skills are personal and live outside the repo:
 
 ```text
-~/.kosmokrator/skills/
+~/.kosmo/skills/
   my-review-style/
     SKILL.md
 ```

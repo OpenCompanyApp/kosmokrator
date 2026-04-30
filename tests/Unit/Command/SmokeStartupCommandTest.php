@@ -21,7 +21,7 @@ final class SmokeStartupCommandTest extends TestCase
     {
         $this->originalHome = getenv('HOME') ?: null;
         $this->tempHome = sys_get_temp_dir().'/kosmokrator-smoke-test-'.uniqid();
-        mkdir($this->tempHome.'/.kosmokrator', 0777, true);
+        mkdir($this->tempHome.'/.kosmo', 0777, true);
         putenv('HOME='.$this->tempHome);
         $_ENV['HOME'] = $this->tempHome;
     }

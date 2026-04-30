@@ -62,10 +62,10 @@ The **OutputTruncator** is the first line of defense. It processes every tool re
 
 ### Behavior
 
-When truncation occurs, the full untruncated output is first saved to disk at `~/.kosmokrator/data/truncations/`. The truncated version that enters the conversation ends with a notice pointing to the saved file:
+When truncation occurs, the full untruncated output is first saved to disk at `~/.kosmo/data/truncations/`. The truncated version that enters the conversation ends with a notice pointing to the saved file:
 
 ```plaintext
-[truncated - full output saved to ~/.kosmokrator/data/truncations/tool_abc123.txt;
+[truncated - full output saved to ~/.kosmo/data/truncations/tool_abc123.txt;
  inspect with targeted grep/file_read rather than pasting it back into context]
 ```
 
@@ -344,7 +344,7 @@ Up to 6 relevant memories are injected per turn (configurable). Working memory i
 | `/memories` | List all stored memories with their type, class, and creation date |
 | `/forget &lt;id&gt;` | Delete a specific memory by its ID |
 
-Memories are stored in a SQLite database at `~/.kosmokrator/data/kosmokrator.db`. They are scoped to the current project directory, so memories saved while working in `~/projects/alpha` will not appear when working in `~/projects/beta`.
+Memories are stored in a SQLite database at `~/.kosmo/data/kosmo.db`. They are scoped to the current project directory, so memories saved while working in `~/projects/alpha` will not appear when working in `~/projects/beta`.
 
 ## Session Management
 

@@ -471,7 +471,7 @@ final class AcpRenderer implements RendererInterface
         }
 
         $this->connection->notify(
-            'kosmokrator/'.$type,
+            'kosmo/'.$type,
             AcpKosmokratorProtocol::event($this->sessionId, $this->runId, $type, $fields),
         );
     }

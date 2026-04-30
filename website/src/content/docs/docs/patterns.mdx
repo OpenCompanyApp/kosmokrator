@@ -14,7 +14,7 @@ KosmoKrator's [headless mode](/docs/headless) is designed for CI/CD pipelines. P
 
 ```bash
 # Headless mode with auto-approve
-kosmokrator -p --yolo "Fix all failing tests"
+kosmo -p --yolo "Fix all failing tests"
 ```
 
 The `-p` flag enables headless mode. `--yolo` auto-approves all tool calls so the agent can work unattended. Exit code `0` means the task completed successfully; non-zero indicates an error or that the agent hit a guardrail. See [Headless Mode](/docs/headless) for the full CLI reference including `--max-turns`, `--timeout`, and JSON output.
@@ -46,7 +46,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          kosmokrator -p --yolo --max-turns 20 "Fix all failing tests"
+          kosmo -p --yolo --max-turns 20 "Fix all failing tests"
 
       - name: Commit and push fixes
         run: |
@@ -72,7 +72,7 @@ Not every agent turn needs the most expensive model. KosmoKrator supports **per-
 ### Per-depth cascade
 
 ```bash
-# .kosmokrator.yaml
+# .kosmo.yaml
 
 # Main agent — most capable model for complex reasoning
 default_provider: anthropic
@@ -127,7 +127,7 @@ Working with a big monorepo or unfamiliar project? Use KosmoKrator's exploration
 4.  **Reduce concurrency** — For very large repos, lower the `subagent_concurrency` setting to avoid overwhelming system resources.
 
 ```bash
-# .kosmokrator.yaml — tuned for a large monorepo
+# .kosmo.yaml — tuned for a large monorepo
 
 subagent_concurrency: 3
 mode: plan          # start in plan mode for safety

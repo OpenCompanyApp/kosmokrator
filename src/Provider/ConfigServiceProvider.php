@@ -27,7 +27,7 @@ class ConfigServiceProvider extends ServiceProvider
         $config = $loader->load();
 
         $codexUrl = (string) $config->get('prism.providers.codex.url', 'https://chatgpt.com/backend-api/codex');
-        $codexOAuthPort = (int) $config->get('kosmokrator.codex.oauth_port', 9876);
+        $codexOAuthPort = (int) $config->get('kosmo.codex.oauth_port', 9876);
 
         $this->container->instance('config', $config);
         $this->container->alias('config', Repository::class);
@@ -40,8 +40,8 @@ class ConfigServiceProvider extends ServiceProvider
             'callback_route' => '/auth/codex/callback',
             'table' => 'codex_tokens',
             'id_token_add_organizations' => true,
-            'originator' => 'kosmokrator',
-            'user_agent' => 'kosmokrator',
+            'originator' => 'kosmo',
+            'user_agent' => 'kosmo',
         ]);
     }
 }

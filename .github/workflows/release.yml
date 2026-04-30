@@ -50,7 +50,8 @@ jobs:
           tmp_home="$(mktemp -d)"
           tmp_cwd="$(mktemp -d)"
           cd "$tmp_cwd"
-          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmo" smoke:startup --json
+          HOME="$tmp_home" php "$GITHUB_WORKSPACE/bin/kosmokrator" --version
 
       - name: Build website docs
         working-directory: website
@@ -240,11 +241,13 @@ jobs:
           mkdir -p "$tmp_root/bin" "$tmp_root/home" "$tmp_root/work"
 
           if [ -f "release/kosmokrator-linux-x86_64" ]; then
-            cp "release/kosmokrator-linux-x86_64" "$tmp_root/bin/kosmokrator"
-            chmod +x "$tmp_root/bin/kosmokrator"
+            cp "release/kosmokrator-linux-x86_64" "$tmp_root/bin/kosmo"
+            chmod +x "$tmp_root/bin/kosmo"
+            ln -sfn kosmo "$tmp_root/bin/kosmokrator"
             cd "$tmp_root/work"
+            PATH="$tmp_root/bin:$PATH" HOME="$tmp_root/home" kosmo --version
+            PATH="$tmp_root/bin:$PATH" HOME="$tmp_root/home" kosmo smoke:startup --json
             PATH="$tmp_root/bin:$PATH" HOME="$tmp_root/home" kosmokrator --version
-            PATH="$tmp_root/bin:$PATH" HOME="$tmp_root/home" kosmokrator smoke:startup --json
           fi
 
           cd "$tmp_root/work"

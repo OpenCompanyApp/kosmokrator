@@ -7,20 +7,20 @@ sidebar:
 KosmoKrator can run as an **Agent Client Protocol** server for editors and IDEs that speak ACP:
 
 ```bash
-kosmokrator acp
+kosmo acp
 ```
 
 ACP mode is a protocol surface over the same runtime used by the terminal UI and headless CLI. It reuses provider credentials, sessions, permissions, built-in tools, Lua, integrations, MCP, memory, tasks, and subagents.
 
-Clients that only understand ordinary ACP can ignore the extra frames. Rich wrappers can opt into KosmoKrator's native model by reading the advertised `kosmokratorCapabilities` and subscribing to namespaced `kosmokrator/*` notifications on the same JSON-RPC connection.
+Clients that only understand ordinary ACP can ignore the extra frames. Rich wrappers can opt into KosmoKrator's native model by reading the advertised `kosmoCapabilities` and subscribing to namespaced `kosmo/*` notifications on the same JSON-RPC connection.
 
 ## Quick Start
 
 ```bash
-kosmokrator setup
-kosmokrator acp
-kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
-kosmokrator acp --yolo
+kosmo setup
+kosmo acp
+kosmo acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmo acp --yolo
 ```
 
 ACP uses newline-delimited JSON-RPC over stdin/stdout. Stdout is reserved for protocol frames; logs and diagnostics go to stderr.
@@ -32,8 +32,8 @@ ACP uses newline-delimited JSON-RPC over stdin/stdout. Stdout is reserved for pr
 ```json
 {
   "agent_servers": {
-    "kosmokrator": {
-      "command": "kosmokrator",
+    "kosmo": {
+      "command": "kosmo",
       "args": ["acp"]
     }
   }
@@ -45,8 +45,8 @@ ACP uses newline-delimited JSON-RPC over stdin/stdout. Stdout is reserved for pr
 ```json
 {
   "agents": {
-    "kosmokrator": {
-      "command": "kosmokrator",
+    "kosmo": {
+      "command": "kosmo",
       "args": ["acp"]
     }
   }
@@ -57,8 +57,8 @@ ACP uses newline-delimited JSON-RPC over stdin/stdout. Stdout is reserved for pr
 
 ```plaintext
 acp_providers = {
-  kosmokrator = {
-    command = "kosmokrator",
+  kosmo = {
+    command = "kosmo",
     args = { "acp" }
   }
 }
@@ -79,14 +79,14 @@ acp_providers = {
 | Legacy model switch | Supported | `session/set_model` is accepted for clients that still use the draft model endpoint. |
 | Client MCP servers | Supported for stdio | ACP `mcpServers` become runtime-only MCP overlays for that active session and appear in `app.mcp.*`. |
 | Client filesystem / terminal delegation | Planned | File and shell tools currently execute through KosmoKrator's local tool layer. |
-| KosmoKrator extension events | Supported | Native UI events are emitted as `kosmokrator/*` notifications for wrappers that need terminal-grade state. |
+| KosmoKrator extension events | Supported | Native UI events are emitted as `kosmo/*` notifications for wrappers that need terminal-grade state. |
 | Direct integration calls | Supported | ACP clients can list, describe, and call headless integrations without going through an LLM turn. |
 | Direct MCP calls | Supported | ACP clients can list servers/tools, inspect schemas, call MCP tools, and execute MCP Lua workflows. |
 | Lua execution | Supported | Lua can run against the integration runtime, the MCP runtime, or the combined integration runtime. |
 
 ## KosmoKrator Extensions
 
-The extension layer keeps ACP compatibility while exposing the full KosmoKrator runtime to non-PHP applications. Extension events are JSON-RPC notifications whose method names start with `kosmokrator/`. Every event includes:
+The extension layer keeps ACP compatibility while exposing the full KosmoKrator runtime to non-PHP applications. Extension events are JSON-RPC notifications whose method names start with `kosmo/`. Every event includes:
 
 -   `protocolVersion` — extension protocol version.
 -   `type` — event type without the namespace.
@@ -114,7 +114,7 @@ The response includes:
     "name": "KosmoKrator",
     "version": "..."
   },
-  "kosmokratorCapabilities": {
+  "kosmoCapabilities": {
     "protocolVersion": 1,
     "uiEvents": true,
     "textDeltas": true,
@@ -137,30 +137,30 @@ The response includes:
 
 | Notification | Purpose |
 | --- | --- |
-| `kosmokrator/session_update` | Prompt run started, completed, or cancelled. |
-| `kosmokrator/phase_changed` | Agent phase changed. |
-| `kosmokrator/text_delta` | Assistant response text delta. |
-| `kosmokrator/thinking_delta` | Reasoning or thought delta when available. |
-| `kosmokrator/tool_started` | Tool call was created. |
-| `kosmokrator/tool_progress` | Tool execution status changed. |
-| `kosmokrator/tool_completed` | Tool call completed or failed. |
-| `kosmokrator/permission_requested` | KosmoKrator is asking the ACP client to approve a governed operation. |
-| `kosmokrator/permission_resolved` | The client answered or the request was denied/cancelled. |
-| `kosmokrator/subagent_spawned` | One or more subagents were spawned. |
-| `kosmokrator/subagent_running` | Subagent batch execution started. |
-| `kosmokrator/subagent_tree` | Live subagent tree snapshot for hierarchical UIs. |
-| `kosmokrator/subagent_completed` | Subagent batch completed. |
-| `kosmokrator/subagent_dashboard` | Aggregated subagent dashboard state. |
-| `kosmokrator/usage_updated` | Token and cost counters changed. |
-| `kosmokrator/runtime_changed` | Mode, model, provider, or permission selection changed. |
-| `kosmokrator/integration_event` | Direct integration or Lua operation lifecycle. |
-| `kosmokrator/mcp_event` | Direct MCP operation lifecycle. |
-| `kosmokrator/error` | Agent/runtime error message. |
+| `kosmo/session_update` | Prompt run started, completed, or cancelled. |
+| `kosmo/phase_changed` | Agent phase changed. |
+| `kosmo/text_delta` | Assistant response text delta. |
+| `kosmo/thinking_delta` | Reasoning or thought delta when available. |
+| `kosmo/tool_started` | Tool call was created. |
+| `kosmo/tool_progress` | Tool execution status changed. |
+| `kosmo/tool_completed` | Tool call completed or failed. |
+| `kosmo/permission_requested` | KosmoKrator is asking the ACP client to approve a governed operation. |
+| `kosmo/permission_resolved` | The client answered or the request was denied/cancelled. |
+| `kosmo/subagent_spawned` | One or more subagents were spawned. |
+| `kosmo/subagent_running` | Subagent batch execution started. |
+| `kosmo/subagent_tree` | Live subagent tree snapshot for hierarchical UIs. |
+| `kosmo/subagent_completed` | Subagent batch completed. |
+| `kosmo/subagent_dashboard` | Aggregated subagent dashboard state. |
+| `kosmo/usage_updated` | Token and cost counters changed. |
+| `kosmo/runtime_changed` | Mode, model, provider, or permission selection changed. |
+| `kosmo/integration_event` | Direct integration or Lua operation lifecycle. |
+| `kosmo/mcp_event` | Direct MCP operation lifecycle. |
+| `kosmo/error` | Agent/runtime error message. |
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "kosmokrator/tool_started",
+  "method": "kosmo/tool_started",
   "params": {
     "protocolVersion": 1,
     "type": "tool_started",
@@ -185,7 +185,7 @@ Rich clients should build their tree from `subagent_spawned` and refresh it from
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "kosmokrator/subagent_tree",
+  "method": "kosmo/subagent_tree",
   "params": {
     "type": "subagent_tree",
     "sessionId": "01j...",
@@ -210,8 +210,8 @@ Rich clients should build their tree from `subagent_spawned` and refresh it from
 ACP session IDs are KosmoKrator session IDs. A session created in an editor can be resumed from the CLI, and a terminal-created session can be loaded by an ACP client:
 
 ```bash
-kosmokrator --session &lt;id&gt;
-kosmokrator --resume
+kosmo --session &lt;id&gt;
+kosmo --resume
 ```
 
 ## Permissions
@@ -256,10 +256,10 @@ ACP mode does not have its own credential store. Configure KosmoKrator once with
 
 ```bash
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator providers:configure openai --api-key-stdin --json
+  kosmo providers:configure openai --api-key-stdin --json
 
-kosmokrator settings:set agent.mode edit --global --json
-kosmokrator settings:doctor --json
+kosmo settings:set agent.mode edit --global --json
+kosmo settings:doctor --json
 ```
 
 ## Direct Runtime Methods
@@ -272,7 +272,7 @@ These methods are for applications that need the same headless integration, MCP,
 {
   "jsonrpc": "2.0",
   "id": 10,
-  "method": "kosmokrator/runtime/set",
+  "method": "kosmo/runtime/set",
     "params": {
       "sessionId": "01j...",
       "provider": "openai",
@@ -289,11 +289,11 @@ These methods are for applications that need the same headless integration, MCP,
 {
   "jsonrpc": "2.0",
   "id": 18,
-  "method": "kosmokrator/settings/set",
+  "method": "kosmo/settings/set",
   "params": {
     "sessionId": "01j...",
     "scope": "project",
-    "path": "kosmokrator.tools.default_permission_mode",
+    "path": "kosmo.tools.default_permission_mode",
     "value": "guardian"
   }
 }
@@ -303,7 +303,7 @@ These methods are for applications that need the same headless integration, MCP,
 {
   "jsonrpc": "2.0",
   "id": 19,
-  "method": "kosmokrator/providers/configure",
+  "method": "kosmo/providers/configure",
   "params": {
     "sessionId": "01j...",
     "scope": "global",
@@ -322,7 +322,7 @@ Provider responses never echo secret values. They report whether an API key or b
 {
   "jsonrpc": "2.0",
   "id": 11,
-  "method": "kosmokrator/integrations/list",
+  "method": "kosmo/integrations/list",
   "params": {
     "sessionId": "01j...",
     "query": "plane",
@@ -335,7 +335,7 @@ Provider responses never echo secret values. They report whether an API key or b
 {
   "jsonrpc": "2.0",
   "id": 12,
-  "method": "kosmokrator/integrations/describe",
+  "method": "kosmo/integrations/describe",
   "params": {
     "sessionId": "01j...",
     "function": "plane.list_issues"
@@ -347,7 +347,7 @@ Provider responses never echo secret values. They report whether an API key or b
 {
   "jsonrpc": "2.0",
   "id": 13,
-  "method": "kosmokrator/integrations/call",
+  "method": "kosmo/integrations/call",
   "params": {
     "sessionId": "01j...",
     "function": "plane.list_issues",
@@ -365,7 +365,7 @@ Provider responses never echo secret values. They report whether an API key or b
 {
   "jsonrpc": "2.0",
   "id": 20,
-  "method": "kosmokrator/integrations/configure",
+  "method": "kosmo/integrations/configure",
   "params": {
     "sessionId": "01j...",
     "integration": "plane",
@@ -394,7 +394,7 @@ Integration calls follow configured read/write policy. Set `force: true` only fo
 {
   "jsonrpc": "2.0",
   "id": 14,
-  "method": "kosmokrator/mcp/list_servers",
+  "method": "kosmo/mcp/list_servers",
   "params": {
     "sessionId": "01j..."
   }
@@ -405,7 +405,7 @@ Integration calls follow configured read/write policy. Set `force: true` only fo
 {
   "jsonrpc": "2.0",
   "id": 15,
-  "method": "kosmokrator/mcp/list_tools",
+  "method": "kosmo/mcp/list_tools",
   "params": {
     "sessionId": "01j...",
     "server": "filesystem",
@@ -418,7 +418,7 @@ Integration calls follow configured read/write policy. Set `force: true` only fo
 {
   "jsonrpc": "2.0",
   "id": 16,
-  "method": "kosmokrator/mcp/call_tool",
+  "method": "kosmo/mcp/call_tool",
   "params": {
     "sessionId": "01j...",
     "function": "filesystem.list_allowed_directories",
@@ -433,7 +433,7 @@ Integration calls follow configured read/write policy. Set `force: true` only fo
 {
   "jsonrpc": "2.0",
   "id": 21,
-  "method": "kosmokrator/mcp/add_stdio_server",
+  "method": "kosmo/mcp/add_stdio_server",
   "params": {
     "sessionId": "01j...",
     "scope": "project",
@@ -455,7 +455,7 @@ Integration calls follow configured read/write policy. Set `force: true` only fo
 {
   "jsonrpc": "2.0",
   "id": 22,
-  "method": "kosmokrator/mcp/set_secret",
+  "method": "kosmo/mcp/set_secret",
   "params": {
     "sessionId": "01j...",
     "server": "github",
@@ -473,7 +473,7 @@ MCP direct calls honor project trust and read/write policy. Set `force: true` to
 {
   "jsonrpc": "2.0",
   "id": 17,
-  "method": "kosmokrator/lua/execute",
+  "method": "kosmo/lua/execute",
   "params": {
     "sessionId": "01j...",
     "runtime": "integrations",
@@ -495,7 +495,7 @@ Use `runtime: "integrations"` for the combined integration Lua environment, incl
 -   Stdout is reserved for JSON-RPC frames.
 -   Session IDs are the normal KosmoKrator persisted session IDs.
 -   Supported base ACP methods include `initialize`, `authenticate`, `session/new`, `session/load`, `session/resume`, `session/list`, `session/prompt`, `session/cancel`, `session/close`, `session/set_mode`, `session/set_model`, and `session/set_config_option`.
--   Supported KosmoKrator methods include `kosmokrator/capabilities`, `kosmokrator/runtime/set`, `kosmokrator/settings/set`, `kosmokrator/providers/configure`, `kosmokrator/integrations/list`, `kosmokrator/integrations/describe`, `kosmokrator/integrations/configure`, `kosmokrator/integrations/call`, `kosmokrator/mcp/list_servers`, `kosmokrator/mcp/list_tools`, `kosmokrator/mcp/schema`, `kosmokrator/mcp/add_stdio_server`, `kosmokrator/mcp/set_secret`, `kosmokrator/mcp/call_tool`, and `kosmokrator/lua/execute`.
+-   Supported KosmoKrator methods include `kosmo/capabilities`, `kosmo/runtime/set`, `kosmo/settings/set`, `kosmo/providers/configure`, `kosmo/integrations/list`, `kosmo/integrations/describe`, `kosmo/integrations/configure`, `kosmo/integrations/call`, `kosmo/mcp/list_servers`, `kosmo/mcp/list_tools`, `kosmo/mcp/schema`, `kosmo/mcp/add_stdio_server`, `kosmo/mcp/set_secret`, `kosmo/mcp/call_tool`, and `kosmo/lua/execute`.
 -   Tool calls are streamed as ACP `tool_call` and `tool_call_update` events.
 -   Assistant text is streamed as `agent_message_chunk`.
 -   Reasoning/notices use `agent_thought_chunk`.

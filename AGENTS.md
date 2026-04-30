@@ -5,15 +5,15 @@ AI coding agent for the terminal. Mythology-themed CLI built with PHP 8.4, Symfo
 ## Quick Start
 
 ```bash
-bin/kosmokrator              # Run with auto-detected renderer (TUI if available, ANSI fallback)
-bin/kosmokrator --renderer=ansi   # Force ANSI mode
-bin/kosmokrator --no-animation    # Skip the animated intro
+bin/kosmo              # Run with auto-detected renderer (TUI if available, ANSI fallback)
+bin/kosmo --renderer=ansi   # Force ANSI mode
+bin/kosmo --no-animation    # Skip the animated intro
 ```
 
 ## Architecture
 
 ```
-bin/kosmokrator → Kernel → AgentCommand → AgentSessionBuilder → AgentLoop (REPL)
+bin/kosmo → Kernel → AgentCommand → AgentSessionBuilder → AgentLoop (REPL)
                                             ├── ToolExecutor → tools + PermissionEvaluator
                                             ├── ContextManager → compaction, pruning, system prompt
                                             ├── StuckDetector → headless loop convergence
@@ -97,7 +97,7 @@ npm run build
 
 ### Config
 
-Config loaded from `config/kosmokrator.yaml`, overridable via `~/.kosmokrator/config.yaml` or `.kosmokrator.yaml` in the working directory.
+Config loaded from `config/kosmo.yaml`, overridable via `~/.kosmo/config.yaml`, `.kosmo/config.yaml`, or `.kosmo.yaml` in the working directory.
 
 `README.md`, `docs/architecture/overview.md`, `docs/architecture/permission-modes.md`, and `AGENTS.md` are the main current-truth docs. Files in `docs/proposals/` are design notes. Actionable backlog is tracked in Plane, not in repo audit/todo docs.
 
@@ -107,12 +107,12 @@ When adding or changing user-facing features, update the website docs in `websit
 
 KosmoKrator has first-class MCP support for headless usage and Lua code mode.
 MCP servers are not registered as native model tools; they are exposed through
-`kosmokrator mcp:*`, dynamic `kosmokrator mcp:<server>` shortcuts, and Lua
+`kosmo mcp:*`, dynamic `kosmo mcp:<server>` shortcuts, and Lua
 namespaces under `app.mcp.*`.
 
 - Portable project config: `.mcp.json` with top-level `mcpServers`
 - Compatibility reads: `.vscode/mcp.json` and `.cursor/mcp.json` with top-level `servers`
-- Global config: `~/.kosmokrator/mcp.json`
+- Global config: `~/.kosmo/mcp.json`
 - Kosmo-only policy: `mcp.*` YAML settings for trust and read/write permissions
 - Secrets: `mcp:secret:set/list/unset`, referenced with `${KOSMO_SECRET:mcp.server.key}`
 - Trust: project MCP servers require `mcp:trust <server> --project --json` before normal discovery/execution
@@ -121,14 +121,14 @@ namespaces under `app.mcp.*`.
 Common usage:
 
 ```bash
-kosmokrator mcp:list --json
-kosmokrator mcp:add github --project --type=stdio --command=github-mcp-server --env GITHUB_TOKEN --json
-kosmokrator mcp:trust github --project --json
-kosmokrator mcp:tools github --json
-kosmokrator mcp:schema github.search_repositories --json
-kosmokrator mcp:call github.search_repositories --query="kosmokrator" --json
-kosmokrator mcp:github search_repositories --query="kosmokrator" --json
-kosmokrator mcp:lua workflow.lua --json
+kosmo mcp:list --json
+kosmo mcp:add github --project --type=stdio --command=github-mcp-server --env GITHUB_TOKEN --json
+kosmo mcp:trust github --project --json
+kosmo mcp:tools github --json
+kosmo mcp:schema github.search_repositories --json
+kosmo mcp:call github.search_repositories --query="kosmokrator" --json
+kosmo mcp:github search_repositories --query="kosmokrator" --json
+kosmo mcp:lua workflow.lua --json
 ```
 
 ## ACP CLI
@@ -137,9 +137,9 @@ KosmoKrator can run as an Agent Client Protocol server over newline-delimited
 JSON-RPC stdio:
 
 ```bash
-kosmokrator acp
-kosmokrator acp --cwd /path/to/project --mode edit --permission-mode guardian
-kosmokrator acp --yolo
+kosmo acp
+kosmo acp --cwd /path/to/project --mode edit --permission-mode guardian
+kosmo acp --yolo
 ```
 
 ACP mode reuses the normal agent runtime, sessions, permissions, provider
@@ -148,7 +148,7 @@ credentials, Lua, integrations, MCP, memory, tasks, and subagents. Client
 written to project MCP config.
 
 ACP also exposes KosmoKrator-native extension notifications and methods under
-the `kosmokrator/*` JSON-RPC namespace. Rich UI wrappers should use these for
+the `kosmo/*` JSON-RPC namespace. Rich UI wrappers should use these for
 phase changes, tool lifecycle, permission lifecycle, subagent trees/dashboards,
 direct integration/MCP calls, Lua execution, and runtime configuration while
 keeping ordinary ACP compatibility.
@@ -164,7 +164,7 @@ php vendor/bin/box compile      # Uses box.json config
 - PSR-4 autoloading: `Kosmokrator\` → `src/`
 - Strict types everywhere
 - No tool round limits — agent runs until the LLM finishes
-- Tool approval required for: file_write, file_edit, bash (configurable in `config/kosmokrator.yaml`)
+- Tool approval required for: file_write, file_edit, bash (configurable in `config/kosmo.yaml`)
 - Mythology-themed UI: planetary symbols for tool icons, mythological thinking phrases, cosmic spinner animations
 - ANSI renderer uses league/commonmark for markdown parsing + tempest/highlight for code blocks
 - TUI renderer uses Symfony TUI's MarkdownWidget with custom stylesheet
@@ -289,7 +289,7 @@ The `/agents` command shows a live dashboard (`SwarmDashboardWidget` in TUI, `fo
 
 ### Configuration
 
-In `config/kosmokrator.yaml`:
+In `config/kosmo.yaml`:
 
 ```yaml
 agent:

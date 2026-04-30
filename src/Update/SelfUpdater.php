@@ -55,7 +55,7 @@ final class SelfUpdater implements SelfUpdaterInterface
 
         @unlink($backupPath);
 
-        return "Updated to v{$targetVersion}. Restart KosmoKrator to use the new version.";
+        return "Updated to v{$targetVersion}. Restart kosmo to use the new version.";
     }
 
     public function installationMethod(): string
@@ -220,7 +220,7 @@ final class SelfUpdater implements SelfUpdaterInterface
         // Parse version from the download context — we verify against the checksum file
         // that lives alongside the asset in the same release
         $binaryDir = dirname($filePath);
-        $checksumPath = $binaryDir.'/.kosmokrator-checksums.tmp';
+        $checksumPath = $binaryDir.'/.kosmo-checksums.tmp';
 
         // We need the base URL — derive from asset name embedded in caller context
         // For simplicity, attempt checksum verification but don't fail if checksums unavailable

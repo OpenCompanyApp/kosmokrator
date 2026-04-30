@@ -125,8 +125,8 @@ try {
 
     // Apply audio model/provider overrides from config
     $appConfig = $container->make('config');
-    $audioProvider = $appConfig->get('kosmokrator.agent.audio_provider');
-    $audioModel = $appConfig->get('kosmokrator.agent.audio_model');
+    $audioProvider = $appConfig->get('kosmo.agent.audio_provider');
+    $audioModel = $appConfig->get('kosmo.agent.audio_model');
 
     if ($audioProvider !== null && $audioProvider !== '') {
         $llm->setProvider($audioProvider);

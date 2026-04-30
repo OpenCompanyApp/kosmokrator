@@ -10,7 +10,7 @@ Provider configuration can be performed interactively, through `setup`, through 
 
 ## Built-in Providers
 
-Every built-in provider is ready to use after entering credentials. The live catalog is large and is sourced from the application provider registry, so use `kosmokrator providers:list --json` and `kosmokrator providers:models <provider> --json` as the source of truth. The table below highlights common providers and their setup shape.
+Every built-in provider is ready to use after entering credentials. The live catalog is large and is sourced from the application provider registry, so use `kosmo providers:list --json` and `kosmo providers:models <provider> --json` as the source of truth. The table below highlights common providers and their setup shape.
 
 | Provider ID | Label | Auth Mode | Notes |
 | --- | --- | --- | --- |
@@ -43,7 +43,7 @@ Every built-in provider is ready to use after entering credentials. The live cat
 The easiest way to configure credentials is the interactive setup command, which walks you through provider selection and API key entry:
 
 ```bash
-kosmokrator setup
+kosmo setup
 ```
 
 The same setup can run headlessly. Use this form for containers, CI, and remote machines:
@@ -51,16 +51,16 @@ The same setup can run headlessly. Use this form for containers, CI, and remote 
 ```bash
 # Configure an API-key provider and default model without exposing the key in argv
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator setup --provider openai --model gpt-5.4-mini \
+  kosmo setup --provider openai --model gpt-5.4-mini \
   --api-key-stdin --global --json
 
 # Equivalent provider-specific command
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator providers:configure openai --model gpt-5.4-mini \
+  kosmo providers:configure openai --model gpt-5.4-mini \
   --api-key-stdin --global --json
 
 # OAuth providers can use device login when available
-kosmokrator providers:configure codex --device --global --json
+kosmo providers:configure codex --device --global --json
 ```
 
 ### Headless provider discovery
@@ -69,33 +69,33 @@ Provider commands are designed for agents and scripts: they expose stable JSON, 
 
 ```bash
 # List providers, auth mode, source, and configured status
-kosmokrator providers:list --json
+kosmo providers:list --json
 
 # Show one provider's status
-kosmokrator providers:status openai --json
+kosmo providers:status openai --json
 
 # List advertised models for a provider
-kosmokrator providers:models openai --json
+kosmo providers:models openai --json
 
 # Clear a stored API key
-kosmokrator providers:logout openai --json
+kosmo providers:logout openai --json
 ```
 
 Provider commands reject unknown provider IDs with `success: false` and a non-zero exit code. This keeps automation from mistaking an empty result for a valid provider.
 
 ### API key storage
 
-API keys entered through the setup wizard, `providers:configure`, or `secrets:set` are stored in the local SQLite database at `~/.kosmokrator/data/kosmokrator.db`. Keys are never written to plain-text config files and JSON output only reports masked/configured status.
+API keys entered through the setup wizard, `providers:configure`, or `secrets:set` are stored in the local SQLite database at `~/.kosmo/data/kosmo.db`. Keys are never written to plain-text config files and JSON output only reports masked/configured status.
 
 ```bash
 # Set a provider key without putting it in argv history
 printf %s "$OPENAI_API_KEY" | \
-  kosmokrator secrets:set provider.openai.api_key --stdin --json
+  kosmo secrets:set provider.openai.api_key --stdin --json
 
 # Check managed secret status
-kosmokrator secrets:status provider.openai.api_key --json
-kosmokrator secrets:list --json
-kosmokrator secrets:unset provider.openai.api_key --json
+kosmo secrets:status provider.openai.api_key --json
+kosmo secrets:list --json
+kosmo secrets:unset provider.openai.api_key --json
 ```
 
 ### Environment variables
@@ -125,7 +125,7 @@ Database-stored keys always take priority over environment variables. If you set
 
 The `codex` provider uses a browser-based OAuth device login flow tied to your ChatGPT subscription. When you select Codex as your provider:
 
-1.  KosmoKrator starts a local callback server on port `9876` (configurable in `config/kosmokrator.yaml`).
+1.  KosmoKrator starts a local callback server on port `9876` (configurable in `config/kosmo.yaml`).
 2.  Your browser opens to a ChatGPT authorization page.
 3.  After granting access, the OAuth tokens are stored and refreshed automatically.
 
@@ -186,7 +186,7 @@ Any OpenAI-compatible API endpoint can be added as a custom provider. This is us
 Or create/update the provider headlessly:
 
 ```bash
-printf %s "$CORP_LLM_API_KEY" | kosmokrator providers:custom:upsert corp_llm \
+printf %s "$CORP_LLM_API_KEY" | kosmo providers:custom:upsert corp_llm \
   --label "Corporate LLM" \
   --url https://llm.corp.example/v1 \
   --model llama-3.1-70b \
@@ -195,8 +195,8 @@ printf %s "$CORP_LLM_API_KEY" | kosmokrator providers:custom:upsert corp_llm \
   --api-key-stdin \
   --global --json
 
-kosmokrator providers:custom:list --json
-kosmokrator providers:custom:delete corp_llm --json
+kosmo providers:custom:list --json
+kosmo providers:custom:delete corp_llm --json
 ```
 
 For richer definitions, pass JSON on stdin. The payload may include `id`, `scope`, `api_key`, and a `definition` object with the same fields used in YAML (`label`, `driver`, `auth`, `url`, `default_model`, `modalities`, and `models`).

@@ -61,7 +61,9 @@ final class McpGatewayProfileFactory
             return [];
         }
 
-        $value = $this->settings->getRaw("mcp_gateway.profiles.{$profileName}")
+        $value = $this->settings->getRaw("kosmo.mcp_gateway.profiles.{$profileName}")
+            ?? $this->settings->getRaw("mcp_gateway.profiles.{$profileName}")
+            ?? $this->settings->getRaw("kosmo.mcp_proxy.profiles.{$profileName}")
             ?? $this->settings->getRaw("mcp_proxy.profiles.{$profileName}")
             ?? [];
 

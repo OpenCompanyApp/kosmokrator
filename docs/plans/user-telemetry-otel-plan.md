@@ -227,11 +227,11 @@ environment variables, API keys, project names, hostnames, usernames, or git rem
 Commands:
 
 ```bash
-bin/kosmokrator telemetry status
-bin/kosmokrator telemetry enable
-bin/kosmokrator telemetry disable
-bin/kosmokrator telemetry inspect-last
-bin/kosmokrator telemetry flush
+bin/kosmo telemetry status
+bin/kosmo telemetry enable
+bin/kosmo telemetry disable
+bin/kosmo telemetry inspect-last
+bin/kosmo telemetry flush
 ```
 
 `inspect-last` should print the exact sanitized payload that would be sent. This makes the privacy model auditable by users.

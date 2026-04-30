@@ -318,7 +318,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
     public function renderIntro(bool $animated): void
     {
         $intro = new AnsiIntro;
-        $noAnim = getenv('KOSMOKRATOR_NO_ANIM') === '1';
+        $noAnim = getenv('KOSMO_NO_ANIM') === '1' || getenv('KOSMOKRATOR_NO_ANIM') === '1';
 
         if ($noAnim || ! $animated) {
             $intro->renderStatic();

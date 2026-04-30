@@ -99,7 +99,7 @@ final class WebProviderRegistryTest extends TestCase
             ],
         ];
 
-        return new Repository(['kosmokrator' => array_replace_recursive($base, $override)]);
+        return new Repository(['kosmo' => array_replace_recursive($base, $override)]);
     }
 }
 

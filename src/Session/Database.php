@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+use Kosmokrator\Settings\ConfigCompatibility;
+use Kosmokrator\Settings\SettingsPaths;
+
 /**
  * SQLite-backed persistence layer for sessions, messages, settings, and memories.
  * Manages schema creation and migration, providing a shared PDO connection for the Session subsystem.
@@ -16,18 +19,26 @@ class Database
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
-     *                             Defaults to ~/.kosmokrator/data/kosmokrator.db.
+     *                             Defaults to ~/.kosmo/data/kosmo.db.
      */
     public function __construct(?string $path = null)
     {
         $initLock = null;
         if ($path === null) {
-            $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
-            $dir = $home.'/.kosmokrator/data';
+            $dir = SettingsPaths::globalDirectory().'/data';
             if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
                 throw new \RuntimeException("Unable to create data directory: {$dir}");
             }
-            $path = $dir.'/kosmokrator.db';
+            $path = $dir.'/kosmo.db';
+            $legacyPath = SettingsPaths::globalDirectory(ConfigCompatibility::LEGACY_ROOT).'/data/kosmokrator.db';
+            if (! file_exists($path) && file_exists($legacyPath)) {
+                @copy($legacyPath, $path);
+                foreach (['-wal', '-shm'] as $suffix) {
+                    if (file_exists($legacyPath.$suffix)) {
+                        @copy($legacyPath.$suffix, $path.$suffix);
+                    }
+                }
+            }
         }
 
         $isMemory = $path === ':memory:';

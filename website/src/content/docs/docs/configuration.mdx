@@ -10,27 +10,28 @@ KosmoKrator uses a layered configuration system that lets you set global default
 
 Configuration is loaded from up to three YAML sources, merged in order. Later sources override earlier ones on a per-key basis.
 
-1.  **Bundled defaults** — `config/kosmokrator.yaml` inside the application. Ships with sane defaults for every setting. You never need to edit this file; it exists as the baseline.
-2.  **User global config** — `~/.kosmokrator/config.yaml`. Your personal overrides that apply to every project. This is the right place for API keys, preferred provider/model, theme choice, and permission mode.
-3.  **Project-level config** — discovered by walking up from the current working directory to the filesystem root. At each directory level, KosmoKrator checks for `.kosmokrator/config.yaml` (priority) and `.kosmokrator.yaml`. The first match found wins, giving you per-project overrides. Use this to set a different model for a specific repo, enable plan mode by default, or adjust subagent concurrency for large monorepos.
+1.  **Bundled defaults** — `config/kosmo.yaml` inside the application. Ships with sane defaults for every setting. You never need to edit this file; it exists as the baseline.
+2.  **User global config** — `~/.kosmo/config.yaml`. Your personal overrides that apply to every project. This is the right place for API keys, preferred provider/model, theme choice, and permission mode.
+3.  **Project-level config** — discovered by walking up from the current working directory to the filesystem root. At each directory level, KosmoKrator checks for `.kosmo/config.yaml` (priority) and `.kosmo.yaml`. The first match found wins, giving you per-project overrides. Use this to set a different model for a specific repo, enable plan mode by default, or adjust subagent concurrency for large monorepos.
 
-**Tip:** The priority chain is **project > global > bundled**. A setting in a project-level config always wins over the same key in `~/.kosmokrator/config.yaml`, which in turn overrides the bundled default.
+**Tip:** The priority chain is **project > global > bundled**. A setting in a project-level config always wins over the same key in `~/.kosmo/config.yaml`, which in turn overrides the bundled default.
 
 ### Environment Variable Expansion
 
 Any value in your YAML files can reference environment variables using the `${VAR_NAME}` syntax. This is especially useful for API keys and paths that differ between machines.
 
 ```bash
-agent:
-  default_provider: anthropic
+kosmo:
+  agent:
+    default_provider: anthropic
 
 # API key pulled from the shell environment
 # (set in ~/.zshrc, ~/.bashrc, or your CI secrets)
 anthropic:
   api_key: ${ANTHROPIC_API_KEY}
 
-audio:
-  soundfont: ${HOME}/.kosmokrator/soundfonts/FluidR3_GM.sf2
+  audio:
+    soundfont: ${HOME}/.kosmo/soundfonts/FluidR3_GM.sf2
 ```
 
 If a referenced variable is not set, it is replaced with an empty string. This means unset variables are silently removed rather than causing an error at load time.
@@ -52,18 +53,18 @@ Every setting exposed in `/settings` is also available from a non-interactive sh
 
 ```bash
 # Discover categories, keys, current values, sources, effects, and YAML paths
-kosmokrator settings:list --json
-kosmokrator settings:list --category permissions --json
+kosmo settings:list --json
+kosmo settings:list --category permissions --json
 
 # Inspect one setting and enumerate valid options
-kosmokrator settings:get agent.default_provider --json
-kosmokrator settings:options agent.default_provider --json
-kosmokrator settings:options agent.default_model --provider openai --json
+kosmo settings:get agent.default_provider --json
+kosmo settings:options agent.default_provider --json
+kosmo settings:options agent.default_model --provider openai --json
 
 # Write one value to global or project config
-kosmokrator settings:set agent.mode plan --global --json
-kosmokrator settings:set tools.denied_tools "bash,file_write" --project --json
-kosmokrator settings:set agent.default_model gpt-5.4-mini --provider openai --global --json
+kosmo settings:set agent.mode plan --global --json
+kosmo settings:set tools.denied_tools "bash,file_write" --project --json
+kosmo settings:set agent.default_model gpt-5.4-mini --provider openai --global --json
 
 # Apply multiple settings atomically from JSON
 jq -n '{
@@ -73,14 +74,14 @@ jq -n '{
     "agent.default_model": "gpt-5.4-mini",
     "tools.default_permission_mode": "guardian"
   }
-}' | kosmokrator settings:apply --stdin-json --json
+}' | kosmo settings:apply --stdin-json --json
 
 # Remove an override so lower-priority config/defaults take over
-kosmokrator settings:unset agent.mode --project --json
+kosmo settings:unset agent.mode --project --json
 
 # Diagnose whether headless runs are ready
-kosmokrator settings:doctor --json
-kosmokrator settings:examples --json
+kosmo settings:doctor --json
+kosmo settings:examples --json
 ```
 
 Write responses include both the value written to the requested scope and the effective value after the normal project/global/default priority chain is applied. This matters when, for example, a global write is masked by a project override.
@@ -169,7 +170,7 @@ The permission system controls which tool calls require explicit user approval.
 
 ### Integrations
 
-KosmoKrator discovers installed OpenCompany integration packages from your `composer.lock`. Current packages may use either the newer `opencompanyapp/integration-*` prefix or the legacy `opencompanyapp/ai-tool-*` prefix. Each integration exposes Lua-callable API functions via `app.integrations.{name}` and headless shell commands via `kosmokrator integrations:*`. Integration settings are managed at runtime through `/settings` under the **Integrations** category. See [Integrations CLI](/docs/integrations) for the full headless command and Lua reference.
+KosmoKrator discovers installed OpenCompany integration packages from your `composer.lock`. Current packages may use either the newer `opencompanyapp/integration-*` prefix or the legacy `opencompanyapp/ai-tool-*` prefix. Each integration exposes Lua-callable API functions via `app.integrations.{name}` and headless shell commands via `kosmo integrations:*`. Integration settings are managed at runtime through `/settings` under the **Integrations** category. See [Integrations CLI](/docs/integrations) for the full headless command and Lua reference.
 
 | Setting | Type | Default | Description | Effect |
 | --- | --- | --- | --- | --- |
@@ -182,7 +183,7 @@ KosmoKrator discovers installed OpenCompany integration packages from your `comp
 
 ### MCP
 
-MCP server definitions intentionally live in JSON so projects can share config with other coding agents. KosmoKrator reads global `~/.kosmokrator/mcp.json`, project `.vscode/mcp.json`, project `.cursor/mcp.json`, and project `.mcp.json`. The portable shape is a top-level `mcpServers` object; VS Code/Cursor compatibility files may use top-level `servers`.
+MCP server definitions intentionally live in JSON so projects can share config with other coding agents. KosmoKrator reads global `~/.kosmo/mcp.json`, project `.vscode/mcp.json`, project `.cursor/mcp.json`, and project `.mcp.json`. The portable shape is a top-level `mcpServers` object; VS Code/Cursor compatibility files may use top-level `servers`.
 
 ```json
 {
@@ -202,19 +203,20 @@ Kosmo-only policy stays in YAML config because trust and permissions should not 
 
 | Setting | Type | Default | Description | Effect |
 | --- | --- | --- | --- | --- |
-| `mcp.permissions_default` | choice: `allow`, `ask`, `deny` | `ask` | Default read/write policy for MCP tool operations not explicitly configured. | applies now |
-| `mcp.servers.SERVER.permissions.read` | choice: `allow`, `ask`, `deny` | _inherits default_ | Read policy for one MCP server. Also applies to resources and prompts. | applies now |
-| `mcp.servers.SERVER.permissions.write` | choice: `allow`, `ask`, `deny` | _inherits default_ | Write policy for one MCP server. Tools without MCP `readOnlyHint` are treated as write. | applies now |
-| `mcp.trust.SERVER.fingerprint` | string | _unset_ | Fingerprint written by `mcp:trust` after reviewing a project MCP command. | applies now |
+| `kosmo.mcp.permissions_default` | choice: `allow`, `ask`, `deny` | `ask` | Default read/write policy for MCP tool operations not explicitly configured. | applies now |
+| `kosmo.mcp.servers.SERVER.permissions.read` | choice: `allow`, `ask`, `deny` | _inherits default_ | Read policy for one MCP server. Also applies to resources and prompts. | applies now |
+| `kosmo.mcp.servers.SERVER.permissions.write` | choice: `allow`, `ask`, `deny` | _inherits default_ | Write policy for one MCP server. Tools without MCP `readOnlyHint` are treated as write. | applies now |
+| `kosmo.mcp.trust.SERVER.fingerprint` | string | _unset_ | Fingerprint written by `mcp:trust` after reviewing a project MCP command. | applies now |
 
 ```yaml
-mcp:
-  permissions_default: ask
-  servers:
-    github:
-      permissions:
-        read: allow
-        write: ask
+kosmo:
+  mcp:
+    permissions_default: ask
+    servers:
+      github:
+        permissions:
+          read: allow
+          write: ask
 ```
 
 Configure headlessly with `mcp:add`, `mcp:trust`, `mcp:secret:set`, and `settings:set`. See [MCP](/docs/mcp) for the full command reference.
@@ -250,7 +252,7 @@ kosmokrator web:doctor --json
 
 ### Gateway
 
-The Gateway category controls external chat surfaces. Today the shipped gateway is Telegram, started with `kosmokrator gateway:telegram`. Gateway state lives partly in normal config and partly in the local secret store, so you usually manage it through `/settings` rather than by editing YAML directly.
+The Gateway category controls external chat surfaces. Today the shipped gateway is Telegram, started with `kosmo gateway:telegram`. Gateway state lives partly in normal config and partly in the local secret store, so you usually manage it through `/settings` rather than by editing YAML directly.
 
 | Setting | Type | Default | Description | Effect |
 | --- | --- | --- | --- | --- |
@@ -268,7 +270,7 @@ The Gateway category controls external chat surfaces. Today the shipped gateway 
 | `gateway.telegram.free_response_chats` | list | _empty_ | Chats that are allowed to receive normal free-form responses without mention gating. | next session |
 | `gateway.telegram.poll_timeout_seconds` | number | `20` | Long-poll timeout for the Telegram bot loop. | next session |
 
-**Telegram token:** The bot token is managed through `/settings → Gateway` and stored outside normal YAML by default. You can also provide it via `KOSMOKRATOR_TELEGRAM_BOT_TOKEN`.
+**Telegram token:** The bot token is managed through `/settings → Gateway` and stored outside normal YAML by default. You can also provide it via `KOSMO_TELEGRAM_BOT_TOKEN`.
 
 ### Codex
 
@@ -303,7 +305,7 @@ KosmoKrator can compose and play a short musical piece after each agent response
 | Setting | Type | Default | Description | Effect |
 | --- | --- | --- | --- | --- |
 | `audio.completion_sound` | toggle | `off` | Compose and play a short musical piece after each agent response. The composition reflects the nature of the completed work. | applies now |
-| `audio.soundfont` | text (file path) | `~/.kosmokrator/soundfonts/FluidR3_GM.sf2` | Path to a SoundFont (.sf2) file for MIDI playback. FluidR3 GM is recommended for a good general-purpose sound set. | applies now |
+| `audio.soundfont` | text (file path) | `~/.kosmo/soundfonts/FluidR3_GM.sf2` | Path to a SoundFont (.sf2) file for MIDI playback. FluidR3 GM is recommended for a good general-purpose sound set. | applies now |
 | `audio.llm_timeout` | number (seconds) | `60` | Maximum seconds to wait for the AI to compose a musical piece before falling back to a built-in omen sound. | applies now |
 | `audio.max_duration` | number (seconds) | `8` | Maximum length of the composed musical piece in seconds. | applies now |
 | `audio.max_retries` | number | `1` | Number of times to retry if the LLM fails to generate a valid music composition script. | applies now |
@@ -312,37 +314,38 @@ KosmoKrator can compose and play a short musical piece after each agent response
 
 ## YAML Configuration Examples
 
-Below are complete `~/.kosmokrator/config.yaml` examples for common setups. Copy one as your starting point and adjust to taste.
+Below are complete `~/.kosmo/config.yaml` examples for common setups. Copy one as your starting point and adjust to taste.
 
 ### Anthropic (Claude)
 
 ```bash
-# ~/.kosmokrator/config.yaml — Anthropic Claude setup
-agent:
-  default_provider: anthropic
-  default_model: claude-sonnet-4-20250514
-  temperature: 0.0
-  max_retries: 3
-  reasoning_effort: medium
-  mode: edit
+# ~/.kosmo/config.yaml — Anthropic Claude setup
+kosmo:
+  agent:
+    default_provider: anthropic
+    default_model: claude-sonnet-4-20250514
+    temperature: 0.0
+    max_retries: 3
+    reasoning_effort: medium
+    mode: edit
 
-  # Use a cheaper model for subagents
-  subagent_provider: anthropic
-  subagent_model: claude-haiku-4-20250414
-  subagent_max_depth: 3
-  subagent_concurrency: 8
+    # Use a cheaper model for subagents
+    subagent_provider: anthropic
+    subagent_model: claude-haiku-4-20250414
+    subagent_max_depth: 3
+    subagent_concurrency: 8
 
-ui:
-  renderer: auto
-  intro_animated: true
-  show_reasoning: false
+  ui:
+    renderer: auto
+    intro_animated: true
+    show_reasoning: false
 
-tools:
-  default_permission_mode: guardian
+  tools:
+    default_permission_mode: guardian
 
-context:
-  auto_compact: true
-  memories: true
+  context:
+    auto_compact: true
+    memories: true
 ```
 
 **Tip:** Set `ANTHROPIC_API_KEY` in your shell environment rather than putting it in the YAML file. KosmoKrator reads it automatically.
@@ -350,47 +353,49 @@ context:
 ### OpenAI
 
 ```bash
-# ~/.kosmokrator/config.yaml — OpenAI setup
-agent:
-  default_provider: openai
-  default_model: gpt-4.1
-  temperature: 0.0
-  max_retries: 3
-  reasoning_effort: off
+# ~/.kosmo/config.yaml — OpenAI setup
+kosmo:
+  agent:
+    default_provider: openai
+    default_model: gpt-4.1
+    temperature: 0.0
+    max_retries: 3
+    reasoning_effort: off
 
-  subagent_provider: openai
-  subagent_model: gpt-4.1-mini
+    subagent_provider: openai
+    subagent_model: gpt-4.1-mini
 
-ui:
-  renderer: auto
-  intro_animated: true
+  ui:
+    renderer: auto
+    intro_animated: true
 
-tools:
-  default_permission_mode: guardian
+  tools:
+    default_permission_mode: guardian
 ```
 
 ### Local Ollama
 
 ```bash
-# ~/.kosmokrator/config.yaml — Local Ollama setup
-agent:
-  default_provider: ollama
-  default_model: qwen3:32b
-  temperature: 0.0
-  max_retries: 0          # unlimited retries (local server may restart)
+# ~/.kosmo/config.yaml — Local Ollama setup
+kosmo:
+  agent:
+    default_provider: ollama
+    default_model: qwen3:32b
+    temperature: 0.0
+    max_retries: 0          # unlimited retries (local server may restart)
 
-  # Smaller model for subagents to stay within local resources
-  subagent_provider: ollama
-  subagent_model: qwen3:8b
-  subagent_max_depth: 2
-  subagent_concurrency: 3
+    # Smaller model for subagents to stay within local resources
+    subagent_provider: ollama
+    subagent_model: qwen3:8b
+    subagent_max_depth: 2
+    subagent_concurrency: 3
 
-ui:
-  renderer: auto
-  intro_animated: false    # skip animation for quick iteration
+  ui:
+    renderer: auto
+    intro_animated: false    # skip animation for quick iteration
 
-tools:
-  default_permission_mode: prometheus   # auto-approve for local-only use
+  tools:
+    default_permission_mode: prometheus   # auto-approve for local-only use
 ```
 
 **Tip:** With local models, keep subagent concurrency low to avoid saturating your GPU. A concurrency of 2–4 is typically the sweet spot for consumer hardware.
@@ -398,22 +403,23 @@ tools:
 ### Custom / OpenAI-Compatible Provider
 
 ```bash
-# ~/.kosmokrator/config.yaml — Custom endpoint
-agent:
-  default_provider: custom
-  default_model: my-fine-tuned-model
-  temperature: 0.2
-  max_retries: 5
+# ~/.kosmo/config.yaml — Custom endpoint
+kosmo:
+  agent:
+    default_provider: custom
+    default_model: my-fine-tuned-model
+    temperature: 0.2
+    max_retries: 5
 
-  # Main agent uses the custom provider, subagents use OpenAI
-  subagent_provider: openai
-  subagent_model: gpt-4.1-mini
+    # Main agent uses the custom provider, subagents use OpenAI
+    subagent_provider: openai
+    subagent_model: gpt-4.1-mini
 
-ui:
-  renderer: ansi    # force ANSI for SSH sessions
+  ui:
+    renderer: ansi    # force ANSI for SSH sessions
 
-tools:
-  default_permission_mode: guardian
+  tools:
+    default_permission_mode: guardian
 ```
 
 Custom providers that expose an OpenAI-compatible API can be configured by registering them in the provider setup. Use `/settings` under the **Provider Setup** category to add the base URL and API key.
@@ -421,35 +427,36 @@ Custom providers that expose an OpenAI-compatible API can be configured by regis
 ### Multi-Provider Mix
 
 ```bash
-# ~/.kosmokrator/config.yaml — Use different providers at each depth
-agent:
-  default_provider: anthropic
-  default_model: claude-sonnet-4-20250514
-  temperature: 0.0
-  reasoning_effort: high
+# ~/.kosmo/config.yaml — Use different providers at each depth
+kosmo:
+  agent:
+    default_provider: anthropic
+    default_model: claude-sonnet-4-20250514
+    temperature: 0.0
+    reasoning_effort: high
 
-  # Depth-1 subagents: fast Anthropic model
-  subagent_provider: anthropic
-  subagent_model: claude-haiku-4-20250414
+    # Depth-1 subagents: fast Anthropic model
+    subagent_provider: anthropic
+    subagent_model: claude-haiku-4-20250414
 
-  # Depth-2+ subagents: cheap OpenAI for bulk exploration
-  subagent_depth2_provider: openai
-  subagent_depth2_model: gpt-4.1-mini
+    # Depth-2+ subagents: cheap OpenAI for bulk exploration
+    subagent_depth2_provider: openai
+    subagent_depth2_model: gpt-4.1-mini
 
-  subagent_max_depth: 3
-  subagent_concurrency: 12
+    subagent_max_depth: 3
+    subagent_concurrency: 12
 
-  # Audio composition uses a small model to save cost
-  audio_provider: openai
-  audio_model: gpt-4.1-nano
+    # Audio composition uses a small model to save cost
+    audio_provider: openai
+    audio_model: gpt-4.1-nano
 
-audio:
-  completion_sound: true
-  soundfont: ${HOME}/.kosmokrator/soundfonts/FluidR3_GM.sf2
-  max_duration: 6
+  audio:
+    completion_sound: true
+    soundfont: ${HOME}/.kosmo/soundfonts/FluidR3_GM.sf2
+    max_duration: 6
 
-tools:
-  default_permission_mode: guardian
+  tools:
+    default_permission_mode: guardian
 ```
 
 ## Environment Variables
@@ -475,149 +482,151 @@ Reference any environment variable in your YAML config with the `${VAR_NAME}` sy
 
 ```bash
 # Paths and keys from environment
-audio:
-  soundfont: ${HOME}/.kosmokrator/soundfonts/FluidR3_GM.sf2
+kosmo:
+  audio:
+    soundfont: ${HOME}/.kosmo/soundfonts/FluidR3_GM.sf2
 
-session:
-  history_dir: ${KOSMOKRATOR_DATA_DIR}/sessions
+  session:
+    history_dir: ${KOSMO_DATA_DIR}/sessions
 ```
 
 ## Full YAML Structure Reference
 
-For reference, here is the complete top-level structure of `kosmokrator.yaml` with all sections:
+For reference, here is the complete structure for user and project config files. The bundled `config/kosmo.yaml` stores the same settings as defaults, while `~/.kosmo/config.yaml` and `.kosmo/config.yaml` should place KosmoKrator runtime settings under the canonical `kosmo:` root.
 
 ```yaml
-agent:
-  default_provider: ...       # LLM provider name
-  default_model: ...          # Model identifier
-  temperature: 0.0            # Sampling temperature
-  max_retries: 0              # 0 = unlimited
-  mode: edit                  # edit | plan | ask
-  reasoning_effort: high      # off | low | medium | high
-  subagent_provider: ...      # Depth-1 subagent provider
-  subagent_model: ...         # Depth-1 subagent model
-  subagent_depth2_provider: ... # Depth-2+ provider
-  subagent_depth2_model: ...  # Depth-2+ model
-  subagent_max_depth: 3
-  subagent_concurrency: 10
-  subagent_max_retries: 2
-  subagent_idle_watchdog_seconds: 900
-  audio_provider: ...         # Audio composition provider
-  audio_model: ...            # Audio composition model
-  system_prompt: |
-    ...                       # Custom system prompt (advanced)
+kosmo:
+  agent:
+    default_provider: ...       # LLM provider name
+    default_model: ...          # Model identifier
+    temperature: 0.0            # Sampling temperature
+    max_retries: 0              # 0 = unlimited
+    mode: edit                  # edit | plan | ask
+    reasoning_effort: high      # off | low | medium | high
+    subagent_provider: ...      # Depth-1 subagent provider
+    subagent_model: ...         # Depth-1 subagent model
+    subagent_depth2_provider: ... # Depth-2+ provider
+    subagent_depth2_model: ...  # Depth-2+ model
+    subagent_max_depth: 3
+    subagent_concurrency: 10
+    subagent_max_retries: 2
+    subagent_idle_watchdog_seconds: 900
+    audio_provider: ...         # Audio composition provider
+    audio_model: ...            # Audio composition model
+    system_prompt: |
+      ...                       # Custom system prompt (advanced)
 
-ui:
-  renderer: auto              # auto | tui | ansi
-  intro_animated: true
-  theme: default
-  show_reasoning: false       # Show model thinking before responses
+  ui:
+    renderer: auto              # auto | tui | ansi
+    intro_animated: true
+    theme: default
+    show_reasoning: false       # Show model thinking before responses
 
-codex:
-  oauth_port: 9876            # OAuth callback server port
+  codex:
+    oauth_port: 9876            # OAuth callback server port
 
-integrations:
-  permissions_default: ask    # allow | ask | deny (default for integration ops)
+  integrations:
+    permissions_default: ask    # allow | ask | deny (default for integration ops)
 
-mcp:
-  permissions_default: ask    # allow | ask | deny (default for MCP ops)
-  servers:
-    github:
-      permissions:
-        read: allow
-        write: ask
+  mcp:
+    permissions_default: ask    # allow | ask | deny (default for MCP ops)
+    servers:
+      github:
+        permissions:
+          read: allow
+          write: ask
 
-tools:
-  approval_required:          # Tools requiring explicit approval
-    - file_write
-    - file_edit
-    - apply_patch
-    - bash
-    - shell_start
-    - shell_write
-    - execute_lua
-  denied_tools: []            # Tools always blocked (overrides all modes)
-  safe_tools:                 # Tools auto-approved in Guardian mode
-    - file_read
-    - glob
-    - grep
-    - task_create
-    - task_update
-    - task_list
-    - task_get
-    - shell_read
-    - shell_kill
-    - memory_save
-    - memory_search
-    - ask_user
-    - ask_choice
-    - subagent
-    - lua_list_docs
-    - lua_search_docs
-    - lua_read_doc
-  default_permission_mode: guardian
-  bash:
-    timeout: 120              # Bash command timeout (seconds)
-    blocked_commands:
-      - "rm -rf /"
-  shell:
-    wait_ms: 100              # Shell session poll interval
-    idle_ttl: 300             # Shell session idle timeout
-  blocked_paths:              # Glob patterns for blocked file paths
-    - "*.env"
-    - ".git/*"
-    - "*.pem"
-    - "*id_rsa*"
-    - "*id_ed25519*"
-    - "*.key"
-  allowed_paths:              # Paths exempt from blocked_paths
-    - "~/.kosmokrator"
-    - "/tmp"
-  guardian_safe_commands:      # Commands auto-approved in Guardian mode
-    - "git *"
-    - "ls *"
-    - "pwd"
-    - "cat *"
-    - "head *"
-    - "tail *"
-    - "wc *"
-    - "find *"
-    - "which *"
-    - "echo *"
-    - "diff *"
-    - "php vendor/bin/phpunit*"
-    - "php vendor/bin/pint*"
-    - "composer *"
-    - "npm *"
-    - "npx *"
-    - "node *"
-    - "python *"
-    - "cargo *"
-    - "go *"
-    - "make *"
+  tools:
+    approval_required:          # Tools requiring explicit approval
+      - file_write
+      - file_edit
+      - apply_patch
+      - bash
+      - shell_start
+      - shell_write
+      - execute_lua
+    denied_tools: []            # Tools always blocked (overrides all modes)
+    safe_tools:                 # Tools auto-approved in Guardian mode
+      - file_read
+      - glob
+      - grep
+      - task_create
+      - task_update
+      - task_list
+      - task_get
+      - shell_read
+      - shell_kill
+      - memory_save
+      - memory_search
+      - ask_user
+      - ask_choice
+      - subagent
+      - lua_list_docs
+      - lua_search_docs
+      - lua_read_doc
+    default_permission_mode: guardian
+    bash:
+      timeout: 120              # Bash command timeout (seconds)
+      blocked_commands:
+        - "rm -rf /"
+    shell:
+      wait_ms: 100              # Shell session poll interval
+      idle_ttl: 300             # Shell session idle timeout
+    blocked_paths:              # Glob patterns for blocked file paths
+      - "*.env"
+      - ".git/*"
+      - "*.pem"
+      - "*id_rsa*"
+      - "*id_ed25519*"
+      - "*.key"
+    allowed_paths:              # Paths exempt from blocked_paths
+      - "~/.kosmo"
+      - "/tmp"
+    guardian_safe_commands:      # Commands auto-approved in Guardian mode
+      - "git *"
+      - "ls *"
+      - "pwd"
+      - "cat *"
+      - "head *"
+      - "tail *"
+      - "wc *"
+      - "find *"
+      - "which *"
+      - "echo *"
+      - "diff *"
+      - "php vendor/bin/phpunit*"
+      - "php vendor/bin/pint*"
+      - "composer *"
+      - "npm *"
+      - "npx *"
+      - "node *"
+      - "python *"
+      - "cargo *"
+      - "go *"
+      - "make *"
 
-context:
-  max_output_lines: 2000
-  max_output_bytes: 50000
-  reserve_output_tokens: 16000
-  warning_buffer_tokens: 24000
-  auto_compact_buffer_tokens: 12000
-  blocking_buffer_tokens: 3000
-  prune_protect: 40000
-  prune_min_savings: 20000
-  compact_threshold: 60
-  memory_warning_mb: 50
+  context:
+    max_output_lines: 2000
+    max_output_bytes: 50000
+    reserve_output_tokens: 16000
+    warning_buffer_tokens: 24000
+    auto_compact_buffer_tokens: 12000
+    blocking_buffer_tokens: 3000
+    prune_protect: 40000
+    prune_min_savings: 20000
+    compact_threshold: 60
+    memory_warning_mb: 50
 
-session:
-  auto_save: true
-  history_dir: ~/.kosmokrator/sessions
+  session:
+    auto_save: true
+    history_dir: ~/.kosmo/sessions
 
-audio:
-  completion_sound: false
-  soundfont: "~/.kosmokrator/soundfonts/FluidR3_GM.sf2"
-  llm_timeout: 60
-  max_duration: 8
-  max_retries: 1
+  audio:
+    completion_sound: false
+    soundfont: "~/.kosmo/soundfonts/FluidR3_GM.sf2"
+    llm_timeout: 60
+    max_duration: 8
+    max_retries: 1
 ```
 
 **Tip:** You only need to include the keys you want to override. KosmoKrator merges your partial config on top of the bundled defaults, so a three-line config file is perfectly valid.

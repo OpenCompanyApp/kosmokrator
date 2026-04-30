@@ -62,7 +62,7 @@ final class AgentSessionBuilder
         $llm = $llmFactory->create($ui->getActiveRenderer(), $ui);
 
         $log = $this->container->make(LoggerInterface::class);
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $provider = $config->get('kosmo.agent.default_provider', 'z');
         $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
 
         // Tools and permissions
@@ -78,8 +78,8 @@ final class AgentSessionBuilder
         $sessionManager->setProject($project);
 
         // Apply persisted settings (temperature, max_tokens, permission_mode, max_retries)
-        $kosmokratorConfig = $config->get('kosmokrator', []);
-        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
+        $kosmoConfig = $config->get('kosmo', []);
+        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmoConfig);
         $settingsApplier->apply($llm, $permissions);
 
         // Set initial permission mode on UI
@@ -87,7 +87,7 @@ final class AgentSessionBuilder
         $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
 
         // Build system prompt
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+        $baseSystemPrompt = $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.')
             .InstructionLoader::gather()
             .EnvironmentContext::gather();
 
@@ -100,10 +100,10 @@ final class AgentSessionBuilder
         $ui->setTaskStore($taskStore);
 
         // Context pipeline (budget, compactor, pruner, deduplicator, truncator, protected context)
-        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
+        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmoConfig);
         $contextPipeline = $contextFactory->create($llm);
 
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
+        $memoryWarningThreshold = (int) $config->get('kosmo.context.memory_warning_mb', 50) * 1024 * 1024;
 
         // Event dispatcher for cross-cutting concerns
         $events = $this->container->bound(Dispatcher::class)
@@ -120,7 +120,7 @@ final class AgentSessionBuilder
 
         // Subagent pipeline (orchestrator, root context, factory)
         $prismProviders = $config->get('prism.providers', []);
-        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
+        $subagentConfig = array_merge($kosmoConfig, ['prism_providers' => $prismProviders]);
         $subagentPipelineFactory = new SubagentPipelineFactory(
             $sessionManager,
             $this->container->make(ProviderCatalog::class),
@@ -183,7 +183,7 @@ final class AgentSessionBuilder
         }
 
         $log = $this->container->make(LoggerInterface::class);
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $provider = $config->get('kosmo.agent.default_provider', 'z');
         $log->info('KosmoKrator headless started', ['format' => $format->value, 'provider' => $provider]);
 
         // Tools and permissions
@@ -202,8 +202,8 @@ final class AgentSessionBuilder
         }
 
         // Apply persisted settings
-        $kosmokratorConfig = $config->get('kosmokrator', []);
-        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
+        $kosmoConfig = $config->get('kosmo', []);
+        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmoConfig);
         $settingsApplier->apply($llm, $permissions);
 
         // Apply permission mode override (--yolo or --permission-mode)
@@ -213,7 +213,7 @@ final class AgentSessionBuilder
         }
 
         // Build system prompt
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+        $baseSystemPrompt = $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.')
             .InstructionLoader::gather()
             .EnvironmentContext::gather();
 
@@ -233,10 +233,10 @@ final class AgentSessionBuilder
         $taskStore = $this->container->make(TaskStore::class);
 
         // Context pipeline
-        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
+        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmoConfig);
         $contextPipeline = $contextFactory->create($llm);
 
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
+        $memoryWarningThreshold = (int) $config->get('kosmo.context.memory_warning_mb', 50) * 1024 * 1024;
 
         // Event dispatcher
         $events = $this->container->bound(Dispatcher::class)
@@ -267,7 +267,7 @@ final class AgentSessionBuilder
 
         // Subagent pipeline
         $prismProviders = $config->get('prism.providers', []);
-        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
+        $subagentConfig = array_merge($kosmoConfig, ['prism_providers' => $prismProviders]);
         $subagentPipelineFactory = new SubagentPipelineFactory(
             $sessionManager,
             $this->container->make(ProviderCatalog::class),
@@ -326,15 +326,15 @@ final class AgentSessionBuilder
         $project = InstructionLoader::gitRoot() ?? getcwd();
         $sessionManager->setProject($project);
 
-        $kosmokratorConfig = $config->get('kosmokrator', []);
-        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
+        $kosmoConfig = $config->get('kosmo', []);
+        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmoConfig);
         $settingsApplier->apply($llm, $permissions);
 
         if (! empty($options['permission_mode'])) {
             $permissions->setPermissionMode(PermissionMode::from((string) $options['permission_mode']));
         }
 
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
+        $baseSystemPrompt = $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.')
             .InstructionLoader::gather()
             .EnvironmentContext::gather();
 
@@ -349,9 +349,9 @@ final class AgentSessionBuilder
         $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
 
         $taskStore = $this->container->make(TaskStore::class);
-        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
+        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmoConfig);
         $contextPipeline = $contextFactory->create($llm);
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
+        $memoryWarningThreshold = (int) $config->get('kosmo.context.memory_warning_mb', 50) * 1024 * 1024;
         $events = $this->container->bound(Dispatcher::class)
             ? $this->container->make(Dispatcher::class)
             : null;
@@ -376,7 +376,7 @@ final class AgentSessionBuilder
         }
 
         $prismProviders = $config->get('prism.providers', []);
-        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
+        $subagentConfig = array_merge($kosmoConfig, ['prism_providers' => $prismProviders]);
         $subagentPipelineFactory = new SubagentPipelineFactory(
             $sessionManager,
             $this->container->make(ProviderCatalog::class),

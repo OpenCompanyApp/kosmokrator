@@ -206,8 +206,8 @@ class AgentCommand extends Command
     private function runInteractive(InputInterface $input, OutputInterface $output): int
     {
         $config = $this->container->make('config');
-        $rendererPref = $input->getOption('renderer') ?: $config->get('kosmokrator.ui.renderer', 'auto');
-        $animated = ! $input->getOption('no-animation') && $config->get('kosmokrator.ui.intro_animated', true);
+        $rendererPref = $input->getOption('renderer') ?: $config->get('kosmo.ui.renderer', 'auto');
+        $animated = ! $input->getOption('no-animation') && $config->get('kosmo.ui.intro_animated', true);
         $setup = $this->container->make(SetupFlowInterface::class);
 
         if ($setup->needsProviderSetup()) {
@@ -236,7 +236,7 @@ class AgentCommand extends Command
             $white = "\033[1;37m";
 
             echo "{$accent}  ⚡ {$e->getMessage()}{$r}\n";
-            echo "{$dim}  Run {$white}kosmokrator setup{$dim} to configure your provider and API key.{$r}\n\n";
+            echo "{$dim}  Run {$white}kosmo setup{$dim} to configure your provider and API key.{$r}\n\n";
 
             return Command::FAILURE;
         }
@@ -263,7 +263,7 @@ class AgentCommand extends Command
             $currentVersion = $this->getApplication()?->getVersion() ?? 'dev';
             $updateAvailable = (new UpdateChecker($currentVersion))->check();
             if ($updateAvailable !== null) {
-                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmokrator update` to install.");
+                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmo update` to install.");
             }
         }
 
@@ -296,11 +296,11 @@ class AgentCommand extends Command
         $providers = $this->container->make(ProviderCatalog::class);
 
         // Build skill system (user-defined $skills)
-        // Discovers from: .kosmokrator/skills/, .agents/skills/, ~/.kosmokrator/skills/
+        // Discovers from: .kosmo/skills/, .agents/skills/, ~/.kosmo/skills/
         $projectRoot = $this->container->make('path.base');
         $skillLoader = new SkillLoader(
             $projectRoot,
-            ($_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp').'/.kosmokrator/skills',
+            ($_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp').'/.kosmo/skills',
         );
         $skillRegistry = new SkillRegistry;
         $skillRegistry->load($skillLoader);

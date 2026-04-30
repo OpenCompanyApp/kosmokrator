@@ -11,11 +11,11 @@ The desktop app should not embed PHP internals and should not scrape terminal ou
 ```text
 apps/desktop
   -> Tauri Rust backend
-  -> spawn: kosmokrator acp --cwd /repo
+  -> spawn: kosmo acp --cwd /repo
   -> newline-delimited JSON-RPC over stdio
-  -> Svelte UI renders ACP + kosmokrator/* events
+  -> Svelte UI renders ACP + kosmo/* events
 
-bin/kosmokrator
+bin/kosmo
   -> Kernel
   -> ACP server
   -> AgentSessionBuilder
@@ -96,7 +96,7 @@ The Rust backend owns the KosmoKrator child process.
 Responsibilities:
 
 - Resolve which `kosmokrator` binary to use.
-- Start `kosmokrator acp --cwd <project>`.
+- Start `kosmo acp --cwd <project>`.
 - Frame JSON-RPC messages over stdin/stdout.
 - Route stderr to diagnostics, not the normal event stream.
 - Restart or close the process when the project changes.
@@ -143,27 +143,27 @@ The desktop app should use standard ACP methods where possible and KosmoKrator e
 
 Core flow:
 
-1. Start `kosmokrator acp --cwd /repo`.
+1. Start `kosmo acp --cwd /repo`.
 2. Send `initialize`.
 3. Create or resume a session.
 4. Send `session/prompt`.
-5. Render streamed content and `kosmokrator/*` notifications.
+5. Render streamed content and `kosmo/*` notifications.
 6. When `session/request_permission` arrives, show a native modal and send the user's decision.
 7. Keep the session resumable by terminal and desktop.
 
 Extension events to render first:
 
-- `kosmokrator/phase`
-- `kosmokrator/text_delta`
-- `kosmokrator/thinking_delta`
-- `kosmokrator/tool/call`
-- `kosmokrator/tool/result`
-- `kosmokrator/permission/request`
-- `kosmokrator/subagents/spawn`
-- `kosmokrator/subagents/tree`
-- `kosmokrator/subagents/complete`
-- `kosmokrator/usage`
-- `kosmokrator/error`
+- `kosmo/phase_changed`
+- `kosmo/text_delta`
+- `kosmo/thinking_delta`
+- `kosmo/tool_started`
+- `kosmo/tool_completed`
+- `kosmo/permission_requested`
+- `kosmo/subagent_spawned`
+- `kosmo/subagent_tree`
+- `kosmo/subagent_completed`
+- `kosmo/usage_updated`
+- `kosmo/error`
 
 Direct extension methods should power settings and helper panels:
 
@@ -198,7 +198,7 @@ The desktop app should not add a second independent permission system. It should
 ### Phase 1: Thin ACP Shell
 
 - Scaffold `apps/desktop` with Tauri 2, Svelte, Vite, TypeScript.
-- Add Rust process manager for `kosmokrator acp`.
+- Add Rust process manager for `kosmo acp`.
 - Implement initialize, new session, prompt, cancel, close.
 - Render text stream, tool calls, tool results, and errors.
 - Add project picker and binary path setting.

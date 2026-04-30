@@ -127,7 +127,7 @@ final class McpStdioClient
             'protocolVersion' => '2025-11-25',
             'capabilities' => (object) [],
             'clientInfo' => [
-                'name' => 'kosmokrator',
+                'name' => 'kosmo',
                 'version' => 'dev',
             ],
         ]);

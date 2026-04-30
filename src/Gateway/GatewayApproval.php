@@ -20,5 +20,7 @@ final readonly class GatewayApproval
         public string $chatId,
         public ?string $threadId,
         public ?int $requestMessageId = null,
+        public ?string $requesterUserId = null,
+        public ?string $requesterUsername = null,
     ) {}
 }

@@ -6,6 +6,7 @@ namespace Kosmokrator\Gateway\Telegram;
 
 use Illuminate\Container\Container;
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Gateway\GatewayApproval;
 use Kosmokrator\Gateway\GatewayApprovalStore;
 use Kosmokrator\Gateway\GatewayCheckpointStore;
 use Kosmokrator\Gateway\GatewayMessageEvent;
@@ -177,6 +178,7 @@ final class TelegramGatewayRuntime
                 $link === null ? 'Session: none linked yet' : 'Session: '.$link->sessionId,
                 'Route: '.$event->routeKey,
                 'Running: '.($active !== null ? 'yes' : 'no'),
+                $active !== null ? 'Elapsed: '.$this->formatElapsed((int) floor(microtime(true) - $active['startedAt'])) : null,
                 $active !== null && $active['pid'] !== null ? 'Worker PID: '.$active['pid'] : null,
                 'Queued inputs: '.$queued,
                 'Active routes: '.count($this->activeRoutes),
@@ -210,9 +212,23 @@ final class TelegramGatewayRuntime
 
         if ($event->isCommand('/approve') || $event->isCommand('/deny')) {
             [$status, $message] = $this->resolveApprovalCommand($event);
-            $pending = $status !== null
-                ? $this->approvals->resolveLatestPending('telegram', $event->routeKey, $status)
-                : null;
+            $approval = $status !== null ? $this->approvals->latestPending('telegram', $event->routeKey) : null;
+            if ($approval !== null && ! $this->canResolveApproval($event, $approval)) {
+                $this->log->warning('Unauthorized Telegram approval command denied', [
+                    'route_key' => $event->routeKey,
+                    'user_id' => $event->userId,
+                    'username' => $event->username,
+                ]);
+                $this->client->sendMessage($event->chatId, 'Not authorized to resolve this approval.', $event->threadId);
+
+                return;
+            }
+
+            $pending = null;
+            if ($approval !== null && $status !== null) {
+                $this->approvals->resolve($approval->id, $status);
+                $pending = $approval;
+            }
             $this->client->sendMessage(
                 $event->chatId,
                 $pending === null
@@ -225,7 +241,23 @@ final class TelegramGatewayRuntime
         }
 
         if ($event->isCommand('/cancel')) {
-            $pending = $this->approvals->resolveLatestPending('telegram', $event->routeKey, 'denied');
+            $approval = $this->approvals->latestPending('telegram', $event->routeKey);
+            if ($approval !== null && ! $this->canResolveApproval($event, $approval)) {
+                $this->log->warning('Unauthorized Telegram cancel approval denied', [
+                    'route_key' => $event->routeKey,
+                    'user_id' => $event->userId,
+                    'username' => $event->username,
+                ]);
+                $this->client->sendMessage($event->chatId, 'Not authorized to cancel this approval.', $event->threadId);
+
+                return;
+            }
+
+            $pending = null;
+            if ($approval !== null) {
+                $this->approvals->resolve($approval->id, 'denied');
+                $pending = $approval;
+            }
             $message = null;
             if ($pending !== null) {
                 $message = 'Cancelled the pending approval request.';
@@ -266,6 +298,7 @@ final class TelegramGatewayRuntime
             return;
         }
 
+        $this->setProcessingReaction($event, '👀');
         $this->launchEvent($event);
     }
 
@@ -327,6 +360,18 @@ final class TelegramGatewayRuntime
         }
 
         if (preg_match('/^gc:cmd:(.+)$/', $event->text, $matches) === 1) {
+            if (! $this->config->canUseControlCallback($event->userId, $event->username, $event->isPrivate, $event->chatId)) {
+                $this->log->warning('Unauthorized Telegram control callback denied', [
+                    'route_key' => $event->routeKey,
+                    'action' => $event->text,
+                    'user_id' => $event->userId,
+                    'username' => $event->username,
+                ]);
+                $this->client->answerCallbackQuery($event->callbackQueryId, 'Not authorized.');
+
+                return;
+            }
+
             $this->handleControlCallback($event, '/'.ltrim((string) $matches[1], '/'));
 
             return;
@@ -342,6 +387,18 @@ final class TelegramGatewayRuntime
         $approval = $this->approvals->find($approvalId);
         if ($approval === null || $approval->routeKey !== $event->routeKey) {
             $this->client->answerCallbackQuery($event->callbackQueryId, 'Approval not found.');
+
+            return;
+        }
+
+        if (! $this->canResolveApproval($event, $approval)) {
+            $this->log->warning('Unauthorized Telegram approval callback denied', [
+                'route_key' => $event->routeKey,
+                'approval_id' => $approval->id,
+                'user_id' => $event->userId,
+                'username' => $event->username,
+            ]);
+            $this->client->answerCallbackQuery($event->callbackQueryId, 'Not authorized.');
 
             return;
         }
@@ -391,6 +448,18 @@ final class TelegramGatewayRuntime
             str_contains($args, 'always') => ['always', 'Approved for the rest of this session.'],
             default => ['approved', 'Approved.'],
         };
+    }
+
+    private function canResolveApproval(GatewayMessageEvent $event, GatewayApproval $approval): bool
+    {
+        return $this->config->canResolveApproval(
+            $event->userId,
+            $event->username,
+            $event->isPrivate,
+            $event->chatId,
+            $approval->requesterUserId,
+            $approval->requesterUsername,
+        );
     }
 
     /**
@@ -469,5 +538,30 @@ final class TelegramGatewayRuntime
         );
 
         $this->runAgentForEvent($synthetic);
+    }
+
+    private function formatElapsed(int $seconds): string
+    {
+        if ($seconds < 60) {
+            return $seconds.'s';
+        }
+
+        $minutes = intdiv($seconds, 60);
+        $remaining = $seconds % 60;
+
+        return $remaining > 0 ? "{$minutes}m {$remaining}s" : "{$minutes}m";
+    }
+
+    private function setProcessingReaction(GatewayMessageEvent $event, string $emoji): void
+    {
+        if (! $this->config->reactions || $event->messageId === null) {
+            return;
+        }
+
+        try {
+            $this->client->setMessageReaction($event->chatId, $event->messageId, $emoji);
+        } catch (\Throwable) {
+            // Best-effort only; reactions depend on Telegram chat capabilities.
+        }
     }
 }

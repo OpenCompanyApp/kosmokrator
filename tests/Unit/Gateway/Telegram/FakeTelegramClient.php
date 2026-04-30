@@ -35,6 +35,9 @@ final class FakeTelegramClient implements TelegramClientInterface
     /** @var list<array<string, mixed>> */
     public array $chatActions = [];
 
+    /** @var list<array<string, mixed>> */
+    public array $reactions = [];
+
     public function __construct() {}
 
     public function setMyCommands(array $commands): void
@@ -113,6 +116,11 @@ final class FakeTelegramClient implements TelegramClientInterface
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void
     {
         $this->callbackAnswers[] = compact('callbackQueryId', 'text');
+    }
+
+    public function setMessageReaction(string $chatId, int $messageId, string $emoji): void
+    {
+        $this->reactions[] = compact('chatId', 'messageId', 'emoji');
     }
 
     public function deleteWebhook(bool $dropPendingUpdates = false): void {}

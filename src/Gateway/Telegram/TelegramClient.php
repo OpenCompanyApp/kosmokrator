@@ -15,6 +15,7 @@ final class TelegramClient implements TelegramClientInterface
     public function __construct(
         private readonly HttpFactory $http,
         private readonly string $token,
+        private readonly bool $disableLinkPreviews = true,
     ) {
         $this->baseUrl = 'https://api.telegram.org/bot'.$this->token;
     }
@@ -55,7 +56,7 @@ final class TelegramClient implements TelegramClientInterface
         $payload = [
             'chat_id' => $chatId,
             'text' => $text,
-            'disable_web_page_preview' => true,
+            'disable_web_page_preview' => $this->disableLinkPreviews,
         ];
 
         if ($threadId !== null) {
@@ -74,7 +75,24 @@ final class TelegramClient implements TelegramClientInterface
             $payload['parse_mode'] = $parseMode;
         }
 
-        return $this->request('sendMessage', $payload);
+        try {
+            return $this->request('sendMessage', $payload);
+        } catch (\RuntimeException $e) {
+            $message = strtolower($e->getMessage());
+            if (str_contains($message, 'message thread not found') || str_contains($message, 'thread not found')) {
+                unset($payload['message_thread_id']);
+
+                return $this->request('sendMessage', $payload);
+            }
+
+            if (str_contains($message, 'message to be replied not found') || str_contains($message, 'reply message not found')) {
+                unset($payload['reply_parameters']);
+
+                return $this->request('sendMessage', $payload);
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -86,7 +104,7 @@ final class TelegramClient implements TelegramClientInterface
             'chat_id' => $chatId,
             'message_id' => $messageId,
             'text' => $text,
-            'disable_web_page_preview' => true,
+            'disable_web_page_preview' => $this->disableLinkPreviews,
         ];
 
         if ($replyMarkup !== null) {
@@ -97,7 +115,16 @@ final class TelegramClient implements TelegramClientInterface
             $payload['parse_mode'] = $parseMode;
         }
 
-        return $this->request('editMessageText', $payload);
+        try {
+            return $this->request('editMessageText', $payload);
+        } catch (\RuntimeException $e) {
+            $message = strtolower($e->getMessage());
+            if (str_contains($message, 'message is not modified')) {
+                return ['message_id' => $messageId];
+            }
+
+            throw $e;
+        }
     }
 
     public function sendPhoto(string $chatId, string $path, ?string $threadId = null, ?string $caption = null, ?string $parseMode = null): array
@@ -184,6 +211,17 @@ final class TelegramClient implements TelegramClientInterface
         $this->request('answerCallbackQuery', $payload);
     }
 
+    public function setMessageReaction(string $chatId, int $messageId, string $emoji): void
+    {
+        $this->request('setMessageReaction', [
+            'chat_id' => $chatId,
+            'message_id' => $messageId,
+            'reaction' => [
+                ['type' => 'emoji', 'emoji' => $emoji],
+            ],
+        ]);
+    }
+
     public function deleteWebhook(bool $dropPendingUpdates = false): void
     {
         $this->request('deleteWebhook', ['drop_pending_updates' => $dropPendingUpdates]);
@@ -195,8 +233,31 @@ final class TelegramClient implements TelegramClientInterface
      */
     private function request(string $method, array $payload = []): array
     {
-        $response = $this->requestClient()->asJson()->post($this->baseUrl.'/'.$method, $payload);
-        $result = $this->parseResponse($response);
+        $attempts = 0;
+        start:
+        $attempts++;
+
+        try {
+            $response = $this->requestClient()->asJson()->post($this->baseUrl.'/'.$method, $payload);
+            $result = $this->parseResponse($response);
+        } catch (\RuntimeException $e) {
+            $retryAfter = $this->retryAfterSeconds($e->getMessage());
+            if ($attempts < 3 && $retryAfter !== null) {
+                usleep((int) max(100_000, $retryAfter * 1_000_000));
+
+                goto start;
+            }
+
+            throw $e;
+        } catch (\Throwable $e) {
+            if ($attempts < 3 && $this->isRetryableConnectionFailure($e)) {
+                usleep((int) (250_000 * $attempts));
+
+                goto start;
+            }
+
+            throw $e;
+        }
 
         return is_array($result) ? $result : [];
     }
@@ -250,5 +311,33 @@ final class TelegramClient implements TelegramClientInterface
         $result = $json['result'] ?? [];
 
         return is_array($result) ? $result : [];
+    }
+
+    private function retryAfterSeconds(string $message): ?float
+    {
+        $jsonStart = strpos($message, '{');
+        if ($jsonStart !== false) {
+            $payload = json_decode(substr($message, $jsonStart), true);
+            if (is_array($payload) && isset($payload['parameters']['retry_after'])) {
+                return max(0.1, (float) $payload['parameters']['retry_after']);
+            }
+        }
+
+        if (preg_match('/retry after\s+(\d+)/i', $message, $matches) === 1) {
+            return max(0.1, (float) $matches[1]);
+        }
+
+        return null;
+    }
+
+    private function isRetryableConnectionFailure(\Throwable $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'connect')
+            || str_contains($message, 'connection reset')
+            || str_contains($message, 'connection refused')
+            || str_contains($message, 'could not resolve')
+            || str_contains($message, 'network is unreachable');
     }
 }

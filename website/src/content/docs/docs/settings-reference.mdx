@@ -214,10 +214,16 @@ Use `web:configure` when storing API key status or setting provider defaults fro
 | `gateway.telegram.enabled` | toggle | `off` | next session | Enable Telegram gateway worker. |
 | `gateway.telegram.session_mode` | choice: `thread`, `thread_user`, `chat`, `chat_user` | `thread` | next session | Map Telegram messages to Kosmo sessions. |
 | `gateway.telegram.allowed_users` | string list | empty | next session | Allowed Telegram user IDs or usernames. Empty allows any reachable user. |
+| `gateway.telegram.admin_users` | string list | empty | next session | Users allowed to approve any request and press global control buttons. |
 | `gateway.telegram.allowed_chats` | string list | empty | next session | Allowed chat IDs. Empty allows all chats. |
 | `gateway.telegram.require_mention` | toggle | `on` | next session | In groups, respond only when mentioned or replied to unless the chat is free-response. |
 | `gateway.telegram.free_response_chats` | string list | empty | next session | Chat IDs where mention is not required. |
 | `gateway.telegram.poll_timeout_seconds` | number | `20` | next session | Long-poll timeout. |
+| `gateway.telegram.reply_to_mode` | choice: `off`, `first`, `all` | `first` | next session | Whether answer chunks reply to the original Telegram message. |
+| `gateway.telegram.disable_link_previews` | toggle | `on` | next session | Disable Telegram link previews for gateway messages. |
+| `gateway.telegram.fresh_final_after_seconds` | number | `60` | next session | Send a fresh final message after long streamed edits. `0` disables it. |
+| `gateway.telegram.progress_notice_interval_seconds` | number | `60` | next session | Minimum seconds between long-run progress status updates. `0` disables it. |
+| `gateway.telegram.reactions` | toggle | `off` | next session | Mark processing and completion with Telegram reactions when supported. |
 
 The bot token is a managed secret under `gateway.telegram.token`, configured with `gateway:telegram:configure --token-stdin`, `--token-env`, or `secrets:set`.
 

@@ -93,6 +93,12 @@ final class TelegramGatewayWorkerCommand extends Command
                 requireMention: $config->requireMention,
                 freeResponseChats: $config->freeResponseChats,
                 pollTimeoutSeconds: $config->pollTimeoutSeconds,
+                adminUsers: $config->adminUsers,
+                replyToMode: $config->replyToMode,
+                disableLinkPreviews: $config->disableLinkPreviews,
+                freshFinalAfterSeconds: $config->freshFinalAfterSeconds,
+                progressNoticeIntervalSeconds: $config->progressNoticeIntervalSeconds,
+                reactions: $config->reactions,
             );
         }
 
@@ -118,7 +124,7 @@ final class TelegramGatewayWorkerCommand extends Command
         $sessionLinks = $this->container->make(GatewaySessionStore::class);
         $link = $sessionLinks->find('telegram', $event->routeKey);
         $renderer = new TelegramGatewayRenderer(
-            client: new TelegramClient($this->container->make('http'), $config->token),
+            client: new TelegramClient($this->container->make('http'), $config->token, $config->disableLinkPreviews),
             messages: $this->container->make(GatewayMessageStore::class),
             approvals: $this->container->make(GatewayApprovalStore::class),
             routeKey: $event->routeKey,
@@ -129,6 +135,13 @@ final class TelegramGatewayWorkerCommand extends Command
                 return $this->awaitApprovalDecision($approvalId);
             },
             cancellation: fn () => $cancellation->getCancellation(),
+            requesterUserId: $event->userId,
+            requesterUsername: $event->username,
+            replyToMessageId: $event->messageId,
+            replyToMode: $config->replyToMode,
+            freshFinalAfterSeconds: $config->freshFinalAfterSeconds,
+            progressNoticeIntervalSeconds: $config->progressNoticeIntervalSeconds,
+            reactionsEnabled: $config->reactions,
         );
 
         $builder = $this->container->make(AgentSessionBuilder::class);

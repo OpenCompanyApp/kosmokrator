@@ -50,5 +50,7 @@ interface TelegramClientInterface
 
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void;
 
+    public function setMessageReaction(string $chatId, int $messageId, string $emoji): void;
+
     public function deleteWebhook(bool $dropPendingUpdates = false): void;
 }

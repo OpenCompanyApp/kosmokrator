@@ -311,6 +311,121 @@ final class TelegramGatewayRuntimeTest extends TestCase
         $this->assertSame('Switched To Prometheus.', $client->callbackAnswers[0]['text']);
     }
 
+    public function test_group_approval_callback_requires_requester_or_authorized_user(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $approvals = new GatewayApprovalStore($db);
+        $db->connection()->prepare('INSERT INTO sessions (id, project, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute(['sess-1', null, null, 'test/model', date(DATE_ATOM), date(DATE_ATOM)]);
+        $approval = $approvals->createPending('telegram', 'telegram:-1001', 'sess-1', 'bash', ['command' => 'ls'], '-1001', requesterUserId: '5');
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: $approvals,
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
+            log: new NullLogger,
+            launcher: new FakeTelegramWorkerLauncher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 3,
+            'callback_query' => [
+                'id' => 'cbq-1',
+                'data' => 'ga:allow:'.$approval->id,
+                'from' => ['id' => 6, 'username' => 'mallory'],
+                'message' => [
+                    'message_id' => 99,
+                    'chat' => ['id' => -1001, 'type' => 'supergroup'],
+                ],
+            ],
+        ]]);
+
+        $this->assertSame('pending', $approvals->find($approval->id)?->status);
+        $this->assertSame('Not authorized.', $client->callbackAnswers[0]['text']);
+        $this->assertSame([], $client->edited);
+    }
+
+    public function test_group_control_callback_requires_authorized_user(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $launcher = new FakeTelegramWorkerLauncher;
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
+            log: new NullLogger,
+            launcher: $launcher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 3,
+            'callback_query' => [
+                'id' => 'cbq-1',
+                'data' => 'gc:cmd:prometheus',
+                'from' => ['id' => 6, 'username' => 'mallory'],
+                'message' => [
+                    'message_id' => 99,
+                    'chat' => ['id' => -1001, 'type' => 'supergroup'],
+                ],
+            ],
+        ]]);
+
+        $this->assertSame([], $launcher->launched);
+        $this->assertSame('Not authorized.', $client->callbackAnswers[0]['text']);
+    }
+
+    public function test_admin_user_can_use_group_control_callback(): void
+    {
+        $container = new Container;
+        $db = new Database(':memory:');
+        $client = new FakeTelegramClient;
+        $launcher = new FakeTelegramWorkerLauncher;
+        $runtime = new TelegramGatewayRuntime(
+            container: $container,
+            client: $client,
+            config: new TelegramGatewayConfig(true, 'token', 'thread', [], [], true, [], 20, adminUsers: ['admin']),
+            sessionLinks: new GatewaySessionStore($db),
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            checkpoints: new GatewayCheckpointStore($db),
+            pendingInputs: new GatewayPendingInputStore($db),
+            log: new NullLogger,
+            launcher: $launcher,
+        );
+        $runtime->setBotUsername('kosmokrator_bot');
+
+        $runtime->processUpdates([[
+            'update_id' => 3,
+            'callback_query' => [
+                'id' => 'cbq-1',
+                'data' => 'gc:cmd:prometheus',
+                'from' => ['id' => 6, 'username' => 'admin'],
+                'message' => [
+                    'message_id' => 99,
+                    'chat' => ['id' => -1001, 'type' => 'supergroup'],
+                ],
+            ],
+        ]]);
+
+        $this->assertCount(1, $launcher->launched);
+        $this->assertSame('/prometheus', $launcher->launched[0]->text);
+    }
+
     public function test_status_includes_inline_control_keyboard(): void
     {
         $container = new Container;

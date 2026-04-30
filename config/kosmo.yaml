@@ -236,10 +236,16 @@ gateway:
     token: null
     session_mode: thread
     allowed_users: []
+    admin_users: []
     allowed_chats: []
     require_mention: true
     free_response_chats: []
     poll_timeout_seconds: 20
+    reply_to_mode: first
+    disable_link_previews: true
+    fresh_final_after_seconds: 60
+    progress_notice_interval_seconds: 60
+    reactions: false
 
 tools:
   # Tools that are always denied, overriding all modes (including Prometheus).

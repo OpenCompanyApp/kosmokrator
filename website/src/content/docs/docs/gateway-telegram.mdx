@@ -30,7 +30,10 @@ printf %s "$TELEGRAM_BOT_TOKEN" | \
     --enabled on \
     --session-mode thread_user \
     --allowed-users "123456789,@alice" \
+    --admin-users "123456789" \
     --require-mention on \
+    --reply-to-mode first \
+    --progress-notice-interval-seconds 60 \
     --global \
     --json
 ```
@@ -45,10 +48,16 @@ Options:
 | `--enabled` | `on`, `off` | Enable or disable gateway. |
 | `--session-mode` | `thread`, `thread_user`, `chat`, `chat_user` | Route Telegram conversations to sessions. |
 | `--allowed-users` | list | Allowed user IDs or usernames. |
+| `--admin-users` | list | Users allowed to press global control buttons and approve any request. |
 | `--allowed-chats` | list | Allowed chat IDs. |
 | `--require-mention` | `on`, `off` | Require bot mention/reply in group chats. |
 | `--free-response-chats` | list | Chats where mention is not required. |
 | `--poll-timeout-seconds` | integer | Telegram long-poll timeout. |
+| `--reply-to-mode` | `off`, `first`, `all` | Whether answer chunks reply to the original message. |
+| `--disable-link-previews` | `on`, `off` | Disable Telegram link previews for gateway messages. |
+| `--fresh-final-after-seconds` | integer | Send a fresh final message after long streamed edits. `0` disables it. |
+| `--progress-notice-interval-seconds` | integer | Minimum seconds between long-run progress status updates. `0` disables it. |
+| `--reactions` | `on`, `off` | Mark processing and completion with Telegram reactions when supported. |
 | `--global`, `--project` | flag | Write scope. |
 | `--json` | flag | Machine-readable output. |
 
@@ -94,9 +103,18 @@ Use `thread_user` for shared group chats where multiple people may ask independe
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `gateway.telegram.allowed_users` | empty | Empty allows any reachable user. Set user IDs or usernames to restrict access. |
+| `gateway.telegram.admin_users` | empty | Users allowed to press global control buttons and approve any request. |
 | `gateway.telegram.allowed_chats` | empty | Empty allows all chats. Set chat IDs for deployment safety. |
 | `gateway.telegram.require_mention` | `on` | In group chats, respond only when mentioned or replied to. |
 | `gateway.telegram.free_response_chats` | empty | Chat IDs where the bot can answer without mention. |
+
+Approval and control buttons use a stricter policy than normal messages. In group chats, approval buttons can be pressed by the original requester, an explicit allowed user, or an admin user. Global control buttons such as mode switches require an explicit allowed or admin user.
+
+## Long Runs And Delivery
+
+The gateway keeps one status message per route, updates it while tools run, and can send periodic progress notices for long operations. `gateway.telegram.progress_notice_interval_seconds` controls that cadence.
+
+Telegram message delivery also handles UTF-16 message limits, optional reply threading, HTML fallback, flood-control retry hints, and stale reply/thread targets. `gateway.telegram.fresh_final_after_seconds` can send a fresh final message after a long edited stream so the completion appears at the current time in the chat.
 
 Recommended group setup:
 

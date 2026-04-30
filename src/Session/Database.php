@@ -15,7 +15,7 @@ class Database
 {
     private \PDO $pdo;
 
-    private const SCHEMA_VERSION = 9;
+    private const SCHEMA_VERSION = 10;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -236,6 +236,8 @@ class Database
                 chat_id             TEXT NOT NULL,
                 thread_id           TEXT,
                 request_message_id  INTEGER,
+                requester_user_id   TEXT,
+                requester_username  TEXT,
                 created_at          TEXT,
                 resolved_at         TEXT
             )
@@ -338,6 +340,8 @@ class Database
                     chat_id             TEXT NOT NULL,
                     thread_id           TEXT,
                     request_message_id  INTEGER,
+                    requester_user_id   TEXT,
+                    requester_username  TEXT,
                     created_at          TEXT,
                     resolved_at         TEXT
                 )
@@ -375,6 +379,11 @@ class Database
             $this->addColumnIfMissing('swarm_agents', 'output_ref', 'TEXT');
             $this->addColumnIfMissing('swarm_agents', 'output_bytes', 'INTEGER NOT NULL DEFAULT 0');
             $this->addColumnIfMissing('swarm_agents', 'output_preview', 'TEXT');
+        }
+
+        if ($from < 10) {
+            $this->addColumnIfMissing('gateway_approvals', 'requester_user_id', 'TEXT');
+            $this->addColumnIfMissing('gateway_approvals', 'requester_username', 'TEXT');
         }
     }
 

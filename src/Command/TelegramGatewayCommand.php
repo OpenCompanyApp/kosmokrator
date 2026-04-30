@@ -50,6 +50,12 @@ final class TelegramGatewayCommand extends Command
                 requireMention: $config->requireMention,
                 freeResponseChats: $config->freeResponseChats,
                 pollTimeoutSeconds: $config->pollTimeoutSeconds,
+                adminUsers: $config->adminUsers,
+                replyToMode: $config->replyToMode,
+                disableLinkPreviews: $config->disableLinkPreviews,
+                freshFinalAfterSeconds: $config->freshFinalAfterSeconds,
+                progressNoticeIntervalSeconds: $config->progressNoticeIntervalSeconds,
+                reactions: $config->reactions,
             );
         }
 
@@ -69,7 +75,7 @@ final class TelegramGatewayCommand extends Command
             return Command::FAILURE;
         }
 
-        $client = new TelegramClient($this->container->make('http'), $config->token);
+        $client = new TelegramClient($this->container->make('http'), $config->token, $config->disableLinkPreviews);
         $me = $client->getMe();
         $botUsername = ltrim((string) ($me['username'] ?? ''), '@');
         $checkpoint = $this->container->make(GatewayCheckpointStore::class)->get('telegram', 'last_update_id') ?? 'none';

@@ -19,8 +19,8 @@ final class TelegramTextFormatter
         $chunks = [];
         $remaining = $normalized;
 
-        while (mb_strlen($remaining) > $limit) {
-            $slice = mb_substr($remaining, 0, $limit);
+        while (self::utf16Length($remaining) > $limit) {
+            $slice = self::prefixWithinUtf16Limit($remaining, $limit);
             $splitAt = max(
                 (int) mb_strrpos($slice, "\n\n"),
                 (int) mb_strrpos($slice, "\n"),
@@ -28,7 +28,7 @@ final class TelegramTextFormatter
             );
 
             if ($splitAt < (int) ($limit / 2)) {
-                $splitAt = $limit;
+                $splitAt = mb_strlen($slice);
             }
 
             $chunks[] = trim(mb_substr($remaining, 0, $splitAt));
@@ -40,6 +40,31 @@ final class TelegramTextFormatter
         }
 
         return array_values(array_filter($chunks, static fn (string $chunk): bool => $chunk !== ''));
+    }
+
+    public static function utf16Length(string $text): int
+    {
+        return (int) (strlen(mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')) / 2);
+    }
+
+    public static function prefixWithinUtf16Limit(string $text, int $limit): string
+    {
+        if (self::utf16Length($text) <= $limit) {
+            return $text;
+        }
+
+        $low = 0;
+        $high = mb_strlen($text);
+        while ($low < $high) {
+            $mid = intdiv($low + $high + 1, 2);
+            if (self::utf16Length(mb_substr($text, 0, $mid)) <= $limit) {
+                $low = $mid;
+            } else {
+                $high = $mid - 1;
+            }
+        }
+
+        return mb_substr($text, 0, $low);
     }
 
     public static function formatHtml(string $text): string

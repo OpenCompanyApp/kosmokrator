@@ -24,6 +24,12 @@ final readonly class TelegramGatewayConfig
         public bool $requireMention,
         public array $freeResponseChats,
         public int $pollTimeoutSeconds,
+        public array $adminUsers = [],
+        public string $replyToMode = 'first',
+        public bool $disableLinkPreviews = true,
+        public int $freshFinalAfterSeconds = 60,
+        public int $progressNoticeIntervalSeconds = 60,
+        public bool $reactions = false,
     ) {}
 
     public static function fromSettings(SettingsManager $settings, Repository $config, ?SettingsRepositoryInterface $repository = null): self
@@ -73,6 +79,36 @@ final readonly class TelegramGatewayConfig
                 ?? $settings->getRaw('kosmo.gateway.telegram.poll_timeout_seconds')
                 ?? $config->get('kosmo.gateway.telegram.poll_timeout_seconds', 20)
             )),
+            adminUsers: self::toList(
+                ($repository?->get('global', 'kosmo.gateway.telegram.admin_users'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.admin_users')
+                ?? $config->get('kosmo.gateway.telegram.admin_users', [])
+            ),
+            replyToMode: (string) (
+                ($repository?->get('global', 'kosmo.gateway.telegram.reply_to_mode'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.reply_to_mode')
+                ?? $config->get('kosmo.gateway.telegram.reply_to_mode', 'first')
+            ),
+            disableLinkPreviews: self::toBool(
+                ($repository?->get('global', 'kosmo.gateway.telegram.disable_link_previews'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.disable_link_previews')
+                ?? $config->get('kosmo.gateway.telegram.disable_link_previews', true)
+            ),
+            freshFinalAfterSeconds: max(0, (int) (
+                ($repository?->get('global', 'kosmo.gateway.telegram.fresh_final_after_seconds'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.fresh_final_after_seconds')
+                ?? $config->get('kosmo.gateway.telegram.fresh_final_after_seconds', 60)
+            )),
+            progressNoticeIntervalSeconds: max(0, (int) (
+                ($repository?->get('global', 'kosmo.gateway.telegram.progress_notice_interval_seconds'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.progress_notice_interval_seconds')
+                ?? $config->get('kosmo.gateway.telegram.progress_notice_interval_seconds', 60)
+            )),
+            reactions: self::toBool(
+                ($repository?->get('global', 'kosmo.gateway.telegram.reactions'))
+                ?? $settings->getRaw('kosmo.gateway.telegram.reactions')
+                ?? $config->get('kosmo.gateway.telegram.reactions', false)
+            ),
         );
     }
 
@@ -89,6 +125,10 @@ final readonly class TelegramGatewayConfig
         if (! in_array($this->sessionMode, ['chat', 'chat_user', 'thread', 'thread_user'], true)) {
             throw new \RuntimeException('Telegram gateway session mode must be one of: chat, chat_user, thread, thread_user.');
         }
+
+        if (! in_array($this->replyToMode, ['off', 'first', 'all'], true)) {
+            throw new \RuntimeException('Telegram gateway reply mode must be one of: off, first, all.');
+        }
     }
 
     public function allowsChat(string $chatId): bool
@@ -102,11 +142,61 @@ final readonly class TelegramGatewayConfig
             return true;
         }
 
-        if ($userId !== null && in_array($userId, $this->allowedUsers, true)) {
+        return $this->matchesIdentity($this->allowedUsers, $userId, $username);
+    }
+
+    public function explicitlyAllowsUser(?string $userId, ?string $username): bool
+    {
+        return $this->matchesIdentity($this->allowedUsers, $userId, $username);
+    }
+
+    public function allowsAdmin(?string $userId, ?string $username): bool
+    {
+        return $this->matchesIdentity($this->adminUsers, $userId, $username);
+    }
+
+    public function canUseControlCallback(?string $userId, ?string $username, bool $isPrivate, string $chatId): bool
+    {
+        if ($this->allowsAdmin($userId, $username) || $this->explicitlyAllowsUser($userId, $username)) {
             return true;
         }
 
-        return $username !== null && $username !== '' && in_array(ltrim($username, '@'), $this->allowedUsers, true);
+        return $isPrivate;
+    }
+
+    public function canResolveApproval(?string $userId, ?string $username, bool $isPrivate, string $chatId, ?string $requesterUserId, ?string $requesterUsername): bool
+    {
+        if ($this->allowsAdmin($userId, $username) || $this->explicitlyAllowsUser($userId, $username)) {
+            return true;
+        }
+
+        if ($requesterUserId !== null && $userId !== null && $requesterUserId === $userId) {
+            return true;
+        }
+
+        if ($requesterUsername !== null && $username !== null && strcasecmp(ltrim($requesterUsername, '@'), ltrim($username, '@')) === 0) {
+            return true;
+        }
+
+        return $requesterUserId === null
+            && $requesterUsername === null
+            && $isPrivate;
+    }
+
+    /**
+     * @param  list<string>  $identities
+     */
+    private function matchesIdentity(array $identities, ?string $userId, ?string $username): bool
+    {
+        if ($identities === []) {
+            return false;
+        }
+
+        if ($userId !== null && in_array($userId, $identities, true)) {
+            return true;
+        }
+
+        return $username !== null && $username !== '' && in_array(ltrim($username, '@'), $identities, true);
     }
 
     public function isFreeResponseChat(string $chatId): bool
@@ -120,7 +210,7 @@ final readonly class TelegramGatewayConfig
     private static function toList(mixed $value): array
     {
         if (is_array($value)) {
-            $items = array_map(static fn ($item): string => trim((string) $item), $value);
+            $items = array_map(static fn ($item): string => ltrim(trim((string) $item), '@'), $value);
 
             return array_values(array_filter($items, static fn (string $item): bool => $item !== ''));
         }
@@ -130,7 +220,7 @@ final readonly class TelegramGatewayConfig
         }
 
         $parts = preg_split('/[\s,]+/', $value) ?: [];
-        $items = array_map(static fn ($item): string => trim((string) $item), $parts);
+        $items = array_map(static fn ($item): string => ltrim(trim((string) $item), '@'), $parts);
 
         return array_values(array_filter($items, static fn (string $item): bool => $item !== ''));
     }

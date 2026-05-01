@@ -6,6 +6,7 @@ namespace Kosmokrator\Sdk;
 
 use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentSession;
+use Kosmokrator\Agent\Exception\HeadlessRunFailedException;
 use Kosmokrator\Agent\Exception\MaxTurnsExceededException;
 use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
@@ -87,6 +88,8 @@ final class Agent
             $resultText = '';
             $exitCode = 0;
             $error = null;
+            $errorClass = null;
+            $errorTrace = null;
             $session = null;
             if ($this->renderer instanceof EventRenderer) {
                 $this->renderer->reset();
@@ -112,7 +115,12 @@ final class Agent
                 $resultText = $e->partialResult;
             } catch (\Throwable $e) {
                 $exitCode = 1;
+                $diagnostic = $e instanceof HeadlessRunFailedException && $e->getPrevious() !== null
+                    ? $e->getPrevious()
+                    : $e;
                 $error = $e->getMessage();
+                $errorClass = get_class($diagnostic);
+                $errorTrace = $diagnostic->getTraceAsString();
                 $this->renderer->showError($error);
                 $resultText = 'Error: '.$error;
             } finally {
@@ -157,6 +165,8 @@ final class Agent
                 success: $exitCode === 0,
                 exitCode: $exitCode,
                 error: $error,
+                errorClass: $errorClass,
+                errorTrace: $errorTrace,
             );
         });
     }

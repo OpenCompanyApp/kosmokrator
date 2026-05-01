@@ -357,15 +357,25 @@ class HeadlessRenderer implements RendererInterface
     /**
      * Emit an error result to stdout.
      */
-    public function emitError(string $message, int $exitCode = 1): void
+    public function emitError(string $message, int $exitCode = 1, ?string $errorClass = null, ?string $trace = null): void
     {
         if ($this->format === OutputFormat::Text) {
             $this->writeStderr("Error: {$message}");
         } elseif ($this->format === OutputFormat::StreamJson) {
-            $this->emitEvent('error', ['message' => $message, 'code' => $exitCode]);
+            $this->emitEvent('error', array_filter([
+                'message' => $message,
+                'code' => $exitCode,
+                'error_class' => $errorClass,
+                'trace' => $trace,
+            ], static fn (mixed $value): bool => $value !== null));
         } elseif ($this->format === OutputFormat::Json) {
-            // JSON mode: errors go to stderr. The result blob (if any) goes to stdout.
-            $this->writeStderr("Error: {$message}");
+            $this->writeStdout($this->jsonEncode(array_filter([
+                'type' => 'error',
+                'error' => $message,
+                'exit_code' => $exitCode,
+                'error_class' => $errorClass,
+                'trace' => $trace,
+            ], static fn (mixed $value): bool => $value !== null), JSON_PRETTY_PRINT));
         }
     }
 

@@ -86,6 +86,80 @@ final class AgentBuilderTest extends TestCase
         $this->assertNotEmpty(array_filter($result->events, fn ($event): bool => $event instanceof ToolCallCompleted));
     }
 
+    public function test_collect_preserves_exception_details_for_headless_debugging(): void
+    {
+        $llm = new class implements LlmClientInterface
+        {
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+            {
+                throw new \LogicException('diagnostic failure');
+            }
+
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                throw new \LogicException('diagnostic failure');
+                yield;
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+
+            public function setSystemPrompt(string $prompt): void {}
+
+            public function getProvider(): string
+            {
+                return 'test';
+            }
+
+            public function setProvider(string $provider): void {}
+
+            public function getModel(): string
+            {
+                return 'test-model';
+            }
+
+            public function setModel(string $model): void {}
+
+            public function getTemperature(): int|float|null
+            {
+                return null;
+            }
+
+            public function setTemperature(int|float|null $temperature): void {}
+
+            public function getMaxTokens(): ?int
+            {
+                return null;
+            }
+
+            public function setMaxTokens(?int $maxTokens): void {}
+
+            public function getReasoningEffort(): string
+            {
+                return 'medium';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+        };
+
+        $kernel = $this->kernelWithFakeLlm($llm);
+
+        $result = AgentBuilder::fromContainer($kernel->getContainer())
+            ->forProject($this->project)
+            ->withoutSessionPersistence()
+            ->build()
+            ->collect('fail with diagnostics');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('diagnostic failure', $result->error);
+        $this->assertSame(\LogicException::class, $result->errorClass);
+        $this->assertNotNull($result->errorTrace);
+        $this->assertStringContainsString('diagnostic failure', $result->text);
+        $this->assertSame(\LogicException::class, $result->toArray()['error_class']);
+    }
+
     public function test_callback_renderer_receives_events_during_run(): void
     {
         $llm = new RecordingLlmClient;
@@ -109,14 +183,14 @@ final class AgentBuilderTest extends TestCase
 
     public function test_stream_yields_events_before_run_completes(): void
     {
-        $marker = (object) ['completed' => false];
+        $marker = new StreamCompletionMarker;
         $llm = new class($marker) implements LlmClientInterface
         {
             private string $provider = 'test';
 
             private string $model = 'test-model';
 
-            public function __construct(private readonly \stdClass $marker) {}
+            public function __construct(private readonly StreamCompletionMarker $marker) {}
 
             public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
             {
@@ -294,4 +368,9 @@ final class AgentBuilderTest extends TestCase
             return true;
         }
     }
+}
+
+final class StreamCompletionMarker
+{
+    public bool $completed = false;
 }

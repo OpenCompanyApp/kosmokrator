@@ -23,6 +23,8 @@ final class AgentResult
         public readonly bool $success = true,
         public readonly int $exitCode = 0,
         public readonly ?string $error = null,
+        public readonly ?string $errorClass = null,
+        public readonly ?string $errorTrace = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -38,6 +40,8 @@ final class AgentResult
             'success' => $this->success,
             'exit_code' => $this->exitCode,
             'error' => $this->error,
+            'error_class' => $this->errorClass,
+            'error_trace' => $this->errorTrace,
             'usage' => [
                 'tokens_in' => $this->tokensIn,
                 'tokens_out' => $this->tokensOut,

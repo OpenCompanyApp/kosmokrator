@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Amp\Cancellation;
 use Amp\CancelledException;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Tool\Coding\FileReadTool;
@@ -160,6 +161,7 @@ final class ToolExecutor
         }
 
         // Phase 2: Execute with live feedback — show header + spinner before, result after
+        $cancellation = $this->ui->getCancellation();
         $results = [];
         $subagentBatch = [];
         $groups = $this->partitionConcurrentGroups($approved);
@@ -183,7 +185,7 @@ final class ToolExecutor
                     SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
                 }
 
-                $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode);
+                $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode, $cancellation);
                 $agentContext?->orchestrator->persistStats($stats);
 
                 if ($toolCall->name !== 'subagent') {
@@ -207,20 +209,28 @@ final class ToolExecutor
                 // Launch all futures concurrently
                 $futures = [];
                 foreach ($group as [$toolCall, $tool, $args]) {
-                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode));
+                    $futures[$toolCall->id] = async(fn () => $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode, $cancellation));
                 }
 
                 // Await and display each header+result pair in original order
-                foreach ($group as [$toolCall, $tool, $args]) {
-                    $outcome = $futures[$toolCall->id]->await();
-                    $agentContext?->orchestrator->persistStats($stats);
+                try {
+                    foreach ($group as [$toolCall, $tool, $args]) {
+                        $outcome = $futures[$toolCall->id]->await($cancellation);
+                        $agentContext?->orchestrator->persistStats($stats);
 
-                    if ($toolCall->name !== 'subagent') {
-                        SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
-                        SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
+                        if ($toolCall->name !== 'subagent') {
+                            SafeDisplay::call(fn () => $this->ui->clearToolExecuting(), $this->log);
+                            SafeDisplay::call(fn () => $this->ui->showToolCall($toolCall->name, $args), $this->log);
+                        }
+
+                        $this->collectResult($toolCall, $args, $outcome, $agentContext, $subagentBatch, $results);
+                    }
+                } catch (\Throwable $e) {
+                    foreach ($futures as $future) {
+                        $future->ignore();
                     }
 
-                    $this->collectResult($toolCall, $args, $outcome, $agentContext, $subagentBatch, $results);
+                    throw $e;
                 }
             }
         }
@@ -237,7 +247,7 @@ final class ToolExecutor
                 SafeDisplay::call(fn () => $this->ui->showToolExecuting($toolCall->name), $this->log);
             }
 
-            $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode);
+            $result = $this->executeSingleTool($toolCall, $args, $tool, $stats, $mode, $cancellation);
             $agentContext?->orchestrator->persistStats($stats);
 
             if ($toolCall->name !== 'subagent') {
@@ -335,10 +345,17 @@ final class ToolExecutor
     /**
      * Execute a single tool call with error handling and output truncation.
      */
-    private function executeSingleTool(ToolCall $toolCall, array $args, Tool $tool, ?SubagentStats $stats, AgentMode $mode): ToolResult
-    {
+    private function executeSingleTool(
+        ToolCall $toolCall,
+        array $args,
+        Tool $tool,
+        ?SubagentStats $stats,
+        AgentMode $mode,
+        ?Cancellation $cancellation = null,
+    ): ToolResult {
         try {
-            \Amp\delay(0);
+            $cancellation?->throwIfRequested();
+            \Amp\delay(0, cancellation: $cancellation);
 
             if ($toolCall->name === 'shell_start') {
                 $args['read_only'] = $mode !== AgentMode::Edit;
@@ -350,7 +367,8 @@ final class ToolExecutor
             $stats?->markTool($toolCall->name);
             try {
                 $output = $tool->handle(...$args);
-                \Amp\delay(0);
+                \Amp\delay(0, cancellation: $cancellation);
+                $cancellation?->throwIfRequested();
                 $stats?->incrementToolCalls();
                 $outputStr = ToolCallMapper::normalizeToolOutput($output);
 

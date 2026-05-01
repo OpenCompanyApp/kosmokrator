@@ -11,7 +11,7 @@ namespace Kosmokrator\LLM;
  * parsed from response headers, so RetryableLlmClient can honor
  * provider-specified backoff durations.
  */
-class RetryableHttpException extends \RuntimeException
+class RetryableHttpException extends \Exception
 {
     public function __construct(
         public readonly int $httpStatus,

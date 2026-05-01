@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Amp\CancelledException;
+use Amp\DeferredCancellation;
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentType;
@@ -333,6 +335,41 @@ class ToolExecutorTest extends TestCase
 
         $this->assertSame('file contents', $byId['tc_1']->result);
         $this->assertSame('*.php', $byId['tc_2']->result);
+    }
+
+    public function test_concurrent_tool_execution_honors_cancellation_token(): void
+    {
+        $deferred = new DeferredCancellation;
+        $deferred->cancel();
+
+        $this->ui->method('getCancellation')->willReturn($deferred->getCancellation());
+
+        $readTool = $this->makeToolWithCallback('file_read', function (): string {
+            \Amp\delay(1);
+
+            return 'file contents';
+        });
+        $globTool = $this->makeToolWithCallback('glob', function (): string {
+            \Amp\delay(1);
+
+            return '*.php';
+        });
+
+        $executor = $this->createExecutor();
+
+        $this->expectException(CancelledException::class);
+
+        $executor->executeToolCalls(
+            toolCalls: [
+                new ToolCall(id: 'tc_1', name: 'file_read', arguments: ['path' => '/tmp/a.txt']),
+                new ToolCall(id: 'tc_2', name: 'glob', arguments: ['pattern' => '*.php']),
+            ],
+            tools: [$readTool, $globTool],
+            allTools: [$readTool, $globTool],
+            mode: AgentMode::Edit,
+            agentContext: null,
+            stats: null,
+        );
     }
 
     public function test_write_write_conflict_partitions_sequentially(): void

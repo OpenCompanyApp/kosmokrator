@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
+use Amp\Future;
 use Amp\Process\Process;
 use Kosmokrator\Exception\SessionException;
 use Psr\Log\LoggerInterface;
@@ -19,6 +20,9 @@ final class ShellSessionManager
 {
     /** @var array<string, ShellSession> Active sessions keyed by ID. */
     private array $sessions = [];
+
+    /** @var array<string, Future> Background stdout/stderr/exit reader futures keyed by session and stream. */
+    private array $readerFutures = [];
 
     /** Monotonic counter for generating unique session IDs. */
     private int $nextId = 1;
@@ -192,21 +196,21 @@ final class ShellSessionManager
     /** Launch background Amp fibers to read stdout, stderr, and process exit. */
     private function startBackgroundReaders(ShellSession $session): void
     {
-        \Amp\async(function () use ($session): void {
+        $this->trackReader($session, 'stdout', function () use ($session): void {
             $stream = $session->process->getStdout();
             while (($chunk = $stream->read()) !== null) {
                 $session->appendOutput($chunk);
             }
         });
 
-        \Amp\async(function () use ($session): void {
+        $this->trackReader($session, 'stderr', function () use ($session): void {
             $stream = $session->process->getStderr();
             while (($chunk = $stream->read()) !== null) {
                 $session->appendOutput($chunk);
             }
         });
 
-        \Amp\async(function () use ($session): void {
+        $this->trackReader($session, 'exit', function () use ($session): void {
             $exitCode = $session->process->join();
             // Cancel the timeout timer since the process exited on its own
             if ($session->timeoutTimerId() !== null) {
@@ -217,6 +221,30 @@ final class ShellSessionManager
             $session->markExited($exitCode);
             $session->appendSystemLine("Exit code: {$exitCode}");
         });
+    }
+
+    /** Track reader futures so background failures are logged and do not surface as unhandled event-loop errors. */
+    private function trackReader(ShellSession $session, string $kind, \Closure $reader): void
+    {
+        $key = "{$session->id}:{$kind}";
+
+        $this->readerFutures[$key] = \Amp\async($reader)
+            ->catch(function (\Throwable $e) use ($session, $kind): void {
+                $this->log->warning('Shell session background reader failed', [
+                    'session' => $session->id,
+                    'reader' => $kind,
+                    'exception' => get_class($e),
+                    'error' => $e->getMessage(),
+                ]);
+
+                if (! $session->isDrained()) {
+                    $session->appendSystemLine("Shell {$kind} reader failed: {$e->getMessage()}");
+                }
+            })
+            ->finally(function () use ($key): void {
+                unset($this->readerFutures[$key]);
+            })
+            ->ignore();
     }
 
     /** Schedule a Revolt event-loop timer to auto-kill the session after its timeout. */

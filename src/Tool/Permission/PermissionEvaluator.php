@@ -79,6 +79,10 @@ class PermissionEvaluator
     /** Switch the active permission mode at runtime. */
     public function setPermissionMode(PermissionMode $mode): void
     {
+        if ($this->permissionMode !== $mode) {
+            $this->grants->reset();
+        }
+
         $this->permissionMode = $mode;
     }
 

@@ -15,6 +15,7 @@ use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\MessageMapper;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
@@ -306,6 +307,17 @@ class AgentLoop
                 } catch (CancelledException $e) {
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
                     $this->log->info('LLM request cancelled by user', ['round' => $round]);
+
+                    return;
+                } catch (RetryableHttpException $e) {
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+                    $this->log->error('LLM retryable HTTP request failed after retries', [
+                        'status' => $e->httpStatus,
+                        'error' => $e->getMessage(),
+                        ...$this->logContext($round),
+                    ]);
+                    SafeDisplay::call(fn () => $this->ui->showError($e->getMessage()), $this->log);
+                    $this->history->addAssistant('Error: '.ErrorSanitizer::sanitize($e->getMessage()));
 
                     return;
                 } catch (\RuntimeException $e) {

@@ -124,6 +124,22 @@ class PermissionEvaluatorTest extends TestCase
         $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('file_edit', [])->action);
     }
 
+    public function test_permission_mode_change_clears_session_grants(): void
+    {
+        $rules = [
+            new PermissionRule('bash', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+        $evaluator->setPermissionMode(PermissionMode::Argus);
+
+        $evaluator->grantSession('bash', ['command' => 'touch safe.txt']);
+        $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('bash', ['command' => 'touch safe.txt'])->action);
+
+        $evaluator->setPermissionMode(PermissionMode::Guardian);
+
+        $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'touch safe.txt'])->action);
+    }
+
     public function test_deny_pattern_matching_is_case_insensitive(): void
     {
         $rules = [

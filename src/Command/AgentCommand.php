@@ -193,7 +193,7 @@ class AgentCommand extends Command
         $result = $agent->collect($prompt);
         if ($result->error !== null && $result->text === 'Error: '.$result->error) {
             if ($format === OutputFormat::Json) {
-                $renderer->emitError($result->error, $result->exitCode);
+                $renderer->emitError($result->error, $result->exitCode, $result->errorClass, $result->errorTrace);
             }
         } else {
             $renderer->emitResult($result->text, $result->turns, $result->tokensIn, $result->tokensOut);

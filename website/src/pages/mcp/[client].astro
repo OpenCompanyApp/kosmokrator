@@ -1,0 +1,151 @@
+---
+import '../../styles/tailwind.css';
+import { getIntegrations, integrationUrl } from '../../lib/integrations-catalog';
+import {
+  SITE_URL,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  faqJsonLd,
+  jsonLd,
+  matrixClients,
+  ogImageUrl,
+  siteUrl,
+  type MatrixClient,
+} from '../../lib/seo';
+
+export function getStaticPaths() {
+  return matrixClients.map((client) => ({
+    params: { client: client.slug },
+    props: { client },
+  }));
+}
+
+const { client } = Astro.props as { client: MatrixClient };
+const integrations = getIntegrations();
+const featured = integrations
+  .filter((integration) => integration.seo.mcp_gateway_supported && integration.tools.length > 0)
+  .slice(0, 48);
+const pagePath = `/mcp/${client.slug}`;
+const pageTitle = `KosmoKrator MCP Gateway for ${client.label}`;
+const pageDescription = `Use KosmoKrator as a local MCP gateway for ${client.label}, exposing selected integrations with local credentials, scoped tools, and write policy.`;
+const pageOgImage = ogImageUrl(['mcp', client.slug]);
+const exampleJson = JSON.stringify({
+  mcpServers: {
+    kosmokrator: {
+      type: 'stdio',
+      command: 'kosmo',
+      args: ['mcp:serve', '--integration=github', '--integration=clickup', '--write=deny'],
+    },
+  },
+}, null, 2);
+const faqs = [
+  {
+    question: `Can ${client.label} use KosmoKrator as an MCP server?`,
+    answer: `Yes. ${client.label} can connect to the local KosmoKrator MCP gateway through a stdio MCP server configuration.`,
+  },
+  {
+    question: 'Can I restrict which integrations are exposed?',
+    answer: 'Yes. Use repeated --integration flags or a gateway profile so the client only sees selected tools.',
+  },
+  {
+    question: 'Can I keep MCP tools read-only?',
+    answer: 'Yes. Use --write=deny by default, then opt into ask or allow only for trusted workspaces.',
+  },
+];
+const schemas = [
+  articleJsonLd(pageTitle, pageDescription, pagePath),
+  breadcrumbJsonLd([
+    { name: 'KosmoKrator', url: SITE_URL },
+    { name: 'MCP', url: siteUrl('/docs/mcp') },
+    { name: client.label, url: siteUrl(pagePath) },
+  ]),
+  faqJsonLd(faqs),
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle} - KosmoKrator</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content={`${client.label} MCP, ${client.label} integrations, local MCP gateway, Claude Code MCP, Cursor MCP, Codex MCP, AI agent integrations, KosmoKrator`} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={pageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={pageOgImage} />
+    <link rel="canonical" href={siteUrl(pagePath)} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {schemas.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+  </head>
+  <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="flex flex-wrap items-center justify-end gap-4" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/mcp">MCP docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/integrations">CLI docs</a>
+      </nav>
+    </header>
+
+    <main class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto py-12 pb-20">
+      <section class="max-w-[900px] mb-8">
+        <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">MCP client setup</p>
+        <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">{pageTitle}</h1>
+        <p class="text-kosmo-muted leading-[1.7]">{pageDescription}</p>
+      </section>
+
+      <section class="grid grid-cols-[minmax(0,1fr)_320px] gap-5 items-start max-[900px]:grid-cols-1">
+        <div class="grid gap-5">
+          <section class="p-5 border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
+            <h2 class="mt-0">Config Shape</h2>
+            <p class="text-kosmo-muted leading-relaxed">{client.configIntro}</p>
+            <pre class="overflow-x-auto m-0 p-4 rounded-md bg-kosmo-code-bg-2 text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.65]"><code>{exampleJson}</code></pre>
+          </section>
+
+          <section class="p-5 border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
+            <h2 class="mt-0">Why This Works</h2>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3">
+              <div class="p-4 border border-kosmo-white-border rounded-lg bg-white/[0.04]"><strong>One local gateway</strong><p class="text-kosmo-muted">Expose selected integrations from one stdio MCP server.</p></div>
+              <div class="p-4 border border-kosmo-white-border rounded-lg bg-white/[0.04]"><strong>Tool scope</strong><p class="text-kosmo-muted">Avoid loading every integration into {client.shortLabel} at once.</p></div>
+              <div class="p-4 border border-kosmo-white-border rounded-lg bg-white/[0.04]"><strong>Write policy</strong><p class="text-kosmo-muted">Keep write tools denied, ask-based, or allowed per trusted workspace.</p></div>
+            </div>
+          </section>
+
+          <section>
+            <h2>Popular Integrations for {client.shortLabel}</h2>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
+              {featured.map((integration) => (
+                <article class="grid gap-3 p-[1.1rem] border border-kosmo-white-border rounded-lg bg-kosmo-surface">
+                  <h3 class="m-0 text-xl"><a class="text-kosmo-text no-underline" href={`${integrationUrl(integration)}/framework/${client.slug}`}>{integration.name} MCP for {client.shortLabel}</a></h3>
+                  <p class="m-0 text-kosmo-muted leading-[1.55]">{integration.description}</p>
+                  <nav class="flex flex-wrap gap-[0.55rem]" aria-label={`${integration.name} links`}>
+                    <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={`${integrationUrl(integration)}/framework/${client.slug}`}>Setup</a>
+                    <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'cli')}>{integration.name} CLI</a>
+                    <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'mcp')}>MCP reference</a>
+                  </nav>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside class="sticky top-4 p-4 border border-kosmo-border rounded-lg bg-kosmo-surface-solid max-[900px]:static">
+          <h2 class="mt-0 text-base">Client Matrix</h2>
+          <nav class="grid gap-2" aria-label="MCP clients">
+            {matrixClients.map((item) => (
+              <a class:list={['text-kosmo-muted no-underline hover:text-kosmo-text', item.slug === client.slug && 'text-kosmo-text font-bold']} href={`/mcp/${item.slug}`}>{item.label}</a>
+            ))}
+          </nav>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

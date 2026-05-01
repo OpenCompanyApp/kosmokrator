@@ -5,6 +5,9 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   site: 'https://kosmokrator.dev',
   trailingSlash: 'never',
+  build: {
+    concurrency: 1,
+  },
   vite: {
     plugins: [tailwindcss()],
   },
@@ -44,8 +47,49 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             property: 'og:image',
-            content: '/og-image.svg',
+            content: 'https://kosmokrator.dev/og/default.svg',
           },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image:width',
+            content: '1200',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image:height',
+            content: '630',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:card',
+            content: 'summary_large_image',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:image',
+            content: 'https://kosmokrator.dev/og/default.svg',
+          },
+        },
+        {
+          tag: 'script',
+          attrs: {
+            async: true,
+            src: 'https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js',
+          },
+        },
+        {
+          tag: 'script',
+          attrs: { 'is:inline': true },
+          content:
+            'window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()',
         },
       ],
       sidebar: [

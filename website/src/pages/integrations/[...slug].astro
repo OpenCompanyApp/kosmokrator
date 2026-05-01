@@ -14,38 +14,104 @@ import {
   type Integration,
   type IntegrationTool,
 } from '../../lib/integrations-catalog';
+import {
+  SITE_URL,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  cliEnvironments,
+  faqJsonLd,
+  integrationCliTitle,
+  integrationEnvironmentTitle,
+  integrationFrameworkTitle,
+  integrationKeywords,
+  integrationMcpTitle,
+  integrationOverviewTitle,
+  jsonLd,
+  matrixClients,
+  ogImageUrl,
+  shouldIndexIntegration,
+  siteUrl,
+  type CliEnvironment,
+  type MatrixClient,
+} from '../../lib/seo';
 
-type PageType = 'overview' | 'lua' | 'cli' | 'mcp';
+type PageType = 'overview' | 'lua' | 'cli' | 'mcp' | 'framework' | 'environment';
 
 export function getStaticPaths() {
   const integrations = getIntegrations();
 
-  return integrations.flatMap((integration) => [
-    { params: { slug: integration.route_slug }, props: { integration, pageType: 'overview' } },
-    { params: { slug: `${integration.route_slug}/lua` }, props: { integration, pageType: 'lua' } },
-    { params: { slug: `${integration.route_slug}/cli` }, props: { integration, pageType: 'cli' } },
-    { params: { slug: `${integration.route_slug}/mcp` }, props: { integration, pageType: 'mcp' } },
-  ]);
+  return integrations.flatMap((integration) => {
+    const corePages = [
+      { params: { slug: integration.route_slug }, props: { integration, pageType: 'overview' } },
+      { params: { slug: `${integration.route_slug}/lua` }, props: { integration, pageType: 'lua' } },
+      { params: { slug: `${integration.route_slug}/cli` }, props: { integration, pageType: 'cli' } },
+      { params: { slug: `${integration.route_slug}/mcp` }, props: { integration, pageType: 'mcp' } },
+    ];
+    const frameworkPages = matrixClients.map((client) => ({
+      params: { slug: `${integration.route_slug}/framework/${client.slug}` },
+      props: { integration, pageType: 'framework', client },
+    }));
+    const environmentPages = cliEnvironments.map((environment) => ({
+      params: { slug: `${integration.route_slug}/cli/${environment.slug}` },
+      props: { integration, pageType: 'environment', environment },
+    }));
+
+    return [...corePages, ...frameworkPages, ...environmentPages];
+  });
 }
 
-const { integration, pageType } = Astro.props as { integration: Integration; pageType: PageType };
+const { integration, pageType, client, environment } = Astro.props as {
+  integration: Integration;
+  pageType: PageType;
+  client?: MatrixClient;
+  environment?: CliEnvironment;
+};
 const primaryTool = integration.tools[0];
-const markdownProcessor = await createMarkdownProcessor();
 const fallbackLuaDocs = `No package Lua docs were provided. Use the function reference below for ${integration.name}.`;
 const luaDocsMarkdown = integration.lua_docs || fallbackLuaDocs;
-const luaDocsHtml = (await markdownProcessor.render(luaDocsMarkdown)).code;
-const titleByPage = {
-  overview: `${integration.name} CLI, Lua, and MCP integration`,
-  lua: `${integration.name} Lua API reference`,
-  cli: `${integration.name} CLI setup and headless usage`,
-  mcp: `${integration.name} MCP gateway setup`,
-};
-const descriptionByPage = {
-  overview: integration.seo.meta_description,
-  lua: `Agent-facing Lua documentation and function reference for the ${integration.name} KosmoKrator integration.`,
-  cli: `Configure and call ${integration.name} headlessly with the KosmoKrator integrations CLI.`,
-  mcp: `Expose ${integration.name} tools to MCP clients through the KosmoKrator MCP gateway.`,
-};
+const luaDocsHtml = pageType === 'lua'
+  ? (await (await createMarkdownProcessor()).render(luaDocsMarkdown)).code
+  : '';
+const pageTitle = pageType === 'overview'
+  ? integrationOverviewTitle(integration)
+  : pageType === 'cli'
+    ? integrationCliTitle(integration)
+    : pageType === 'mcp'
+      ? integrationMcpTitle(integration)
+      : pageType === 'lua'
+        ? `${integration.name} Lua API for KosmoKrator Agents`
+        : pageType === 'framework' && client
+          ? integrationFrameworkTitle(integration, client)
+          : pageType === 'environment' && environment
+            ? integrationEnvironmentTitle(integration, environment)
+            : integrationOverviewTitle(integration);
+const pageDescription = pageType === 'overview'
+  ? `${integration.name} integration docs for AI agents: MCP gateway setup, ${integration.name} CLI commands, Lua API reference, credentials, and function schemas.`
+  : pageType === 'cli'
+    ? `Use the ${integration.name} CLI from KosmoKrator to call ${integration.name} tools headlessly, return JSON, inspect schemas, and automate workflows from coding agents, scripts, and CI.`
+    : pageType === 'mcp'
+      ? `Expose ${integration.name} tools to Claude Code, Cursor, Codex, and other MCP clients through the local KosmoKrator MCP gateway.`
+      : pageType === 'lua'
+        ? `Agent-facing Lua documentation and function reference for the ${integration.name} KosmoKrator integration.`
+        : pageType === 'framework' && client
+          ? `Connect ${integration.name} to ${client.label} through the local KosmoKrator MCP gateway with scoped tools, credentials, and write policy.`
+          : pageType === 'environment' && environment
+            ? `Use the ${integration.name} CLI for ${environment.label} with headless JSON commands, schema discovery, credentials, and permission controls.`
+            : integration.seo.meta_description;
+const pagePath = pageType === 'overview'
+  ? integrationUrl(integration)
+  : pageType === 'framework' && client
+    ? `${integrationUrl(integration)}/framework/${client.slug}`
+    : pageType === 'environment' && environment
+      ? `${integrationUrl(integration, 'cli')}/${environment.slug}`
+      : integrationUrl(integration, pageType === 'lua' || pageType === 'cli' || pageType === 'mcp' ? pageType : undefined);
+const pageOgImage = pageType === 'overview'
+  ? ogImageUrl(['integration', integration.route_slug])
+  : pageType === 'framework' && client
+    ? ogImageUrl(['integration', integration.route_slug, 'framework', client.slug])
+    : pageType === 'environment' && environment
+      ? ogImageUrl(['integration', integration.route_slug, 'cli', environment.slug])
+      : ogImageUrl(['integration', integration.route_slug, pageType]);
 const configureSnippet = [
   '# Install KosmoKrator first if it is not available on PATH.',
   'curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash',
@@ -65,12 +131,45 @@ const mcpJson = JSON.stringify({
   mcpServers: {
     [`kosmokrator-${integration.slug}`]: {
       type: 'stdio',
-      command: 'kosmokrator',
+      command: 'kosmo',
       args: ['mcp:serve', `--integration=${integration.slug}`, '--write=deny'],
     },
   },
 }, null, 2);
+const clientMcpJson = client ? JSON.stringify({
+  mcpServers: {
+    [`kosmokrator-${integration.slug}`]: {
+      type: 'stdio',
+      command: 'kosmo',
+      args: ['mcp:serve', `--integration=${integration.slug}`, '--write=deny'],
+    },
+  },
+}, null, 2) : mcpJson;
+const environmentSnippet = environment ? [
+  `# ${integration.name} CLI for ${environment.titleSuffix}`,
+  integration.setup.cli_configure_command,
+  primaryTool ? `kosmo integrations:call ${toolFullName(integration, primaryTool)} '${compactJsonExample(primaryTool)}' --json` : `kosmo integrations:docs ${integration.slug} --json`,
+].join('\n') : '';
 const packageUrl = `https://github.com/OpenCompanyApp/integrations/tree/main/packages/${integration.package}`;
+const feedbackIssueUrl = `https://github.com/OpenCompanyApp/integrations/issues/new?title=${encodeURIComponent(`${integration.name} integration feedback`)}&body=${encodeURIComponent([
+  `## ${integration.name} integration feedback`,
+  '',
+  'Describe the missing function, credential issue, incorrect docs, runtime failure, MCP behavior, or Lua/CLI problem.',
+  '',
+  '## Page',
+  siteUrl(pagePath),
+  '',
+  '## Integration metadata',
+  `- slug: ${integration.slug}`,
+  `- package: ${integration.package}`,
+  `- page_type: ${pageType}`,
+  '',
+  '## Expected behavior',
+  '',
+  '',
+  '## Actual behavior',
+  '',
+].join('\n'))}`;
 const discoverySnippet = [
   `kosmo integrations:docs ${integration.slug} --json`,
   primaryTool ? `kosmo integrations:docs ${toolFullName(integration, primaryTool)} --json` : null,
@@ -80,6 +179,35 @@ const discoverySnippet = [
 ].filter(Boolean).join('\n');
 
 const showToc = integration.tools.length > 5;
+const indexable = shouldIndexIntegration(integration);
+const integrationFaqs = [
+  {
+    question: `Can I use ${integration.name} as a CLI?`,
+    answer: `Yes. KosmoKrator exposes a ${integration.name} CLI through kosmo integrations:call and the provider shortcut command. Commands can return JSON for scripts, CI, and coding agents.`,
+  },
+  {
+    question: `Can I expose ${integration.name} through MCP?`,
+    answer: `Yes. The KosmoKrator MCP gateway can expose selected ${integration.name} tools to clients such as Claude Code, Cursor, Codex, and other MCP-compatible tools.`,
+  },
+  {
+    question: `Where are ${integration.name} credentials stored?`,
+    answer: `${integration.name} credentials are configured in KosmoKrator's local integration settings and reused by CLI, Lua, and MCP gateway surfaces.`,
+  },
+  {
+    question: `Can I deny write access for ${integration.name} MCP tools?`,
+    answer: `Yes. Start the gateway with --write=deny for read-only clients, or use ask/allow only for trusted workspaces.`,
+  },
+];
+const pageJsonLd = [
+  articleJsonLd(pageTitle, pageDescription, pagePath),
+  breadcrumbJsonLd([
+    { name: 'KosmoKrator', url: SITE_URL },
+    { name: 'Integrations', url: siteUrl('/integrations') },
+    { name: integration.name, url: siteUrl(integrationUrl(integration)) },
+    ...(pagePath !== integrationUrl(integration) ? [{ name: pageTitle, url: siteUrl(pagePath) }] : []),
+  ]),
+  faqJsonLd(integrationFaqs),
+];
 
 function compactJsonExample(tool: IntegrationTool): string {
   try {
@@ -108,38 +236,62 @@ function parameterSummary(tool: IntegrationTool): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{titleByPage[pageType]} - KosmoKrator</title>
-    <meta name="description" content={descriptionByPage[pageType]} />
-    <meta name="keywords" content={integration.seo.keywords.join(', ')} />
-    <meta property="og:title" content={titleByPage[pageType]} />
-    <meta property="og:description" content={descriptionByPage[pageType]} />
-    <link rel="canonical" href={`https://kosmokrator.dev${integrationUrl(integration, pageType === 'overview' ? undefined : pageType)}`} />
+    <title>{pageTitle} - KosmoKrator</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content={integrationKeywords(integration, pageType === 'framework' && client ? [client.label, `${integration.name} ${client.label}`, `${client.label} MCP`] : pageType === 'environment' && environment ? [environment.label, `${integration.name} ${environment.titleSuffix}`] : [])} />
+    {!indexable && <meta name="robots" content="noindex,follow" />}
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={pageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={pageDescription} />
+    <meta name="twitter:image" content={pageOgImage} />
+    <link rel="canonical" href={siteUrl(pagePath)} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Privacy-friendly analytics by Plausible -->
+    <script async src="https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js"></script>
+    <script is:inline>
+      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+      plausible.init()
+    </script>
+    {pageJsonLd.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
   </head>
   <body class="min-h-screen text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
-    <header class="w-[min(1180px,calc(100vw-2rem))] mx-auto flex items-center justify-between gap-4 py-4">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-4 max-[640px]:flex-col max-[640px]:items-start">
       <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
         <img src="/favicon.svg" alt="" width="28" height="28" />
         <span>KosmoKrator</span>
       </a>
-      <nav class="flex items-center gap-4" aria-label="Main navigation">
+      <nav class="flex flex-wrap items-center gap-x-4 gap-y-2 justify-end max-[640px]:justify-start" aria-label="Main navigation">
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="/integrations">Integrations</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="/docs/integrations">CLI docs</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="/docs/mcp">MCP docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href={feedbackIssueUrl}>Submit feedback</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="https://github.com/OpenCompanyApp/integrations">Contribute</a>
       </nav>
     </header>
 
-    <main class="w-[min(1180px,calc(100vw-2rem))] mx-auto pt-12 pb-20">
+    <main class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto pt-12 pb-20">
       <section class="max-w-[900px] mb-8">
         <p class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">{integration.category}</p>
-        <h1 class="text-[clamp(2.4rem,5vw,4.1rem)]">{pageType === 'overview' ? `${integration.name} CLI and MCP integration` : titleByPage[pageType]}</h1>
-        <p class="text-kosmo-muted leading-relaxed">{integration.description}</p>
+        <h1 class="text-[clamp(2.4rem,5vw,4.1rem)]">{pageTitle}</h1>
+        <p class="text-kosmo-muted leading-relaxed">{pageDescription}</p>
         <div class="flex flex-wrap gap-3 mt-5">
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.tools.length}</strong> functions</span>
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.read_tool_count}</strong> read</span>
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.write_tool_count}</strong> write</span>
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.auth_strategy_label}</strong> auth</span>
+        </div>
+        <div class="mt-5 flex flex-wrap gap-3">
+          <a class="inline-flex min-h-[42px] items-center justify-center rounded-md border border-kosmo-crimson bg-kosmo-crimson px-4 py-2 font-bold text-white no-underline" href={feedbackIssueUrl}>
+            Submit {integration.name} feedback
+          </a>
+          <a class="inline-flex min-h-[42px] items-center justify-center rounded-md border border-kosmo-white-border-strong bg-white/[0.05] px-4 py-2 font-bold text-kosmo-text no-underline" href={packageUrl}>
+            View package source
+          </a>
         </div>
       </section>
 
@@ -190,7 +342,30 @@ function parameterSummary(tool: IntegrationTool): string {
               <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'lua')}><strong>Lua API</strong><span>Agent-facing namespace and function reference.</span></a>
               <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'cli')}><strong>{integration.name} CLI</strong><span>Headless setup and direct function calls.</span></a>
               <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'mcp')}><strong>{integration.name} MCP</strong><span>MCP gateway setup for external clients.</span></a>
+              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={feedbackIssueUrl}><strong>Submit feedback</strong><span>Report missing tools, auth problems, wrong docs, or runtime issues.</span></a>
               <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={packageUrl}><strong>Contribute</strong><span>Add tools or improve metadata in the integrations repo.</span></a>
+            </div>
+
+            <h2>{integration.name} MCP Client Matrix</h2>
+            <p>Use these pages when a specific agent client or framework needs copy-pasteable MCP setup for {integration.name}.</p>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
+              {matrixClients.map((matrixClient) => (
+                <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`${integrationUrl(integration)}/framework/${matrixClient.slug}`}>
+                  <strong>{matrixClient.shortLabel}</strong>
+                  <span>{integration.name} MCP setup for {matrixClient.label}.</span>
+                </a>
+              ))}
+            </div>
+
+            <h2>{integration.name} CLI Matrix</h2>
+            <p>Use these pages for direct {integration.name} CLI workflows in scripts, CI, cron, and agent wrappers.</p>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
+              {cliEnvironments.map((cliEnvironment) => (
+                <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`${integrationUrl(integration, 'cli')}/${cliEnvironment.slug}`}>
+                  <strong>{cliEnvironment.titleSuffix}</strong>
+                  <span>{integration.name} CLI for {cliEnvironment.label}.</span>
+                </a>
+              ))}
             </div>
 
             {integration.runtime_requirements.length > 0 && (
@@ -573,6 +748,119 @@ function parameterSummary(tool: IntegrationTool): string {
             Start with <code class="text-kosmo-rose">--write=deny</code> for read-only MCP clients. Use <code class="text-kosmo-rose">--write=ask</code> or
             <code class="text-kosmo-rose"> --write=allow</code> only when the client and workspace are trusted.
           </p>
+        </section>
+      )}
+
+      {pageType === 'framework' && client && (
+        <section class="integration-copy min-w-0 grid gap-4 max-w-[1080px]">
+          <h2>Connect {integration.name} to {client.label}</h2>
+          <p>{client.description}</p>
+          <p>
+            {client.configIntro} The gateway is local, scoped to this integration, and starts with
+            <code class="text-kosmo-rose"> --write=deny</code> so {client.shortLabel} can inspect read-capable tools without receiving write access by default.
+          </p>
+
+          <h2>{integration.name} MCP Config for {client.label}</h2>
+          <p>{client.installHint}</p>
+          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
+            <Code code={clientMcpJson} lang="json" />
+          </div>
+
+          <h2>Run the Gateway Manually</h2>
+          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
+            <Code code={integration.setup.mcp_gateway_serve_command} lang="bash" />
+          </div>
+
+          <h2>Why Use KosmoKrator Here</h2>
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
+            <div class="p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><strong>Scoped tools</strong><p>Expose only {integration.name} instead of a broad multi-service tool list.</p></div>
+            <div class="p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><strong>Local credentials</strong><p>Reuse credentials already configured for the KosmoKrator CLI and Lua runtime.</p></div>
+            <div class="p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><strong>Write policy</strong><p>Start read-only, then opt into ask or allow for trusted workspaces.</p></div>
+          </div>
+
+          <h2>{integration.name} Tools Visible to {client.shortLabel}</h2>
+          <p>{client.shortLabel} sees stable MCP tool names generated from the {integration.name} integration catalog.</p>
+          <div class="tool-table-wrapper">
+            <table>
+              <thead><tr><th>MCP tool</th><th>Source function</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                {integration.tools.slice(0, 30).map((tool) => (
+                  <tr>
+                    <td data-label="MCP tool"><code class="text-kosmo-rose">{toolMcpName(integration, tool)}</code></td>
+                    <td data-label="Source"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
+                    <td data-label="Type">{operationLabel(tool.type)}</td>
+                    <td data-label="Description">{tool.description || tool.short_description || tool.name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {integration.tools.length > 30 && <p>Showing 30 of {integration.tools.length} functions. See the <a href={integrationUrl(integration, 'mcp')}>{integration.name} MCP reference</a> for the full list.</p>}
+
+          <h2>Related {integration.name} Pages</h2>
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
+            <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'cli')}><strong>{integration.name} CLI</strong><span>Use direct JSON commands instead of MCP discovery.</span></a>
+            <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'mcp')}><strong>{integration.name} MCP</strong><span>Full gateway reference and MCP tool names.</span></a>
+            <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`/mcp/${client.slug}`}><strong>KosmoKrator for {client.shortLabel}</strong><span>Client-level gateway setup.</span></a>
+          </div>
+        </section>
+      )}
+
+      {pageType === 'environment' && environment && (
+        <section class="integration-copy min-w-0 grid gap-4 max-w-[1080px]">
+          <h2>{integration.name} CLI for {environment.titleSuffix}</h2>
+          <p>{environment.description}</p>
+          <p>
+            {environment.exampleIntro} The {integration.name} CLI uses the same integration registry as the TUI, Lua runtime, and MCP gateway,
+            but returns predictable command output for automation.
+          </p>
+
+          <h2>Command Shape</h2>
+          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
+            <Code code={environmentSnippet} lang="bash" />
+          </div>
+
+          <h2>Discovery Before Execution</h2>
+          <p>Agents and scripts can inspect {integration.name} docs and schemas before choosing a function.</p>
+          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
+            <Code code={discoverySnippet} lang="bash" />
+          </div>
+
+          <h2>Useful {integration.name} CLI Functions</h2>
+          <div class="tool-table-wrapper">
+            <table>
+              <thead><tr><th>Function</th><th>Type</th><th>Parameters</th><th>Description</th></tr></thead>
+              <tbody>
+                {integration.tools.slice(0, 40).map((tool) => (
+                  <tr>
+                    <td data-label="Function"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
+                    <td data-label="Type">{operationLabel(tool.type)}</td>
+                    <td data-label="Parameters">{parameterSummary(tool)}</td>
+                    <td data-label="Description">{tool.description || tool.short_description || tool.name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {integration.tools.length > 40 && <p>Showing 40 of {integration.tools.length} functions. See the <a href={integrationUrl(integration, 'cli')}>{integration.name} CLI reference</a> for every function.</p>}
+
+          <h2>Automation Notes</h2>
+          <ul>
+            <li>Use <code class="text-kosmo-rose">--json</code> for machine-readable output.</li>
+            <li>Keep credentials out of argv by using environment variables or stored KosmoKrator configuration.</li>
+            <li>Configure read/write policy before unattended runs; use <code class="text-kosmo-rose">--force</code> only for trusted automation.</li>
+            <li>Use the MCP gateway instead when the agent needs dynamic tool discovery inside a conversation.</li>
+          </ul>
+
+          <h2>Related {integration.name} CLI Pages</h2>
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
+            {cliEnvironments.filter((item) => item.slug !== environment.slug).map((item) => (
+              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`${integrationUrl(integration, 'cli')}/${item.slug}`}>
+                <strong>{item.titleSuffix}</strong>
+                <span>{integration.name} CLI for {item.label}.</span>
+              </a>
+            ))}
+          </div>
         </section>
       )}
     </main>

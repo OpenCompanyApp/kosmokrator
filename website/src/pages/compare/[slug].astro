@@ -1,0 +1,111 @@
+---
+import '../../styles/tailwind.css';
+import {
+  SITE_URL,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  comparisonPages,
+  faqJsonLd,
+  jsonLd,
+  ogImageUrl,
+  siteUrl,
+  type ComparisonPage,
+} from '../../lib/seo';
+
+export function getStaticPaths() {
+  return comparisonPages.map((page) => ({
+    params: { slug: page.slug },
+    props: { page },
+  }));
+}
+
+const { page } = Astro.props as { page: ComparisonPage };
+const pagePath = `/compare/${page.slug}`;
+const pageOgImage = ogImageUrl(['compare', page.slug]);
+const faqs = [
+  {
+    question: `Is KosmoKrator a replacement for ${page.competitor}?`,
+    answer: `It depends on the workflow. KosmoKrator is strongest when you want a local terminal agent, local CLI integration runtime, local MCP gateway, ACP, Lua, and PHP SDK surfaces.`,
+  },
+  {
+    question: 'When should I use KosmoKrator?',
+    answer: 'Use KosmoKrator when local credentials, command-line automation, scoped MCP tools, and coding-agent workflows matter more than a hosted integration dashboard.',
+  },
+  {
+    question: 'Can KosmoKrator work alongside other agent tools?',
+    answer: 'Yes. KosmoKrator can run directly as a terminal agent or expose selected integrations to other clients through MCP.',
+  },
+];
+const schemas = [
+  articleJsonLd(page.title, page.description, pagePath),
+  breadcrumbJsonLd([
+    { name: 'KosmoKrator', url: SITE_URL },
+    { name: 'Compare', url: siteUrl('/compare/composio') },
+    { name: page.h1, url: siteUrl(pagePath) },
+  ]),
+  faqJsonLd(faqs),
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{page.title}</title>
+    <meta name="description" content={page.description} />
+    <meta name="keywords" content={`KosmoKrator vs ${page.competitor}, ${page.competitor} alternative, local MCP gateway, terminal AI coding agent, AI agent CLI`} />
+    <meta property="og:title" content={page.title} />
+    <meta property="og:description" content={page.description} />
+    <meta property="og:image" content={pageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={pageOgImage} />
+    <link rel="canonical" href={siteUrl(pagePath)} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {schemas.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+  </head>
+  <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="flex flex-wrap items-center justify-end gap-4" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/getting-started">Docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/use-cases/local-mcp-gateway">Local MCP</a>
+      </nav>
+    </header>
+
+    <main class="w-[min(980px,calc(100%_-_2.5rem))] mx-auto py-12 pb-20">
+      <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">Comparison</p>
+      <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">{page.h1}</h1>
+      <p class="text-kosmo-muted leading-[1.7]">{page.description}</p>
+
+      <section class="my-8 p-5 border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
+        <h2 class="mt-0">Short Version</h2>
+        <p class="text-kosmo-muted leading-relaxed">{page.positioning}</p>
+      </section>
+
+      <section class="tool-table-wrapper">
+        <table>
+          <thead><tr><th>Area</th><th>KosmoKrator</th><th>{page.competitor}</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Area">Primary shape</td><td data-label="KosmoKrator">Local terminal coding agent, headless CLI, MCP gateway, ACP, Lua, PHP SDK.</td><td data-label={page.competitor}>Depends on the product; usually a focused client, hosted service, or framework.</td></tr>
+            <tr><td data-label="Area">Integration runtime</td><td data-label="KosmoKrator">Local CLI, Lua, and MCP surfaces backed by generated integration metadata.</td><td data-label={page.competitor}>Often hosted, client-specific, or not the primary focus.</td></tr>
+            <tr><td data-label="Area">Credential location</td><td data-label="KosmoKrator">Local KosmoKrator configuration and project policy.</td><td data-label={page.competitor}>Varies by product and deployment model.</td></tr>
+            <tr><td data-label="Area">Best fit</td><td data-label="KosmoKrator">Developer workstations, local automation, CI commands, scoped MCP gateways, and coding-agent workflows.</td><td data-label={page.competitor}>Use when its native workflow or hosted platform is the better fit.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3 my-8">
+        <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href="/use-cases/local-mcp-gateway"><strong>Local MCP Gateway</strong><span class="text-kosmo-muted">Expose selected integrations to other clients.</span></a>
+        <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href="/use-cases/headless-ai-coding-agent"><strong>Headless Agent</strong><span class="text-kosmo-muted">Run agent workflows from scripts and CI.</span></a>
+        <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href="/integrations"><strong>Integration Catalog</strong><span class="text-kosmo-muted">Browse CLI, MCP, and Lua integration pages.</span></a>
+      </section>
+    </main>
+  </body>
+</html>

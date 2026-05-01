@@ -1,12 +1,54 @@
 ---
 import '../../styles/tailwind.css';
 import { getIntegrations, integrationUrl } from '../../lib/integrations-catalog';
+import {
+  SITE_URL,
+  breadcrumbJsonLd,
+  jsonLd,
+  ogImageUrl,
+  siteUrl,
+  slugify,
+} from '../../lib/seo';
 
 const integrations = getIntegrations();
 const categories = [...new Set(integrations.map((integration) => integration.category))].sort();
 const totalTools = integrations.reduce((sum, integration) => sum + integration.tools.length, 0);
 const cliReady = integrations.filter((integration) => integration.cli_runtime_supported).length;
 const mcpReady = integrations.filter((integration) => integration.seo.mcp_gateway_supported).length;
+const pageTitle = 'AI Agent Integration Catalog - CLI, MCP, and Lua Tools';
+const pageDescription = 'Browse KosmoKrator integrations for AI agents with generated CLI, MCP gateway, Lua, credential, schema, and framework setup pages.';
+const pageOgImage = ogImageUrl(['integrations']);
+const feedbackIssueUrl = `https://github.com/OpenCompanyApp/integrations/issues/new?title=${encodeURIComponent('Integration catalog feedback')}&body=${encodeURIComponent([
+  '## What needs improvement?',
+  '',
+  'Describe the integration, function, credential setup, documentation gap, or runtime issue.',
+  '',
+  '## Page',
+  siteUrl('/integrations'),
+  '',
+  '## Expected behavior',
+  '',
+  '',
+  '## Actual behavior',
+  '',
+].join('\n'))}`;
+const catalogJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: pageTitle,
+  description: pageDescription,
+  numberOfItems: integrations.length,
+  itemListElement: integrations.slice(0, 100).map((integration, index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: integration.name,
+    url: siteUrl(integrationUrl(integration)),
+  })),
+};
+const breadcrumbs = breadcrumbJsonLd([
+  { name: 'KosmoKrator', url: SITE_URL },
+  { name: 'Integrations', url: siteUrl('/integrations') },
+]);
 ---
 
 <!doctype html>
@@ -14,14 +56,29 @@ const mcpReady = integrations.filter((integration) => integration.seo.mcp_gatewa
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Integration CLI and MCP Catalog - KosmoKrator</title>
-    <meta name="description" content="Browse KosmoKrator integrations with Lua, headless CLI, and MCP gateway setup documentation for AI agents." />
-    <meta property="og:title" content="KosmoKrator Integration Catalog" />
-    <meta property="og:description" content="Per-integration docs for Lua, CLI setup, and MCP gateway usage." />
+    <title>{pageTitle} - KosmoKrator</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content="AI agent integrations, MCP gateway, integration CLI, local MCP server, Claude Code MCP, Cursor MCP, Codex MCP, KosmoKrator integrations" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={pageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={pageOgImage} />
+    <link rel="canonical" href={siteUrl('/integrations')} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Privacy-friendly analytics by Plausible -->
+    <script async src="https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js"></script>
+    <script is:inline>
+      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+      plausible.init()
+    </script>
+    <script type="application/ld+json" set:html={jsonLd(catalogJsonLd)} />
+    <script type="application/ld+json" set:html={jsonLd(breadcrumbs)} />
   </head>
   <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
-    <header class="w-[min(1180px,calc(100vw-2rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem]">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
       <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
         <img src="/favicon.svg" alt="" width="28" height="28" />
         <span>KosmoKrator</span>
@@ -30,14 +87,15 @@ const mcpReady = integrations.filter((integration) => integration.seo.mcp_gatewa
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/getting-started">Docs</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/integrations">Integration CLI</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/mcp">MCP</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href={feedbackIssueUrl}>Submit feedback</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="https://github.com/OpenCompanyApp/integrations">Contribute</a>
       </nav>
     </header>
 
-    <main class="w-[min(1180px,calc(100vw-2rem))] mx-auto py-12 pb-20">
+    <main class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto py-12 pb-20">
       <section class="max-w-[900px] mb-8">
         <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">Integration catalog</p>
-        <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">CLI, Lua, and MCP docs for every KosmoKrator integration.</h1>
+        <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">AI agent integrations with CLI, MCP, and Lua pages.</h1>
         <p class="text-kosmo-muted leading-[1.7]">
           These pages are generated from the OpenCompany integrations catalog. They are written for humans
           and AI agents that need exact function names, credential fields, setup commands, and MCP gateway instructions.
@@ -47,6 +105,14 @@ const mcpReady = integrations.filter((integration) => integration.seo.mcp_gatewa
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{totalTools}</strong> functions</span>
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{cliReady}</strong> CLI runtime-ready</span>
           <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{mcpReady}</strong> MCP gateway-ready</span>
+        </div>
+        <div class="mt-5 flex flex-wrap gap-3">
+          <a class="inline-flex min-h-[42px] items-center justify-center rounded-md border border-kosmo-crimson bg-kosmo-crimson px-4 py-2 font-bold text-white no-underline" href={feedbackIssueUrl}>
+            Submit integration feedback
+          </a>
+          <a class="inline-flex min-h-[42px] items-center justify-center rounded-md border border-kosmo-white-border-strong bg-white/[0.05] px-4 py-2 font-bold text-kosmo-text no-underline" href="https://github.com/OpenCompanyApp/integrations">
+            Open integrations repo
+          </a>
         </div>
       </section>
 
@@ -70,6 +136,15 @@ const mcpReady = integrations.filter((integration) => integration.seo.mcp_gatewa
             {categories.map((category) => <option value={category}>{category}</option>)}
           </select>
         </label>
+      </section>
+
+      <section class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3 my-8" aria-label="Integration category hubs">
+        {categories.map((category) => (
+          <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href={`/integrations/categories/${slugify(category)}`}>
+            <strong>{category}</strong>
+            <span class="text-kosmo-muted">Browse {category} CLI and MCP integrations.</span>
+          </a>
+        ))}
       </section>
 
       <p class="-mt-2 text-kosmo-muted text-sm" id="integration-count">

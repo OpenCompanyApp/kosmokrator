@@ -1,5 +1,11 @@
 ---
 import '../styles/tailwind.css';
+import {
+  DEFAULT_OG_IMAGE,
+  jsonLd,
+  siteUrl,
+  softwareJsonLd,
+} from '../lib/seo';
 
 const asciiLogo = `██╗  ██╗ ██████╗ ███████╗███╗   ███╗ ██████╗ ██╗  ██╗██████╗  █████╗ ████████╗ ██████╗ ██████╗
 ██║ ██╔╝██╔═══██╗██╔════╝████╗ ████║██╔═══██╗██║ ██╔╝██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗
@@ -9,39 +15,41 @@ const asciiLogo = `██╗  ██╗ ██████╗ ██████
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝`;
 
 const surfaceSnippets = {
-  terminal: `kosmo
+  terminal: `<span class="syntax-command">kosmo</span>
 
-> fix the failing tests and explain the change
+<span class="syntax-prompt">&gt;</span> <span class="syntax-string">fix the failing tests and explain the change</span>
 
-● reading failing test output
-● editing src/Auth/TokenVerifier.php
-● running vendor/bin/phpunit --filter TokenVerifierTest
+<span class="syntax-bullet">●</span> <span class="syntax-muted">reading failing test output</span>
+<span class="syntax-bullet">●</span> <span class="syntax-muted">editing</span> <span class="syntax-path">src/Auth/TokenVerifier.php</span>
+<span class="syntax-bullet">●</span> <span class="syntax-muted">running</span> <span class="syntax-command">vendor/bin/phpunit</span> <span class="syntax-option">--filter</span> <span class="syntax-value">TokenVerifierTest</span>
 
-Done. 2 files changed, tests passing.`,
-  headless: `kosmo -p "review this branch" \\
-  --mode plan \\
-  --permission-mode guardian \\
-  -o stream-json
+<span class="syntax-success">Done.</span> <span class="syntax-muted">2 files changed, tests passing.</span>`,
+  headless: `<span class="syntax-command">kosmo</span> <span class="syntax-option">-p</span> <span class="syntax-string">"review this branch"</span> <span class="syntax-escape">\\</span>
+  <span class="syntax-option">--mode</span> <span class="syntax-value">plan</span> <span class="syntax-escape">\\</span>
+  <span class="syntax-option">--permission-mode</span> <span class="syntax-value">guardian</span> <span class="syntax-escape">\\</span>
+  <span class="syntax-option">-o</span> <span class="syntax-value">stream-json</span>
 
-kosmo integrations:plane list_issues \\
-  --account work \\
-  --json`,
-  sdk: `use Kosmokrator\\Sdk\\AgentBuilder;
+<span class="syntax-command">kosmo</span> <span class="syntax-namespace">integrations:plane</span> <span class="syntax-function">list_issues</span> <span class="syntax-escape">\\</span>
+  <span class="syntax-option">--account</span> <span class="syntax-value">work</span> <span class="syntax-escape">\\</span>
+  <span class="syntax-option">--json</span>`,
+  sdk: `<span class="syntax-keyword">use</span> <span class="syntax-namespace">Kosmokrator\\Sdk\\AgentBuilder</span>;
 
-$result = AgentBuilder::create()
-    ->forProject('/repo')
-    ->withMode('edit')
-    ->withPermissionMode('guardian')
-    ->build()
-    ->collect('Implement the missing tests');`,
-  acp: `kosmo acp --cwd /repo
+<span class="syntax-variable">$result</span> <span class="syntax-operator">=</span> <span class="syntax-class">AgentBuilder</span><span class="syntax-operator">::</span><span class="syntax-function">create</span>()
+    <span class="syntax-operator">-&gt;</span><span class="syntax-function">forProject</span>(<span class="syntax-string">'/repo'</span>)
+    <span class="syntax-operator">-&gt;</span><span class="syntax-function">withMode</span>(<span class="syntax-string">'edit'</span>)
+    <span class="syntax-operator">-&gt;</span><span class="syntax-function">withPermissionMode</span>(<span class="syntax-string">'guardian'</span>)
+    <span class="syntax-operator">-&gt;</span><span class="syntax-function">build</span>()
+    <span class="syntax-operator">-&gt;</span><span class="syntax-function">collect</span>(<span class="syntax-string">'Implement the missing tests'</span>);`,
+  acp: `<span class="syntax-command">kosmo</span> <span class="syntax-namespace">acp</span> <span class="syntax-option">--cwd</span> <span class="syntax-path">/repo</span>
 
-// newline-delimited JSON-RPC over stdio
-// session/prompt
-// session/request_permission
-// kosmo/subagents/tree
-// kosmo/tool/result`,
+<span class="syntax-comment">// newline-delimited JSON-RPC over stdio</span>
+<span class="syntax-comment">//</span> <span class="syntax-function">session/prompt</span>
+<span class="syntax-comment">//</span> <span class="syntax-function">session/request_permission</span>
+<span class="syntax-comment">//</span> <span class="syntax-function">kosmo/subagents/tree</span>
+<span class="syntax-comment">//</span> <span class="syntax-function">kosmo/tool/result</span>`,
 };
+const homepageDescription = 'KosmoKrator is a terminal AI coding agent with headless execution, local MCP gateway, ACP, PHP SDK, Lua, integrations, and parallel subagents.';
+const homepageOgImage = DEFAULT_OG_IMAGE;
 ---
 
 <!doctype html>
@@ -52,15 +60,28 @@ $result = AgentBuilder::create()
     <title>KosmoKrator - Terminal AI Coding Agent</title>
     <meta
       name="description"
-      content="KosmoKrator is a terminal AI coding agent with headless execution, ACP, PHP SDK, Lua, integrations, MCP, and parallel subagents."
+      content={homepageDescription}
     />
+    <meta name="keywords" content="terminal AI coding agent, local MCP gateway, AI agent CLI, headless coding agent, MCP proxy, Claude Code MCP, Cursor MCP, Codex MCP, PHP AI agent SDK" />
     <meta property="og:title" content="KosmoKrator - Terminal AI Coding Agent" />
-    <meta property="og:description" content="A terminal coding agent with matching headless automation surfaces." />
-    <meta property="og:image" content="/og-image.svg" />
+    <meta property="og:description" content={homepageDescription} />
+    <meta property="og:image" content={homepageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={homepageOgImage} />
+    <link rel="canonical" href={siteUrl('/')} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script type="application/ld+json" set:html={jsonLd(softwareJsonLd())} />
+    <!-- Privacy-friendly analytics by Plausible -->
+    <script async src="https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js"></script>
+    <script is:inline>
+      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+      plausible.init()
+    </script>
   </head>
   <body class="min-h-screen overflow-x-hidden text-kosmo-text font-sans bg-[radial-gradient(circle_at_8%_10%,rgba(220,20,60,0.18),transparent_28rem),radial-gradient(circle_at_92%_20%,rgba(255,92,117,0.12),transparent_26rem),linear-gradient(180deg,#07070d_0%,#0c0c14_58%,#07070d_100%)]">
-    <header class="w-[min(1180px,calc(100vw-2rem))] mx-auto flex items-center justify-between gap-4 py-4 max-[920px]:flex-col max-[920px]:items-start">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-4 max-[920px]:flex-col max-[920px]:items-start">
       <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
         <img src="/favicon.svg" alt="" width="28" height="28" />
         <span>KosmoKrator</span>
@@ -69,6 +90,7 @@ $result = AgentBuilder::create()
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/getting-started">Docs</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/installation">Install</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/integrations">Integrations</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/use-cases/local-mcp-gateway">MCP Gateway</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/headless">Headless</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/acp">ACP</a>
         <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem] max-[560px]:text-[0.88rem]" href="/docs/changelog">Changelog</a>
@@ -77,22 +99,22 @@ $result = AgentBuilder::create()
     </header>
 
     <main>
-      <section class="grid grid-cols-[minmax(0,1fr)_minmax(360px,520px)] items-center gap-[clamp(2rem,5vw,5rem)] w-[min(1180px,calc(100vw-2rem))] mx-auto pt-16 pb-18 max-[920px]:w-[min(100vw-1.25rem,720px)] max-[920px]:grid-cols-1 max-[920px]:pt-8">
+      <section class="grid grid-cols-[minmax(0,1fr)_minmax(360px,520px)] items-center gap-[clamp(2rem,5vw,5rem)] w-[min(1180px,calc(100%_-_2.5rem))] mx-auto pt-16 pb-18 max-[920px]:w-[min(100%_-_2.5rem,720px)] max-[920px]:grid-cols-1 max-[920px]:pt-8">
         <div class="min-w-0">
           <pre
             class="overflow-x-auto w-max max-w-full mb-8 p-0 border-0 bg-transparent text-kosmo-crimson font-mono font-bold text-[clamp(0.28rem,0.72vw,0.5rem)] leading-[1.18]"
             aria-label="KosmoKrator ASCII logo"
           >{asciiLogo}</pre>
           <p class="mb-3 text-kosmo-hot text-xs font-extrabold tracking-[0.14em] uppercase">Terminal AI coding agent for real repositories</p>
-          <h1 class="max-w-[720px] m-0 leading-none text-[clamp(2.85rem,5.4vw,4.75rem)] tracking-normal">The coding agent you run from the terminal.</h1>
+          <h1 class="max-w-[760px] m-0 leading-[1.02] text-[clamp(2.75rem,5.2vw,4.6rem)] tracking-normal">Local coding agents, MCP gateways, and swarms from one terminal.</h1>
           <p class="max-w-[760px] mt-5 text-kosmo-muted leading-relaxed text-[clamp(1.03rem,1.55vw,1.24rem)] tracking-normal">
             KosmoKrator gives you a shell-first agent with TUI and ANSI renderers, permissions,
             persistent sessions, context management, Lua code mode, integrations, MCP, ACP,
             a PHP SDK, and parallel subagents.
           </p>
-          <div class="flex flex-wrap gap-3 mt-8">
-            <a class="inline-flex items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href="/docs/installation">Install KosmoKrator</a>
-            <a class="inline-flex items-center justify-center min-h-[44px] px-4 py-3 border border-kosmo-border rounded-md text-kosmo-text font-bold no-underline bg-white/[0.05]" href="/docs/getting-started">Read the docs</a>
+          <div class="flex flex-wrap gap-3 mt-8 max-[560px]:items-stretch">
+            <a class="inline-flex w-[190px] max-[560px]:w-full items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href="/docs/installation">Install KosmoKrator</a>
+            <a class="inline-flex w-[190px] max-[560px]:w-full items-center justify-center min-h-[44px] px-4 py-3 border border-kosmo-border rounded-md text-kosmo-text font-bold no-underline bg-white/[0.05]" href="/docs/getting-started">Read the docs</a>
             <span class="self-center inline-flex items-center justify-center min-h-[32px]">
               <a
                 class="github-button"
@@ -138,12 +160,12 @@ $result = AgentBuilder::create()
               role="tabpanel"
               aria-labelledby={`tab-${key}`}
               hidden={index !== 0}
-            ><code class="font-[inherit]">{snippet}</code></pre>
+            ><code class="font-[inherit]" set:html={snippet}></code></pre>
           ))}
         </div>
       </section>
 
-      <section class="w-[min(1180px,calc(100vw-2rem))] mx-auto py-18 border-t border-white/[0.08] max-[920px]:w-[min(100vw-1.25rem,720px)]" id="install">
+      <section class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto py-18 border-t border-white/[0.08] max-[920px]:w-[min(100%_-_2.5rem,720px)]" id="install">
         <div class="grid gap-2 max-w-[760px] mb-5">
           <p class="mb-3 text-kosmo-hot text-xs font-extrabold tracking-[0.14em] uppercase">Install</p>
           <h2 class="m-0 leading-tight text-[clamp(2rem,4vw,3.2rem)] tracking-normal">Choose the runtime package that matches the machine.</h2>
@@ -182,12 +204,12 @@ bin/kosmo --renderer=ansi</code></pre>
         </div>
       </section>
 
-      <section class="w-[min(1180px,calc(100vw-2rem))] mx-auto py-18 border-t border-white/[0.08] max-[920px]:w-[min(100vw-1.25rem,720px)]">
+      <section class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto py-18 border-t border-white/[0.08] max-[920px]:w-[min(100%_-_2.5rem,720px)]">
         <div class="grid gap-2 max-w-[760px] mb-5">
           <p class="mb-3 text-kosmo-hot text-xs font-extrabold tracking-[0.14em] uppercase">Runtime surfaces</p>
           <h2 class="m-0 leading-tight text-[clamp(2rem,4vw,3.2rem)] tracking-normal">One agent core, several ways to operate it.</h2>
         </div>
-        <div class="grid grid-cols-4 gap-3.5 max-[920px]:grid-cols-2 max-[560px]:grid-cols-1">
+        <div class="grid grid-cols-5 gap-3.5 max-[1100px]:grid-cols-3 max-[760px]:grid-cols-2 max-[560px]:grid-cols-1">
           <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/docs/headless">
             <strong class="block mb-2 text-kosmo-text text-base">Headless CLI</strong>
             <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Use `kosmo -p`, JSON output, stream-json, and direct integrations/MCP commands from automation.</span>
@@ -208,11 +230,19 @@ bin/kosmo --renderer=ansi</code></pre>
             <strong class="block mb-2 text-kosmo-text text-base">Integration catalog</strong>
             <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Browse generated CLI, Lua, and MCP gateway docs for every OpenCompany integration.</span>
           </a>
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/use-cases/local-mcp-gateway">
+            <strong class="block mb-2 text-kosmo-text text-base">Local MCP gateway</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Expose selected local integrations to Claude Code, Cursor, Codex, and other MCP clients.</span>
+          </a>
+          <a class="min-w-0 p-4 border border-white/10 rounded-lg bg-white/[0.04] text-inherit no-underline hover:border-kosmo-crimson" href="/cli/clickup">
+            <strong class="block mb-2 text-kosmo-text text-base">Integration CLI pages</strong>
+            <span class="block m-0 text-kosmo-muted text-[0.93rem] leading-relaxed">Rankable pages like ClickUp CLI, GitHub CLI, and Slack CLI for AI agents.</span>
+          </a>
         </div>
       </section>
     </main>
 
-    <footer class="flex items-center gap-4 justify-start py-8 pb-12 text-kosmo-muted border-t border-white/[0.08] w-[min(1180px,calc(100vw-2rem))] mx-auto max-[920px]:w-[min(100vw-1.25rem,720px)]">
+    <footer class="box-border flex flex-wrap items-center gap-x-4 gap-y-2 justify-start py-8 pb-12 text-kosmo-muted border-t border-white/[0.08] w-[min(1180px,calc(100%_-_2.5rem))] mx-auto max-[920px]:w-[min(100%_-_2.5rem,720px)] max-[560px]:items-start">
       <span class="text-kosmo-text font-extrabold">KosmoKrator</span>
       <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs">Documentation</a>
       <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
@@ -238,6 +268,8 @@ bin/kosmo --renderer=ansi</code></pre>
         panels.forEach((panel) => {
           const selected = panel.dataset.surfacePanel === key;
           panel.hidden = !selected;
+          panel.classList.toggle('block', selected);
+          panel.classList.toggle('hidden', !selected);
         });
       }
 
@@ -269,6 +301,8 @@ bin/kosmo --renderer=ansi</code></pre>
         installPanels.forEach((panel) => {
           const selected = panel.dataset.installPanel === key;
           panel.hidden = !selected;
+          panel.classList.toggle('block', selected);
+          panel.classList.toggle('hidden', !selected);
         });
       }
 

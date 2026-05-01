@@ -1,0 +1,121 @@
+---
+import '../../../styles/tailwind.css';
+import { getIntegrations, integrationUrl, type Integration } from '../../../lib/integrations-catalog';
+import {
+  SITE_URL,
+  breadcrumbJsonLd,
+  jsonLd,
+  ogImageUrl,
+  siteUrl,
+  slugify,
+} from '../../../lib/seo';
+
+type CategoryPage = {
+  slug: string;
+  category: string;
+  integrations: Integration[];
+};
+
+export function getStaticPaths() {
+  const integrations = getIntegrations();
+  const categories = [...new Set(integrations.map((integration) => integration.category))].sort();
+
+  return categories.map((category) => ({
+    params: { slug: slugify(category) },
+    props: {
+      slug: slugify(category),
+      category,
+      integrations: integrations.filter((integration) => integration.category === category),
+    },
+  }));
+}
+
+const { slug, category, integrations } = Astro.props as CategoryPage;
+const totalTools = integrations.reduce((sum, integration) => sum + integration.tools.length, 0);
+const pagePath = `/integrations/categories/${slug}`;
+const pageTitle = `${category} CLI and MCP Integrations for AI Agents`;
+const pageDescription = `Browse ${category} integrations for AI agents with KosmoKrator CLI, MCP gateway, Lua, credentials, and schema documentation.`;
+const pageOgImage = ogImageUrl(['category', category]);
+const itemListJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: pageTitle,
+  description: pageDescription,
+  numberOfItems: integrations.length,
+  itemListElement: integrations.map((integration, index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: integration.name,
+    url: siteUrl(integrationUrl(integration)),
+  })),
+};
+const breadcrumbs = breadcrumbJsonLd([
+  { name: 'KosmoKrator', url: SITE_URL },
+  { name: 'Integrations', url: siteUrl('/integrations') },
+  { name: category, url: siteUrl(pagePath) },
+]);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle} - KosmoKrator</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content={`${category} CLI, ${category} MCP, AI agent integrations, local MCP gateway, KosmoKrator`} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={pageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={pageOgImage} />
+    <link rel="canonical" href={siteUrl(pagePath)} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script type="application/ld+json" set:html={jsonLd(itemListJsonLd)} />
+    <script type="application/ld+json" set:html={jsonLd(breadcrumbs)} />
+  </head>
+  <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="flex flex-wrap items-center justify-end gap-4" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">All integrations</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/mcp">MCP docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/integrations">CLI docs</a>
+      </nav>
+    </header>
+
+    <main class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto py-12 pb-20">
+      <section class="max-w-[900px] mb-8">
+        <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">Integration category</p>
+        <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">{pageTitle}</h1>
+        <p class="text-kosmo-muted leading-[1.7]">{pageDescription}</p>
+        <div class="flex flex-wrap gap-[0.7rem] mt-[1.3rem]" aria-label="Category statistics">
+          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{integrations.length}</strong> integrations</span>
+          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-[0.55rem] px-3 text-kosmo-muted"><strong class="text-kosmo-text">{totalTools}</strong> functions</span>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+        {integrations.map((integration) => (
+          <article class="grid gap-3 p-[1.1rem] border border-kosmo-white-border rounded-lg bg-kosmo-surface">
+            <div>
+              <p class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">{integration.auth_strategy_label} auth</p>
+              <h2 class="mt-[0.2rem] text-xl"><a class="text-kosmo-text no-underline" href={integrationUrl(integration)}>{integration.name}</a></h2>
+              <p class="text-kosmo-muted leading-[1.55]">{integration.description}</p>
+            </div>
+            <nav class="flex flex-wrap gap-[0.55rem] self-end" aria-label={`${integration.name} pages`}>
+              <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'cli')}>{integration.name} CLI</a>
+              <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'mcp')}>{integration.name} MCP</a>
+              <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'lua')}>Lua</a>
+            </nav>
+          </article>
+        ))}
+      </section>
+    </main>
+  </body>
+</html>

@@ -83,6 +83,44 @@
     @apply w-max cursor-pointer rounded-md border border-kosmo-white-border-strong bg-white/[0.06] px-2 py-1 text-xs font-bold text-kosmo-muted hover:border-kosmo-crimson hover:text-kosmo-text;
   }
 
+  .syntax-command {
+    @apply text-kosmo-text font-extrabold;
+  }
+
+  .syntax-prompt,
+  .syntax-bullet,
+  .syntax-option,
+  .syntax-keyword {
+    @apply text-kosmo-hot font-bold;
+  }
+
+  .syntax-string,
+  .syntax-success {
+    @apply text-kosmo-rose;
+  }
+
+  .syntax-path,
+  .syntax-namespace,
+  .syntax-class {
+    @apply text-[#93c5fd];
+  }
+
+  .syntax-function,
+  .syntax-value {
+    @apply text-[#facc15];
+  }
+
+  .syntax-comment,
+  .syntax-muted {
+    @apply text-kosmo-muted;
+  }
+
+  .syntax-operator,
+  .syntax-escape,
+  .syntax-variable {
+    @apply text-[#c4b5fd];
+  }
+
   .integration-copy {
     @apply min-w-0 text-kosmo-muted leading-relaxed;
   }
@@ -189,6 +227,7 @@
   border: 1px solid var(--color-kosmo-white-border-strong);
   border-radius: 0.5rem;
   background: rgba(255, 255, 255, 0.03);
+  overflow-x: auto;
 }
 
 .rendered-lua-docs h1 {
@@ -250,6 +289,7 @@
 }
 
 .rendered-lua-docs pre {
+  max-width: 100%;
   margin: 1rem 0 !important;
   padding: 1rem !important;
   border: 1px solid var(--color-kosmo-white-border-strong);
@@ -289,6 +329,12 @@
   background: transparent;
   padding: 0;
   color: inherit;
+}
+
+@media (max-width: 560px) {
+  .rendered-lua-docs {
+    padding: 1rem;
+  }
 }
 
 /* Scroll margin for anchor links */

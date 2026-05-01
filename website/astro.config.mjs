@@ -20,6 +20,9 @@ export default defineConfig({
         src: './src/assets/logo.svg',
         replacesTitle: false,
       },
+      components: {
+        Footer: './src/components/StarlightFooter.astro',
+      },
       customCss: ['./src/styles/custom.css'],
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/OpenCompanyApp/kosmokrator' },

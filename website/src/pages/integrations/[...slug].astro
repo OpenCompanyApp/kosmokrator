@@ -2,6 +2,7 @@
 import '../../styles/tailwind.css';
 import { Code } from 'astro:components';
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
+import MegaFooter from '../../components/MegaFooter.astro';
 import {
   credentialTypeLabel,
   getIntegrations,
@@ -864,6 +865,7 @@ function parameterSummary(tool: IntegrationTool): string {
         </section>
       )}
     </main>
+    <MegaFooter />
 
     <script>
       // Function card toggle

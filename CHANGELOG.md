@@ -11,6 +11,7 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 - KosmoKrator MCP gateway for exposing selected integrations and upstream MCP servers to Claude Code and other MCP clients.
 - Live provider model discovery commands, cached model inventories, provider model diagnostics, and unlisted-model overrides for newly launched models.
 - Website SEO matrices for integration CLI, MCP client/framework setup, category hubs, use cases, comparison pages, structured data, and robots/sitemap discovery.
+- Website megafooter and complete site map so docs, use cases, MCP pages, comparisons, categories, CLI shortcuts, and generated integration matrix pages stay reachable within two clicks.
 
 ## [0.7.1] - 2026-04-29
 

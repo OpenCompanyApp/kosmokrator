@@ -1,5 +1,6 @@
 ---
 import '../../styles/tailwind.css';
+import MegaFooter from '../../components/MegaFooter.astro';
 import { getIntegrations, integrationUrl, toolFullName, type Integration } from '../../lib/integrations-catalog';
 import {
   SITE_URL,
@@ -96,5 +97,6 @@ const schemas = [
         </a>
       </section>
     </main>
+    <MegaFooter />
   </body>
 </html>

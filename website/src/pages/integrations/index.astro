@@ -1,5 +1,6 @@
 ---
 import '../../styles/tailwind.css';
+import MegaFooter from '../../components/MegaFooter.astro';
 import { getIntegrations, integrationUrl } from '../../lib/integrations-catalog';
 import {
   SITE_URL,
@@ -177,6 +178,7 @@ const breadcrumbs = breadcrumbJsonLd([
         ))}
       </section>
     </main>
+    <MegaFooter />
 
     <script>
       const search = document.querySelector('#integration-search');

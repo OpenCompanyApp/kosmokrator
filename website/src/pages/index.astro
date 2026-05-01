@@ -1,5 +1,6 @@
 ---
 import '../styles/tailwind.css';
+import MegaFooter from '../components/MegaFooter.astro';
 import {
   DEFAULT_OG_IMAGE,
   jsonLd,
@@ -242,14 +243,7 @@ bin/kosmo --renderer=ansi</code></pre>
       </section>
     </main>
 
-    <footer class="box-border flex flex-wrap items-center gap-x-4 gap-y-2 justify-start py-8 pb-12 text-kosmo-muted border-t border-white/[0.08] w-[min(1180px,calc(100%_-_2.5rem))] mx-auto max-[920px]:w-[min(100%_-_2.5rem,720px)] max-[560px]:items-start">
-      <span class="text-kosmo-text font-extrabold">KosmoKrator</span>
-      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs">Documentation</a>
-      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
-      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/changelog">Changelog</a>
-      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/architecture">Architecture</a>
-      <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
-    </footer>
+    <MegaFooter />
 
     <script>
       const tabs = Array.from(document.querySelectorAll('[data-surface-tab]'));

@@ -1,0 +1,97 @@
+---
+import '../styles/tailwind.css';
+import MegaFooter from '../components/MegaFooter.astro';
+import { getSiteMapSections } from '../lib/site-navigation';
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_URL,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  jsonLd,
+  siteUrl,
+} from '../lib/seo';
+
+const sections = getSiteMapSections();
+const pageTitle = 'KosmoKrator Website Map';
+const pageDescription = 'Complete map of KosmoKrator docs, integration CLI pages, MCP gateway pages, comparison pages, use cases, categories, and generated integration matrix pages.';
+const schemas = [
+  articleJsonLd(pageTitle, pageDescription, '/site-map'),
+  breadcrumbJsonLd([
+    { name: 'KosmoKrator', url: SITE_URL },
+    { name: 'Website Map', url: siteUrl('/site-map') },
+  ]),
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content="KosmoKrator site map, AI agent CLI pages, MCP gateway pages, integration CLI pages, website navigation" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={DEFAULT_OG_IMAGE} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
+    <link rel="canonical" href={siteUrl('/site-map')} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {schemas.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+  </head>
+  <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="flex flex-wrap items-center justify-end gap-4" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/docs/getting-started">Docs</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/use-cases/local-mcp-gateway">Use Cases</a>
+      </nav>
+    </header>
+
+    <main class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto py-12 pb-10">
+      <section class="max-w-[900px] mb-10">
+        <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">Website map</p>
+        <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.3rem)]">Every KosmoKrator page in one place.</h1>
+        <p class="text-kosmo-muted leading-[1.7]">{pageDescription}</p>
+      </section>
+
+      <nav class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 mb-10" aria-label="Site map sections">
+        {sections.map((section) => (
+          <a class="block p-3 border border-kosmo-white-border rounded-md bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href={`#${section.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>
+            {section.title}
+          </a>
+        ))}
+      </nav>
+
+      <div class="grid gap-10" data-pagefind-ignore>
+        {sections.map((section) => (
+          <section id={section.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')} class="scroll-mt-6">
+            <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+              <div>
+                <h2 class="m-0 text-[clamp(1.55rem,3vw,2.25rem)]">{section.title}</h2>
+                {section.intro && <p class="max-w-[780px] m-0 mt-2 text-kosmo-muted leading-relaxed">{section.intro}</p>}
+              </div>
+              <span class="text-kosmo-muted text-sm">{section.links.length} pages</span>
+            </div>
+            <ul class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-x-5 gap-y-2 m-0 p-0 list-none">
+              {section.links.map((link) => (
+                <li>
+                  <a class="text-kosmo-muted hover:text-kosmo-text no-underline hover:underline hover:decoration-kosmo-crimson underline-offset-4" href={link.href}>{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </main>
+
+    <MegaFooter />
+  </body>
+</html>

@@ -1,4 +1,5 @@
 ---
+import MegaFooter from '../components/MegaFooter.astro';
 import { DEFAULT_OG_IMAGE, siteUrl } from '../lib/seo';
 
 const target = '/docs/changelog';
@@ -23,5 +24,6 @@ const targetUrl = siteUrl(target);
   </head>
   <body>
     <a href={target}>Redirecting to the KosmoKrator changelog.</a>
+    <MegaFooter />
   </body>
 </html>

@@ -29,6 +29,7 @@ class DatabaseTest extends TestCase
         $this->assertContains('gateway_checkpoints', $tableNames);
         $this->assertContains('gateway_pending_inputs', $tableNames);
         $this->assertContains('swarm_agents', $tableNames);
+        $this->assertContains('provider_model_cache', $tableNames);
         $this->assertContains('schema_version', $tableNames);
     }
 

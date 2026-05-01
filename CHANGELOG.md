@@ -9,6 +9,7 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 ### Added
 - Canonical changelog workflow with release extraction, PR enforcement, and website publishing.
 - KosmoKrator MCP gateway for exposing selected integrations and upstream MCP servers to Claude Code and other MCP clients.
+- Live provider model discovery commands, cached model inventories, provider model diagnostics, and unlisted-model overrides for newly launched models.
 
 ## [0.7.1] - 2026-04-29
 

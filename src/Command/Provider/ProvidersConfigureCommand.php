@@ -36,6 +36,7 @@ final class ProvidersConfigureCommand extends Command
             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'API key for api_key providers')
             ->addOption('api-key-stdin', null, InputOption::VALUE_NONE, 'Read API key from stdin')
             ->addOption('api-key-env', null, InputOption::VALUE_REQUIRED, 'Read API key from an environment variable')
+            ->addOption('allow-unlisted-model', null, InputOption::VALUE_NONE, 'Allow a model ID that is not currently advertised by the provider catalog')
             ->addOption('device', null, InputOption::VALUE_NONE, 'Use device OAuth for oauth providers')
             ->addOption('global', null, InputOption::VALUE_NONE, 'Write global config')
             ->addOption('project', null, InputOption::VALUE_NONE, 'Write project config')
@@ -77,6 +78,7 @@ final class ProvidersConfigureCommand extends Command
                     model: is_string($input->getOption('model')) ? $input->getOption('model') : null,
                     apiKey: $apiKey,
                     scope: $this->scope($input),
+                    allowUnlistedModel: (bool) $input->getOption('allow-unlisted-model'),
                 );
                 $result = ['success' => true] + $result;
             }

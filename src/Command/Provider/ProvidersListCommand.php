@@ -43,6 +43,10 @@ final class ProvidersListCommand extends Command
             'url' => $provider->url,
             'default_model' => $provider->defaultModel,
             'model_count' => count($provider->models),
+            'model_source' => $provider->modelSource,
+            'model_fetched_at' => $provider->modelFetchedAt,
+            'model_inventory_fresh' => $provider->modelInventoryFresh,
+            'model_inventory_error' => $provider->modelInventoryError,
             'free_text_model' => $provider->freeTextModel,
             'input_modalities' => $provider->inputModalities,
             'output_modalities' => $provider->outputModalities,
@@ -60,7 +64,7 @@ final class ProvidersListCommand extends Command
                 $provider['id'],
                 $provider['auth_mode'],
                 $provider['auth_status'],
-                $provider['free_text_model'] ? 'free text' : (string) $provider['model_count'],
+                ($provider['free_text_model'] ? 'free text' : (string) $provider['model_count']).' · '.$provider['model_source'],
                 $provider['source'],
             ], $providers))
             ->render();

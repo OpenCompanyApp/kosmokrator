@@ -25,6 +25,7 @@ final class ProviderConfigurator
         ?string $model = null,
         ?string $apiKey = null,
         string $scope = 'global',
+        bool $allowUnlistedModel = false,
     ): array {
         $definition = $this->catalog->provider($provider);
         if ($definition === null) {
@@ -32,7 +33,7 @@ final class ProviderConfigurator
         }
 
         $model ??= $this->catalog->defaultModel($provider);
-        if ($model !== null && $model !== '' && ! $this->catalog->supportsModel($provider, $model)) {
+        if ($model !== null && $model !== '' && ! $allowUnlistedModel && ! $this->catalog->supportsModel($provider, $model)) {
             throw new \InvalidArgumentException("Provider [{$provider}] does not advertise model [{$model}].");
         }
 

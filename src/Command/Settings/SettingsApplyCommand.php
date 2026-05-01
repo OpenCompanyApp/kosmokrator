@@ -56,6 +56,7 @@ final class SettingsApplyCommand extends Command
         }
 
         $rawSettings = $payload['settings'] ?? $payload['set'] ?? [];
+        $allowUnlistedModel = (bool) ($payload['allow_unlisted_model'] ?? $payload['allow_unlisted_models'] ?? false);
         if (! is_array($rawSettings)) {
             return $this->fail($output, 'Payload must contain a settings object.');
         }
@@ -85,7 +86,7 @@ final class SettingsApplyCommand extends Command
 
         foreach ($parsedValues as $id => $value) {
             try {
-                $this->validateChoice($id, $value, $catalog, $parsedValues);
+                $this->validateChoice($id, $value, $catalog, $parsedValues, $allowUnlistedModel);
             } catch (\Throwable $e) {
                 $errors[] = ['key' => $id, 'error' => $e->getMessage()];
             }
@@ -130,8 +131,12 @@ final class SettingsApplyCommand extends Command
     /**
      * @param  array<string, mixed>  $pending
      */
-    private function validateChoice(string $id, mixed $value, SettingsCatalog $catalog, array $pending): void
+    private function validateChoice(string $id, mixed $value, SettingsCatalog $catalog, array $pending, bool $allowUnlistedModel = false): void
     {
+        if ($allowUnlistedModel && $id === 'agent.default_model') {
+            return;
+        }
+
         $provider = is_string($pending['agent.default_provider'] ?? null) ? $pending['agent.default_provider'] : null;
         $options = $catalog->options($id, $provider === null ? [] : ['provider' => $provider]);
         $values = array_values(array_filter(

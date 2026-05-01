@@ -100,7 +100,8 @@ class LlmServiceProvider extends ServiceProvider
             $registry = $this->container->make(RelayRegistry::class);
             $providers = $this->container->make(ProviderCatalog::class);
             $provider = $config->get('kosmo.agent.default_provider', 'z');
-            $providerUrl = rtrim($registry->url($provider), '/');
+            $configuredUrl = $config->get("prism.providers.{$provider}.url");
+            $providerUrl = rtrim(is_string($configuredUrl) && $configuredUrl !== '' ? $configuredUrl : $registry->url($provider), '/');
 
             return new RetryableLlmClient(
                 new AsyncLlmClient(

@@ -77,11 +77,40 @@ kosmo providers:status openai --json
 # List advertised models for a provider
 kosmo providers:models openai --json
 
+# Refresh the cached inventory directly from the provider API
+kosmo providers:models openai --live --json
+kosmo providers:refresh-models openai --json
+
+# Diagnose auth, endpoint, catalog freshness, and a specific model ID
+kosmo providers:doctor openai --model gpt-5.4-mini --json
+
 # Clear a stored API key
 kosmo providers:logout openai --json
 ```
 
 Provider commands reject unknown provider IDs with `success: false` and a non-zero exit code. This keeps automation from mistaking an empty result for a valid provider.
+
+### Live model inventory
+
+The normal provider catalog is available offline from the bundled Prism Relay registry. When you want the newest provider model list, run a live refresh. KosmoKrator stores the result in SQLite and overlays it on top of bundled metadata, preserving known context windows and pricing where provider APIs only return model IDs.
+
+Live refresh is explicit so ordinary `kosmo` startup does not block on provider APIs. JSON output includes `model_source`, `model_fetched_at`, `model_inventory_fresh`, and any `model_inventory_error`.
+
+If a provider launched a model before the catalog knows about it, headless setup can still pin it intentionally:
+
+```bash
+kosmo providers:configure openai \
+  --model future-model-id \
+  --allow-unlisted-model \
+  --global --json
+
+kosmo settings:set agent.default_model future-model-id \
+  --provider openai \
+  --allow-unlisted-model \
+  --global --json
+```
+
+Custom OpenAI-compatible providers accept free-text model identifiers by default, unless their relay definition sets `strict_models: true`.
 
 ### API key storage
 

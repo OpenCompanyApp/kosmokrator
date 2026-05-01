@@ -9,6 +9,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
+use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
@@ -31,6 +32,9 @@ class DatabaseServiceProvider extends ServiceProvider
             $this->container->make(SessionDatabase::class),
         ));
         $this->container->alias(SettingsRepository::class, SettingsRepositoryInterface::class);
+        $this->container->singleton(ModelDiscoveryCacheRepository::class, fn () => new ModelDiscoveryCacheRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
         $this->container->singleton(CodexTokenStoreContract::class, fn () => new SettingsCodexTokenStore(
             $this->container->make(SettingsRepositoryInterface::class),
         ));

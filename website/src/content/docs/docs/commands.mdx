@@ -177,9 +177,13 @@ Configure LLM providers, discover models, manage custom OpenAI-compatible endpoi
 ```bash
 kosmo providers:list --json
 kosmo providers:models openai --json
+kosmo providers:models openai --live --json
+kosmo providers:refresh-models openai --json
+kosmo providers:doctor openai --model gpt-5.4-mini --json
 kosmo providers:status openai --json
 printf %s "$OPENAI_API_KEY" | \
   kosmo providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json
+kosmo providers:configure openai --model future-model-id --allow-unlisted-model --global --json
 kosmo providers:configure codex --device --global --json
 kosmo providers:logout openai --json
 kosmo providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --global --json

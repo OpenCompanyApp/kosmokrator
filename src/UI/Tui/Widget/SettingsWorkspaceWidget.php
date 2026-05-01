@@ -1154,6 +1154,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             $lines[] = $this->boxLine('Auth: '.($providerInfo['auth_status'] ?? 'Unknown'), $width);
             $lines[] = $this->boxLine('Driver: '.($providerInfo['driver'] ?? 'unknown'), $width);
             $lines[] = $this->boxLine('Source: '.(($providerInfo['source'] ?? 'built_in') === 'custom' ? 'Custom YAML' : 'Built-in Relay'), $width);
+            $lines[] = $this->boxLine('Models: '.($providerInfo['model_source'] ?? 'bundled'), $width);
             $lines[] = $this->boxLine('Input: '.implode(', ', $providerInfo['input_modalities'] ?? ['text']), $width);
             $lines[] = $this->boxLine('Output: '.implode(', ', $providerInfo['output_modalities'] ?? ['text']), $width);
         }
@@ -1899,6 +1900,7 @@ final class SettingsWorkspaceWidget extends AbstractWidget implements FocusableI
             $lines[] = $this->boxLine('Driver: '.($providerInfo['driver'] ?? 'unknown'), $width);
             $lines[] = $this->boxLine('Input: '.implode(', ', $providerInfo['input_modalities'] ?? ['text']), $width);
             $lines[] = $this->boxLine('Output: '.implode(', ', $providerInfo['output_modalities'] ?? ['text']), $width);
+            $lines[] = $this->boxLine('Models: '.($providerInfo['model_source'] ?? 'bundled'), $width);
         }
 
         while (count($lines) < $height - 1) {

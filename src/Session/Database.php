@@ -19,7 +19,7 @@ class Database
 
     private bool $isMemory = false;
 
-    private const SCHEMA_VERSION = 12;
+    private const SCHEMA_VERSION = 13;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -284,6 +284,7 @@ class Database
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_gateway_pending_inputs_route ON gateway_pending_inputs(platform, route_key, id)');
 
         $this->createSwarmMetadataSchema();
+        $this->createProviderModelCacheSchema();
     }
 
     /** Runs incremental schema migrations starting from the given version. */
@@ -417,6 +418,10 @@ class Database
                 $this->addColumnIfMissing('swarm_agents', 'model', 'TEXT');
                 $this->createSwarmEventsSchema();
             }
+        }
+
+        if ($from < 13) {
+            $this->createProviderModelCacheSchema();
         }
     }
 
@@ -612,6 +617,25 @@ class Database
         );
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_agent ON swarm_events(root_session_id, agent_id, id)');
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_type ON swarm_events(root_session_id, event_type, id)');
+    }
+
+    private function createProviderModelCacheSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS provider_model_cache (
+                provider     TEXT NOT NULL,
+                account      TEXT NOT NULL DEFAULT 'default',
+                source       TEXT NOT NULL,
+                models_json  TEXT NOT NULL,
+                error        TEXT,
+                fetched_at   TEXT NOT NULL,
+                expires_at   TEXT NOT NULL,
+                PRIMARY KEY (provider, account)
+            )
+            SQL
+        );
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_provider_model_cache_expires ON provider_model_cache(expires_at)');
     }
 
     private function rebuildMessagesFtsIndex(): void

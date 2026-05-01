@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\ModelDiscovery\DiscoveredModel;
+use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 use OpenCompany\PrismRelay\Meta\ProviderMeta;
@@ -81,6 +83,7 @@ final class ProviderCatalog
         private readonly Repository $config,
         private readonly SettingsRepositoryInterface $settings,
         private readonly CodexTokenStore $codexTokens,
+        private readonly ?ModelDiscoveryCacheRepository $modelCache = null,
     ) {
         $this->auth = new ProviderAuthService($this, $this->settings, $this->config, $this->codexTokens);
     }
@@ -129,7 +132,7 @@ final class ProviderCatalog
         foreach ($this->meta->models($provider) as $model) {
             $info = $this->meta->modelInfo($provider, $model);
             $modalities = $this->registry->modelModalities($provider, $model);
-            $models[] = new ModelDefinition(
+            $models[strtolower($model)] = new ModelDefinition(
                 id: $model,
                 displayName: $info->displayName ?? $model,
                 contextWindow: $info->contextWindow,
@@ -143,24 +146,39 @@ final class ProviderCatalog
                 status: $info->status,
                 inputModalities: $modalities['input'],
                 outputModalities: $modalities['output'],
+                source: $this->providerSource($provider) === 'custom' ? 'custom' : 'bundled',
             );
         }
 
+        $inventory = $this->modelCache?->get($provider);
+        if ($inventory !== null && $inventory->error === null && $inventory->models !== []) {
+            foreach ($inventory->models as $discovered) {
+                $key = strtolower($discovered->id);
+                $models[$key] = $this->mergeDiscoveredModel($provider, $discovered, $models[$key] ?? null, $inventory->source);
+            }
+        }
+
+        $modelList = array_values($models);
         $providerModalities = $this->registry->providerModalities($provider);
+        $freeTextModel = $this->allowsUnlistedModels($provider);
 
         return new ProviderDefinition(
             id: $provider,
             label: $definition['label'],
             description: $definition['description'],
             authMode: $definition['auth'],
-            source: $this->registry->source($provider),
+            source: $this->providerSource($provider),
             driver: $this->registry->driver($provider),
-            url: $this->registry->url($provider),
-            defaultModel: $this->meta->defaultModel($provider) ?? ($models[0]->id ?? ''),
-            models: $models,
+            url: $this->providerUrl($provider),
+            defaultModel: $this->meta->defaultModel($provider) ?? ($modelList[0]->id ?? ''),
+            models: $modelList,
             inputModalities: $providerModalities['input'],
             outputModalities: $providerModalities['output'],
-            freeTextModel: in_array($provider, self::FREE_TEXT_MODEL_PROVIDERS, true),
+            freeTextModel: $freeTextModel,
+            modelSource: $inventory !== null && $inventory->error === null && $inventory->models !== [] ? $inventory->source : 'bundled',
+            modelFetchedAt: $inventory?->fetchedAt->format(DATE_ATOM),
+            modelInventoryFresh: $inventory?->isFresh() ?? false,
+            modelInventoryError: $inventory?->error,
         );
     }
 
@@ -182,7 +200,7 @@ final class ProviderCatalog
 
     public function supportsModel(string $provider, string $model): bool
     {
-        if (in_array($provider, self::FREE_TEXT_MODEL_PROVIDERS, true)) {
+        if ($model !== '' && $this->allowsUnlistedModels($provider)) {
             return true;
         }
 
@@ -200,6 +218,7 @@ final class ProviderCatalog
                 'label' => $provider->label,
                 'description' => "{$provider->id} · {$provider->description} · "
                     .($provider->freeTextModel ? 'any model · ' : count($provider->models).' models · ')
+                    .$provider->modelSource.' inventory · '
                     .($provider->source === 'custom' ? 'Custom' : 'Built-in'),
             ],
             $this->providers(),
@@ -329,6 +348,78 @@ final class ProviderCatalog
             'google-vertex',
             'amazon-bedrock',
         ], true);
+    }
+
+    private function allowsUnlistedModels(string $provider): bool
+    {
+        if (in_array($provider, self::FREE_TEXT_MODEL_PROVIDERS, true)) {
+            return true;
+        }
+
+        $definition = $this->registry->provider($provider) ?? [];
+        if (($definition['strict_models'] ?? false) === true) {
+            return false;
+        }
+
+        if (($definition['free_text_models'] ?? false) === true || ($definition['allow_unlisted_models'] ?? false) === true) {
+            return true;
+        }
+
+        $customDefinition = $this->config->get("relay.providers.{$provider}");
+        if (is_array($customDefinition)
+            && in_array($this->registry->driver($provider), ['openai', 'openai-compatible', 'ollama'], true)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function providerSource(string $provider): string
+    {
+        if ($this->registry->source($provider) !== 'custom') {
+            return $this->registry->source($provider);
+        }
+
+        return is_array($this->config->get("relay.providers.{$provider}")) ? 'custom' : 'built_in';
+    }
+
+    private function providerUrl(string $provider): string
+    {
+        $configured = $this->config->get("prism.providers.{$provider}.url");
+
+        return is_string($configured) && $configured !== '' ? $configured : $this->registry->url($provider);
+    }
+
+    private function mergeDiscoveredModel(
+        string $provider,
+        DiscoveredModel $discovered,
+        ?ModelDefinition $base,
+        string $source,
+    ): ModelDefinition {
+        $modalities = $this->registry->modelModalities($provider, $discovered->id);
+        $inputModalities = $discovered->inputModalities !== []
+            ? $discovered->inputModalities
+            : ($base?->inputModalities ?? $modalities['input']);
+        $outputModalities = $discovered->outputModalities !== []
+            ? $discovered->outputModalities
+            : ($base?->outputModalities ?? $modalities['output']);
+
+        return new ModelDefinition(
+            id: $discovered->id,
+            displayName: $discovered->displayName !== '' ? $discovered->displayName : ($base?->displayName ?? $discovered->id),
+            contextWindow: $discovered->contextWindow > 0 ? $discovered->contextWindow : ($base?->contextWindow ?? 0),
+            maxOutput: $discovered->maxOutput > 0 ? $discovered->maxOutput : ($base?->maxOutput ?? 0),
+            thinking: $discovered->thinking || ($base?->thinking ?? false),
+            inputPricePerMillion: $discovered->inputPricePerMillion ?? $base?->inputPricePerMillion,
+            outputPricePerMillion: $discovered->outputPricePerMillion ?? $base?->outputPricePerMillion,
+            pricingKind: $base?->pricingKind ?? 'paid',
+            referenceInputPricePerMillion: $base?->referenceInputPricePerMillion,
+            referenceOutputPricePerMillion: $base?->referenceOutputPricePerMillion,
+            status: $discovered->status ?? $base?->status,
+            inputModalities: $inputModalities,
+            outputModalities: $outputModalities,
+            source: $source,
+        );
     }
 
     private function isHiddenProvider(string $provider): bool

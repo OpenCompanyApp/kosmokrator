@@ -37,6 +37,7 @@ final class SettingsSetCommand extends Command
             ->addOption('global', null, InputOption::VALUE_NONE, 'Write global config')
             ->addOption('project', null, InputOption::VALUE_NONE, 'Write project config')
             ->addOption('provider', null, InputOption::VALUE_REQUIRED, 'Provider context for dynamic model validation')
+            ->addOption('allow-unlisted-model', null, InputOption::VALUE_NONE, 'Allow an unadvertised model value when setting agent.default_model')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Validate without writing')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON');
     }
@@ -58,7 +59,7 @@ final class SettingsSetCommand extends Command
         try {
             $value = (new SettingValueParser)->parse($definition, $input->getArgument('value'));
             $provider = is_string($input->getOption('provider')) ? $input->getOption('provider') : null;
-            $this->validateChoice($definition->id, $value, $catalog, $provider);
+            $this->validateChoice($definition->id, $value, $catalog, $provider, (bool) $input->getOption('allow-unlisted-model'));
         } catch (\Throwable $e) {
             return $this->fail($input, $output, $e->getMessage());
         }
@@ -99,8 +100,12 @@ final class SettingsSetCommand extends Command
         return Command::FAILURE;
     }
 
-    private function validateChoice(string $id, mixed $value, SettingsCatalog $catalog, ?string $provider = null): void
+    private function validateChoice(string $id, mixed $value, SettingsCatalog $catalog, ?string $provider = null, bool $allowUnlistedModel = false): void
     {
+        if ($allowUnlistedModel && $id === 'agent.default_model') {
+            return;
+        }
+
         $options = $catalog->options($id, $provider === null ? [] : ['provider' => $provider]);
         $values = array_values(array_filter(
             array_map(static fn (array $option): string => (string) $option['value'], $options),

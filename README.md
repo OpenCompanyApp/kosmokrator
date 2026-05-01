@@ -31,7 +31,7 @@ KosmoKrator is a mythology-themed AI coding agent with one reusable runtime and 
 
 The agent can read, write, and edit files, search your codebase, execute shell commands, run Lua workflows, call OpenCompany integrations, call MCP servers, and spawn parallel subagents. Permission modes, blocked paths, trust checks, sessions, settings, and credentials are shared across the terminal, headless CLI, SDK, and ACP surfaces.
 
-Built with **PHP 8.4+**, **Symfony Console**, **Symfony TUI**, and async streaming via **Amp/Revolt**. The current provider catalog exposes 120+ provider configurations and 4,800+ catalogued models through Prism, provider-native clients, OpenAI-compatible APIs, OAuth, and custom providers.
+Built with **PHP 8.4+**, **Symfony Console**, **Symfony TUI**, and async streaming via **Amp/Revolt**. The offline provider catalog exposes 90+ provider configurations and 3,500+ catalogued models through Prism, provider-native clients, OpenAI-compatible APIs, OAuth, and custom providers; live provider refresh can cache newer model inventories when credentials are available.
 
 ## Table of Contents
 
@@ -190,8 +190,12 @@ kosmo settings:options agent.default_model --provider openai --json
 kosmo settings:doctor --json        # Diagnose headless readiness
 
 kosmo providers:list --json
+kosmo providers:models openai --live --json
+kosmo providers:refresh-models openai --json
+kosmo providers:doctor openai --model gpt-5.4-mini --json
 printf %s "$OPENAI_API_KEY" | \
   kosmo providers:configure openai --api-key-stdin --model gpt-5.4-mini --global --json
+kosmo providers:configure openai --model future-model-id --allow-unlisted-model --global --json
 kosmo providers:configure codex --device --global --json
 kosmo providers:custom:upsert local_ai --url http://127.0.0.1:11434/v1 --model qwen3:32b --json
 
@@ -582,6 +586,8 @@ Built-in provider configurations are defined in `config/prism.yaml`. KosmoKrator
 | MiniMax | `minimax`, `minimax-cn` | API key |
 | StepFun | `stepfun`, `stepfun-plan` | API key |
 | Ollama | `ollama` | None (local) |
+
+Model inventories come from the bundled `prism-relay` registry plus optional cached live discovery. Use `kosmo providers:models <provider> --live --json` or `kosmo providers:refresh-models <provider> --json` to query provider model endpoints and cache the result in SQLite. `providers:list` and `providers:models` report the active inventory source (`bundled`, `provider_live`, etc.). For newly launched models that have not appeared in metadata yet, headless setup supports `--allow-unlisted-model`.
 
 ### Custom Providers
 

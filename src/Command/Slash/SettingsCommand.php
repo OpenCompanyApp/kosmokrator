@@ -622,7 +622,7 @@ final class SettingsCommand implements SlashCommand
         $inner = self::innerClient($ctx->llm);
 
         if ($provider !== 'codex' && method_exists($inner, 'setBaseUrl')) {
-            $inner->setBaseUrl(rtrim($registry->url($provider), '/'));
+            $inner->setBaseUrl(rtrim($catalog->provider($provider)?->url ?? $registry->url($provider), '/'));
         }
 
         if (method_exists($inner, 'setApiKey')) {
@@ -818,6 +818,10 @@ final class SettingsCommand implements SlashCommand
                 'input_modalities' => $provider->inputModalities,
                 'output_modalities' => $provider->outputModalities,
                 'free_text_model' => $provider->freeTextModel,
+                'model_source' => $provider->modelSource,
+                'model_fetched_at' => $provider->modelFetchedAt,
+                'model_inventory_fresh' => $provider->modelInventoryFresh,
+                'model_inventory_error' => $provider->modelInventoryError,
             ];
         }
 

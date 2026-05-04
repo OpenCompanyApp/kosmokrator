@@ -4,15 +4,18 @@ import { getMegaFooterSections } from '../lib/site-navigation';
 const sections = getMegaFooterSections();
 ---
 
-<footer class="kosmo-megafooter" aria-labelledby="megafooter-heading">
+<footer class="kosmo-megafooter" aria-label="KosmoKrator footer navigation">
   <div class="megafooter-inner">
-    <div class="megafooter-lede">
-      <p class="megafooter-kicker">Explore KosmoKrator</p>
-      <h2 id="megafooter-heading">One footer for the docs, integration matrix, MCP pages, and use cases.</h2>
-      <p>
-        Every generated content page is reachable from the complete website map in one more click.
-        Common product, docs, client, comparison, category, and CLI pages are linked directly here.
-      </p>
+    <div class="megafooter-top">
+      <a class="megafooter-brand" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" loading="lazy" />
+        <span>KosmoKrator</span>
+      </a>
+      <div class="megafooter-actions" aria-label="Footer shortcuts">
+        <a href="/site-map">Website Map</a>
+        <a href="/docs/installation">Install</a>
+        <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+      </div>
     </div>
 
     <nav class="megafooter-grid" aria-label="Footer navigation">
@@ -29,8 +32,9 @@ const sections = getMegaFooterSections();
     </nav>
 
     <div class="megafooter-bottom">
-      <a href="/site-map">Complete Website Map</a>
+      <a href="/site-map">Website Map</a>
       <a href="/docs/changelog">Changelog</a>
+      <a href="/integrations">Integrations</a>
       <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
     </div>
   </div>
@@ -50,45 +54,56 @@ const sections = getMegaFooterSections();
     box-sizing: border-box;
     width: min(1180px, calc(100% - 2.5rem));
     margin-inline: auto;
-    padding: 3rem 0 3.25rem;
+    padding: 2.5rem 0 2.75rem;
   }
 
-  .megafooter-lede {
-    display: grid;
+  .megafooter-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.8rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .megafooter-brand {
+    display: inline-flex;
+    align-items: center;
     gap: 0.7rem;
-    max-width: 820px;
-    margin-bottom: 2rem;
-  }
-
-  .megafooter-kicker {
-    margin: 0;
-    color: #ff5c75;
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .megafooter-lede h2 {
-    margin: 0;
     color: #f8fafc;
-    font-size: clamp(1.6rem, 3vw, 2.5rem);
-    line-height: 1.08;
-    letter-spacing: 0;
+    font-size: 1rem;
+    font-weight: 900;
+    text-decoration: none;
   }
 
-  .megafooter-lede p:last-child {
-    max-width: 760px;
-    margin: 0;
-    color: #a8b3c7;
-    font-size: 1rem;
-    line-height: 1.65;
+  .megafooter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.55rem;
+  }
+
+  .megafooter-actions a {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    color: #dce4f3;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.86rem;
+    font-weight: 800;
+    text-decoration: none;
   }
 
   .megafooter-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1.3rem 1.1rem;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.25rem 1rem;
+    align-items: start;
   }
 
   .megafooter-section {
@@ -140,6 +155,15 @@ const sections = getMegaFooterSections();
     .megafooter-inner {
       width: min(100% - 2rem, 720px);
       padding: 2.25rem 0 2.5rem;
+    }
+
+    .megafooter-top {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .megafooter-actions {
+      justify-content: flex-start;
     }
 
     .megafooter-grid {

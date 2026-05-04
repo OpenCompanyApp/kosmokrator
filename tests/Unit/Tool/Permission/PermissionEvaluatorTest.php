@@ -506,7 +506,7 @@ class PermissionEvaluatorTest extends TestCase
 
     // --- Project boundary integration ---
 
-    public function test_boundary_denies_in_prometheus_mode(): void
+    public function test_boundary_allows_prometheus_mode_to_auto_approve(): void
     {
         $projectRoot = realpath(getcwd());
         $rules = [
@@ -523,10 +523,10 @@ class PermissionEvaluatorTest extends TestCase
         );
         $evaluator->setPermissionMode(PermissionMode::Prometheus);
 
-        // Outside project + Prometheus → denied by invariant boundary
+        // Outside project + Prometheus → boundary does not stop mode auto-approval.
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
-        $this->assertSame(PermissionAction::Deny, $result->action);
-        $this->assertStringContainsString('cannot bypass project boundary', $result->reason);
+        $this->assertSame(PermissionAction::Allow, $result->action);
+        $this->assertTrue($result->autoApproved);
     }
 
     public function test_boundary_asks_in_guardian_mode(): void

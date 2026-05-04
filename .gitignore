@@ -9,6 +9,7 @@
 /tmp
 /docs/confidential
 /.playwright-cli
+/.playwright-mcp
 /builds
 /.kosmokrator
 /.kosmo

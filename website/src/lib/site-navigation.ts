@@ -116,15 +116,36 @@ export function getMegaFooterSections(): FooterSection[] {
     'airtable',
     'zendesk',
   ]);
+  const featuredCategoryNames = new Set([
+    'automation',
+    'crm',
+    'developer-tools',
+    'finance',
+    'marketing',
+    'messaging',
+    'payments',
+    'productivity',
+    'sales',
+    'support',
+  ]);
   const priorityIntegrations = integrations
     .filter((integration) => prioritySlugs.has(integration.route_slug))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const categories = getIntegrationCategories();
+  const categories = getIntegrationCategories()
+    .filter((category) => featuredCategoryNames.has(category.toLowerCase().replace(/[^a-z0-9]+/g, '-')))
+    .slice(0, 10);
 
   return [
-    { title: 'KosmoKrator', links: corePages },
+    { title: 'KosmoKrator', links: corePages.slice(0, 6) },
     { title: 'Run Modes', links: runtimePages },
-    { title: 'Docs', links: docPages.slice(1, 13) },
+    {
+      title: 'Docs',
+      links: [
+        ...docPages.slice(1, 9),
+        { label: 'All Docs', href: '/docs' },
+        { label: 'Changelog', href: '/docs/changelog' },
+      ],
+    },
     {
       title: 'MCP Clients',
       links: matrixClients.map((client) => ({
@@ -133,35 +154,48 @@ export function getMegaFooterSections(): FooterSection[] {
       })),
     },
     {
-      title: 'Comparisons',
-      links: comparisonPages.map((page) => ({
-        label: page.h1,
-        href: `/compare/${page.slug}`,
-      })),
+      title: 'Integrations',
+      links: [
+        { label: 'Integration Catalog', href: '/integrations' },
+        { label: 'All Categories', href: '/site-map#integration-categories' },
+        { label: 'Integration Matrix', href: '/site-map#integration-matrix' },
+        { label: 'CLI Shortcuts', href: '/site-map#cli-shortcuts' },
+        { label: 'Local Integration Runtime', href: '/use-cases/local-integration-runtime' },
+      ],
     },
     {
-      title: 'Integration Categories',
-      links: categories.map((category) => ({
-        label: category,
-        href: `/integrations/categories/${category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
-      })),
+      title: 'Categories',
+      links: [
+        ...categories.map((category) => ({
+          label: category,
+          href: `/integrations/categories/${category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
+        })),
+        { label: 'All Categories', href: '/site-map#integration-categories' },
+      ],
     },
     {
-      title: 'Popular CLI Integrations',
-      links: priorityIntegrations.map((integration) => ({
+      title: 'Popular CLI',
+      links: priorityIntegrations.slice(0, 12).map((integration) => ({
         label: `${integration.name} CLI`,
         href: `/cli/${integration.route_slug}`,
       })),
     },
     {
-      title: 'All Pages',
+      title: 'Compare',
+      links: comparisonPages.map((page) => ({
+        label: page.competitor,
+        href: `/compare/${page.slug}`,
+      })),
+    },
+    {
+      title: 'Site Index',
       links: [
         { label: 'Complete Website Map', href: '/site-map' },
-        { label: 'All Integrations', href: '/integrations' },
         { label: 'All Use Cases', href: '/site-map#use-cases' },
         { label: 'All MCP Client Pages', href: '/site-map#mcp-clients' },
         { label: 'All Comparisons', href: '/site-map#comparisons' },
-        { label: 'Every Integration Matrix Page', href: '/site-map#integration-matrix' },
+        { label: 'All Generated Pages', href: '/site-map#integration-matrix' },
+        { label: 'GitHub', href: 'https://github.com/OpenCompanyApp/kosmokrator' },
       ],
     },
   ];

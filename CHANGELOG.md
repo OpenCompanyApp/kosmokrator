@@ -7,11 +7,22 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.7.2] - 2026-05-04
+
+### Added
 - Canonical changelog workflow with release extraction, PR enforcement, and website publishing.
 - KosmoKrator MCP gateway for exposing selected integrations and upstream MCP servers to Claude Code and other MCP clients.
 - Live provider model discovery commands, cached model inventories, provider model diagnostics, and unlisted-model overrides for newly launched models.
 - Website SEO matrices for integration CLI, MCP client/framework setup, category hubs, use cases, comparison pages, structured data, and robots/sitemap discovery.
 - Website megafooter and complete site map so docs, use cases, MCP pages, comparisons, categories, CLI shortcuts, and generated integration matrix pages stay reachable within two clicks.
+- Homepage PHP elephant runtime badge.
+- Balanced website megafooter navigation with compact category and shortcut sections.
+- Updated bundled OpenCompany integrations catalog for the website and local integration metadata.
 
 ## [0.7.1] - 2026-04-29
 

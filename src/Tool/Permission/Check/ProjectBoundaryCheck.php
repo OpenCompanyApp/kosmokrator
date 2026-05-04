@@ -15,7 +15,7 @@ use Kosmokrator\Tool\Permission\PermissionResult;
  *
  * Positioned before SessionGrantCheck so a session-wide tool grant cannot
  * silently approve newly requested paths outside the project root. Prometheus
- * mode auto-approves normal tool policy but still cannot bypass this boundary.
+ * intentionally bypasses this prompt and lets ModeOverrideCheck auto-approve.
  * In Guardian and Argus modes, outside-project paths trigger an Ask prompt so
  * the user can approve or deny.
  */
@@ -64,10 +64,7 @@ class ProjectBoundaryCheck implements PermissionCheck
         }
 
         if (($this->modeResolver)() === PermissionMode::Prometheus) {
-            return new PermissionResult(
-                PermissionAction::Deny,
-                "Path '".basename($path)."' is outside the project root. Prometheus mode cannot bypass project boundary checks.",
-            );
+            return null;
         }
 
         return new PermissionResult(

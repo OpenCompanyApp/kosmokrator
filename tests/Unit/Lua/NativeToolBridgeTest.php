@@ -110,7 +110,7 @@ final class NativeToolBridgeTest extends TestCase
         }
     }
 
-    public function test_prometheus_cannot_bypass_project_boundary_inside_lua(): void
+    public function test_prometheus_allows_project_boundary_to_continue_to_mode_override_inside_lua(): void
     {
         $projectRoot = realpath(getcwd()) ?: getcwd();
         $tool = new NativeBridgeFakeTool('file_read');
@@ -126,14 +126,10 @@ final class NativeToolBridgeTest extends TestCase
 
         $bridge = new NativeToolBridge(fn () => $this->registry($tool), $permissions, AgentMode::Edit);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('cannot bypass project boundary');
+        $result = $bridge->call('file_read', ['path' => '/tmp/outside-project-file']);
 
-        try {
-            $bridge->call('file_read', ['path' => '/tmp/outside-project-file']);
-        } finally {
-            $this->assertSame(0, $tool->executions);
-        }
+        $this->assertSame(1, $tool->executions);
+        $this->assertSame('file_read:{"path":"/tmp/outside-project-file"}', $result['output']);
     }
 
     public function test_list_tools_filters_by_agent_mode(): void

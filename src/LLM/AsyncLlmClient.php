@@ -548,8 +548,7 @@ class AsyncLlmClient implements LlmClientInterface
         }
 
         $body = $response->getBody()->buffer($cancellation);
-        $error = json_decode($body, true);
-        $message = $error['error']['message'] ?? $body;
+        $message = $this->extractErrorMessage($body);
 
         if ($status === 429 || $status >= 500) {
             throw $this->relay->normalizeError(
@@ -568,6 +567,32 @@ class AsyncLlmClient implements LlmClientInterface
             $this->provider,
             $this->model,
         );
+    }
+
+    private function extractErrorMessage(string $body): string
+    {
+        $error = json_decode($body, true);
+        $message = is_array($error) ? ($error['error']['message'] ?? null) : null;
+
+        if (is_string($message) && trim($message) !== '') {
+            return trim($message);
+        }
+
+        $text = mb_convert_encoding($body, 'UTF-8', 'UTF-8');
+        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/\b(bearer\s+)[\w.\-]+/i', '$1[REDACTED]', $text) ?? $text;
+        $text = preg_replace('/\b(sk-[a-zA-Z0-9]{8,})\b/', '[REDACTED_KEY]', $text) ?? $text;
+        $text = trim((string) preg_replace('/\s+/', ' ', $text));
+
+        if ($text === '') {
+            return 'Provider returned a non-JSON error response.';
+        }
+
+        if (mb_strlen($text) > 200) {
+            return mb_substr($text, 0, 200).'...';
+        }
+
+        return $text;
     }
 
     /**

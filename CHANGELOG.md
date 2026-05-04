@@ -24,6 +24,9 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 - Balanced website megafooter navigation with compact category and shortcut sections.
 - Updated bundled OpenCompany integrations catalog for the website and local integration metadata.
 
+### Fixed
+- Fixed release docs deployment checkout so generated integration catalog pages build during tag releases.
+
 ## [0.7.1] - 2026-04-29
 
 ### Added

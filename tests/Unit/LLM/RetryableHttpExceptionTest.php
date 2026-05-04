@@ -26,10 +26,11 @@ class RetryableHttpExceptionTest extends TestCase
         $this->assertNull($e->retryAfterSeconds);
     }
 
-    public function test_extends_runtime_exception(): void
+    public function test_does_not_extend_runtime_exception(): void
     {
         $e = new RetryableHttpException(500, 'test');
 
-        $this->assertInstanceOf(\RuntimeException::class, $e);
+        $this->assertInstanceOf(\Exception::class, $e);
+        $this->assertSame(\Exception::class, get_parent_class($e));
     }
 }

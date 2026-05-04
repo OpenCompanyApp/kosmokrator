@@ -44,20 +44,20 @@ final class WebDoctorCommand extends Command
             }
         }
 
-        $searchProvider = (string) $config->get('kosmokrator.web.search.provider', '');
-        if ($this->bool($config->get('kosmokrator.web.search.enabled')) && $searchProvider === '') {
+        $searchProvider = (string) $config->get('kosmo.web.search.provider', '');
+        if ($this->bool($config->get('kosmo.web.search.enabled')) && $searchProvider === '') {
             $problems[] = 'web.search.enabled is on but web.search.provider is empty.';
         }
-        $crawlProvider = (string) $config->get('kosmokrator.web.crawl.provider', '');
-        if ($this->bool($config->get('kosmokrator.web.crawl.enabled')) && $crawlProvider === '') {
+        $crawlProvider = (string) $config->get('kosmo.web.crawl.provider', '');
+        if ($this->bool($config->get('kosmo.web.crawl.enabled')) && $crawlProvider === '') {
             $problems[] = 'web.crawl.enabled is on but web.crawl.provider is empty.';
         }
 
         $payload = [
             'success' => $problems === [],
-            'search' => ['enabled' => $this->bool($config->get('kosmokrator.web.search.enabled')), 'provider' => $searchProvider ?: null],
-            'fetch' => ['external_allowed' => $this->bool($config->get('kosmokrator.web.fetch.allow_external')), 'provider' => $config->get('kosmokrator.web.fetch.provider', 'native')],
-            'crawl' => ['enabled' => $this->bool($config->get('kosmokrator.web.crawl.enabled')), 'provider' => $crawlProvider ?: null],
+            'search' => ['enabled' => $this->bool($config->get('kosmo.web.search.enabled')), 'provider' => $searchProvider ?: null],
+            'fetch' => ['external_allowed' => $this->bool($config->get('kosmo.web.fetch.allow_external')), 'provider' => $config->get('kosmo.web.fetch.provider', 'native')],
+            'crawl' => ['enabled' => $this->bool($config->get('kosmo.web.crawl.enabled')), 'provider' => $crawlProvider ?: null],
             'providers' => $providers,
             'problems' => $problems,
         ];

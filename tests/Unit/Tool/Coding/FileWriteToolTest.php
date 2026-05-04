@@ -98,6 +98,34 @@ class FileWriteToolTest extends TestCase
         $this->assertStringContainsString('Wrote 1 lines', $result->output);
     }
 
+    public function test_rejects_write_through_symlink_directory(): void
+    {
+        $target = $this->tempDir.'/target';
+        $link = $this->tempDir.'/link';
+        mkdir($target);
+        symlink($target, $link);
+
+        $result = $this->tool->execute(['path' => $link.'/file.txt', 'content' => 'x']);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('symlink component', $result->output);
+        $this->assertFileDoesNotExist($target.'/file.txt');
+    }
+
+    public function test_rejects_overwrite_of_symlink_file(): void
+    {
+        $target = $this->tempDir.'/target.txt';
+        $link = $this->tempDir.'/link.txt';
+        file_put_contents($target, 'target');
+        symlink($target, $link);
+
+        $result = $this->tool->execute(['path' => $link, 'content' => 'new']);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('symlink component', $result->output);
+        $this->assertSame('target', file_get_contents($target));
+    }
+
     public function test_output_includes_path(): void
     {
         $path = $this->tempDir.'/output.txt';
@@ -118,7 +146,9 @@ class FileWriteToolTest extends TestCase
         );
 
         foreach ($items as $item) {
-            $item->isDir() ? rmdir($item->getRealPath()) : unlink($item->getRealPath());
+            $item->isDir() && ! $item->isLink()
+                ? rmdir($item->getPathname())
+                : unlink($item->getPathname());
         }
 
         rmdir($dir);

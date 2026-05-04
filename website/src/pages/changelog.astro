@@ -1,0 +1,29 @@
+---
+import MegaFooter from '../components/MegaFooter.astro';
+import { DEFAULT_OG_IMAGE, siteUrl } from '../lib/seo';
+
+const target = '/docs/changelog';
+const targetUrl = siteUrl(target);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirecting to KosmoKrator Changelog</title>
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="refresh" content={`0;url=${target}`} />
+    <meta property="og:title" content="KosmoKrator Changelog" />
+    <meta property="og:description" content="Release history and user-facing changes for KosmoKrator." />
+    <meta property="og:image" content={DEFAULT_OG_IMAGE} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
+    <link rel="canonical" href={targetUrl} />
+  </head>
+  <body>
+    <a href={target}>Redirecting to the KosmoKrator changelog.</a>
+    <MegaFooter />
+  </body>
+</html>

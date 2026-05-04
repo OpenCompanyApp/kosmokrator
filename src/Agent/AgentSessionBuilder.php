@@ -49,103 +49,25 @@ final class AgentSessionBuilder
      */
     public function build(string $rendererPref, bool $animated): AgentSession
     {
-        $config = $this->container->make('config');
-
-        // Initialize UI
         $ui = new UIManager($rendererPref);
         $ui->initialize();
         $ui->renderIntro($animated);
         $ui->showWelcome();
 
-        // Create LLM client (validates auth, selects sync/async)
-        $llmFactory = new LlmClientFactory($this->container);
-        $llm = $llmFactory->create($ui->getActiveRenderer(), $ui);
-
-        $log = $this->container->make(LoggerInterface::class);
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        $log->info('KosmoKrator started', ['renderer' => $ui->getActiveRenderer(), 'provider' => $provider]);
-
-        // Tools and permissions
-        $toolRegistry = $this->container->make(ToolRegistry::class);
-        $toolRegistry->register(new AskUserTool($ui));
-        $toolRegistry->register(new AskChoiceTool($ui));
-        $permissions = $this->container->make(PermissionEvaluator::class);
-        $models = $this->container->make(ModelCatalog::class);
-
-        // Session manager and project scope
-        $sessionManager = $this->container->make(SessionManager::class);
-        $project = InstructionLoader::gitRoot() ?? getcwd();
-        $sessionManager->setProject($project);
-
-        // Apply persisted settings (temperature, max_tokens, permission_mode, max_retries)
-        $kosmokratorConfig = $config->get('kosmokrator', []);
-        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
-        $settingsApplier->apply($llm, $permissions);
-
-        // Set initial permission mode on UI
-        $permMode = $permissions->getPermissionMode();
-        $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
-
-        // Build system prompt
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
-            .InstructionLoader::gather()
-            .EnvironmentContext::gather();
-
-        // Append Lua integration docs if available
-        $baseSystemPrompt .= $this->buildLuaDocsSuffix();
-        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
-
-        // Task store
-        $taskStore = $this->container->make(TaskStore::class);
-        $ui->setTaskStore($taskStore);
-
-        // Context pipeline (budget, compactor, pruner, deduplicator, truncator, protected context)
-        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
-        $contextPipeline = $contextFactory->create($llm);
-
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
-
-        // Event dispatcher for cross-cutting concerns
-        $events = $this->container->bound(Dispatcher::class)
-            ? $this->container->make(Dispatcher::class)
-            : null;
-
-        // Create AgentLoop
-        $agentLoop = new AgentLoop(
-            $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager,
-            $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
-            $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
+        $session = $this->assembleSession(
+            ui: $ui,
+            llmRenderer: $ui->getActiveRenderer(),
+            options: [],
+            persistSession: true,
+            exposeTaskStore: true,
+            subagentRenderer: $ui->getActiveRenderer(),
+            logMessage: 'KosmoKrator started',
+            logContext: ['renderer' => $ui->getActiveRenderer()],
         );
 
-        // Subagent pipeline (orchestrator, root context, factory)
-        $prismProviders = $config->get('prism.providers', []);
-        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
-        $subagentPipelineFactory = new SubagentPipelineFactory(
-            $sessionManager,
-            $this->container->make(ProviderCatalog::class),
-            $this->container->make(RelayRegistry::class),
-            $models,
-            $this->container->make(Relay::class),
-            $log,
-            $subagentConfig,
-        );
-        $subagentPipeline = $subagentPipelineFactory->create(
-            $llm, $toolRegistry, $permissions, $ui, $contextPipeline, $ui->getActiveRenderer(),
-        );
+        $ui->setAgentTreeProvider(fn () => $session->agentLoop->buildLiveAgentTree());
 
-        // Wire subagent tool into the tool registry
-        $toolRegistry->register(new SubagentTool(
-            $subagentPipeline->rootContext,
-            fn (AgentContext $ctx, string $task) => $subagentPipeline->factory->createAndRunAgent($ctx, $task),
-        ));
-        $agentLoop->setAgentContext($subagentPipeline->rootContext);
-        $agentLoop->setTools($toolRegistry->toPrismTools());
-
-        // Wire live subagent tree for TUI display
-        $ui->setAgentTreeProvider(fn () => $agentLoop->buildLiveAgentTree());
-
-        return new AgentSession($ui, $agentLoop, $llm, $permissions, $sessionManager, $subagentPipeline->orchestrator);
+        return $session;
     }
 
     /**
@@ -162,134 +84,20 @@ final class AgentSessionBuilder
      */
     public function buildHeadless(OutputFormat $format = OutputFormat::Text, array $options = []): AgentSession
     {
-        $config = $this->container->make('config');
-
-        // Create headless renderer. SDK callers can supply an event/callback
-        // renderer while keeping the same headless agent wiring as the CLI.
         $ui = ($options['renderer'] ?? null) instanceof RendererInterface
             ? $options['renderer']
             : new HeadlessRenderer($format);
 
-        // Create LLM client (always use sync/prism for headless)
-        $llmFactory = new LlmClientFactory($this->container);
-        // Gateway surfaces need the same async-capable LLM path as TUI sessions.
-        // Some providers, notably Z.AI coding, work correctly via the async transport
-        // but fail on the sync Prism path used for plain ANSI/headless mode.
-        $llm = $llmFactory->create('tui', $ui);
-
-        // Apply model override if specified
-        if (! empty($options['model'])) {
-            $llm->setModel($options['model']);
-        }
-
-        $log = $this->container->make(LoggerInterface::class);
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
-        $log->info('KosmoKrator headless started', ['format' => $format->value, 'provider' => $provider]);
-
-        // Tools and permissions
-        $toolRegistry = $this->container->make(ToolRegistry::class);
-        $toolRegistry->register(new AskUserTool($ui));
-        $toolRegistry->register(new AskChoiceTool($ui));
-        $permissions = $this->container->make(PermissionEvaluator::class);
-        $models = $this->container->make(ModelCatalog::class);
-
-        // Session manager — optional for headless
-        $persistSession = $options['persist_session'] ?? true;
-        $sessionManager = $this->container->make(SessionManager::class);
-        if ($persistSession) {
-            $project = InstructionLoader::gitRoot() ?? getcwd();
-            $sessionManager->setProject($project);
-        }
-
-        // Apply persisted settings
-        $kosmokratorConfig = $config->get('kosmokrator', []);
-        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
-        $settingsApplier->apply($llm, $permissions);
-
-        // Apply permission mode override (--yolo or --permission-mode)
-        if (! empty($options['permission_mode'])) {
-            $permMode = PermissionMode::from($options['permission_mode']);
-            $permissions->setPermissionMode($permMode);
-        }
-
-        // Build system prompt
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
-            .InstructionLoader::gather()
-            .EnvironmentContext::gather();
-
-        // System prompt overrides
-        if (! empty($options['system_prompt'])) {
-            $baseSystemPrompt = $options['system_prompt'];
-        }
-        if (! empty($options['append_system_prompt'])) {
-            $baseSystemPrompt .= "\n\n".$options['append_system_prompt'];
-        }
-
-        // Append Lua integration docs if available
-        $baseSystemPrompt .= $this->buildLuaDocsSuffix();
-        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
-
-        // Task store
-        $taskStore = $this->container->make(TaskStore::class);
-
-        // Context pipeline
-        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
-        $contextPipeline = $contextFactory->create($llm);
-
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
-
-        // Event dispatcher
-        $events = $this->container->bound(Dispatcher::class)
-            ? $this->container->make(Dispatcher::class)
-            : null;
-
-        // Create AgentLoop
-        $agentLoop = new AgentLoop(
-            $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore,
-            $persistSession ? $sessionManager : null,
-            $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
-            $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
+        return $this->assembleSession(
+            ui: $ui,
+            llmRenderer: 'tui',
+            options: $options,
+            persistSession: (bool) ($options['persist_session'] ?? true),
+            exposeTaskStore: false,
+            subagentRenderer: 'ansi',
+            logMessage: 'KosmoKrator headless started',
+            logContext: ['format' => $format->value],
         );
-
-        // Apply guardrails
-        if (! empty($options['max_turns'])) {
-            $agentLoop->setMaxTurns((int) $options['max_turns']);
-        }
-        if (! empty($options['timeout'])) {
-            $agentLoop->setTimeout((int) $options['timeout']);
-        }
-
-        // Apply agent mode
-        if (! empty($options['agent_mode'])) {
-            $agentLoop->setMode(AgentMode::from($options['agent_mode']));
-        }
-
-        // Subagent pipeline
-        $prismProviders = $config->get('prism.providers', []);
-        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
-        $subagentPipelineFactory = new SubagentPipelineFactory(
-            $sessionManager,
-            $this->container->make(ProviderCatalog::class),
-            $this->container->make(RelayRegistry::class),
-            $models,
-            $this->container->make(Relay::class),
-            $log,
-            $subagentConfig,
-        );
-        $subagentPipeline = $subagentPipelineFactory->create(
-            $llm, $toolRegistry, $permissions, $ui, $contextPipeline, 'ansi',
-        );
-
-        // Wire subagent tool
-        $toolRegistry->register(new SubagentTool(
-            $subagentPipeline->rootContext,
-            fn (AgentContext $ctx, string $task) => $subagentPipeline->factory->createAndRunAgent($ctx, $task),
-        ));
-        $agentLoop->setAgentContext($subagentPipeline->rootContext);
-        $agentLoop->setTools($toolRegistry->toPrismTools());
-
-        return new AgentSession($ui, $agentLoop, $llm, $permissions, $sessionManager, $subagentPipeline->orchestrator);
     }
 
     /**
@@ -302,19 +110,45 @@ final class AgentSessionBuilder
      */
     public function buildGateway(RendererInterface $ui, array $options = []): AgentSession
     {
-        $config = $this->container->make('config');
-
         $ui->initialize();
 
-        $llmFactory = new LlmClientFactory($this->container);
-        // Gateway surfaces need the same async-capable client selection as TUI.
-        $llm = $llmFactory->create('tui', $ui);
+        return $this->assembleSession(
+            ui: $ui,
+            llmRenderer: 'tui',
+            options: $options,
+            persistSession: true,
+            exposeTaskStore: false,
+            subagentRenderer: 'ansi',
+        );
+    }
 
-        if (! empty($options['model'])) {
-            $llm->setModel($options['model']);
+    /**
+     * Shared runtime assembly for terminal, headless, SDK, ACP, and gateway surfaces.
+     *
+     * @param  array{model?: string, permission_mode?: string, agent_mode?: string, system_prompt?: string, append_system_prompt?: string, max_turns?: int, timeout?: int}  $options
+     * @param  array<string, mixed>  $logContext
+     */
+    private function assembleSession(
+        RendererInterface $ui,
+        string $llmRenderer,
+        array $options,
+        bool $persistSession,
+        bool $exposeTaskStore,
+        string $subagentRenderer,
+        ?string $logMessage = null,
+        array $logContext = [],
+    ): AgentSession {
+        $config = $this->container->make('config');
+        $log = $this->container->make(LoggerInterface::class);
+        $provider = $config->get('kosmo.agent.default_provider', 'z');
+        if ($logMessage !== null) {
+            $log->info($logMessage, ['provider' => $provider, ...$logContext]);
         }
 
-        $log = $this->container->make(LoggerInterface::class);
+        $llm = (new LlmClientFactory($this->container))->create($llmRenderer, $ui);
+        if (! empty($options['model'])) {
+            $llm->setModel((string) $options['model']);
+        }
 
         $toolRegistry = $this->container->make(ToolRegistry::class);
         $toolRegistry->register(new AskUserTool($ui));
@@ -323,46 +157,96 @@ final class AgentSessionBuilder
         $models = $this->container->make(ModelCatalog::class);
 
         $sessionManager = $this->container->make(SessionManager::class);
-        $project = InstructionLoader::gitRoot() ?? getcwd();
-        $sessionManager->setProject($project);
+        if ($persistSession) {
+            $sessionManager->setProject(InstructionLoader::gitRoot() ?? getcwd());
+        }
 
-        $kosmokratorConfig = $config->get('kosmokrator', []);
-        $settingsApplier = new SessionSettingsApplier($sessionManager, $kosmokratorConfig);
-        $settingsApplier->apply($llm, $permissions);
-
+        $kosmoConfig = $config->get('kosmo', []);
+        (new SessionSettingsApplier($sessionManager, $kosmoConfig))->apply($llm, $permissions);
         if (! empty($options['permission_mode'])) {
             $permissions->setPermissionMode(PermissionMode::from((string) $options['permission_mode']));
         }
 
-        $baseSystemPrompt = $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.')
-            .InstructionLoader::gather()
-            .EnvironmentContext::gather();
+        $permMode = $permissions->getPermissionMode();
+        $ui->setPermissionMode($permMode->statusLabel(), $permMode->color());
 
-        if (! empty($options['system_prompt'])) {
-            $baseSystemPrompt = (string) $options['system_prompt'];
-        }
-        if (! empty($options['append_system_prompt'])) {
-            $baseSystemPrompt .= "\n\n".(string) $options['append_system_prompt'];
-        }
-
-        $baseSystemPrompt .= $this->buildLuaDocsSuffix();
-        $baseSystemPrompt .= $this->buildWebToolsSuffix($toolRegistry);
-
+        $baseSystemPrompt = $this->systemPrompt($toolRegistry, $options);
         $taskStore = $this->container->make(TaskStore::class);
-        $contextFactory = new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmokratorConfig);
-        $contextPipeline = $contextFactory->create($llm);
-        $memoryWarningThreshold = (int) $config->get('kosmokrator.context.memory_warning_mb', 50) * 1024 * 1024;
+        if ($exposeTaskStore) {
+            $ui->setTaskStore($taskStore);
+        }
+
+        $contextPipeline = (new ContextPipelineFactory($sessionManager, $models, $taskStore, $log, $kosmoConfig))->create($llm);
         $events = $this->container->bound(Dispatcher::class)
             ? $this->container->make(Dispatcher::class)
             : null;
 
         $agentLoop = new AgentLoop(
-            $llm, $ui, $log, $baseSystemPrompt, $permissions, $models, $taskStore, $sessionManager,
-            $contextPipeline->compactor, $contextPipeline->truncator, $contextPipeline->pruner,
-            $contextPipeline->deduplicator, $contextPipeline->budget, $contextPipeline->protectedContextBuilder,
-            $memoryWarningThreshold, $events, webCache: $this->container->make(WebTransientCache::class),
+            $llm,
+            $ui,
+            $log,
+            $baseSystemPrompt,
+            $permissions,
+            $models,
+            $taskStore,
+            $persistSession ? $sessionManager : null,
+            $contextPipeline->compactor,
+            $contextPipeline->truncator,
+            $contextPipeline->pruner,
+            $contextPipeline->deduplicator,
+            $contextPipeline->budget,
+            $contextPipeline->protectedContextBuilder,
+            (int) $config->get('kosmo.context.memory_warning_mb', 50) * 1024 * 1024,
+            $events,
+            webCache: $this->container->make(WebTransientCache::class),
         );
 
+        $this->applyRuntimeOptions($agentLoop, $options);
+
+        $subagentPipeline = (new SubagentPipelineFactory(
+            $sessionManager,
+            $this->container->make(ProviderCatalog::class),
+            $this->container->make(RelayRegistry::class),
+            $models,
+            $this->container->make(Relay::class),
+            $log,
+            array_merge($kosmoConfig, ['prism_providers' => $config->get('prism.providers', [])]),
+        ))->create($llm, $toolRegistry, $permissions, $ui, $contextPipeline, $subagentRenderer);
+
+        $toolRegistry->register(new SubagentTool(
+            $subagentPipeline->rootContext,
+            fn (AgentContext $ctx, string $task) => $subagentPipeline->factory->createAndRunAgent($ctx, $task),
+        ));
+        $agentLoop->setAgentContext($subagentPipeline->rootContext);
+        $agentLoop->setTools($toolRegistry->toPrismTools());
+
+        return new AgentSession($ui, $agentLoop, $llm, $permissions, $sessionManager, $subagentPipeline->orchestrator);
+    }
+
+    /**
+     * @param  array{system_prompt?: string, append_system_prompt?: string}  $options
+     */
+    private function systemPrompt(ToolRegistry $toolRegistry, array $options): string
+    {
+        $config = $this->container->make('config');
+        $prompt = ! empty($options['system_prompt'])
+            ? (string) $options['system_prompt']
+            : $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.')
+                .InstructionLoader::gather()
+                .EnvironmentContext::gather();
+
+        if (! empty($options['append_system_prompt'])) {
+            $prompt .= "\n\n".(string) $options['append_system_prompt'];
+        }
+
+        return $prompt.$this->buildLuaDocsSuffix().$this->buildWebToolsSuffix($toolRegistry);
+    }
+
+    /**
+     * @param  array{max_turns?: int, timeout?: int, agent_mode?: string}  $options
+     */
+    private function applyRuntimeOptions(AgentLoop $agentLoop, array $options): void
+    {
         if (! empty($options['max_turns'])) {
             $agentLoop->setMaxTurns((int) $options['max_turns']);
         }
@@ -374,30 +258,6 @@ final class AgentSessionBuilder
         if (! empty($options['agent_mode'])) {
             $agentLoop->setMode(AgentMode::from((string) $options['agent_mode']));
         }
-
-        $prismProviders = $config->get('prism.providers', []);
-        $subagentConfig = array_merge($kosmokratorConfig, ['prism_providers' => $prismProviders]);
-        $subagentPipelineFactory = new SubagentPipelineFactory(
-            $sessionManager,
-            $this->container->make(ProviderCatalog::class),
-            $this->container->make(RelayRegistry::class),
-            $models,
-            $this->container->make(Relay::class),
-            $log,
-            $subagentConfig,
-        );
-        $subagentPipeline = $subagentPipelineFactory->create(
-            $llm, $toolRegistry, $permissions, $ui, $contextPipeline, 'ansi',
-        );
-
-        $toolRegistry->register(new SubagentTool(
-            $subagentPipeline->rootContext,
-            fn (AgentContext $ctx, string $task) => $subagentPipeline->factory->createAndRunAgent($ctx, $task),
-        ));
-        $agentLoop->setAgentContext($subagentPipeline->rootContext);
-        $agentLoop->setTools($toolRegistry->toPrismTools());
-
-        return new AgentSession($ui, $agentLoop, $llm, $permissions, $sessionManager, $subagentPipeline->orchestrator);
     }
 
     /**

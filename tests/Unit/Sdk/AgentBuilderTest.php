@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Sdk;
 
+use Amp\Cancellation;
 use Kosmokrator\Kernel;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\LlmStreamingEvent;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Sdk\AgentBuilder;
 use Kosmokrator\Sdk\Event\RunCompleted;
+use Kosmokrator\Sdk\Event\TextDelta;
 use Kosmokrator\Sdk\Event\ToolCallCompleted;
 use Kosmokrator\Sdk\Event\ToolCallStarted;
 use Kosmokrator\Sdk\Renderer\CollectingRenderer;
@@ -82,6 +86,80 @@ final class AgentBuilderTest extends TestCase
         $this->assertNotEmpty(array_filter($result->events, fn ($event): bool => $event instanceof ToolCallCompleted));
     }
 
+    public function test_collect_preserves_exception_details_for_headless_debugging(): void
+    {
+        $llm = new class implements LlmClientInterface
+        {
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+            {
+                throw new \LogicException('diagnostic failure');
+            }
+
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                throw new \LogicException('diagnostic failure');
+                yield;
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+
+            public function setSystemPrompt(string $prompt): void {}
+
+            public function getProvider(): string
+            {
+                return 'test';
+            }
+
+            public function setProvider(string $provider): void {}
+
+            public function getModel(): string
+            {
+                return 'test-model';
+            }
+
+            public function setModel(string $model): void {}
+
+            public function getTemperature(): int|float|null
+            {
+                return null;
+            }
+
+            public function setTemperature(int|float|null $temperature): void {}
+
+            public function getMaxTokens(): ?int
+            {
+                return null;
+            }
+
+            public function setMaxTokens(?int $maxTokens): void {}
+
+            public function getReasoningEffort(): string
+            {
+                return 'medium';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+        };
+
+        $kernel = $this->kernelWithFakeLlm($llm);
+
+        $result = AgentBuilder::fromContainer($kernel->getContainer())
+            ->forProject($this->project)
+            ->withoutSessionPersistence()
+            ->build()
+            ->collect('fail with diagnostics');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('diagnostic failure', $result->error);
+        $this->assertSame(\LogicException::class, $result->errorClass);
+        $this->assertNotNull($result->errorTrace);
+        $this->assertStringContainsString('diagnostic failure', $result->text);
+        $this->assertSame(\LogicException::class, $result->toArray()['error_class']);
+    }
+
     public function test_callback_renderer_receives_events_during_run(): void
     {
         $llm = new RecordingLlmClient;
@@ -103,6 +181,100 @@ final class AgentBuilderTest extends TestCase
         $this->assertNotEmpty($events);
     }
 
+    public function test_stream_yields_events_before_run_completes(): void
+    {
+        $marker = new StreamCompletionMarker;
+        $llm = new class($marker) implements LlmClientInterface
+        {
+            private string $provider = 'test';
+
+            private string $model = 'test-model';
+
+            public function __construct(private readonly StreamCompletionMarker $marker) {}
+
+            public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
+            {
+                return new LlmResponse('unused', FinishReason::Stop, [], 1, 1);
+            }
+
+            public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
+            {
+                yield LlmStreamingEvent::textDelta("live\n");
+                \Amp\delay(0.05);
+                $this->marker->completed = true;
+                yield LlmStreamingEvent::streamEnd(3, 2, finishReason: FinishReason::Stop);
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return true;
+            }
+
+            public function setSystemPrompt(string $prompt): void {}
+
+            public function getProvider(): string
+            {
+                return $this->provider;
+            }
+
+            public function setProvider(string $provider): void
+            {
+                $this->provider = $provider;
+            }
+
+            public function getModel(): string
+            {
+                return $this->model;
+            }
+
+            public function setModel(string $model): void
+            {
+                $this->model = $model;
+            }
+
+            public function getTemperature(): int|float|null
+            {
+                return null;
+            }
+
+            public function setTemperature(int|float|null $temperature): void {}
+
+            public function getMaxTokens(): ?int
+            {
+                return null;
+            }
+
+            public function setMaxTokens(?int $maxTokens): void {}
+
+            public function getReasoningEffort(): string
+            {
+                return 'medium';
+            }
+
+            public function setReasoningEffort(string $effort): void {}
+        };
+
+        $kernel = $this->kernelWithFakeLlm($llm);
+        $events = [];
+
+        $agent = AgentBuilder::fromContainer($kernel->getContainer())
+            ->forProject($this->project)
+            ->withoutSessionPersistence()
+            ->withRenderer(new CollectingRenderer)
+            ->build();
+
+        foreach ($agent->stream('Run live stream') as $event) {
+            $events[] = $event;
+            if ($event instanceof TextDelta) {
+                $this->assertFalse($marker->completed);
+            }
+        }
+
+        $this->assertTrue($marker->completed);
+        $this->assertNotEmpty(array_filter($events, fn ($event): bool => $event instanceof TextDelta));
+        $this->assertNotEmpty(array_filter($events, fn ($event): bool => $event instanceof RunCompleted));
+    }
+
     public function test_collecting_renderer_reset_refreshes_cancelled_token(): void
     {
         $renderer = new CollectingRenderer;
@@ -116,6 +288,7 @@ final class AgentBuilderTest extends TestCase
 
     public function test_mcp_client_uses_project_root_without_agent_run(): void
     {
+        putenv('KOSMO_MCP_ALLOW_FORCE=1');
         $server = dirname(__DIR__, 2).'/fixtures/mcp/fake_stdio_server.php';
         file_put_contents($this->project.'/.mcp.json', json_encode([
             'mcpServers' => [
@@ -132,10 +305,12 @@ final class AgentBuilderTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('project-root', $result['data']);
         $agent->close();
+        putenv('KOSMO_MCP_ALLOW_FORCE');
     }
 
     public function test_mcp_client_uses_runtime_server_overlay_without_agent_run(): void
     {
+        putenv('KOSMO_MCP_ALLOW_FORCE=1');
         $server = dirname(__DIR__, 2).'/fixtures/mcp/fake_stdio_server.php';
 
         $agent = AgentBuilder::create()
@@ -148,16 +323,17 @@ final class AgentBuilderTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('runtime-overlay', $result['data']);
         $agent->close();
+        putenv('KOSMO_MCP_ALLOW_FORCE');
     }
 
-    private function kernelWithFakeLlm(?RecordingLlmClient $llm = null): Kernel
+    private function kernelWithFakeLlm(?LlmClientInterface $llm = null): Kernel
     {
         $llm ??= new RecordingLlmClient;
         $kernel = new Kernel(dirname(__DIR__, 3));
         $kernel->boot();
         $container = $kernel->getContainer();
-        $container->make('config')->set('kosmokrator.agent.default_provider', 'ollama');
-        $container->make('config')->set('kosmokrator.agent.default_model', 'test-model');
+        $container->make('config')->set('kosmo.agent.default_provider', 'ollama');
+        $container->make('config')->set('kosmo.agent.default_model', 'test-model');
         $container->instance(AsyncLlmClient::class, $llm);
         $container->instance(PrismService::class, $llm);
 
@@ -192,4 +368,9 @@ final class AgentBuilderTest extends TestCase
             return true;
         }
     }
+}
+
+final class StreamCompletionMarker
+{
+    public bool $completed = false;
 }

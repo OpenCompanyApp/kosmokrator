@@ -162,9 +162,9 @@ class ProjectBoundaryCheckTest extends TestCase
         $this->assertNull($result);
     }
 
-    // --- Prometheus exempt ---
+    // --- Prometheus boundary bypass ---
 
-    public function test_prometheus_mode_exempt(): void
+    public function test_prometheus_mode_allows_outside_project_to_continue_to_mode_override(): void
     {
         $check = $this->makeCheck(mode: PermissionMode::Prometheus);
 
@@ -279,9 +279,9 @@ class ProjectBoundaryCheckTest extends TestCase
             $this->markTestSkipped('HOME not set');
         }
 
-        $kosmoDir = $home.'/.kosmokrator';
+        $kosmoDir = $home.'/.kosmo';
         if (! is_dir($kosmoDir)) {
-            $this->markTestSkipped('~/.kosmokrator does not exist');
+            $this->markTestSkipped('~/.kosmo does not exist');
         }
 
         $check = $this->makeCheck([realpath($kosmoDir)]);

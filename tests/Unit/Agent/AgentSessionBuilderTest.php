@@ -47,7 +47,7 @@ class AgentSessionBuilderTest extends TestCase
     {
         $this->originalHome = getenv('HOME') ?: null;
         $this->fakeHome = sys_get_temp_dir().'/kosmokrator_builder_test_'.uniqid();
-        mkdir($this->fakeHome.'/.kosmokrator/logs', 0755, true);
+        mkdir($this->fakeHome.'/.kosmo/logs', 0755, true);
         putenv("HOME={$this->fakeHome}");
         $_ENV['HOME'] = $this->fakeHome;
     }
@@ -300,7 +300,7 @@ class AgentSessionBuilderTest extends TestCase
 
         // Config
         $config = new ConfigRepository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'default_provider' => $provider,
                     'system_prompt' => 'You are a helpful coding assistant.',

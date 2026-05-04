@@ -1,0 +1,209 @@
+---
+title: "Architecture"
+description: "KosmoKrator runtime architecture and request lifecycle."
+sidebar:
+  order: 20
+---
+KosmoKrator is a PHP 8.4 application built around a thin-agent-loop architecture: a small orchestrator delegates to focused components for tool execution, context management, permission checking, and rendering. This page walks through the request lifecycle, key source directories, the rendering layer, and how the pieces fit together.
+
+## Request Lifecycle
+
+Every interaction with KosmoKrator follows the same boot path, from the CLI entry point through to the interactive REPL loop. Understanding this flow makes it easier to navigate the codebase and extend specific stages.
+
+#### bin/kosmo
+
+CLI entry point
+
+PHP shebang
+
+→
+
+#### Kernel
+
+Boots DI container, loads config, registers providers
+
+Boot
+
+→
+
+#### AgentCommand
+
+Console command: parses CLI flags, validates environment
+
+CLI layer
+
+→
+
+#### AgentSessionBuilder
+
+Wires all dependencies: LLM client, tools, renderer, session DB
+
+Composition
+
+→
+
+#### AgentLoop
+
+Interactive REPL: user input → LLM call → tool calls → repeat
+
+REPL
+
+The `AgentSessionBuilder` is the composition root. It reads the merged configuration, instantiates the LLM client, registers all tools, creates the session database connection, selects the appropriate renderer, and returns an immutable `AgentSession` value object. The `AgentLoop` then takes over and runs until the user exits.
+
+## Key Directories
+
+The source code is organized into focused namespaces under `src/`. Each directory has a clear responsibility:
+
+| Directory | Responsibility |
+| --- | --- |
+| `src/Agent/` | Agent core: `AgentLoop`, `ToolExecutor`, `ContextManager`, `StuckDetector`, `ContextCompactor`, `ContextPruner`, subagent orchestration, session builder |
+| `src/LLM/` | LLM clients: `AsyncLlmClient`, `PrismService`, `RetryableLlmClient`, provider catalog, model definitions, pricing service |
+| `src/UI/` | Terminal rendering: `TuiRenderer` (Symfony TUI + Revolt event loop), `AnsiRenderer` (pure ANSI + readline), `HeadlessRenderer` for non-interactive output, `NullRenderer` for subagents, `Theme` for colors, diff rendering, conversation display |
+| `src/Tool/` | Tool implementations under `Coding/` (file ops, search, bash, subagent, memory), permission system under `Permission/` |
+| `src/Command/` | Console commands: `AgentCommand`, `SetupCommand`, `ConfigCommand`, `AuthCommand`, update/gateway/integration commands, slash commands in `Slash/`, power commands in `Power/` |
+| `src/Session/` | SQLite persistence: sessions, messages, memories, settings via `Database` class |
+| `src/Task/` | Task tracking with tool integrations for managing work items across agent turns |
+| `src/Settings/` | Settings management: `SettingsManager`, `SettingsPaths`, `YamlConfigStore`, `SettingsSchema` |
+| `src/Provider/` | Service providers for the DI container — 11 providers (Core, Config, Database, LLM, Tool, Session, Agent, Event, Integration, Logging, UI) each with `register()` and `boot()` phases |
+| `src/Athanor/` | Reactive signal/subscriber system: `Signal`, `Effect`, `Computed`, `Subscriber` for fine-grained reactivity |
+| `src/Skill/` | Skill system: `Skill`, `SkillRegistry`, `SkillLoader`, `SkillDispatcher`, `SkillScope` for extensible agent capabilities |
+| `src/Lua/` | Lua sandbox and scripting: `LuaSandboxService`, `LuaDocService`, `NativeToolBridge`, `LuaResult` |
+| `src/Integration/` | Integration management and headless runtime: `IntegrationManager`, `IntegrationCatalog`, `IntegrationRuntime`, `IntegrationArgumentMapper`, `IntegrationDocService`, credential resolution, and Lua invocation helpers |
+| `src/Mcp/` | MCP config compatibility, stdio transport, trust and read/write permission checks, headless command runtime, resources/prompts, secret resolution, and Lua `app.mcp.*` bridge |
+| `src/Audio/` | Sound effects via `CompletionSound` |
+| `src/Update/` | Self-updater: `UpdateChecker`, `SelfUpdater` |
+| `src/UI/Diff/` | Diff rendering via `DiffRenderer` |
+| `src/UI/Highlight/` | Lua syntax highlighting for inline code display |
+
+**Tip:** Each namespace is intentionally self-contained. Dependencies flow inward: `Command` depends on `Agent`, which depends on `LLM`, `Tool`, and `UI`. The `Session` layer is used by `Agent` for persistence but has no dependency on agent logic itself.
+
+## Rendering Layer
+
+The UI is built around a composite `RendererInterface` that combines five focused sub-interfaces. Each sub-interface covers one aspect of the terminal output, and the composite is implemented by two concrete renderers plus a null renderer for testing. The **Revolt event loop** is fundamental to KosmoKrator's async architecture — it drives not just the TUI widget rendering but also concurrent LLM streaming, parallel tool execution, and non-blocking I/O throughout the application.
+
+### Sub-Interfaces
+
+| Interface | Responsibility |
+| --- | --- |
+| `CoreRendererInterface` | Lifecycle events: startup, shutdown, errors, status bar |
+| `ToolRendererInterface` | Tool call display: formatting tool invocations and their results |
+| `DialogRendererInterface` | Interactive dialogs: permission prompts, confirmations, settings editor |
+| `ConversationRendererInterface` | Conversation history replay and session resumption: re-rendering the prior message history when a session is resumed |
+| `SubagentRendererInterface` | Subagent UI: swarm dashboard, progress bars, result injection |
+
+### Implementations
+
+Two full implementations exist, selected at boot time based on the `ui.renderer` setting and terminal capabilities:
+
+-   **TuiRenderer** — Built on Symfony Terminal TUI components and the Revolt event loop. Provides a rich, interactive interface with widgets, modals, streaming output, and the swarm dashboard overlay. Uses `KosmokratorStyleSheet` for widget styling.
+-   **AnsiRenderer** — A pure ANSI escape-code renderer backed by PHP's readline extension. Works in any terminal, including SSH sessions and CI environments. Uses `MarkdownToAnsi` for rendering markdown in the terminal.
+
+A **UIManager** facade sits in front of the concrete renderers. It implements `RendererInterface` and delegates to either `TuiRenderer` or `AnsiRenderer` based on the active configuration. This is the actual object wired into `AgentSession` — the rest of the codebase never references the concrete renderer classes directly.
+
+Both implementations share the `Theme` class for color palette management and `KosmokratorTerminalTheme` for syntax highlighting of code blocks. When `ui.renderer` is set to `auto`, KosmoKrator selects `TuiRenderer` when the terminal supports it and falls back to `AnsiRenderer` otherwise.
+
+**Tip:** Force the ANSI renderer with `ui.renderer: ansi` in your config or the `--renderer ansi` CLI flag. This is useful for SSH sessions or terminals where the TUI's widget rendering has issues.
+
+## Agent Loop
+
+The `AgentLoop` is the heart of KosmoKrator — a thin orchestrator (~860 lines) that manages the REPL cycle and delegates all heavy work to specialized components. Its job is to coordinate the flow between user input, LLM calls, and tool execution, not to implement any of those concerns itself.
+
+The conversation state is held in a `ConversationHistory` object — the central message list data structure that tracks all user messages, assistant responses, tool calls, and tool results across the session. It is passed through the context pipeline before each LLM call.
+
+### REPL Flow
+
+Each iteration of the loop follows this sequence:
+
+1.  **Read user input** — The renderer collects a message from the user (or resumes from a slash command result).
+2.  **Pre-flight context check** — The `ContextManager` estimates token usage and runs the context pipeline (truncation, deduplication, pruning, compaction) if needed before the LLM call.
+3.  **LLM call** — The LLM client sends the system prompt and conversation history. The response is streamed back through the renderer in real time.
+4.  **Tool calls** — If the LLM response contains tool calls, the `ToolExecutor` handles them: permission checking, concurrent execution partitioning, subagent spawning, and result collection.
+5.  **Tool results → repeat** — Tool results are appended to the conversation and the loop returns to step 2 for another LLM call. This continues until the LLM produces a response with no tool calls (a plain text answer).
+
+### ToolExecutor
+
+The `ToolExecutor` is responsible for executing tool calls returned by the LLM. It handles several concerns that must be coordinated per turn:
+
+-   **Permission checking** — Each tool call is evaluated against the current permission mode (Guardian, Argus, or Prometheus). Write operations may require explicit user approval via the dialog renderer.
+-   **Concurrent execution partitioning** — Independent tool calls are grouped and executed concurrently where possible, while maintaining ordering guarantees for dependent calls.
+-   **Subagent management** — Subagent spawn and batch operations are routed through the `SubagentOrchestrator`, with UI updates pushed to the renderer's subagent interface.
+
+### ContextManager
+
+The `ContextManager` runs before each LLM call to ensure the conversation fits within the model's context window. It orchestrates the full context pipeline:
+
+-   **Pre-flight token estimation** — Fast character-based estimation of the total token count (system prompt + conversation + tool schemas).
+-   **Context pipeline** — Wired together by `ContextPipeline` and `ContextPipelineFactory`, which compose the budget, compactor, pruner, `ToolResultDeduplicator` (removes superseded tool results between turns), truncator, and protected context builder into a single pass. Progressive reduction runs through deduplication, pruning, LLM-based compaction, truncation, and emergency oldest-turn trimming. See [Context & Memory](/docs/context#context-pipeline) for full details.
+-   **System prompt refresh** — Rebuilds the system prompt each turn to incorporate the latest memories, session recall, mode suffix, and active tasks.
+
+### StuckDetector
+
+The `StuckDetector` monitors headless subagent loops for repetitive behavior. It maintains a rolling window of the last 8 tool call signatures and escalates through nudge, final notice, and force return stages when a signature repeats 3 or more times. Stuck detection only applies to autonomous subagents — the main interactive agent relies on human oversight. See [Agents → Stuck Detection](/docs/agents#stuck-detection) for the full escalation process.
+
+### Event System
+
+KosmoKrator uses a lightweight event system in `src/Agent/Event/` to decouple cross-cutting concerns from the core agent loop. Events are dispatched at key points during the REPL cycle and consumed by listeners:
+
+-   **StreamChunkEvent** — fired for each streamed token chunk from the LLM
+-   **ThinkingEvent** — fired when the model emits extended thinking content
+-   **ToolCallEvent** — fired before a tool is executed
+-   **ToolResultEvent** — fired after a tool returns its result
+-   **LlmResponseReceived** — fired when a complete LLM response arrives
+-   **MessagePersisted** — fired after a message is saved to the session database
+-   **ResponseCompleteEvent** — fired when the full response cycle (including all tool calls) finishes
+-   **ContextCompacted** — fired after the context pipeline runs compaction
+
+The primary built-in listener is `TokenTrackingListener`, which aggregates token usage from LLM responses for cost tracking and budget enforcement.
+
+## Session Persistence
+
+KosmoKrator stores all session data in a single SQLite database at `~/.kosmo/data/kosmo.db`. The database is managed by the `Database` class in `src/Session/` and handles:
+
+-   **Sessions** — Conversation metadata, model configuration, and timestamps for each agent session.
+-   **Messages** — Full conversation history (user, assistant, tool calls, tool results, system messages) serialized for session resume.
+-   **Memories** — Persistent knowledge fragments (project facts, user preferences, decisions) with type, class, and optional expiration.
+-   **Settings** — Runtime settings overrides saved via the `/settings` command, taking priority over all YAML config files.
+
+Sessions are auto-saved after each agent turn. You can resume any previous session with its full history intact using `/resume` or the `--resume` CLI flag. The database is created automatically on first run.
+
+**Tip:** All data is stored locally. Nothing is sent to external servers except the LLM API calls you configure. You can inspect the database directly with any SQLite client.
+
+## Configuration Layering
+
+KosmoKrator merges configuration from three YAML sources in order of increasing priority. Later layers override earlier ones on a per-key basis:
+
+| Priority | Source | Location | Purpose |
+| --- | --- | --- | --- |
+| 1 (lowest) | Bundled defaults | `config/kosmo.yaml` | Sane baseline defaults shipped with the application |
+| 2 | User global | `~/.kosmo/config.yaml` | Personal overrides: API keys, preferred model, theme |
+| 3 | Project-local | `.kosmo.yaml` or `.kosmo/config.yaml` | Per-project overrides: different model, plan mode default |
+| 4 (highest) | Runtime settings | SQLite database | Changed via `/settings` during a session |
+
+Environment variables can be referenced in any YAML file using the `${VAR_NAME}` syntax. This is the recommended way to provide API keys and other secrets. Additionally, a `.env` file in the project root is loaded automatically by the Kernel via `Dotenv` during bootstrap (`Kernel.php:94-96`), making those variables available throughout the application.
+
+For a complete reference of every setting, see the [Configuration](/docs/configuration) page.
+
+## Dependency Injection
+
+KosmoKrator uses the **Illuminate Container** with a service provider pattern. The `Kernel` (see `src/Kernel.php`) bootstraps the container in two phases:
+
+1.  **register()** — Each provider registers bindings (interfaces → concretes, singletons, factory closures) into the container without resolving anything.
+2.  **boot()** — After all providers have registered, each is booted. This is where providers can resolve dependencies from the container and perform initialization that requires other services.
+
+There are 12 service providers in `src/Provider/`: `CoreServiceProvider`, `ConfigServiceProvider`, `DatabaseServiceProvider`, `LlmServiceProvider`, `ToolServiceProvider`, `SessionServiceProvider`, `AgentServiceProvider`, `EventServiceProvider`, `IntegrationServiceProvider`, `McpServiceProvider`, `LoggingServiceProvider`, and `UiServiceProvider`. The Kernel also loads `.env` variables via `Dotenv` before booting providers (`Kernel.php:94-96`).
+
+The `AgentSessionBuilder` then acts as the composition root for each agent session: it reads the merged configuration, resolves components from the container, and returns an immutable `AgentSession` value object (a PHP 8.4 `readonly class`). The design avoids circular dependencies by ensuring that classes communicate through return values and closures rather than holding mutual references.
+
+```plaintext
+Kernel.php
+  → loads .env via Dotenv
+  → register() on all providers (Illuminate Container bindings)
+  → boot() on all providers (resolve & initialize)
+
+AgentSessionBuilder
+  → resolves LlmClient, ToolExecutor, ContextManager, Renderer, Database from container
+  → wires them into AgentSession
+  → AgentLoop receives AgentSession and orchestrates the REPL
+```
+
+This approach keeps the object graph simple and testable. Each component has a clear interface and can be replaced or mocked independently. The `HeadlessRenderer`, for example, implements the full `RendererInterface` while emitting text, JSON, or NDJSON for non-interactive runs. `NullRenderer` implements the same interface while producing no output for subagents and tests.

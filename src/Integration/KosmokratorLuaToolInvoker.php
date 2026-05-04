@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Integration;
 
+use Kosmokrator\Integration\Runtime\IntegrationToolMetadata;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
 use OpenCompany\IntegrationCore\Contracts\CredentialResolver;
@@ -26,7 +27,7 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
     {
         $provider = $this->assertCanInvoke($toolSlug, $force || $this->forceDepth > 0);
 
-        $toolMeta = $provider->tools()[$toolSlug] ?? null;
+        $toolMeta = IntegrationToolMetadata::forProvider($provider)[$toolSlug] ?? null;
         if ($toolMeta === null) {
             throw new \RuntimeException("Tool not found: {$toolSlug}");
         }
@@ -68,7 +69,7 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
         }
 
         $appName = $provider->appName();
-        $toolMeta = $provider->tools()[$toolSlug] ?? null;
+        $toolMeta = IntegrationToolMetadata::forProvider($provider)[$toolSlug] ?? null;
 
         if ($toolMeta === null) {
             throw new \RuntimeException("Tool not found: {$toolSlug}");
@@ -96,7 +97,7 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
             return [];
         }
 
-        $meta = $provider->tools()[$toolSlug] ?? [];
+        $meta = IntegrationToolMetadata::forProvider($provider)[$toolSlug] ?? [];
 
         return [
             'icon' => $meta['icon'] ?? 'ph:wrench',
@@ -107,7 +108,7 @@ class KosmokratorLuaToolInvoker implements LuaToolInvoker
     private function findProviderForTool(string $toolSlug): ?ToolProvider
     {
         foreach ($this->providers->all() as $provider) {
-            if (isset($provider->tools()[$toolSlug])) {
+            if (isset(IntegrationToolMetadata::forProvider($provider)[$toolSlug])) {
                 return $provider;
             }
         }

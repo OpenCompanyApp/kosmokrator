@@ -85,6 +85,7 @@ class MarkdownToAnsi
      */
     public function render(string $markdown): string
     {
+        $this->termWidth = self::detectTermWidth();
         $this->output = '';
         $this->inlineBuffer = '';
         $this->blockquoteDepth = 0;

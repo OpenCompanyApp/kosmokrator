@@ -15,6 +15,7 @@ use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\MessageMapper;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
@@ -78,6 +79,8 @@ class AgentLoop
     private ?array $lastCacheObservation = null;
 
     private int $lastHeadlessTurns = 0;
+
+    private bool $running = false;
 
     public function __construct(
         private readonly LlmClientInterface $llm,
@@ -215,6 +218,11 @@ class AgentLoop
         return $this->mode;
     }
 
+    public function isRunning(): bool
+    {
+        return $this->running;
+    }
+
     private function applyModeFilter(): void
     {
         $allowed = $this->mode->allowedTools();
@@ -232,6 +240,7 @@ class AgentLoop
      */
     public function run(string $userInput): void
     {
+        $this->running = true;
         $this->webCache?->advanceTurn();
         $this->log->debug('User input', ['input' => $userInput]);
         $this->history->addUser($userInput);
@@ -300,6 +309,17 @@ class AgentLoop
                     $this->log->info('LLM request cancelled by user', ['round' => $round]);
 
                     return;
+                } catch (RetryableHttpException $e) {
+                    SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
+                    $this->log->error('LLM retryable HTTP request failed after retries', [
+                        'status' => $e->httpStatus,
+                        'error' => $e->getMessage(),
+                        ...$this->logContext($round),
+                    ]);
+                    SafeDisplay::call(fn () => $this->ui->showError($e->getMessage()), $this->log);
+                    $this->history->addAssistant('Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+
+                    return;
                 } catch (\RuntimeException $e) {
                     SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
 
@@ -340,6 +360,8 @@ class AgentLoop
                             $toolCalls, $this->tools, $this->allTools,
                             $this->mode, $this->agentContext, $this->stats,
                         );
+                    } catch (CancelledException $e) {
+                        throw $e;
                     } catch (\Throwable $e) {
                         $toolResults = $this->handleToolExecutionError($e, $toolCalls, interactive: true);
                     }
@@ -411,6 +433,7 @@ class AgentLoop
 
             // Unreachable — loop exits via return
         } finally {
+            $this->running = false;
             // Guarantee phase resets to Idle when run() exits (idempotent if already Idle)
             SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
         }
@@ -424,6 +447,7 @@ class AgentLoop
      */
     public function runHeadless(string $task): string
     {
+        $this->running = true;
         $this->log->debug('Headless agent started', ['task' => mb_substr($task, 0, 100), 'depth' => $this->agentContext?->depth]);
         $this->history->addUser($task);
 
@@ -474,6 +498,7 @@ class AgentLoop
 
                 try {
                     $cancellation = $this->ui->getCancellation();
+                    $this->stats?->touchActivity('calling model');
                     $responseData = $this->callLlm($cancellation);
                     $trimAttempts = 0;
 
@@ -529,7 +554,7 @@ class AgentLoop
 
                     $this->log->error('Headless agent error', ['error' => $e->getMessage(), ...$this->logContext($round)]);
 
-                    return 'Error: '.$e->getMessage();
+                    throw new Exception\HeadlessRunFailedException(ErrorSanitizer::sanitize($e->getMessage()), previous: $e);
                 }
 
                 if ($fullText !== '') {
@@ -544,6 +569,8 @@ class AgentLoop
                             $toolCalls, $this->tools, $this->allTools,
                             $this->mode, $this->agentContext, $this->stats,
                         );
+                    } catch (CancelledException $e) {
+                        throw $e;
                     } catch (\Throwable $e) {
                         $toolResults = $this->handleToolExecutionError($e, $toolCalls, interactive: false);
                     }
@@ -567,6 +594,7 @@ class AgentLoop
                         $this->log->warning('Headless agent force-returned', [
                             'round' => $round,
                             'escalation' => $this->stuckDetector->getEscalation(),
+                            'reason' => $this->stuckDetector->getReason(),
                             'window' => $this->stuckDetector->getWindow(),
                         ]);
                         if ($this->stats !== null) {
@@ -580,6 +608,7 @@ class AgentLoop
                         $this->history->addUser('[SYSTEM] You appear to be repeating the same actions. Consolidate your findings and return a final response.');
                         $this->log->info('Stuck nudge injected', [
                             'round' => $round,
+                            'reason' => $this->stuckDetector->getReason(),
                             'window' => $this->stuckDetector->getWindow(),
                             'escalation' => $this->stuckDetector->getEscalation(),
                         ]);
@@ -588,6 +617,7 @@ class AgentLoop
                         $this->history->addUser('[SYSTEM] FINAL NOTICE: You are still looping. Return your findings NOW. Do NOT make any more tool calls.');
                         $this->log->warning('Stuck final notice injected', [
                             'round' => $round,
+                            'reason' => $this->stuckDetector->getReason(),
                             'window' => $this->stuckDetector->getWindow(),
                             'escalation' => $this->stuckDetector->getEscalation(),
                         ]);
@@ -616,6 +646,7 @@ class AgentLoop
                 return $fullText;
             }
         } finally {
+            $this->running = false;
             $this->log->debug('Headless agent exiting, resetting phase');
             SafeDisplay::call(fn () => $this->ui->setPhase(AgentPhase::Idle), $this->log);
         }
@@ -828,6 +859,7 @@ class AgentLoop
      */
     private function callLlm(?Cancellation $cancellation): ResponseData
     {
+        $this->stats?->markModel($this->llm->getProvider(), $this->contextManager->getModelName());
         if ($this->llm->supportsStreaming()) {
             [$fullText, $toolCalls, $finishReason, $tokensIn, $tokensOut, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningContent] =
                 $this->streamResponse($this->history->messages(), $this->tools, $cancellation);
@@ -836,6 +868,8 @@ class AgentLoop
         }
 
         $response = $this->llm->chat($this->history->messages(), $this->tools, $cancellation);
+        $this->stats?->touchActivity('received model response');
+        $this->stuckDetector->observeText($response->text);
         $reasoningContent = $this->shouldRetainReasoning()
             ? $this->capReasoningContent($response->reasoningContent)
             : '';
@@ -895,6 +929,10 @@ class AgentLoop
      */
     private function handleToolExecutionError(\Throwable $e, array $toolCalls, bool $interactive): array
     {
+        if ($e instanceof CancelledException) {
+            throw $e;
+        }
+
         $this->log->error($interactive ? 'Tool execution failed' : 'Headless tool execution failed', ['error' => $e->getMessage(), ...$this->logContext()]);
 
         if ($interactive) {
@@ -1109,6 +1147,8 @@ class AgentLoop
             if ($event->type === 'text_delta') {
                 $fullText .= $event->delta;
                 $lineBuffer .= $event->delta;
+                $this->stats?->touchActivity('streaming model text');
+                $this->stuckDetector->observeText($event->delta);
 
                 // Flush line-by-line: yield complete lines to the renderer
                 while (($nl = strpos($lineBuffer, "\n")) !== false) {
@@ -1127,6 +1167,8 @@ class AgentLoop
                     SafeDisplay::call(fn () => $this->ui->streamChunk($partial), $this->log);
                 }
             } elseif ($event->type === 'thinking_delta') {
+                $this->stats?->touchActivity('streaming model reasoning');
+                $this->stuckDetector->observeThinking($event->delta);
                 if ($retainReasoning && ! $reasoningTruncated) {
                     [$reasoningContent, $reasoningTruncated] = $this->appendReasoningContent(
                         $reasoningContent,
@@ -1134,6 +1176,7 @@ class AgentLoop
                     );
                 }
             } elseif ($event->type === 'tool_call') {
+                $this->stats?->touchActivity('received tool call');
                 $toolCalls[] = new ToolCall(
                     id: $event->toolCall['id'],
                     name: $event->toolCall['name'],

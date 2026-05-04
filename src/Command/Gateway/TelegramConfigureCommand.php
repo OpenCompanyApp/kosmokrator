@@ -36,10 +36,16 @@ final class TelegramConfigureCommand extends Command
             ->addOption('enabled', null, InputOption::VALUE_REQUIRED, 'on/off')
             ->addOption('session-mode', null, InputOption::VALUE_REQUIRED, 'thread|thread_user|chat|chat_user')
             ->addOption('allowed-users', null, InputOption::VALUE_REQUIRED, 'Comma/space-separated users')
+            ->addOption('admin-users', null, InputOption::VALUE_REQUIRED, 'Comma/space-separated users allowed to approve/control any route')
             ->addOption('allowed-chats', null, InputOption::VALUE_REQUIRED, 'Comma/space-separated chats')
             ->addOption('require-mention', null, InputOption::VALUE_REQUIRED, 'on/off')
             ->addOption('free-response-chats', null, InputOption::VALUE_REQUIRED, 'Comma/space-separated chats')
             ->addOption('poll-timeout-seconds', null, InputOption::VALUE_REQUIRED, 'Poll timeout')
+            ->addOption('reply-to-mode', null, InputOption::VALUE_REQUIRED, 'off|first|all')
+            ->addOption('disable-link-previews', null, InputOption::VALUE_REQUIRED, 'on/off')
+            ->addOption('fresh-final-after-seconds', null, InputOption::VALUE_REQUIRED, 'Fresh final message threshold')
+            ->addOption('progress-notice-interval-seconds', null, InputOption::VALUE_REQUIRED, 'Progress notice interval')
+            ->addOption('reactions', null, InputOption::VALUE_REQUIRED, 'on/off')
             ->addOption('global', null, InputOption::VALUE_NONE, 'Write global config')
             ->addOption('project', null, InputOption::VALUE_NONE, 'Write project config')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON');
@@ -56,10 +62,16 @@ final class TelegramConfigureCommand extends Command
             'enabled' => 'gateway.telegram.enabled',
             'session-mode' => 'gateway.telegram.session_mode',
             'allowed-users' => 'gateway.telegram.allowed_users',
+            'admin-users' => 'gateway.telegram.admin_users',
             'allowed-chats' => 'gateway.telegram.allowed_chats',
             'require-mention' => 'gateway.telegram.require_mention',
             'free-response-chats' => 'gateway.telegram.free_response_chats',
             'poll-timeout-seconds' => 'gateway.telegram.poll_timeout_seconds',
+            'reply-to-mode' => 'gateway.telegram.reply_to_mode',
+            'disable-link-previews' => 'gateway.telegram.disable_link_previews',
+            'fresh-final-after-seconds' => 'gateway.telegram.fresh_final_after_seconds',
+            'progress-notice-interval-seconds' => 'gateway.telegram.progress_notice_interval_seconds',
+            'reactions' => 'gateway.telegram.reactions',
         ];
         $updated = [];
 

@@ -89,12 +89,12 @@ class ConfigLoaderTest extends TestCase
 
     public function test_user_config_merged(): void
     {
-        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  max_tokens: 1000");
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  max_tokens: 1000");
 
         // Set up fake user config
         $fakeHome = $this->tempDir.'/home';
-        mkdir($fakeHome.'/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "agent:\n  max_tokens: 5000");
+        mkdir($fakeHome.'/.kosmo', 0755, true);
+        file_put_contents($fakeHome.'/.kosmo/config.yaml', "agent:\n  max_tokens: 5000");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -102,17 +102,17 @@ class ConfigLoaderTest extends TestCase
         $config = $loader->load();
 
         // User config overrides base
-        $this->assertSame(5000, $config->get('kosmokrator.agent.max_tokens'));
+        $this->assertSame(5000, $config->get('kosmo.agent.max_tokens'));
     }
 
     public function test_project_config_merged(): void
     {
-        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  temperature: 0.0");
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  temperature: 0.0");
 
         // Set up project config in cwd
         $projectDir = $this->tempDir.'/project';
         mkdir($projectDir, 0755, true);
-        file_put_contents($projectDir.'/.kosmokrator.yaml', "agent:\n  temperature: 0.5");
+        file_put_contents($projectDir.'/.kosmo.yaml', "agent:\n  temperature: 0.5");
         chdir($projectDir);
 
         // Prevent user config from interfering
@@ -124,37 +124,58 @@ class ConfigLoaderTest extends TestCase
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
 
-        $this->assertEquals(0.5, $config->get('kosmokrator.agent.temperature'));
+        $this->assertEquals(0.5, $config->get('kosmo.agent.temperature'));
     }
 
     public function test_canonical_user_and_project_paths_are_loaded(): void
     {
-        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  temperature: 0.0");
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  temperature: 0.0");
 
         $fakeHome = $this->tempDir.'/home_xdg';
-        mkdir($fakeHome.'/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    temperature: 0.4");
+        mkdir($fakeHome.'/.kosmo', 0755, true);
+        file_put_contents($fakeHome.'/.kosmo/config.yaml', "kosmo:\n  agent:\n    temperature: 0.4");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
         $projectDir = $this->tempDir.'/project_xdg';
-        mkdir($projectDir.'/.kosmokrator', 0755, true);
-        file_put_contents($projectDir.'/.kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    temperature: 0.8");
+        mkdir($projectDir.'/.kosmo', 0755, true);
+        file_put_contents($projectDir.'/.kosmo/config.yaml', "kosmo:\n  agent:\n    temperature: 0.8");
         chdir($projectDir);
 
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
 
-        $this->assertEquals(0.8, $config->get('kosmokrator.agent.temperature'));
+        $this->assertEquals(0.8, $config->get('kosmo.agent.temperature'));
+    }
+
+    public function test_project_directory_config_takes_precedence_over_project_yaml_shortcut(): void
+    {
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  default_provider: z");
+
+        $projectDir = $this->tempDir.'/project_priority';
+        mkdir($projectDir.'/.kosmo', 0755, true);
+        file_put_contents($projectDir.'/.kosmo.yaml', "kosmo:\n  agent:\n    default_provider: shortcut");
+        file_put_contents($projectDir.'/.kosmo/config.yaml', "kosmo:\n  agent:\n    default_provider: directory");
+        chdir($projectDir);
+
+        $fakeHome = $this->tempDir.'/empty_home_project_priority';
+        mkdir($fakeHome, 0755, true);
+        putenv("HOME={$fakeHome}");
+        $_ENV['HOME'] = $fakeHome;
+
+        $loader = new ConfigLoader($this->configDir);
+        $config = $loader->load();
+
+        $this->assertSame('directory', $config->get('kosmo.agent.default_provider'));
     }
 
     public function test_project_config_is_discovered_from_parent_directories(): void
     {
-        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  default_provider: z");
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  default_provider: z");
 
         $projectDir = $this->tempDir.'/repo';
-        mkdir($projectDir.'/.kosmokrator', 0755, true);
-        file_put_contents($projectDir.'/.kosmokrator/config.yaml', "kosmokrator:\n  agent:\n    default_provider: openai");
+        mkdir($projectDir.'/.kosmo', 0755, true);
+        file_put_contents($projectDir.'/.kosmo/config.yaml', "kosmo:\n  agent:\n    default_provider: openai");
 
         $nestedDir = $projectDir.'/packages/app';
         mkdir($nestedDir, 0755, true);
@@ -168,39 +189,39 @@ class ConfigLoaderTest extends TestCase
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
 
-        $this->assertSame('openai', $config->get('kosmokrator.agent.default_provider'));
+        $this->assertSame('openai', $config->get('kosmo.agent.default_provider'));
     }
 
     public function test_merge_priority_project_over_user_over_base(): void
     {
-        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  model: base-model");
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  model: base-model");
 
         // User config
         $fakeHome = $this->tempDir.'/home';
-        mkdir($fakeHome.'/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "agent:\n  model: user-model");
+        mkdir($fakeHome.'/.kosmo', 0755, true);
+        file_put_contents($fakeHome.'/.kosmo/config.yaml', "agent:\n  model: user-model");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
         // Project config
         $projectDir = $this->tempDir.'/project';
         mkdir($projectDir, 0755, true);
-        file_put_contents($projectDir.'/.kosmokrator.yaml', "agent:\n  model: project-model");
+        file_put_contents($projectDir.'/.kosmo.yaml', "agent:\n  model: project-model");
         chdir($projectDir);
 
         $loader = new ConfigLoader($this->configDir);
         $config = $loader->load();
 
-        $this->assertSame('project-model', $config->get('kosmokrator.agent.model'));
+        $this->assertSame('project-model', $config->get('kosmo.agent.model'));
     }
 
     public function test_deep_merge_preserves_non_overlapping_keys(): void
     {
-        file_put_contents($this->configDir.'/kosmokrator.yaml', "agent:\n  model: base\n  max_tokens: 1000");
+        file_put_contents($this->configDir.'/kosmo.yaml', "agent:\n  model: base\n  max_tokens: 1000");
 
         $fakeHome = $this->tempDir.'/home';
-        mkdir($fakeHome.'/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "agent:\n  model: override");
+        mkdir($fakeHome.'/.kosmo', 0755, true);
+        file_put_contents($fakeHome.'/.kosmo/config.yaml', "agent:\n  model: override");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -208,8 +229,8 @@ class ConfigLoaderTest extends TestCase
         $config = $loader->load();
 
         // model overridden, max_tokens preserved
-        $this->assertSame('override', $config->get('kosmokrator.agent.model'));
-        $this->assertSame(1000, $config->get('kosmokrator.agent.max_tokens'));
+        $this->assertSame('override', $config->get('kosmo.agent.model'));
+        $this->assertSame(1000, $config->get('kosmo.agent.max_tokens'));
     }
 
     public function test_user_config_providers_mapped_to_prism_providers(): void
@@ -217,8 +238,8 @@ class ConfigLoaderTest extends TestCase
         file_put_contents($this->configDir.'/prism.yaml', "providers:\n  anthropic:\n    api_key: base");
 
         $fakeHome = $this->tempDir.'/home';
-        mkdir($fakeHome.'/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', "providers:\n  anthropic:\n    api_key: user-key");
+        mkdir($fakeHome.'/.kosmo', 0755, true);
+        file_put_contents($fakeHome.'/.kosmo/config.yaml', "providers:\n  anthropic:\n    api_key: user-key");
         putenv("HOME={$fakeHome}");
         $_ENV['HOME'] = $fakeHome;
 
@@ -231,8 +252,8 @@ class ConfigLoaderTest extends TestCase
     public function test_relay_provider_blocks_are_loaded_from_external_config(): void
     {
         $fakeHome = $this->tempDir.'/relay_home';
-        mkdir($fakeHome.'/.kosmokrator', 0755, true);
-        file_put_contents($fakeHome.'/.kosmokrator/config.yaml', <<<'YAML'
+        mkdir($fakeHome.'/.kosmo', 0755, true);
+        file_put_contents($fakeHome.'/.kosmo/config.yaml', <<<'YAML'
 relay:
   providers:
     mimo:

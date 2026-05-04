@@ -36,7 +36,7 @@ final class IntegrationCatalog
             $accounts = $this->integrationManager->getAccounts($providerName);
             $capabilities = $this->integrationManager->capabilityMetadata($provider);
 
-            foreach ($provider->tools() as $slug => $meta) {
+            foreach (IntegrationToolMetadata::forProvider($provider) as $slug => $meta) {
                 $toolClass = (string) ($meta['class'] ?? '');
                 if ($toolClass === '') {
                     continue;

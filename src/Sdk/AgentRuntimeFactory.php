@@ -17,6 +17,10 @@ use Kosmokrator\UI\RendererInterface;
 
 final class AgentRuntimeFactory
 {
+    private static ?string $activeCwd = null;
+
+    private static int $cwdDepth = 0;
+
     private ?Container $bootedContainer = null;
 
     public function __construct(
@@ -99,10 +103,26 @@ final class AgentRuntimeFactory
             throw new \RuntimeException("Project directory does not exist: {$cwd}");
         }
 
+        $realCwd = realpath($cwd) ?: $cwd;
+        if (self::$activeCwd !== null) {
+            if (self::$activeCwd !== $realCwd) {
+                throw new \RuntimeException("Cannot switch SDK project directory to {$realCwd} while another run is active in ".self::$activeCwd.'.');
+            }
+
+            return $callback();
+        }
+
         chdir($cwd);
+        self::$activeCwd = $realCwd;
+        self::$cwdDepth++;
         try {
             return $callback();
         } finally {
+            self::$cwdDepth--;
+            if (self::$cwdDepth <= 0) {
+                self::$activeCwd = null;
+                self::$cwdDepth = 0;
+            }
             if ($previous !== null && is_dir($previous)) {
                 chdir($previous);
             }
@@ -118,11 +138,11 @@ final class AgentRuntimeFactory
         }
 
         if ($options->provider !== null) {
-            $config->set('kosmokrator.agent.default_provider', $options->provider);
+            $config->set('kosmo.agent.default_provider', $options->provider);
         }
 
         if ($options->model !== null) {
-            $config->set('kosmokrator.agent.default_model', $options->model);
+            $config->set('kosmo.agent.default_model', $options->model);
         }
 
         if ($options->apiKey !== null && $options->provider !== null) {

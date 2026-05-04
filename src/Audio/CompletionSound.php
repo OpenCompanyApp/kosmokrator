@@ -72,7 +72,7 @@ PROMPT;
     ) {
         $this->enabled = $enabled ?? false;
         $home = $_SERVER['HOME'] ?? getenv('HOME') ?: sys_get_temp_dir();
-        $this->soundfont = $soundfont ?? $home.'/.kosmokrator/soundfonts/FluidR3_GM.sf2';
+        $this->soundfont = $soundfont ?? $home.'/.kosmo/soundfonts/FluidR3_GM.sf2';
         $this->maxDuration = $maxDuration;
         $this->maxRetries = $maxRetries;
         $this->llmTimeoutSeconds = max(1, $llmTimeoutSeconds);

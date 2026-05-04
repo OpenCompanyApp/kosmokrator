@@ -103,9 +103,10 @@ class PermissionEvaluatorTest extends TestCase
 
         $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'ls'])->action);
 
-        $evaluator->grantSession('bash');
+        $evaluator->grantSession('bash', ['command' => 'ls']);
 
         $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('bash', ['command' => 'ls'])->action);
+        $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'rm -rf src'])->action);
     }
 
     public function test_reset_grants_clears_session_memory(): void
@@ -116,11 +117,27 @@ class PermissionEvaluatorTest extends TestCase
         $evaluator = new PermissionEvaluator($rules, $this->grants);
         $evaluator->setPermissionMode(PermissionMode::Argus);
 
-        $evaluator->grantSession('file_edit');
+        $evaluator->grantSession('file_edit', []);
         $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('file_edit', [])->action);
 
         $evaluator->resetGrants();
         $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('file_edit', [])->action);
+    }
+
+    public function test_permission_mode_change_clears_session_grants(): void
+    {
+        $rules = [
+            new PermissionRule('bash', PermissionAction::Ask),
+        ];
+        $evaluator = new PermissionEvaluator($rules, $this->grants);
+        $evaluator->setPermissionMode(PermissionMode::Argus);
+
+        $evaluator->grantSession('bash', ['command' => 'touch safe.txt']);
+        $this->assertSame(PermissionAction::Allow, $evaluator->evaluate('bash', ['command' => 'touch safe.txt'])->action);
+
+        $evaluator->setPermissionMode(PermissionMode::Guardian);
+
+        $this->assertSame(PermissionAction::Ask, $evaluator->evaluate('bash', ['command' => 'touch safe.txt'])->action);
     }
 
     public function test_deny_pattern_matching_is_case_insensitive(): void
@@ -280,7 +297,7 @@ class PermissionEvaluatorTest extends TestCase
     {
         $rules = [new PermissionRule('file_read', PermissionAction::Ask)];
         $evaluator = new PermissionEvaluator($rules, $this->grants, ['*.env']);
-        $evaluator->grantSession('file_read');
+        $evaluator->grantSession('file_read', ['path' => '.env']);
 
         $this->assertSame(PermissionAction::Deny, $evaluator->evaluate('file_read', ['path' => '.env'])->action);
     }
@@ -405,7 +422,7 @@ class PermissionEvaluatorTest extends TestCase
             new PermissionRule('bash', PermissionAction::Ask, ['rm -rf /']),
         ];
         $evaluator = new PermissionEvaluator($rules, $this->grants);
-        $evaluator->grantSession('bash');
+        $evaluator->grantSession('bash', ['command' => 'rm -rf /']);
 
         // Granted, but deny pattern should still block
         $result = $evaluator->evaluate('bash', ['command' => 'rm -rf /']);
@@ -420,7 +437,7 @@ class PermissionEvaluatorTest extends TestCase
         ];
         $evaluator = new PermissionEvaluator($rules, $this->grants);
         $evaluator->setPermissionMode(PermissionMode::Prometheus);
-        $evaluator->grantSession('bash');
+        $evaluator->grantSession('bash', ['command' => 'rm -rf /']);
 
         // Prometheus + session grant, but deny pattern is absolute
         $result = $evaluator->evaluate('bash', ['command' => 'rm -rf /']);
@@ -434,11 +451,15 @@ class PermissionEvaluatorTest extends TestCase
         ];
         $evaluator = new PermissionEvaluator($rules, $this->grants);
         $evaluator->setPermissionMode(PermissionMode::Argus);
-        $evaluator->grantSession('bash');
+        $evaluator->grantSession('bash', ['command' => 'git status']);
 
-        // Safe command: granted, should pass
+        // Same command: granted, should pass
         $result = $evaluator->evaluate('bash', ['command' => 'git status']);
         $this->assertSame(PermissionAction::Allow, $result->action);
+
+        // Different command: no grant, should ask
+        $different = $evaluator->evaluate('bash', ['command' => 'git log']);
+        $this->assertSame(PermissionAction::Ask, $different->action);
 
         // Blocked command: deny pattern still applies
         $blocked = $evaluator->evaluate('bash', ['command' => 'rm -rf /']);
@@ -452,7 +473,7 @@ class PermissionEvaluatorTest extends TestCase
         ];
         $evaluator = new PermissionEvaluator($rules, $this->grants);
         $evaluator->setPermissionMode(PermissionMode::Argus);
-        $evaluator->grantSession('file_write');
+        $evaluator->grantSession('file_write', ['path' => '/tmp/test']);
 
         // No deny patterns on file_write — grant should work
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/test']);
@@ -485,7 +506,7 @@ class PermissionEvaluatorTest extends TestCase
 
     // --- Project boundary integration ---
 
-    public function test_boundary_skips_in_prometheus_mode(): void
+    public function test_boundary_allows_prometheus_mode_to_auto_approve(): void
     {
         $projectRoot = realpath(getcwd());
         $rules = [
@@ -502,7 +523,7 @@ class PermissionEvaluatorTest extends TestCase
         );
         $evaluator->setPermissionMode(PermissionMode::Prometheus);
 
-        // Outside project + Prometheus → auto-approved (boundary is exempt)
+        // Outside project + Prometheus → boundary does not stop mode auto-approval.
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
         $this->assertSame(PermissionAction::Allow, $result->action);
         $this->assertTrue($result->autoApproved);
@@ -547,7 +568,7 @@ class PermissionEvaluatorTest extends TestCase
             }),
         );
         $evaluator->setPermissionMode(PermissionMode::Guardian);
-        $evaluator->grantSession('file_write');
+        $evaluator->grantSession('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);
 
         // Session grant is broad by tool name, so boundary must run before it.
         $result = $evaluator->evaluate('file_write', ['path' => '/tmp/outside-project-file', 'content' => 'x']);

@@ -27,6 +27,10 @@ final readonly class ProviderDefinition
      * @param  list<string>  $inputModalities  Supported input types at the provider level
      * @param  list<string>  $outputModalities  Supported output types at the provider level
      * @param  bool  $freeTextModel  True if the user types arbitrary model codes instead of picking from a list
+     * @param  string  $modelSource  Metadata source for the active inventory
+     * @param  string|null  $modelFetchedAt  Last model-discovery timestamp when cached live metadata is used
+     * @param  bool  $modelInventoryFresh  Whether cached live metadata is still inside its TTL
+     * @param  string|null  $modelInventoryError  Last discovery error, when present
      */
     public function __construct(
         public string $id,
@@ -41,5 +45,9 @@ final readonly class ProviderDefinition
         public array $inputModalities = ['text'],
         public array $outputModalities = ['text'],
         public bool $freeTextModel = false,
+        public string $modelSource = 'bundled',
+        public ?string $modelFetchedAt = null,
+        public bool $modelInventoryFresh = false,
+        public ?string $modelInventoryError = null,
     ) {}
 }

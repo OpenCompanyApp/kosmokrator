@@ -1,0 +1,61 @@
+:root {
+  --sl-color-accent-low: #3b0b16;
+  --sl-color-accent: #dc143c;
+  --sl-color-accent-high: #ffd5dd;
+  --sl-color-white: #f8fafc;
+  --sl-color-gray-1: #e5e7eb;
+  --sl-color-gray-2: #cbd5e1;
+  --sl-color-gray-3: #94a3b8;
+  --sl-color-gray-4: #64748b;
+  --sl-color-gray-5: #334155;
+  --sl-color-gray-6: #172033;
+  --sl-color-black: #07070d;
+  --kosmo-bg: #07070d;
+  --kosmo-panel: #101018;
+  --kosmo-panel-2: #15151f;
+  --kosmo-border: rgba(220, 20, 60, 0.24);
+  --kosmo-text: #f8fafc;
+  --kosmo-muted: #a8b3c7;
+  --kosmo-crimson: #dc143c;
+  --kosmo-hot: #ff5c75;
+  --kosmo-rose: #ff9aad;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.doc-index-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.85rem;
+  margin: 2rem 0;
+}
+
+.doc-index-card {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 132px;
+  padding: 1rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 8px;
+  color: var(--sl-color-white);
+  background: color-mix(in srgb, var(--sl-color-gray-6), transparent 44%);
+  text-decoration: none;
+}
+
+.doc-index-card:hover {
+  border-color: var(--sl-color-accent);
+  background: color-mix(in srgb, var(--sl-color-accent-low), transparent 36%);
+}
+
+.doc-index-card strong {
+  color: var(--sl-color-white);
+  font-size: 1rem;
+}
+
+.doc-index-card span {
+  color: var(--sl-color-gray-2);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}

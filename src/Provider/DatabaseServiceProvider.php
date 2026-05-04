@@ -9,6 +9,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
+use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
@@ -31,6 +32,9 @@ class DatabaseServiceProvider extends ServiceProvider
             $this->container->make(SessionDatabase::class),
         ));
         $this->container->alias(SettingsRepository::class, SettingsRepositoryInterface::class);
+        $this->container->singleton(ModelDiscoveryCacheRepository::class, fn () => new ModelDiscoveryCacheRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
         $this->container->singleton(CodexTokenStoreContract::class, fn () => new SettingsCodexTokenStore(
             $this->container->make(SettingsRepositoryInterface::class),
         ));
@@ -61,17 +65,17 @@ class DatabaseServiceProvider extends ServiceProvider
         if (! $hasExternalConfig) {
             $sqliteProvider = $settings->get('global', 'agent.default_provider');
             if ($sqliteProvider !== null) {
-                $config->set('kosmokrator.agent.default_provider', $sqliteProvider);
+                $config->set('kosmo.agent.default_provider', $sqliteProvider);
             }
 
             $sqliteModel = $settings->get('global', 'agent.default_model');
             if ($sqliteModel !== null) {
-                $config->set('kosmokrator.agent.default_model', $sqliteModel);
+                $config->set('kosmo.agent.default_model', $sqliteModel);
             }
         }
 
         // API key: env var takes priority, then SQLite
-        $provider = $config->get('kosmokrator.agent.default_provider', 'z');
+        $provider = $config->get('kosmo.agent.default_provider', 'z');
         $configKey = "prism.providers.{$provider}.api_key";
         if (empty($config->get($configKey))) {
             $sqliteKey = $settings->get('global', "provider.{$provider}.api_key");
@@ -96,7 +100,7 @@ class DatabaseServiceProvider extends ServiceProvider
         }
 
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-        $yamlPath = $home.'/.kosmokrator/config.yaml';
+        $yamlPath = $home.'/.kosmo/config.yaml';
 
         if (! file_exists($yamlPath)) {
             // Mark as migrated even if no YAML file exists

@@ -41,7 +41,7 @@ class KernelTest extends TestCase
         // Isolate HOME so Kernel's logger writes to a temp dir, not real home
         self::$originalHome = getenv('HOME') ?: null;
         self::$fakeHome = sys_get_temp_dir().'/kosmokrator_kernel_test_'.uniqid();
-        mkdir(self::$fakeHome.'/.kosmokrator/logs', 0755, true);
+        mkdir(self::$fakeHome.'/.kosmo/logs', 0755, true);
         putenv('HOME='.self::$fakeHome);
         $_ENV['HOME'] = self::$fakeHome;
 
@@ -96,7 +96,6 @@ class KernelTest extends TestCase
     {
         // config/app.yaml has: version: git — Kernel falls back to 'dev' if git describe fails
         $version = self::$sharedKernel->getConsole()->getVersion();
-        $this->assertIsString($version);
         $this->assertNotEmpty($version);
     }
 
@@ -227,5 +226,17 @@ class KernelTest extends TestCase
 
         $this->assertInstanceOf(Application::class, $kernel->getConsole());
         $this->assertInstanceOf(Container::class, $kernel->getContainer());
+    }
+
+    public function test_shutdown_closes_resolved_session_database(): void
+    {
+        $kernel = new Kernel(self::$basePath);
+        $kernel->boot();
+
+        $db = $kernel->getContainer()->make(SessionDatabase::class);
+        $kernel->shutdown();
+
+        $this->expectException(\RuntimeException::class);
+        $db->connection();
     }
 }

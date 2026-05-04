@@ -6,6 +6,7 @@ namespace Kosmokrator\Tests\Unit\Command\Slash;
 
 use Illuminate\Config\Repository;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Command\Slash\NewCommand;
 use Kosmokrator\Command\SlashCommandAction;
@@ -31,16 +32,18 @@ class NewCommandTest extends TestCase
     private function makeContext(
         ?AgentLoop $agentLoop = null,
         ?PermissionEvaluator $permissions = null,
+        ?SessionManager $sessionManager = null,
+        ?UIManager $ui = null,
     ): SlashCommandContext {
         $llm = $this->createStub(LlmClientInterface::class);
         $llm->method('getProvider')->willReturn('anthropic');
         $llm->method('getModel')->willReturn('claude-4');
 
         return new SlashCommandContext(
-            ui: $this->createStub(UIManager::class),
+            ui: $ui ?? $this->createStub(UIManager::class),
             agentLoop: $agentLoop ?? $this->createStub(AgentLoop::class),
             permissions: $permissions ?? $this->createStub(PermissionEvaluator::class),
-            sessionManager: $this->createStub(SessionManager::class),
+            sessionManager: $sessionManager ?? $this->createStub(SessionManager::class),
             llm: $llm,
             taskStore: $this->createStub(TaskStore::class),
             config: $this->createStub(Repository::class),
@@ -92,6 +95,31 @@ class NewCommandTest extends TestCase
             ->with(PermissionMode::Guardian);
 
         $ctx = $this->makeContext(agentLoop: $agentLoop, permissions: $permissions);
+
+        $this->command->execute('', $ctx);
+    }
+
+    public function test_execute_resets_agent_mode_to_edit(): void
+    {
+        $history = $this->createStub(ConversationHistory::class);
+
+        $agentLoop = $this->createMock(AgentLoop::class);
+        $agentLoop->method('history')->willReturn($history);
+        $agentLoop->expects($this->once())
+            ->method('setMode')
+            ->with(AgentMode::Edit);
+
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->expects($this->once())
+            ->method('setSetting')
+            ->with('agent.mode', AgentMode::Edit->value);
+
+        $ui = $this->createMock(UIManager::class);
+        $ui->expects($this->once())
+            ->method('showMode')
+            ->with(AgentMode::Edit->label(), AgentMode::Edit->color());
+
+        $ctx = $this->makeContext(agentLoop: $agentLoop, sessionManager: $sessionManager, ui: $ui);
 
         $this->command->execute('', $ctx);
     }

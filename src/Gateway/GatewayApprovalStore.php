@@ -24,13 +24,15 @@ final class GatewayApprovalStore
         string $chatId,
         ?string $threadId = null,
         ?int $requestMessageId = null,
+        ?string $requesterUserId = null,
+        ?string $requesterUsername = null,
     ): GatewayApproval {
         $now = (new \DateTimeImmutable)->format(DATE_ATOM);
         $stmt = $this->database->connection()->prepare(
             'INSERT INTO gateway_approvals (
-                platform, route_key, session_id, tool_name, arguments_json, status, chat_id, thread_id, request_message_id, created_at
+                platform, route_key, session_id, tool_name, arguments_json, status, chat_id, thread_id, request_message_id, requester_user_id, requester_username, created_at
             ) VALUES (
-                :platform, :route_key, :session_id, :tool_name, :arguments_json, :status, :chat_id, :thread_id, :request_message_id, :created_at
+                :platform, :route_key, :session_id, :tool_name, :arguments_json, :status, :chat_id, :thread_id, :request_message_id, :requester_user_id, :requester_username, :created_at
             )'
         );
         $stmt->execute([
@@ -43,6 +45,8 @@ final class GatewayApprovalStore
             'chat_id' => $chatId,
             'thread_id' => $threadId,
             'request_message_id' => $requestMessageId,
+            'requester_user_id' => $requesterUserId,
+            'requester_username' => $requesterUsername !== null ? ltrim($requesterUsername, '@') : null,
             'created_at' => $now,
         ]);
 
@@ -57,6 +61,8 @@ final class GatewayApprovalStore
             chatId: $chatId,
             threadId: $threadId,
             requestMessageId: $requestMessageId,
+            requesterUserId: $requesterUserId,
+            requesterUsername: $requesterUsername !== null ? ltrim($requesterUsername, '@') : null,
         );
     }
 
@@ -118,6 +124,8 @@ final class GatewayApprovalStore
             chatId: (string) $row['chat_id'],
             threadId: $row['thread_id'] !== null ? (string) $row['thread_id'] : null,
             requestMessageId: $row['request_message_id'] !== null ? (int) $row['request_message_id'] : null,
+            requesterUserId: isset($row['requester_user_id']) && $row['requester_user_id'] !== null ? (string) $row['requester_user_id'] : null,
+            requesterUsername: isset($row['requester_username']) && $row['requester_username'] !== null ? (string) $row['requester_username'] : null,
         );
     }
 

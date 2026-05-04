@@ -42,7 +42,7 @@ final class McpAddCommand extends Command
             ->addOption('disable', null, InputOption::VALUE_NONE, 'Disable the server')
             ->addOption('read', null, InputOption::VALUE_REQUIRED, 'Read permission: allow, ask, deny')
             ->addOption('write', null, InputOption::VALUE_REQUIRED, 'Write permission: allow, ask, deny')
-            ->addOption('global', null, InputOption::VALUE_NONE, 'Write ~/.kosmokrator/mcp.json')
+            ->addOption('global', null, InputOption::VALUE_NONE, 'Write ~/.kosmo/mcp.json')
             ->addOption('project', null, InputOption::VALUE_NONE, 'Write project .mcp.json')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON');
     }
@@ -94,7 +94,7 @@ final class McpAddCommand extends Command
                 if (! in_array($permission, ['allow', 'ask', 'deny'], true)) {
                     return $this->fail($input, $output, "Invalid {$operation} permission: {$permission}");
                 }
-                $settings->setRaw("mcp.servers.{$name}.permissions.{$operation}", $permission, $this->scope($input));
+                $settings->setRaw("kosmo.mcp.servers.{$name}.permissions.{$operation}", $permission, $this->scope($input));
             }
         }
 

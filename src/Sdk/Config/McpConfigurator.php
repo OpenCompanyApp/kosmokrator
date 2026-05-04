@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Sdk\Config;
 
+use Kosmokrator\IO\AtomicFileWriter;
 use Kosmokrator\Mcp\McpConfigStore;
 use Kosmokrator\Mcp\McpPermissionEvaluator;
 use Kosmokrator\Mcp\McpSecretStore;
@@ -72,13 +73,8 @@ final class McpConfigurator extends RuntimeConfigurator
     private function setRawSetting(string $path, mixed $value, string $scope): void
     {
         $file = $scope === 'global'
-            ? rtrim(getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir(), '/').'/.kosmokrator/config.yaml'
-            : rtrim($this->cwd ?: (getcwd() ?: sys_get_temp_dir()), '/').'/.kosmokrator/config.yaml';
-
-        $dir = dirname($file);
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
+            ? rtrim(getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir(), '/').'/.kosmo/config.yaml'
+            : rtrim($this->cwd ?: (getcwd() ?: sys_get_temp_dir()), '/').'/.kosmo/config.yaml';
 
         $data = is_file($file) ? (Yaml::parseFile($file) ?: []) : [];
         if (! is_array($data)) {
@@ -86,7 +82,7 @@ final class McpConfigurator extends RuntimeConfigurator
         }
 
         $cursor = &$data;
-        foreach (explode('.', $path) as $segment) {
+        foreach (explode('.', 'kosmo.'.$path) as $segment) {
             if (! is_array($cursor)) {
                 $cursor = [];
             }
@@ -98,7 +94,7 @@ final class McpConfigurator extends RuntimeConfigurator
         $cursor = $value;
         unset($cursor);
 
-        file_put_contents($file, Yaml::dump($data, 8, 2));
+        AtomicFileWriter::write($file, Yaml::dump($data, 8, 2), $scope === 'global' ? 0700 : 0755);
     }
 
     public function setSecret(string $server, string $key, string $value): self

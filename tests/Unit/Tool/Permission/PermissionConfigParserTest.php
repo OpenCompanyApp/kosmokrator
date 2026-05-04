@@ -12,7 +12,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_approval_required_list(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['file_write', 'file_edit', 'bash'],
                     'bash' => ['timeout' => 120],
@@ -30,13 +30,13 @@ class PermissionConfigParserTest extends TestCase
         $this->assertSame('file_write', $askRules[0]->toolName);
         $this->assertSame([], $askRules[0]->denyPatterns);
         $this->assertSame('bash', $askRules[2]->toolName);
-        $this->assertSame([], $askRules[2]->denyPatterns);
+        $this->assertContains('rm -rf *', $askRules[2]->denyPatterns);
     }
 
     public function test_parses_blocked_commands_as_deny_patterns(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'bash' => [
@@ -54,13 +54,16 @@ class PermissionConfigParserTest extends TestCase
         $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
         $this->assertCount(1, $askRules);
         $this->assertSame('bash', $askRules[0]->toolName);
-        $this->assertSame(['rm -rf /', 'rm -rf ~', 'mkfs*'], $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf *', $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf /', $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf ~', $askRules[0]->denyPatterns);
+        $this->assertContains('mkfs*', $askRules[0]->denyPatterns);
     }
 
     public function test_shell_start_and_shell_write_also_receive_blocked_command_patterns(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['shell_start', 'shell_write'],
                     'bash' => [
@@ -76,8 +79,30 @@ class PermissionConfigParserTest extends TestCase
 
         $askRules = array_values(array_filter($rules, fn ($r) => $r->action === PermissionAction::Ask));
         $this->assertCount(2, $askRules);
-        $this->assertSame(['rm -rf /', 'mkfs*'], $askRules[0]->denyPatterns);
-        $this->assertSame(['rm -rf /', 'mkfs*'], $askRules[1]->denyPatterns);
+        $this->assertContains('rm -rf *', $askRules[0]->denyPatterns);
+        $this->assertContains('rm -rf /', $askRules[0]->denyPatterns);
+        $this->assertContains('mkfs*', $askRules[0]->denyPatterns);
+        $this->assertSame($askRules[0]->denyPatterns, $askRules[1]->denyPatterns);
+    }
+
+    public function test_default_blocked_commands_are_applied_when_config_omits_them(): void
+    {
+        $config = new Repository([
+            'kosmo' => [
+                'tools' => [
+                    'approval_required' => ['bash'],
+                    'bash' => ['timeout' => 120],
+                ],
+            ],
+        ]);
+
+        $parser = new PermissionConfigParser;
+        $result = $parser->parse($config);
+        $askRules = array_values(array_filter($result['rules'], fn ($r) => $r->action === PermissionAction::Ask));
+
+        $this->assertContains('rm -rf *', $askRules[0]->denyPatterns);
+        $this->assertContains('git reset --hard*', $askRules[0]->denyPatterns);
+        $this->assertContains('kubectl delete *', $askRules[0]->denyPatterns);
     }
 
     public function test_empty_config_returns_default_safe_rules(): void
@@ -97,7 +122,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_blocked_paths(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'blocked_paths' => ['*.env', '.git/*', '/etc/*'],
@@ -114,7 +139,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_missing_blocked_paths_defaults_to_empty(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                 ],
@@ -130,7 +155,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_guardian_safe_commands(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'guardian_safe_commands' => ['git *', 'ls *', 'pwd'],
@@ -147,7 +172,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_parses_default_permission_mode(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'approval_required' => ['bash'],
                     'default_permission_mode' => 'argus',
@@ -175,7 +200,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_safe_tools_parsed_as_allow_rules(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'safe_tools' => ['file_read', 'glob', 'grep'],
                     'approval_required' => ['bash'],
@@ -197,7 +222,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_safe_tools_come_before_ask_rules(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'safe_tools' => ['file_read'],
                     'approval_required' => ['file_write'],
@@ -219,7 +244,7 @@ class PermissionConfigParserTest extends TestCase
     public function test_custom_safe_tools_override_defaults(): void
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'tools' => [
                     'safe_tools' => ['my_custom_tool'],
                 ],

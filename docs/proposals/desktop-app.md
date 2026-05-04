@@ -1,296 +1,244 @@
 # KosmoKrator Desktop App
 
-> Status: Proposal. This document describes a possible future desktop surface. The current shipped product is the terminal application.
+> Status: Proposal. The shipped product is still the terminal application. This document describes the recommended desktop wrapper architecture.
 
-## Concept
+## Recommendation
 
-KosmoKrator is one product with two surfaces: terminal and desktop. The desktop app is not a companion or wrapper — it runs the same engine (AgentLoop, PrismService, ToolRegistry, Lua bridge, MCP client) with a GUI renderer instead of ANSI/TUI.
+Build the desktop app as a Tauri application that talks to KosmoKrator through the ACP stdio server.
 
-```
-              KosmoKrator (the engine)
-              ├── Kernel, ConfigLoader
-              ├── AgentLoop, PrismService
-              ├── ToolRegistry, Lua bridge
-              ├── MCP client
-              └── Integration loader
-                       │
-            ┌──────────┴──────────┐
-            │                     │
-      CLI surface            Desktop surface
-      (bin/kosmokrator)      (NativePHP app)
-            │                     │
-      Symfony Console        Electron window
-      + TUI renderer         + web renderer
-            │                     │
-      terminal               system tray
-      on-demand              always-on
-                             notifications
-                             OAuth flows
-                             global shortcuts
+The desktop app should not embed PHP internals and should not scrape terminal output. It should spawn a normal KosmoKrator process, speak Agent Client Protocol, and render KosmoKrator's structured extension events for tools, permissions, subagents, integrations, MCP, Lua, usage, and runtime state.
+
+```text
+apps/desktop
+  -> Tauri Rust backend
+  -> spawn: kosmo acp --cwd /repo
+  -> newline-delimited JSON-RPC over stdio
+  -> Svelte UI renders ACP + kosmo/* events
+
+bin/kosmo
+  -> Kernel
+  -> ACP server
+  -> AgentSessionBuilder
+  -> AgentLoop
+  -> normal tools, permissions, sessions, Lua, integrations, MCP, subagents
 ```
 
-The split happens at the UI layer. `RendererInterface` already abstracts rendering — `AnsiRenderer`, `TuiRenderer`, and the desktop app adds a third: a web-based renderer that pushes events to the Electron frontend.
+This keeps terminal, headless CLI, SDK, and desktop wrappers on the same runtime path.
 
----
+## Repo Location
 
-## Why NativePHP
+The app should live in the main repository under `apps/desktop/`.
 
-NativePHP wraps a Laravel app in Electron (desktop) or native shells (mobile). It bundles its own static PHP binary — users install one app, no PHP or Node required.
-
-KosmoKrator's engine already boots an Illuminate Container (via Prism's transitive `laravel/framework` dependency). The desktop surface wraps this in a minimal Laravel HTTP layer that NativePHP can host, while the core engine remains framework-agnostic.
-
-**NativePHP provides what terminals and browsers can't:**
-
-| Capability | Terminal | Browser | Desktop (NativePHP) |
-|-----------|----------|---------|---------------------|
-| System tray (always-on) | No | No | Yes |
-| Native notifications | No | Limited | Yes |
-| Global shortcuts | No | No | Yes |
-| OAuth redirect flows | Painful (copy-paste) | Callback URL complexity | Native redirect URI |
-| File dialogs | CLI path input | Browser picker | Native OS picker |
-| Deep linking | No | URL only | Custom protocol (`kosmokrator://`) |
-| Auto-updater | Manual | N/A | Built-in OTA |
-| Offline-first | Yes | No | Yes |
-
----
-
-## Architecture
-
-### Shared Core (framework-agnostic)
-
-```
-src/
-├── Kernel.php              # Boots Illuminate Container + config
-├── ConfigLoader.php        # YAML → Config Repository
-├── Agent/
-│   ├── AgentLoop.php       # Core loop: prompt → LLM → tools → loop
-│   ├── ConversationHistory.php
-│   └── Middleware/
-├── LLM/
-│   └── PrismService.php    # Prism wrapper, provider failover
-├── Tool/
-│   ├── ToolInterface.php
-│   ├── ToolRegistry.php
-│   └── Coding/             # Built-in tools
-├── Lua/
-│   ├── LuaSandboxService.php
-│   ├── LuaBridge.php
-│   └── LuaApiDocGenerator.php
-├── Mcp/
-│   └── McpClient.php
-├── Integration/
-│   ├── IntegrationLoader.php
-│   └── YamlCredentialResolver.php
-└── Session/
-    ├── Session.php
-    └── SessionStore.php
+```text
+apps/desktop/
+  package.json
+  vite.config.ts
+  src/
+    main.ts
+    app.css
+    lib/
+      acp.ts
+      events.ts
+      types.ts
+    stores/
+      runtime.ts
+      session.ts
+      subagents.ts
+      permissions.ts
+    components/
+      ProjectPicker.svelte
+      Workspace.svelte
+      ChatTimeline.svelte
+      Composer.svelte
+      ToolCallCard.svelte
+      PermissionDialog.svelte
+      SubagentTree.svelte
+      DiffPanel.svelte
+      SettingsPanel.svelte
+  src-tauri/
+    Cargo.toml
+    tauri.conf.json
+    src/
+      main.rs
+      kosmokrator_process.rs
+      acp_client.rs
+      event_bridge.rs
+      settings.rs
 ```
 
-This is the engine. It has no opinion about rendering.
+Keeping it in the monorepo is preferable for now because ACP extension events, runtime settings, and UI expectations will evolve alongside the CLI.
 
-### CLI Surface (Symfony Console)
+## Frontend Stack
 
-```
-bin/kosmokrator
-src/
-├── Command/
-│   └── AgentCommand.php     # REPL loop
-└── UI/
-    ├── RendererInterface.php
-    ├── UIManager.php
-    ├── Ansi/AnsiRenderer.php
-    └── Tui/TuiRenderer.php
-```
+Use Svelte + Vite, not a full SvelteKit app.
 
-### Desktop Surface (NativePHP + Electron)
+Reasons:
 
-```
-desktop/
-├── app/
-│   ├── Providers/
-│   │   └── NativeAppServiceProvider.php   # NativePHP window, menu, tray
-│   ├── Http/
-│   │   └── Controllers/
-│   │       └── AgentController.php        # WebSocket bridge to AgentLoop
-│   └── Renderers/
-│       └── WebRenderer.php                # RendererInterface → WebSocket events
-├── resources/
-│   ├── views/                             # Blade/Vue frontend
-│   └── js/
-│       ├── app.js
-│       └── components/
-│           ├── ConversationView.vue       # Chat UI
-│           ├── ToolCallPanel.vue          # Tool execution display
-│           ├── IntegrationManager.vue     # OAuth flows, credential management
-│           └── StatusBar.vue              # Model, tokens, cost
-├── routes/
-│   └── web.php
-├── composer.json                          # Requires kosmokrator/kosmokrator + nativephp/desktop
-└── package.json                           # Frontend deps (Vue, Tailwind, etc.)
-```
+- Fastest path to a polished Tauri UI.
+- Small bundle and simple routing model.
+- Stores map cleanly to long-lived ACP session state.
+- Less boilerplate than React for a desktop shell.
+- Easy component boundaries for chat, tool cards, permission dialogs, subagent trees, and settings.
 
-The desktop surface is a thin Laravel app that:
-1. Boots the shared KosmoKrator Kernel
-2. Creates a `WebRenderer` implementing `RendererInterface`
-3. Pushes render events (thinking, streaming, tool calls) over WebSocket to the Vue frontend
-4. Receives user input from the frontend and feeds it to `AgentLoop`
-5. NativePHP handles the Electron shell, system tray, notifications, etc.
+Recommended packages:
 
-### WebRenderer
+- Tauri 2
+- Svelte + Vite + TypeScript
+- Tailwind or plain CSS modules
+- Bits UI or shadcn-svelte for dialogs, menus, tabs, and command palette
+- CodeMirror 6 for code previews and editable snippets
+- xterm.js only for an optional raw terminal/debug panel
 
-```php
-class WebRenderer implements RendererInterface
-{
-    public function showThinking(): void
-    {
-        broadcast(new AgentEvent('thinking'));
-    }
+## Process Model
 
-    public function streamChunk(string $text): void
-    {
-        broadcast(new AgentEvent('chunk', ['text' => $text]));
-    }
+The Rust backend owns the KosmoKrator child process.
 
-    public function showToolCall(string $name, array $args): void
-    {
-        broadcast(new AgentEvent('tool_call', ['name' => $name, 'args' => $args]));
-    }
+Responsibilities:
 
-    public function showToolResult(string $name, string $output, bool $success): void
-    {
-        broadcast(new AgentEvent('tool_result', [
-            'name' => $name,
-            'output' => $output,
-            'success' => $success,
-        ]));
-    }
+- Resolve which `kosmokrator` binary to use.
+- Start `kosmo acp --cwd <project>`.
+- Frame JSON-RPC messages over stdin/stdout.
+- Route stderr to diagnostics, not the normal event stream.
+- Restart or close the process when the project changes.
+- Emit typed Tauri events to the frontend.
+- Accept frontend commands for prompt, cancel, permission response, settings changes, and session selection.
 
-    // ... etc
-}
+Binary resolution should support both:
+
+- `system`: use a user-configured path or `kosmokrator` from `$PATH`.
+- `sidecar`: bundle release binaries inside the Tauri app later.
+
+MVP should use `system` first. Sidecar bundling can come after the UI and ACP bridge are stable.
+
+## Primary UI
+
+The desktop app should feel like KosmoKrator with a native shell around it, not a generic chat app.
+
+Initial screens:
+
+- Project picker: recent repos, open folder, active branch, configured runtime.
+- Agent workspace: chat timeline, streaming text, tool calls, result cards, composer.
+- Permission modal: ACP-backed approve/deny/always with exact tool payload.
+- Subagent tree: live parent/child status, dependencies, group sequencing, failures, elapsed time.
+- Session list: resume persisted sessions from the same store as the terminal.
+- Diff panel: file changes, patches, and command output tied to tool calls.
+- Runtime bar: mode, permission mode, provider, model, context health, token usage.
+- Integrations/MCP panel: list configured providers/servers, inspect schemas, call test tools.
+- Settings: provider credentials, headless config, project/global scope, binary path.
+- Diagnostics: ACP traffic, process stderr, version, environment, logs.
+
+Suggested layout:
+
+```text
+top bar:    repo / branch / mode / permission / provider / model
+left rail:  sessions / files / subagents
+center:     conversation timeline + tool cards + composer
+right:      diff / terminal / integrations / MCP / diagnostics
+bottom:     status, usage, active process, errors
 ```
 
-Same `RendererInterface`, just broadcasting instead of printing ANSI codes.
+## ACP Usage
 
----
+The desktop app should use standard ACP methods where possible and KosmoKrator extension methods where needed.
 
-## OpenCompany Connection
+Core flow:
 
-OpenCompany is an optional cloud backend — not required, not a separate product in this context.
+1. Start `kosmo acp --cwd /repo`.
+2. Send `initialize`.
+3. Create or resume a session.
+4. Send `session/prompt`.
+5. Render streamed content and `kosmo/*` notifications.
+6. When `session/request_permission` arrives, show a native modal and send the user's decision.
+7. Keep the session resumable by terminal and desktop.
 
-```yaml
-# ~/.kosmokrator/config.yaml
-opencompany:
-  enabled: true
-  url: https://my-instance.opencompany.app
-  api_key: sk-...
-```
+Extension events to render first:
 
-### When Connected
+- `kosmo/phase_changed`
+- `kosmo/text_delta`
+- `kosmo/thinking_delta`
+- `kosmo/tool_started`
+- `kosmo/tool_completed`
+- `kosmo/permission_requested`
+- `kosmo/subagent_spawned`
+- `kosmo/subagent_tree`
+- `kosmo/subagent_completed`
+- `kosmo/usage_updated`
+- `kosmo/error`
 
-- Pulls available hosted integrations (ClickUp, Google, etc.)
-- Syncs integration credentials (no local OAuth needed for already-configured integrations)
-- Proxies tool calls for hosted-mode integrations
-- Syncs sessions/conversation history (optional)
-- Access to OpenCompany's vector memory and knowledge base
+Direct extension methods should power settings and helper panels:
 
-### When Disconnected
+- runtime settings
+- provider configuration
+- integration list/describe/call
+- MCP server/tool/schema/call
+- Lua execute
 
-- Full local operation — same agent, same built-in tools, same Lua bridge
-- Local integrations work (credentials in `~/.kosmokrator/integrations.yaml`)
-- Local LLM via Ollama works
-- MCP servers work
-- Zero degradation for core coding agent functionality
+## Permissions
 
-The desktop app is KosmoKrator first, OpenCompany-connected second.
+The desktop app should preserve KosmoKrator's existing permission model.
 
----
+- Guardian and Argus show approval modals for governed calls.
+- Prometheus proceeds automatically except hard denies.
+- Path denies and command denies remain enforced.
+- Permission responses should support allow, deny, and always.
+- The UI must show the exact tool name, arguments, working directory, and risk summary before approval.
 
-## Desktop-Specific Features
+The desktop app should not add a second independent permission system. It should render and answer the runtime's permission requests.
 
-### System Tray
+## What Not To Do
 
-Agent lives in the system tray. Click to open conversation window. Badge shows when agent needs attention (tool approval, error, completion).
+- Do not embed the PHP SDK in Tauri. A non-PHP app should use ACP.
+- Do not scrape ANSI/TUI output for state.
+- Do not fork a separate agent runtime for desktop.
+- Do not make desktop sessions incompatible with terminal sessions.
+- Do not register MCP tools as native desktop-only tools; keep MCP available through KosmoKrator runtime and Lua.
 
-### Native Notifications
+## Phased Implementation
 
-```
-┌─────────────────────────────────┐
-│ KosmoKrator                     │
-│ ✓ Refactor complete — 4 files   │
-│   changed, all tests passing    │
-└─────────────────────────────────┘
-```
+### Phase 1: Thin ACP Shell
 
-Notifications for: agent completion, tool approval requests, errors, integration connection status.
+- Scaffold `apps/desktop` with Tauri 2, Svelte, Vite, TypeScript.
+- Add Rust process manager for `kosmo acp`.
+- Implement initialize, new session, prompt, cancel, close.
+- Render text stream, tool calls, tool results, and errors.
+- Add project picker and binary path setting.
 
-### Global Shortcuts
+### Phase 2: Terminal-Equivalent UX
 
-Summon KosmoKrator from any application:
+- Add permission modal.
+- Add session resume/list.
+- Add runtime bar for mode, permission mode, provider, model.
+- Add subagent tree and live status.
+- Add diff/result panel for file edits and patches.
 
-```
-Cmd+Shift+K → opens KosmoKrator window with prompt focused
-```
+### Phase 3: Headless Runtime Panels
 
-Quick-action mode: type a command, hit enter, window minimizes back to tray.
+- Add provider credential configuration.
+- Add integrations panel with docs, schema, accounts, and test calls.
+- Add MCP panel with local/global server config, trust, tools, resources, prompts, and secrets.
+- Add Lua execute panel for advanced workflows.
 
-### OAuth Integration Flows
+### Phase 4: Native Desktop Polish
 
-The desktop app owns a real redirect URI (`kosmokrator://oauth/callback`). Adding integrations:
+- Add tray item and notifications.
+- Add file picker and drag/drop context attachment.
+- Add global shortcut to open/focus the app.
+- Add sidecar binary bundling.
+- Add auto-update.
 
-1. Click "Add Gmail"
-2. Browser opens Google OAuth consent screen
-3. Google redirects to `kosmokrator://oauth/callback?code=...`
-4. NativePHP's deep linking catches it
-5. Tokens stored in credential resolver
-6. Done — no copy-paste, no localhost callback server
+## Testing
 
-### File Context
+Test against a real local KosmoKrator binary and a fixture ACP server.
 
-Native file picker for attaching context to conversations:
+Required coverage:
 
-```
-[Attach File] → OS file dialog → selected file added to conversation
-```
+- ACP framing and request/response correlation.
+- Process crash and restart behavior.
+- Permission request lifecycle.
+- Session resume across terminal and desktop.
+- Subagent tree rendering with nested agents.
+- Large tool results and streaming output.
+- Provider/integration/MCP configuration writes.
+- Mobile-width desktop windows and high-DPI screenshots.
 
-Also: drag-and-drop files onto the conversation window.
-
-### Auto-Updater
-
-Ship updates via GitHub Releases. The app checks and updates silently in the background. Users always have the latest version without manual intervention.
-
----
-
-## Package Structure
-
-The desktop app is a separate Composer package that depends on the core:
-
-```json
-{
-    "name": "kosmokrator/desktop",
-    "require": {
-        "kosmokrator/kosmokrator": "^1.0",
-        "nativephp/desktop": "^2.0",
-        "laravel/framework": "^13.0"
-    }
-}
-```
-
-The core `kosmokrator/kosmokrator` package remains CLI-first and framework-agnostic. The desktop package adds the Laravel HTTP layer and NativePHP integration on top.
-
-This means:
-- `composer global require kosmokrator/kosmokrator` → CLI agent
-- Download KosmoKrator.app → desktop agent (bundles everything)
-- Same engine, same config, same sessions, same integrations
-
----
-
-## Rendering Surfaces Summary
-
-| Surface | Renderer | Input | Output | Runtime |
-|---------|----------|-------|--------|---------|
-| Terminal (ANSI) | `AnsiRenderer` | readline | ANSI escape codes | `php bin/kosmokrator` |
-| Terminal (TUI) | `TuiRenderer` | Symfony TUI InputWidget | TUI widgets + Revolt | `php bin/kosmokrator` |
-| Desktop | `WebRenderer` | Vue frontend via WebSocket | Electron BrowserWindow | NativePHP (bundled PHP) |
-| Kosmo (mobile + desktop) | Flutter thin client | touch + voice | Stream cards | Kosmo Cloud / OpenCompany backend |
-
-Terminal and Desktop surfaces implement `RendererInterface` — the engine doesn't know which surface it's on. Kosmo is a separate thin client that talks to the same backend (Kosmo Cloud / OpenCompany) over WebSocket, not a RendererInterface implementation.
+Before shipping, run Playwright or Tauri WebDriver screenshots for the main workspace at narrow, medium, and wide window sizes.

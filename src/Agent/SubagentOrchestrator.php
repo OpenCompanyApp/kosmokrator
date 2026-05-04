@@ -6,6 +6,7 @@ namespace Kosmokrator\Agent;
 
 use Amp\CompositeCancellation;
 use Amp\DeferredCancellation;
+use Amp\DeferredFuture;
 use Amp\Future;
 use Amp\Http\Client\HttpException;
 use Amp\Sync\LocalSemaphore;
@@ -37,6 +38,12 @@ class SubagentOrchestrator
     /** @var array<string, Future<string>> */
     private array $agents = [];
 
+    /** @var array<string, string> Compact terminal results retained after pruning for depends_on */
+    private array $dependencyResults = [];
+
+    /** @var array<string, string[]> Dependency graph retained after pruning for cycle detection */
+    private array $dependencyGraph = [];
+
     /** @var array<string, LocalSemaphore> */
     private array $groups = [];
 
@@ -55,12 +62,23 @@ class SubagentOrchestrator
     /** @var array<string, true> Agents that yielded their global slot and may reclaim it */
     private array $yieldedGlobalSlots = [];
 
+    /** @var array<string, true> Global slots donated by yielded agents for awaited children or reclaim */
+    private array $donatedGlobalSlots = [];
+
+    /** @var array<string, string> Last status persisted to append-only swarm events */
+    private array $lastPersistedStatus = [];
+
+    /**
+     * @var list<array{id: string, parent_id: ?string, mode: string, deferred: DeferredFuture<Lock>}>
+     */
+    private array $globalWaitQueue = [];
+
     /** @var callable(): ?string|null */
     private $rootSessionIdProvider;
 
     private int $autoIdCounter = 0;
 
-    private ?LocalSemaphore $globalSemaphore;
+    private int $availableGlobalSlots;
 
     /**
      * @param  LoggerInterface  $log  Logger for orchestrator lifecycle events
@@ -81,8 +99,7 @@ class SubagentOrchestrator
         private readonly ?SubagentOutputStore $outputStore = null,
         ?callable $rootSessionIdProvider = null,
     ) {
-        // LocalSemaphore requires maxLocks >= 1, so 0 = unlimited (no semaphore)
-        $this->globalSemaphore = $concurrency > 0 ? new LocalSemaphore($concurrency) : null;
+        $this->availableGlobalSlots = max(0, $concurrency);
         $this->rootSessionIdProvider = $rootSessionIdProvider;
     }
 
@@ -117,7 +134,7 @@ class SubagentOrchestrator
     ): Future {
         $id ??= $this->generateId();
 
-        if (isset($this->agents[$id])) {
+        if (isset($this->agents[$id]) || array_key_exists($id, $this->dependencyResults)) {
             throw new \InvalidArgumentException("Agent ID '{$id}' already exists. Use a unique ID.");
         }
 
@@ -140,6 +157,7 @@ class SubagentOrchestrator
         $stats->parentId = $parentContext->id;
         $stats->depth = $childContext->depth;
         $this->stats[$id] = $stats;
+        $this->dependencyGraph[$id] = $dependsOn;
         $this->persistStats($stats);
 
         // Auto-prune completed agents when stats grow beyond threshold to prevent unbounded RAM usage
@@ -149,7 +167,7 @@ class SubagentOrchestrator
 
         // Detect circular dependencies before spawning
         if ($dependsOn !== [] && $this->wouldCreateCycle($id, $dependsOn)) {
-            unset($this->stats[$id]);
+            unset($this->stats[$id], $this->dependencyGraph[$id]);
             throw new \InvalidArgumentException(
                 "Circular dependency detected: agent '{$id}' would create a cycle with depends_on=[".implode(', ', $dependsOn).']'
             );
@@ -166,7 +184,7 @@ class SubagentOrchestrator
             'task' => mb_substr($task, 0, 100),
         ]);
 
-        $future = async(function () use ($childContext, $task, $id, $dependsOn, $group, $mode, $stats, $agentFactory) {
+        $future = async(function () use ($parentContext, $childContext, $task, $id, $dependsOn, $group, $mode, $stats, $agentFactory) {
             $lock = null;
             $watchdogId = null;
 
@@ -180,6 +198,16 @@ class SubagentOrchestrator
                     $depResults = [];
 
                     foreach ($dependsOn as $depId) {
+                        if (array_key_exists($depId, $this->dependencyResults)) {
+                            $depResults[$depId] = $this->dependencyResults[$depId];
+                            $this->log->debug("Dependency resolved from retained result for agent '{$id}'", [
+                                'dependency' => $depId,
+                                'injected_length' => strlen($depResults[$depId]),
+                            ]);
+
+                            continue;
+                        }
+
                         $depFuture = $this->agents[$depId] ?? null;
                         if ($depFuture === null) {
                             throw new \RuntimeException("Unknown dependency agent: '{$depId}'");
@@ -197,9 +225,9 @@ class SubagentOrchestrator
                             ]);
                         } catch (\Throwable $depError) {
                             // Dependency failed — inject error as result, don't kill this agent
-                            $depResults[$depId] = "[FAILED] Agent '{$depId}' failed: {$depError->getMessage()}";
+                            $depResults[$depId] = "[FAILED] Agent '{$depId}' failed: ".$this->extractFailureMessage($depError);
                             $this->log->warning("Dependency '{$depId}' failed for agent '{$id}'", [
-                                'error' => $depError->getMessage(),
+                                'error' => $this->extractFailureMessage($depError),
                                 'wait_seconds' => round(microtime(true) - $depStart, 2),
                             ]);
                         }
@@ -219,12 +247,12 @@ class SubagentOrchestrator
                 }
 
                 // 2. Acquire global concurrency semaphore
-                if ($this->globalSemaphore !== null) {
+                if ($this->concurrency > 0) {
                     $stats->status = 'queued_global';
                     $stats->markQueueReason('global concurrency limit');
                     $this->persistStats($stats);
                     $this->log->debug("Agent '{$id}' waiting for global semaphore", ['concurrency' => $this->concurrency]);
-                    $this->globalLocks[$id] = $this->globalSemaphore->acquire();
+                    $this->globalLocks[$id] = $this->acquireGlobalSlot($id, $parentContext->id, $mode);
                     $this->log->debug("Agent '{$id}' acquired global semaphore");
                 }
 
@@ -330,6 +358,7 @@ class SubagentOrchestrator
                     $stats->clearQueueState();
                     $stats->endTime = microtime(true);
                     $this->persistStats($stats);
+                    $this->dependencyResults[$id] = $this->compactOutputForContext($id, $result);
                     $this->log->info('Subagent cancelled', [
                         'id' => $id,
                         'depth' => $stats->depth,
@@ -343,6 +372,7 @@ class SubagentOrchestrator
                     $stats->clearQueueState();
                     $stats->endTime = microtime(true);
                     $this->persistStats($stats);
+                    $this->dependencyResults[$id] = $this->compactOutputForContext($id, $result);
                 }
 
                 $this->log->info('Subagent completed', [
@@ -358,16 +388,18 @@ class SubagentOrchestrator
                 ]);
 
                 if ($mode === 'background') {
-                    $this->pendingResults[$stats->parentId][$id] = $this->compactOutputForContext($id, $result);
+                    $this->pendingResults[$stats->parentId][$id] = $this->dependencyResults[$id];
                 }
 
                 return $result;
             } catch (\Throwable $e) {
+                $failureResult = ToolCallMapper::ERROR_PREFIX."Agent '{$id}' failed — ".$this->extractFailureMessage($e);
                 $stats->status = 'failed';
                 $stats->clearQueueState();
                 $stats->error = $this->extractFailureMessage($e);
                 $stats->endTime = microtime(true);
                 $this->persistStats($stats);
+                $this->dependencyResults[$id] = $failureResult;
 
                 $this->log->error('Subagent failed', [
                     'id' => $id,
@@ -379,11 +411,11 @@ class SubagentOrchestrator
 
                 // Inject failure as a pending result so the parent is notified
                 if ($mode === 'background') {
-                    $this->pendingResults[$stats->parentId][$id] = ToolCallMapper::ERROR_PREFIX."Agent '{$id}' failed — {$stats->error}";
+                    $this->pendingResults[$stats->parentId][$id] = $failureResult;
 
                     // Don't throw — nobody awaits background futures, so an unhandled
                     // exception would become an UnhandledFutureError on GC.
-                    return ToolCallMapper::ERROR_PREFIX."Agent '{$id}' failed — {$stats->error}";
+                    return $failureResult;
                 }
 
                 throw $e;
@@ -401,6 +433,7 @@ class SubagentOrchestrator
                     unset($this->globalLocks[$id]);
                     $this->log->debug("Agent '{$id}' released global semaphore");
                 }
+                $this->releaseDonatedGlobalSlot($id);
                 unset($this->yieldedGlobalSlots[$id]);
                 unset($this->cancellations[$id]);
             }
@@ -434,11 +467,11 @@ class SubagentOrchestrator
             }
             $visited[$current] = true;
 
-            if (! isset($this->stats[$current])) {
-                // Pruned or unknown agent — treat as leaf (no outgoing deps)
+            if (! array_key_exists($current, $this->dependencyGraph)) {
+                // Unknown agent — treat as leaf. Pruned agents remain in dependencyGraph.
                 continue;
             }
-            $existingDeps = $this->stats[$current]->dependsOn;
+            $existingDeps = $this->dependencyGraph[$current];
             foreach ($existingDeps as $dep) {
                 $stack[] = $dep;
             }
@@ -574,9 +607,9 @@ class SubagentOrchestrator
             return;
         }
 
+        $this->yieldedGlobalSlots[$agentId] = true;
         $lock->release();
         unset($this->globalLocks[$agentId]);
-        $this->yieldedGlobalSlots[$agentId] = true;
         $this->log->debug("Agent '{$agentId}' yielded global semaphore slot");
     }
 
@@ -585,7 +618,7 @@ class SubagentOrchestrator
      */
     public function reclaimSlot(string $agentId): void
     {
-        if ($this->globalSemaphore === null) {
+        if ($this->concurrency <= 0) {
             return;
         }
 
@@ -599,10 +632,108 @@ class SubagentOrchestrator
             return;
         }
 
+        if (isset($this->donatedGlobalSlots[$agentId])) {
+            unset($this->donatedGlobalSlots[$agentId], $this->yieldedGlobalSlots[$agentId]);
+            $this->globalLocks[$agentId] = $this->createGlobalLock($agentId);
+            $this->log->debug("Agent '{$agentId}' reclaimed reserved global semaphore slot");
+
+            return;
+        }
+
         $this->log->debug("Agent '{$agentId}' reclaiming global semaphore slot");
-        $this->globalLocks[$agentId] = $this->globalSemaphore->acquire();
+        $this->globalLocks[$agentId] = $this->acquireGlobalSlot($agentId, null, 'await');
         unset($this->yieldedGlobalSlots[$agentId]);
         $this->log->debug("Agent '{$agentId}' reclaimed global semaphore slot");
+    }
+
+    private function acquireGlobalSlot(string $agentId, ?string $parentId, string $mode): Lock
+    {
+        if (
+            $parentId !== null
+            && $mode === 'await'
+            && isset($this->yieldedGlobalSlots[$parentId], $this->donatedGlobalSlots[$parentId])
+        ) {
+            unset($this->donatedGlobalSlots[$parentId]);
+
+            return $this->createGlobalLock($agentId, $parentId);
+        }
+
+        if ($this->availableGlobalSlots > 0) {
+            $this->availableGlobalSlots--;
+
+            return $this->createGlobalLock($agentId);
+        }
+
+        $deferred = new DeferredFuture;
+        $this->globalWaitQueue[] = [
+            'id' => $agentId,
+            'parent_id' => $parentId,
+            'mode' => $mode,
+            'deferred' => $deferred,
+        ];
+
+        return $deferred->getFuture()->await();
+    }
+
+    private function createGlobalLock(string $agentId, ?string $returnToAgentId = null): Lock
+    {
+        return new Lock(function () use ($agentId, $returnToAgentId): void {
+            if ($returnToAgentId !== null && isset($this->yieldedGlobalSlots[$returnToAgentId])) {
+                $this->log->debug("Agent '{$agentId}' returned global semaphore slot to yielded parent '{$returnToAgentId}'");
+                $this->releaseGlobalSlot($returnToAgentId);
+
+                return;
+            }
+
+            $this->releaseGlobalSlot(isset($this->yieldedGlobalSlots[$agentId]) ? $agentId : null);
+        });
+    }
+
+    private function releaseGlobalSlot(?string $yieldedAgentId = null): void
+    {
+        $nextIndex = null;
+        if ($yieldedAgentId !== null) {
+            foreach ($this->globalWaitQueue as $index => $waiter) {
+                if ($waiter['parent_id'] === $yieldedAgentId && $waiter['mode'] === 'await') {
+                    $nextIndex = $index;
+                    break;
+                }
+            }
+        }
+
+        if ($nextIndex === null && $yieldedAgentId === null) {
+            $nextIndex = array_key_first($this->globalWaitQueue);
+        }
+        if ($nextIndex === null) {
+            if ($yieldedAgentId !== null) {
+                $this->donatedGlobalSlots[$yieldedAgentId] = true;
+
+                return;
+            }
+
+            $this->availableGlobalSlots++;
+
+            return;
+        }
+
+        $waiter = $this->globalWaitQueue[$nextIndex];
+        array_splice($this->globalWaitQueue, $nextIndex, 1);
+        $waiter['deferred']->complete(
+            $this->createGlobalLock(
+                $waiter['id'],
+                $waiter['parent_id'] === $yieldedAgentId ? $yieldedAgentId : null,
+            ),
+        );
+    }
+
+    private function releaseDonatedGlobalSlot(string $agentId): void
+    {
+        if (! isset($this->donatedGlobalSlots[$agentId])) {
+            return;
+        }
+
+        unset($this->donatedGlobalSlots[$agentId]);
+        $this->releaseGlobalSlot();
     }
 
     /**
@@ -618,6 +749,14 @@ class SubagentOrchestrator
         return $this->stats[$id] ?? null;
     }
 
+    public function hasKnownAgent(string $id): bool
+    {
+        return isset($this->agents[$id])
+            || isset($this->stats[$id])
+            || array_key_exists($id, $this->dependencyResults)
+            || array_key_exists($id, $this->dependencyGraph);
+    }
+
     public function persistStats(?SubagentStats $stats): void
     {
         if ($stats === null || $this->metadataStore === null || $this->rootSessionIdProvider === null) {
@@ -631,6 +770,32 @@ class SubagentOrchestrator
             }
 
             $this->metadataStore->upsertAgent($stats, $rootSessionId);
+            if (($this->lastPersistedStatus[$stats->id] ?? null) !== $stats->status) {
+                $this->metadataStore->appendEvent(
+                    $rootSessionId,
+                    $stats->id,
+                    'status',
+                    $stats->status,
+                    $stats->lastActivityDescription,
+                    [
+                        'parent_id' => $stats->parentId,
+                        'type' => $stats->agentType,
+                        'mode' => $stats->mode,
+                        'group' => $stats->group,
+                        'tool_calls' => $stats->toolCalls,
+                        'tokens_in' => $stats->tokensIn,
+                        'tokens_out' => $stats->tokensOut,
+                        'retries' => $stats->retries,
+                        'queue_reason' => $stats->queueReason,
+                        'last_tool' => $stats->lastTool,
+                        'current_tool' => $stats->currentTool,
+                        'provider' => $stats->provider,
+                        'model' => $stats->model,
+                        'error' => $stats->error,
+                    ],
+                );
+                $this->lastPersistedStatus[$stats->id] = $stats->status;
+            }
         } catch (\Throwable $e) {
             $this->log->debug('Failed to persist subagent metadata', [
                 'agent_id' => $stats->id,
@@ -774,7 +939,7 @@ class SubagentOrchestrator
             }
         }
 
-        return $e->getMessage();
+        return ErrorSanitizer::sanitize($e->getMessage());
     }
 
     /**
@@ -794,18 +959,7 @@ class SubagentOrchestrator
         }
 
         if (str_starts_with($result, ToolCallMapper::ERROR_PREFIX)) {
-            $lower = strtolower($result);
-
-            if (str_contains($lower, 'invalid api key')
-                || str_contains($lower, 'authentication')
-                || str_contains($lower, 'unauthorized')
-                || str_contains($lower, '401')
-                || str_contains($lower, '403')
-            ) {
-                return false;
-            }
-
-            return true;
+            return $this->isRetryableMessage($result);
         }
 
         return false;
@@ -827,21 +981,58 @@ class SubagentOrchestrator
             return true;
         }
 
-        // Generic RuntimeExceptions from API calls — retry unless auth-related
+        // Generic RuntimeExceptions are only retried when their message clearly
+        // identifies a transient transport/provider condition.
         if ($e instanceof \RuntimeException) {
-            $msg = strtolower($e->getMessage());
-
-            return ! (
-                str_contains($msg, 'watchdog:')
-                || str_contains($msg, 'unknown dependency')
-                || str_contains($msg, '401')
-                || str_contains($msg, '403')
-                || str_contains($msg, 'authentication')
-                || str_contains($msg, 'unauthorized')
-            );
+            return $this->isRetryableMessage($e->getMessage());
         }
 
         // Everything else (TypeError, LogicException, InvalidArgumentException, etc.) — no retry
+        return false;
+    }
+
+    private function isRetryableMessage(string $message): bool
+    {
+        $lower = strtolower($message);
+
+        if (str_contains($lower, 'watchdog:')
+            || str_contains($lower, 'unknown dependency')
+            || str_contains($lower, 'invalid api key')
+            || str_contains($lower, 'authentication')
+            || str_contains($lower, 'unauthorized')
+            || str_contains($lower, 'forbidden')
+            || preg_match('/\b(400|401|403|404|422)\b/', $lower) === 1
+        ) {
+            return false;
+        }
+
+        if (preg_match('/\b(408|409|425|429|5\d{2})\b/', $lower) === 1) {
+            return true;
+        }
+
+        foreach ([
+            'context overflow',
+            'rate limit',
+            'rate-limited',
+            'temporarily unavailable',
+            'temporary',
+            'transient',
+            'overload',
+            'overloaded',
+            'timeout',
+            'timed out',
+            'connection reset',
+            'connection refused',
+            'connection closed',
+            'network',
+            'econnreset',
+            'etimedout',
+        ] as $needle) {
+            if (str_contains($lower, $needle)) {
+                return true;
+            }
+        }
+
         return false;
     }
 

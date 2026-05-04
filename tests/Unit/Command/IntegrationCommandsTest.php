@@ -85,19 +85,22 @@ final class IntegrationCommandsTest extends TestCase
         $data = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         $this->assertTrue($data['success']);
         $this->assertSame('work', $data['account']);
-        $this->assertSame('ghp_secret', $this->settingsRepository->get('global', 'integration.github.accounts.work.api_key'));
-        $this->assertTrue($this->settingsManager->getRaw('integrations.github.enabled'));
-        $this->assertSame('allow', $this->settingsManager->getRaw('integrations.github.permissions.read'));
-        $this->assertSame('deny', $this->settingsManager->getRaw('integrations.github.permissions.write'));
+        $stored = $this->settingsRepository->get('global', 'integration.github.accounts.work.api_key');
+        $this->assertIsString($stored);
+        $this->assertStringStartsWith('enc:v1:', $stored);
+        $this->assertSame('ghp_secret', $this->container->make(YamlCredentialResolver::class)->get('github', 'api_key', account: 'work'));
+        $this->assertTrue($this->settingsManager->getRaw('kosmo.integrations.github.enabled'));
+        $this->assertSame('allow', $this->settingsManager->getRaw('kosmo.integrations.github.permissions.read'));
+        $this->assertSame('deny', $this->settingsManager->getRaw('kosmo.integrations.github.permissions.write'));
     }
 
     public function test_fields_and_doctor_return_agent_friendly_json(): void
     {
         $this->settingsRepository->set('global', 'integration.github.accounts', json_encode(['default' => true]));
         $this->settingsRepository->set('global', 'integration.github.accounts.default.api_key', 'ghp_secret');
-        $this->settingsManager->setRaw('integrations.github.enabled', true, 'project');
-        $this->settingsManager->setRaw('integrations.github.permissions.read', 'allow', 'project');
-        $this->settingsManager->setRaw('integrations.github.permissions.write', 'ask', 'project');
+        $this->settingsManager->setRaw('kosmo.integrations.github.enabled', true, 'project');
+        $this->settingsManager->setRaw('kosmo.integrations.github.permissions.read', 'allow', 'project');
+        $this->settingsManager->setRaw('kosmo.integrations.github.permissions.write', 'ask', 'project');
 
         $fields = new CommandTester(new IntegrationFieldsCommand($this->container));
         $this->assertSame(0, $fields->execute(['provider' => 'github', '--json' => true]));
@@ -172,7 +175,7 @@ final class IntegrationCommandsTest extends TestCase
         $doctorData = json_decode($doctor->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame('oauth2_authorization_code', $doctorData['auth_strategy']);
         $this->assertFalse($doctorData['cli_setup_supported']);
-        $this->assertContains('kosmokrator integrations:docs google_docs', $doctorData['next_commands']);
+        $this->assertContains('kosmo integrations:docs google_docs', $doctorData['next_commands']);
 
         $configure = new CommandTester(new IntegrationConfigureCommand($this->container));
         $this->assertSame(1, $configure->execute(['provider' => 'google_docs', '--enable' => true, '--json' => true]));

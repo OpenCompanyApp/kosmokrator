@@ -191,7 +191,7 @@ final class SettingsWorkspaceWidgetTest extends TestCase
         $this->assertStringContainsString('Telegram Gateway', $output);
         $this->assertStringContainsString('Token: configured', $output);
         $this->assertStringContainsString('Session routing: thread', $output);
-        $this->assertStringContainsString('php bin/kosmokrator gateway:telegram', $output);
+        $this->assertStringContainsString('php bin/kosmo gateway:telegram', $output);
     }
 
     // ── buildCustomProvider ──────────────────────────────────────────────

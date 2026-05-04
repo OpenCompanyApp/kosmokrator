@@ -111,12 +111,12 @@ final class WebFetchProviderManager
         }
 
         $ordered = [];
-        $default = $this->settings->getRaw('kosmokrator.web.fetch.default_provider');
+        $default = $this->settings->getRaw('kosmo.web.fetch.default_provider');
         if (is_string($default) && $default !== '') {
             $ordered[] = $default;
         }
 
-        $fallbacks = $this->settings->getRaw('kosmokrator.web.fetch.fallback_providers');
+        $fallbacks = $this->settings->getRaw('kosmo.web.fetch.fallback_providers');
         if (is_array($fallbacks)) {
             foreach ($fallbacks as $fallback) {
                 if (is_string($fallback) && $fallback !== '') {

@@ -1,0 +1,175 @@
+---
+title: "Web Providers"
+description: "Configure and use KosmoKrator web search, web fetch, external extraction, and crawl providers."
+sidebar:
+  order: 13
+---
+
+KosmoKrator has two web layers:
+
+1. Built-in fetch tools that can retrieve a URL directly when the runtime has web access.
+2. Optional external providers for search, extraction/fetch, and crawl workflows.
+
+External providers are off by default. Enable only the capabilities you want in a given project or automation environment.
+
+## Provider Matrix
+
+| Provider | Search | Fetch / Extract | Crawl | Env var |
+| --- | --- | --- | --- | --- |
+| Tavily | yes | yes | yes | `TAVILY_API_KEY` |
+| Firecrawl | yes | yes | yes | `FIRECRAWL_API_KEY` |
+| Exa | yes | yes | no | `EXA_API_KEY` |
+| Brave Search | yes | no | no | `BRAVE_SEARCH_API_KEY` |
+| Parallel | yes | yes | no | `PARALLEL_API_KEY` |
+| Jina Reader/Search | yes | yes | no | `JINA_API_KEY` |
+| SearXNG | yes | no | no | none; configure `base_url` |
+| Perplexity Search | yes | no | no | `PERPLEXITY_API_KEY` |
+| OpenAI native web search | yes | no | no | `OPENAI_API_KEY` |
+| Anthropic native web search | yes | no | no | `ANTHROPIC_API_KEY` |
+
+Inspect the live provider catalog:
+
+```bash
+kosmokrator web:providers --json
+```
+
+## Configure Providers
+
+Use `web:configure` for ergonomic headless setup:
+
+```bash
+kosmokrator web:configure tavily \
+  --api-key-env TAVILY_API_KEY \
+  --enable \
+  --search \
+  --global \
+  --json
+
+kosmokrator web:configure firecrawl \
+  --api-key-env FIRECRAWL_API_KEY \
+  --enable \
+  --fetch \
+  --crawl \
+  --project \
+  --json
+
+kosmokrator web:configure searxng \
+  --base-url https://search.example.internal \
+  --enable \
+  --search \
+  --project \
+  --json
+```
+
+Options:
+
+| Option | Purpose |
+| --- | --- |
+| `--api-key` | Store an API key directly. Prefer `--api-key-stdin` or `--api-key-env` for automation. |
+| `--api-key-stdin` | Read the key from stdin. |
+| `--api-key-env` | Store the env var name used at runtime. |
+| `--base-url` | Configure provider base URL, required for SearXNG. |
+| `--enable`, `--disable` | Toggle the provider. |
+| `--search` | Make this the search provider and enable search. |
+| `--fetch` | Make this the fetch provider and allow external fetch. |
+| `--crawl` | Make this the crawl provider and enable crawl. |
+| `--global`, `--project` | Choose write scope. |
+| `--json` | Emit machine-readable output. |
+
+## Settings
+
+All web settings are available through `settings:*`:
+
+```bash
+kosmo settings:list --category web --json
+kosmo settings:set web.search.enabled on --project --json
+kosmo settings:set web.search.provider tavily --project --json
+kosmo settings:set web.fetch.allow_external on --project --json
+kosmo settings:set web.crawl.provider firecrawl --project --json
+kosmo settings:set web.providers.searxng.base_url https://search.example.internal --project --json
+```
+
+Important settings:
+
+| Setting | Meaning |
+| --- | --- |
+| `web.search.enabled` | Registers the optional `web_search` tool. |
+| `web.search.provider` | Default provider for search commands/tools. |
+| `web.search.max_results` | Default result count. |
+| `web.fetch.provider` | Default external fetch provider. `native` keeps built-in fetch. |
+| `web.fetch.allow_external` | Allows external extract/fetch provider calls. |
+| `web.crawl.enabled` | Registers the optional `web_crawl` tool. |
+| `web.crawl.provider` | Default crawl provider. |
+| `web.native.provider` | Native provider search backend. |
+| `web.native.mode` | `cached` or `live` freshness hint for native provider search. |
+| `web.providers.PROVIDER.enabled` | Provider-specific enable toggle. |
+
+## Shell Usage
+
+```bash
+kosmokrator web:doctor --json
+kosmokrator web:search "Symfony TUI terminal docs" --provider tavily --max-results 5 --json
+kosmokrator web:fetch https://example.com --provider firecrawl --format markdown --json
+kosmokrator web:crawl https://docs.example.com --provider firecrawl --max-pages 10 --json
+```
+
+`web:fetch --format` accepts `markdown`, `text`, or `html` where the provider supports it.
+
+## Agent Tools
+
+The agent can use these tools when enabled by mode and settings:
+
+| Tool | Purpose |
+| --- | --- |
+| `web_search` | Search through the configured external or native provider. |
+| `web_fetch` | Built-in URL fetch/extract path. |
+| `web_fetch_external` / external extract path | Provider-backed extraction when `web.fetch.allow_external` is on. |
+| `web_crawl` | Crawl a site with an enabled crawl provider. |
+
+Mode access:
+
+| Mode | Web access |
+| --- | --- |
+| Edit | `web_search`, `web_fetch` and enabled provider tools. |
+| Plan | same as Edit, but write tools remain unavailable. |
+| Ask | read-only web search/fetch docs and fetch/search tools only. |
+
+## Native Provider Search
+
+OpenAI and Anthropic native web search can be enabled as web providers:
+
+```bash
+kosmokrator web:configure openai_native --api-key-env OPENAI_API_KEY --enable --search --global --json
+kosmokrator web:configure anthropic_native --api-key-env ANTHROPIC_API_KEY --enable --search --global --json
+kosmo settings:set web.native.mode live --global --json
+```
+
+Use native search when you want the model provider to own search grounding. Use Tavily/Exa/Brave/etc. when you want search results as explicit tool output for inspection, scripting, and deterministic tests.
+
+## Safety
+
+External web providers send URLs, queries, and sometimes extracted content to third-party services. For private codebases:
+
+- Prefer project-level settings so teams can see what is enabled.
+- Keep provider API keys in env vars or the managed secret store.
+- Use SearXNG for private/internal search when you control the endpoint.
+- Keep `web.fetch.allow_external` off unless the project needs provider extraction.
+- Use `web:doctor --json` in CI images to verify what is enabled.
+
+## Troubleshooting
+
+```bash
+kosmokrator web:providers --json
+kosmokrator web:doctor --json
+kosmo settings:get web.search.enabled --json
+kosmo settings:get web.search.provider --json
+```
+
+Common issues:
+
+| Symptom | Fix |
+| --- | --- |
+| `web_search` is unavailable to the agent | Set `web.search.enabled` to `on` and restart the session. |
+| Provider says not configured | Set an API key with `web:configure --api-key-stdin` or `--api-key-env`. |
+| Crawl command fails | Enable `web.crawl.enabled` and choose Tavily or Firecrawl. |
+| SearXNG returns connection errors | Verify `web.providers.searxng.base_url` from the same machine running KosmoKrator. |

@@ -37,7 +37,7 @@ final class SetupSettingsFlow implements SetupFlowInterface
         $config = $this->container->make('config');
 
         $provider = trim((string) ($settings->get('agent.default_provider')
-            ?? $config->get('kosmokrator.agent.default_provider', 'z')));
+            ?? $config->get('kosmo.agent.default_provider', 'z')));
 
         if ($provider === '' || $providers->provider($provider) === null) {
             return true;
@@ -85,7 +85,7 @@ final class SetupSettingsFlow implements SetupFlowInterface
         $providers = $this->container->make(ProviderCatalog::class);
         $models = $this->container->make(ModelCatalog::class);
         $provider = trim((string) ($settings->get('agent.default_provider')
-            ?? $this->container->make('config')->get('kosmokrator.agent.default_provider', 'z')));
+            ?? $this->container->make('config')->get('kosmo.agent.default_provider', 'z')));
         $model = trim((string) ($settings->getProviderLastModel($provider)
             ?? $settings->get('agent.default_model')
             ?? $providers->defaultModel($provider)

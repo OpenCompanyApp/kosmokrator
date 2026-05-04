@@ -1,0 +1,102 @@
+---
+import '../../styles/tailwind.css';
+import MegaFooter from '../../components/MegaFooter.astro';
+import { getIntegrations, integrationUrl, toolFullName, type Integration } from '../../lib/integrations-catalog';
+import {
+  SITE_URL,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  integrationCliTitle,
+  integrationKeywords,
+  jsonLd,
+  ogImageUrl,
+  siteUrl,
+} from '../../lib/seo';
+
+export function getStaticPaths() {
+  return getIntegrations().map((integration) => ({
+    params: { slug: integration.route_slug },
+    props: { integration },
+  }));
+}
+
+const { integration } = Astro.props as { integration: Integration };
+const primaryTool = integration.tools[0];
+const pagePath = `/cli/${integration.route_slug}`;
+const canonicalPath = integrationUrl(integration, 'cli');
+const pageTitle = integrationCliTitle(integration);
+const pageDescription = `Use the ${integration.name} CLI from KosmoKrator for headless automation, scripts, CI, coding agents, JSON output, schema discovery, and MCP gateway handoff.`;
+const pageOgImage = ogImageUrl(['cli', integration.route_slug]);
+const command = primaryTool
+  ? `kosmo integrations:call ${toolFullName(integration, primaryTool)} '{}' --json`
+  : `kosmo integrations:docs ${integration.slug} --json`;
+const schemas = [
+  articleJsonLd(pageTitle, pageDescription, pagePath),
+  breadcrumbJsonLd([
+    { name: 'KosmoKrator', url: SITE_URL },
+    { name: 'CLI integrations', url: siteUrl('/integrations') },
+    { name: pageTitle, url: siteUrl(pagePath) },
+  ]),
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle} - KosmoKrator</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content={integrationKeywords(integration, [`${integration.name} command line`, `${integration.name} automation`])} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={pageOgImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={pageOgImage} />
+    <link rel="canonical" href={siteUrl(canonicalPath)} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {schemas.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+  </head>
+  <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
+    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
+      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>KosmoKrator</span>
+      </a>
+      <nav class="flex flex-wrap items-center justify-end gap-4" aria-label="Main navigation">
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href={canonicalPath}>Full CLI reference</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href={integrationUrl(integration, 'mcp')}>MCP</a>
+        <a class="text-kosmo-muted hover:text-kosmo-text no-underline text-[0.94rem]" href="/integrations">Integrations</a>
+      </nav>
+    </header>
+
+    <main class="w-[min(980px,calc(100%_-_2.5rem))] mx-auto py-12 pb-20">
+      <p class="m-0 mb-[0.7rem] text-kosmo-hot text-[0.78rem] font-extrabold tracking-[0.14em] uppercase">CLI shortcut</p>
+      <h1 class="m-0 leading-[1.04] text-[clamp(2.4rem,5vw,4.1rem)]">{pageTitle}</h1>
+      <p class="text-kosmo-muted leading-[1.7]">{pageDescription}</p>
+
+      <section class="my-8 p-5 border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
+        <h2 class="mt-0">Quick Command</h2>
+        <pre class="overflow-x-auto m-0 p-4 rounded-md bg-kosmo-code-bg-2 text-kosmo-code-text font-mono font-medium text-[0.86rem] leading-[1.65]"><code>{command}</code></pre>
+      </section>
+
+      <section class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
+        <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href={canonicalPath}>
+          <strong>{integration.name} CLI reference</strong>
+          <span class="text-kosmo-muted">Commands, credentials, schemas, and function list.</span>
+        </a>
+        <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href={`${canonicalPath}/ci`}>
+          <strong>{integration.name} CLI for CI</strong>
+          <span class="text-kosmo-muted">Pipeline-oriented command examples.</span>
+        </a>
+        <a class="grid gap-1.5 p-4 border border-kosmo-white-border rounded-lg bg-kosmo-surface text-kosmo-text no-underline hover:border-kosmo-crimson" href={integrationUrl(integration, 'mcp')}>
+          <strong>{integration.name} MCP gateway</strong>
+          <span class="text-kosmo-muted">Expose the same tools to MCP clients.</span>
+        </a>
+      </section>
+    </main>
+    <MegaFooter />
+  </body>
+</html>

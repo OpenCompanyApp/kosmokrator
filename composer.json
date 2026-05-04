@@ -19,6 +19,7 @@
         "opencompanyapp/integration-clickup": "@dev",
         "opencompanyapp/integration-coingecko": "@dev",
         "opencompanyapp/integration-core": "@dev",
+        "opencompanyapp/integration-instantly": "@dev",
         "opencompanyapp/integration-plane": "@dev",
         "opencompanyapp/integration-plausible": "@dev",
         "opencompanyapp/prism-relay": "dev-main",
@@ -125,5 +126,5 @@
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
-    "bin": ["bin/kosmokrator"]
+    "bin": ["bin/kosmo", "bin/kosmokrator"]
 }

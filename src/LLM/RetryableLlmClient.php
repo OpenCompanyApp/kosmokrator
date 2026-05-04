@@ -6,6 +6,9 @@ namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
 use Amp\Http\Client\HttpException;
+use Amp\Http\Client\SocketException;
+use Amp\Http\Client\TimeoutException;
+use Amp\Http\Client\TlsException;
 use OpenCompany\PrismRelay\Errors\ProviderError;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
@@ -194,9 +197,9 @@ class RetryableLlmClient implements LlmClientInterface
             return $e->retryable;
         }
 
-        // Amp network errors
         if ($e instanceof HttpException) {
-            return true;
+            return $e instanceof TimeoutException
+                || ($e instanceof SocketException && ! $e instanceof TlsException);
         }
 
         // Legacy: AsyncLlmClient HTTP errors with retryable status codes

@@ -31,11 +31,11 @@ class GuardianEvaluator
     ];
 
     /**
-     * Shell metacharacters that indicate chaining, piping, redirection,
-     * or command substitution. Presence of ANY of these means the command
-     * is not provably safe by static analysis.
+     * Shell control operators that make a command unsafe for Guardian auto-approval.
+     * This check is applied while tokenizing so operators hidden inside quoted
+     * literal arguments do not affect command structure.
      */
-    private const SHELL_META_PATTERN = '/[;&|`$><\n]/';
+    private const SHELL_CONTROL_CHARS = ";&|`$><()\n\r";
 
     /**
      * @param  string[]  $safeCommandPatterns  Glob patterns for bash commands to auto-approve
@@ -63,11 +63,6 @@ class GuardianEvaluator
             return $this->isSafeCommand($args['command'] ?? '');
         }
 
-        if ($toolName === 'execute_lua') {
-            // Always auto-approve — inner integration permissions enforce per-tool granularity
-            return true;
-        }
-
         if ($toolName === 'shell_start') {
             return $this->isSafeCommand($args['command'] ?? '');
         }
@@ -85,6 +80,10 @@ class GuardianEvaluator
     private function isInsideProject(string $path): bool
     {
         if ($path === '') {
+            return false;
+        }
+
+        if (PathResolver::containsSymlinkComponent($path, $this->projectRoot)) {
             return false;
         }
 
@@ -106,12 +105,17 @@ class GuardianEvaluator
             return false;
         }
 
-        if ($this->containsShellOperators($command)) {
+        $tokens = $this->tokenizeSimpleCommand($command);
+        if ($tokens === null) {
+            return false;
+        }
+
+        if ($this->isMutativeCommand($command)) {
             return false;
         }
 
         foreach ($this->safeCommandPatterns as $pattern) {
-            if (PermissionRule::matchesGlob($command, $pattern)) {
+            if ($this->tokensMatchSafePattern($tokens, $pattern)) {
                 return true;
             }
         }
@@ -131,9 +135,18 @@ class GuardianEvaluator
         'touch ',
         'ln ',
         'git commit', 'git push', 'git merge', 'git rebase', 'git reset', 'git checkout',
-        'git stash', 'git cherry-pick', 'git revert', 'git tag', 'git branch -d',
+        'git stash push', 'git stash save', 'git stash pop', 'git stash apply',
+        'git stash drop', 'git stash clear', 'git stash branch', 'git stash store',
+        'git cherry-pick', 'git revert', 'git tag', 'git branch -d',
         'git branch -D', 'git branch -m', 'git clean', 'git am', 'git apply',
         'npm install', 'npm ci', 'npm uninstall', 'npm update', 'npm publish',
+        'npm i ', 'npm add ', 'npm rm ', 'npm remove ', 'npm un ', 'npm audit fix',
+        'npm run ', 'npm test', 'npm exec ', 'npm x ', 'npm create ', 'npm init',
+        'npm pack', 'npm link', 'npm version', 'npm rebuild', 'npm dedupe', 'npm prune',
+        'pnpm install', 'pnpm add', 'pnpm remove', 'pnpm update', 'pnpm publish',
+        'pnpm run ', 'pnpm test', 'pnpm exec ', 'pnpm dlx ', 'pnpm create ',
+        'yarn install', 'yarn add', 'yarn remove', 'yarn upgrade', 'yarn publish',
+        'yarn run ', 'yarn test', 'yarn dlx ', 'yarn create ',
         'npx ',
         'composer require', 'composer remove', 'composer update', 'composer install',
         'pip install', 'pip uninstall',
@@ -190,12 +203,63 @@ class GuardianEvaluator
     {
         // Strip safe redirections before checking for mutative operators
         $stripped = (string) preg_replace(self::SAFE_REDIRECTION_PATTERN, '', $segment);
+        $stripped = $this->stripQuotedLiterals($stripped);
+        if ($stripped === null) {
+            return true;
+        }
 
         if ((bool) preg_match(self::MUTATIVE_SHELL_PATTERN, $stripped)) {
             return true;
         }
 
         return $this->segmentMatchesMutativePattern($segment);
+    }
+
+    private function stripQuotedLiterals(string $segment): ?string
+    {
+        $result = '';
+        $quote = null;
+        $escaped = false;
+        $length = strlen($segment);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $segment[$i];
+
+            if ($escaped) {
+                $escaped = false;
+
+                continue;
+            }
+
+            if ($char === '\\') {
+                $escaped = true;
+                if ($quote === null) {
+                    $result .= ' ';
+                }
+
+                continue;
+            }
+
+            if ($quote !== null) {
+                if ($char === $quote) {
+                    $quote = null;
+                    $result .= ' ';
+                }
+
+                continue;
+            }
+
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+                $result .= ' ';
+
+                continue;
+            }
+
+            $result .= $char;
+        }
+
+        return $quote === null && ! $escaped ? $result : null;
     }
 
     /**
@@ -227,10 +291,127 @@ class GuardianEvaluator
     }
 
     /**
-     * Check whether the command text contains shell metacharacters (pipe, redirect, etc.).
+     * Tokenize a single simple shell command. Returns null for syntax that can
+     * alter shell control flow or perform expansion/substitution.
+     *
+     * @return list<string>|null
      */
-    private function containsShellOperators(string $command): bool
+    private function tokenizeSimpleCommand(string $command): ?array
     {
-        return (bool) preg_match(self::SHELL_META_PATTERN, $command);
+        $tokens = [];
+        $current = '';
+        $quote = null;
+        $escaped = false;
+        $length = strlen($command);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $command[$i];
+
+            if ($escaped) {
+                if ($char === "\n" || $char === "\r") {
+                    return null;
+                }
+                $current .= $char;
+                $escaped = false;
+
+                continue;
+            }
+
+            if ($quote === "'") {
+                if ($char === "'") {
+                    $quote = null;
+                } else {
+                    $current .= $char;
+                }
+
+                continue;
+            }
+
+            if ($quote === '"') {
+                if ($char === '"') {
+                    $quote = null;
+
+                    continue;
+                }
+                if ($char === '\\') {
+                    $escaped = true;
+
+                    continue;
+                }
+                if (str_contains("$`\n\r", $char)) {
+                    return null;
+                }
+
+                $current .= $char;
+
+                continue;
+            }
+
+            if ($char === '\\') {
+                $escaped = true;
+
+                continue;
+            }
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+
+                continue;
+            }
+            if (str_contains(self::SHELL_CONTROL_CHARS, $char)) {
+                return null;
+            }
+            if (ctype_space($char)) {
+                if ($current !== '') {
+                    $tokens[] = $current;
+                    $current = '';
+                }
+
+                continue;
+            }
+
+            $current .= $char;
+        }
+
+        if ($escaped || $quote !== null) {
+            return null;
+        }
+        if ($current !== '') {
+            $tokens[] = $current;
+        }
+
+        return $tokens === [] ? null : $tokens;
+    }
+
+    /**
+     * Match parsed argv tokens against a configured safe command pattern.
+     * A wildcard in the final pattern token may cover the rest of argv, keeping
+     * patterns like "git *" and "php vendor/bin/phpunit*" ergonomic.
+     *
+     * @param  list<string>  $tokens
+     */
+    private function tokensMatchSafePattern(array $tokens, string $pattern): bool
+    {
+        $patternTokens = $this->tokenizeSimpleCommand($pattern);
+        if ($patternTokens === null) {
+            return false;
+        }
+
+        $lastIndex = count($patternTokens) - 1;
+        foreach ($patternTokens as $index => $patternToken) {
+            $isLast = $index === $lastIndex;
+            $hasWildcard = str_contains($patternToken, '*');
+
+            if (! isset($tokens[$index])) {
+                return $isLast && $patternToken === '*';
+            }
+            if (! PermissionRule::matchesGlob($tokens[$index], $patternToken)) {
+                return false;
+            }
+            if ($isLast && $hasWildcard) {
+                return true;
+            }
+        }
+
+        return count($tokens) === count($patternTokens);
     }
 }

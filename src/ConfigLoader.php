@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Kosmokrator;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\Settings\ConfigCompatibility;
+use Kosmokrator\Settings\SettingsPaths;
 use Symfony\Component\Yaml\Yaml;
 
 /**
  * Loads and merges configuration from three layers: bundled defaults (config/*.yaml),
- * user-level overrides (~/.kosmokrator/config.yaml), and project-level overrides
- * (.kosmokrator/config.yaml walked up from cwd). Runs early in the boot sequence,
+ * user-level overrides (~/.kosmo/config.yaml), and project-level overrides
+ * (.kosmo/config.yaml walked up from cwd). Legacy .kosmokrator paths are read
+ * for compatibility. Runs early in the boot sequence,
  * before any services are registered.
  */
 class ConfigLoader
@@ -33,13 +36,13 @@ class ConfigLoader
             $config[$key] = $this->parseYaml($path);
         }
 
-        // Merge user config (~/.kosmokrator/config.yaml)
+        // Merge user config (~/.kosmo/config.yaml)
         $userConfig = $this->loadUserConfig();
         if ($userConfig !== null) {
             $config = $this->mergeDeep($config, $userConfig);
         }
 
-        // Merge project config (.kosmokrator/config.yaml, legacy .kosmokrator.yaml in cwd)
+        // Merge project config (.kosmo/config.yaml, .kosmo.yaml, and legacy .kosmokrator paths)
         $projectConfig = $this->loadProjectConfig();
         if ($projectConfig !== null) {
             $config = $this->mergeDeep($config, $projectConfig);
@@ -86,17 +89,15 @@ class ConfigLoader
         }
     }
 
-    /** Load user-level config from ~/.kosmokrator/config.yaml. */
+    /** Load user-level config from ~/.kosmo/config.yaml, falling back to legacy ~/.kosmokrator/config.yaml. */
     private function loadUserConfig(): ?array
     {
-        $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '';
-        $path = $home.'/.kosmokrator/config.yaml';
-
-        if (! file_exists($path)) {
-            return null;
+        $path = (new SettingsPaths)->globalReadPath();
+        if ($path !== null) {
+            return $this->normalizeExternalConfig($this->parseYaml($path));
         }
 
-        return $this->normalizeExternalConfig($this->parseYaml($path));
+        return null;
     }
 
     /** Load and merge project-level configs by walking from cwd up to root. */
@@ -141,8 +142,9 @@ class ConfigLoader
         $dirs = array_reverse($dirs);
         $paths = [];
         foreach ($dirs as $dir) {
-            $paths[] = $dir.'/.kosmokrator.yaml';
-            $paths[] = $dir.'/.kosmokrator/config.yaml';
+            foreach (array_reverse(SettingsPaths::projectCandidatesForRoot($dir)) as $path) {
+                $paths[] = $path;
+            }
         }
 
         return $paths;
@@ -150,11 +152,13 @@ class ConfigLoader
 
     /**
      * Restructure a flat external config into the canonical namespace structure
-     * (prism.providers, kosmokrator, relay) expected by the rest of the codebase.
+     * (prism.providers, kosmo, relay) expected by the rest of the codebase.
      */
     private function normalizeExternalConfig(array $data): array
     {
-        $knownRoots = ['app', 'kosmokrator', 'prism', 'models', 'relay'];
+        $data = ConfigCompatibility::normalizeKosmoNamespace($data);
+
+        $knownRoots = ['app', 'kosmo', 'prism', 'models', 'relay'];
         $hasKnownRoot = array_intersect(array_keys($data), $knownRoots) !== [];
 
         if ($hasKnownRoot) {
@@ -179,7 +183,7 @@ class ConfigLoader
         }
 
         if (! empty($data)) {
-            $result['kosmokrator'] = $data;
+            $result['kosmo'] = $data;
         }
 
         return $result;
@@ -188,14 +192,6 @@ class ConfigLoader
     /** Recursively merge $override into $base; scalar values in $override win. */
     private function mergeDeep(array $base, array $override): array
     {
-        foreach ($override as $key => $value) {
-            if (is_array($value) && isset($base[$key]) && is_array($base[$key])) {
-                $base[$key] = $this->mergeDeep($base[$key], $value);
-            } else {
-                $base[$key] = $value;
-            }
-        }
-
-        return $base;
+        return ConfigCompatibility::mergeDeep($base, $override);
     }
 }

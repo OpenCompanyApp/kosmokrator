@@ -278,8 +278,7 @@ final class TuiInputHandler
     {
         $askSuspension = $this->modalManager->getAskSuspension();
         if ($askSuspension !== null) {
-            $this->modalManager->clearAskSuspension();
-            $askSuspension->resume('');
+            $this->modalManager->resumeAskSuspension('');
 
             return;
         }
@@ -335,8 +334,7 @@ final class TuiInputHandler
 
         $askSuspension = $this->modalManager->getAskSuspension();
         if ($askSuspension !== null) {
-            $this->modalManager->clearAskSuspension();
-            $askSuspension->resume($value);
+            $this->modalManager->resumeAskSuspension($value);
 
             return;
         }

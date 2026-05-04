@@ -27,6 +27,7 @@ final readonly class ModelDefinition
      * @param  string|null  $status  Model status (e.g. "active", "deprecated")
      * @param  list<string>  $inputModalities  Supported input types (e.g. ["text", "image"])
      * @param  list<string>  $outputModalities  Supported output types (e.g. ["text"])
+     * @param  string  $source  Metadata source: "bundled", "provider_live", "custom", etc.
      */
     public function __construct(
         public string $id,
@@ -42,6 +43,7 @@ final readonly class ModelDefinition
         public ?string $status = null,
         public array $inputModalities = ['text'],
         public array $outputModalities = ['text'],
+        public string $source = 'bundled',
     ) {}
 
     /**

@@ -51,8 +51,8 @@ final class WebFetchCommand extends Command
             $response = $provider->fetch(new WebFetchRequest(
                 url: (string) $input->getArgument('url'),
                 format: is_string($input->getOption('format')) && $input->getOption('format') !== '' ? $input->getOption('format') : 'markdown',
-                timeoutSeconds: max(1, (int) $config->get('kosmokrator.web.fetch.timeout_seconds', 30)),
-                outputLimitChars: max(1000, (int) $config->get('kosmokrator.web.fetch.output_limit_chars', 100000)),
+                timeoutSeconds: max(1, (int) $config->get('kosmo.web.fetch.timeout_seconds', 30)),
+                outputLimitChars: max(1000, (int) $config->get('kosmo.web.fetch.output_limit_chars', 100000)),
             ));
         } catch (\Throwable $e) {
             return $this->fail($input, $output, $e->getMessage());

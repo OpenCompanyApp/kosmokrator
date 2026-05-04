@@ -113,6 +113,9 @@ class MessageRepositoryTest extends TestCase
         $loaded = $this->messages->loadActive($this->sessionId);
 
         $this->assertCount(3, $loaded);
+        $this->assertInstanceOf(UserMessage::class, $loaded[0]);
+        $this->assertInstanceOf(AssistantMessage::class, $loaded[1]);
+        $this->assertInstanceOf(UserMessage::class, $loaded[2]);
         $this->assertSame('First', $loaded[0]->content);
         $this->assertSame('Second', $loaded[1]->content);
         $this->assertSame('Third', $loaded[2]->content);
@@ -129,6 +132,7 @@ class MessageRepositoryTest extends TestCase
         $loaded = $this->messages->loadActive($this->sessionId);
 
         $this->assertCount(1, $loaded);
+        $this->assertInstanceOf(UserMessage::class, $loaded[0]);
         $this->assertSame('Recent message', $loaded[0]->content);
     }
 
@@ -192,6 +196,35 @@ class MessageRepositoryTest extends TestCase
 
         $this->assertSame(0, $totals['tokens_in']);
         $this->assertSame(0, $totals['tokens_out']);
+    }
+
+    public function test_compact_with_summary_rolls_back_when_purge_fails(): void
+    {
+        $id1 = $this->messages->append($this->sessionId, 'user', 'Old question');
+        $id2 = $this->messages->append($this->sessionId, 'assistant', 'Old answer');
+
+        $this->db->connection()->exec(
+            <<<'SQL'
+            CREATE TRIGGER fail_compacted_delete
+            BEFORE DELETE ON messages
+            WHEN old.compacted = 1
+            BEGIN
+                SELECT RAISE(ABORT, 'forced compact purge failure');
+            END
+            SQL
+        );
+
+        try {
+            $this->messages->compactWithSummary($this->sessionId, [$id1, $id2], 'Summary');
+            $this->fail('Expected compact purge failure.');
+        } catch (\PDOException $e) {
+            $this->assertStringContainsString('forced compact purge failure', $e->getMessage());
+        }
+
+        $rows = $this->messages->loadRaw($this->sessionId, includeCompacted: true);
+        $this->assertCount(2, $rows);
+        $this->assertSame([0, 0], array_map(fn (array $row): int => (int) $row['compacted'], $rows));
+        $this->assertSame(['Old question', 'Old answer'], array_column($rows, 'content'));
     }
 
     public function test_search_project_history_finds_matching_messages(): void

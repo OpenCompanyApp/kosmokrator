@@ -10,7 +10,7 @@ use Psr\Log\LoggerInterface;
  * Checks for new KosmoKrator releases via the GitHub API.
  *
  * Caches the result to avoid hitting the API on every session start.
- * The cache lives in ~/.kosmokrator/update-check.json with a configurable TTL.
+ * The cache lives in ~/.kosmo/update-check.json with a configurable TTL.
  */
 final class UpdateChecker implements UpdateCheckerInterface
 {
@@ -25,7 +25,7 @@ final class UpdateChecker implements UpdateCheckerInterface
         private readonly ?LoggerInterface $log = null,
     ) {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
-        $this->cachePath = $home.'/.kosmokrator/update-check.json';
+        $this->cachePath = $home.'/.kosmo/update-check.json';
     }
 
     /**

@@ -1,0 +1,194 @@
+---
+title: "Telegram Gateway"
+description: "Configure, run, secure, and troubleshoot the KosmoKrator Telegram gateway."
+sidebar:
+  order: 14
+---
+
+The Telegram gateway lets users talk to KosmoKrator through a bot while still using the same sessions, providers, permissions, settings, tasks, memories, integrations, MCP, Lua runtime, and subagent system as the terminal agent.
+
+## Mental Model
+
+```text
+Telegram update
+  -> TelegramGatewayRuntime
+  -> TelegramSessionRouter
+  -> AgentSessionBuilder
+  -> AgentLoop
+  -> TelegramGatewayRenderer
+  -> Telegram sendMessage/editMessage
+```
+
+The gateway worker long-polls Telegram, normalizes updates, routes each message to a Kosmo session, and streams agent output back to Telegram through a gateway renderer.
+
+## Configure Headlessly
+
+```bash
+printf %s "$TELEGRAM_BOT_TOKEN" | \
+  kosmo gateway:telegram:configure \
+    --token-stdin \
+    --enabled on \
+    --session-mode thread_user \
+    --allowed-users "123456789,@alice" \
+    --admin-users "123456789" \
+    --require-mention on \
+    --reply-to-mode first \
+    --progress-notice-interval-seconds 60 \
+    --global \
+    --json
+```
+
+Options:
+
+| Option | Values | Purpose |
+| --- | --- | --- |
+| `--token` | token | Store bot token directly. Prefer stdin/env for automation. |
+| `--token-stdin` | flag | Read token from stdin. |
+| `--token-env` | env var name | Read token from an environment variable. |
+| `--enabled` | `on`, `off` | Enable or disable gateway. |
+| `--session-mode` | `thread`, `thread_user`, `chat`, `chat_user` | Route Telegram conversations to sessions. |
+| `--allowed-users` | list | Allowed user IDs or usernames. |
+| `--admin-users` | list | Users allowed to press global control buttons and approve any request. |
+| `--allowed-chats` | list | Allowed chat IDs. |
+| `--require-mention` | `on`, `off` | Require bot mention/reply in group chats. |
+| `--free-response-chats` | list | Chats where mention is not required. |
+| `--poll-timeout-seconds` | integer | Telegram long-poll timeout. |
+| `--reply-to-mode` | `off`, `first`, `all` | Whether answer chunks reply to the original message. |
+| `--disable-link-previews` | `on`, `off` | Disable Telegram link previews for gateway messages. |
+| `--fresh-final-after-seconds` | integer | Send a fresh final message after long streamed edits. `0` disables it. |
+| `--progress-notice-interval-seconds` | integer | Minimum seconds between long-run progress status updates. `0` disables it. |
+| `--reactions` | `on`, `off` | Mark processing and completion with Telegram reactions when supported. |
+| `--global`, `--project` | flag | Write scope. |
+| `--json` | flag | Machine-readable output. |
+
+## Run The Gateway
+
+```bash
+kosmo gateway:telegram:status --json
+kosmo gateway:telegram
+```
+
+For a system service, run the installed binary from a working directory that has the desired project config:
+
+```ini
+[Unit]
+Description=KosmoKrator Telegram Gateway
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/my-project
+ExecStart=/usr/local/bin/kosmo gateway:telegram
+Restart=always
+RestartSec=5
+Environment=KOSMO_TELEGRAM_BOT_TOKEN=123:abc
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Session Routing
+
+| Mode | Session key |
+| --- | --- |
+| `thread` | One session per Telegram thread/topic when available, falling back to chat. |
+| `thread_user` | One session per thread and user. |
+| `chat` | One session per chat. |
+| `chat_user` | One session per chat and user. |
+
+Use `thread_user` for shared group chats where multiple people may ask independent questions. Use `chat` for a private bot used by one person.
+
+## Security Controls
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `gateway.telegram.allowed_users` | empty | Empty allows any reachable user. Set user IDs or usernames to restrict access. |
+| `gateway.telegram.admin_users` | empty | Users allowed to press global control buttons and approve any request. |
+| `gateway.telegram.allowed_chats` | empty | Empty allows all chats. Set chat IDs for deployment safety. |
+| `gateway.telegram.require_mention` | `on` | In group chats, respond only when mentioned or replied to. |
+| `gateway.telegram.free_response_chats` | empty | Chat IDs where the bot can answer without mention. |
+
+Approval and control buttons use a stricter policy than normal messages. In group chats, approval buttons can be pressed by the original requester, an explicit allowed user, or an admin user. Global control buttons such as mode switches require an explicit allowed or admin user.
+
+## Long Runs And Delivery
+
+The gateway keeps one status message per route, updates it while tools run, and can send periodic progress notices for long operations. `gateway.telegram.progress_notice_interval_seconds` controls that cadence.
+
+Telegram message delivery also handles UTF-16 message limits, optional reply threading, HTML fallback, flood-control retry hints, and stale reply/thread targets. `gateway.telegram.fresh_final_after_seconds` can send a fresh final message after a long edited stream so the completion appears at the current time in the chat.
+
+Recommended group setup:
+
+```bash
+kosmo gateway:telegram:configure \
+  --allowed-users "123456789,@maintainer" \
+  --allowed-chats "-1001234567890" \
+  --require-mention on \
+  --session-mode thread_user \
+  --json
+```
+
+## Permissions
+
+Gateway sessions use the same permission system as terminal sessions.
+
+- Guardian auto-approves safe reads and asks for risky operations.
+- Argus asks for every governed tool call.
+- Prometheus auto-approves governed calls.
+- Hard denies, blocked paths, blocked commands, project boundaries, integration permissions, and MCP trust still apply.
+
+Because Telegram is remote, be conservative with project-level settings. A common deployment policy is:
+
+```bash
+kosmo settings:set tools.default_permission_mode guardian --project --json
+kosmo settings:set tools.denied_tools "file_write,file_edit,apply_patch" --project --json
+```
+
+For a bot that should only answer questions, start sessions in Ask mode:
+
+```bash
+kosmo settings:set agent.mode ask --project --json
+```
+
+## Slash Commands
+
+The gateway bridges supported Telegram text commands to Kosmo slash commands through `TelegramSlashCommandBridge`. Useful commands include:
+
+| Command | Purpose |
+| --- | --- |
+| `/new` | Start a new session. |
+| `/resume` | Resume a previous session where supported. |
+| `/sessions` | List sessions. |
+| `/compact` | Compact context. |
+| `/guardian`, `/argus`, `/prometheus` | Change permission mode. |
+| `/edit`, `/plan`, `/ask` | Change agent mode. |
+
+## Credentials
+
+The bot token can come from:
+
+1. Managed secret `gateway.telegram.token`.
+2. YAML config value `kosmo.gateway.telegram.token`.
+3. Environment variable `KOSMO_TELEGRAM_BOT_TOKEN`.
+
+Preferred setup:
+
+```bash
+printf %s "$TELEGRAM_BOT_TOKEN" | kosmo secrets:set gateway.telegram.token --stdin --json
+kosmo gateway:telegram:configure --enabled on --json
+```
+
+## Troubleshooting
+
+```bash
+kosmo gateway:telegram:status --json
+kosmo settings:list --category gateway --json
+kosmo secrets:status gateway.telegram.token --json
+```
+
+| Symptom | Check |
+| --- | --- |
+| Worker exits with disabled error | `kosmo.gateway.telegram.enabled` must be `on` in YAML, or set `gateway.telegram.enabled` through `kosmo settings:set`. |
+| Worker exits with missing token | Configure `kosmo.gateway.telegram.token` or `KOSMO_TELEGRAM_BOT_TOKEN`. |
+| Bot ignores group messages | Mention the bot, reply to the bot, or add the chat to `free_response_chats`. |
+| Some users cannot talk to the bot | Check `allowed_users`; usernames are stored without the leading `@`. |
+| Messages go to the wrong session | Change `session_mode` to `thread_user` or `chat_user`. |

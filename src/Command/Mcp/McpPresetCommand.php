@@ -34,7 +34,7 @@ final class McpPresetCommand extends Command
             ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Server name override')
             ->addOption('enable', null, InputOption::VALUE_NONE, 'Enable the server')
             ->addOption('disable', null, InputOption::VALUE_NONE, 'Disable the server')
-            ->addOption('global', null, InputOption::VALUE_NONE, 'Write ~/.kosmokrator/mcp.json')
+            ->addOption('global', null, InputOption::VALUE_NONE, 'Write ~/.kosmo/mcp.json')
             ->addOption('project', null, InputOption::VALUE_NONE, 'Write project .mcp.json')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON');
     }

@@ -79,13 +79,14 @@ final class TuiModalManager
         $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
+        $resume = $this->resumeOnce($suspension);
 
-        $widget->onConfirm(function (string $decision) use ($suspension) {
-            $suspension->resume($decision);
+        $widget->onConfirm(function (string $decision) use ($resume) {
+            $resume($decision);
         });
 
-        $widget->onDismiss(function () use ($suspension) {
-            $suspension->resume('deny');
+        $widget->onDismiss(function () use ($resume) {
+            $resume('deny');
         });
 
         try {
@@ -121,16 +122,17 @@ final class TuiModalManager
         $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
+        $resume = $this->resumeOnce($suspension);
 
-        $widget->onConfirm(function () use ($suspension, $widget) {
-            $suspension->resume([
+        $widget->onConfirm(function () use ($resume, $widget) {
+            $resume([
                 'permission' => $widget->getPermissionId(),
                 'context' => $widget->getContextId(),
             ]);
         });
 
-        $widget->onDismiss(function () use ($suspension) {
-            $suspension->resume(null);
+        $widget->onDismiss(function () use ($resume) {
+            $resume(null);
         });
 
         try {
@@ -259,13 +261,14 @@ final class TuiModalManager
         $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
+        $resume = $this->resumeOnce($suspension);
 
-        $selectList->onSelect(function (SelectEvent $event) use ($suspension) {
-            $suspension->resume($event->getValue());
+        $selectList->onSelect(function (SelectEvent $event) use ($resume) {
+            $resume($event->getValue());
         });
 
-        $selectList->onCancel(function () use ($suspension) {
-            $suspension->resume('dismissed');
+        $selectList->onCancel(function () use ($resume) {
+            $resume('dismissed');
         });
 
         try {
@@ -307,12 +310,13 @@ final class TuiModalManager
 
         $result = [];
         $suspension = EventLoop::getSuspension();
-        $widget->onSave(function (array $payload) use (&$result, $suspension) {
+        $resume = $this->resumeOnce($suspension);
+        $widget->onSave(function (array $payload) use (&$result, $resume) {
             $result = $payload;
-            $suspension->resume(true);
+            $resume(true);
         });
-        $widget->onCancel(function () use ($suspension) {
-            $suspension->resume(false);
+        $widget->onCancel(function () use ($resume) {
+            $resume(false);
         });
 
         try {
@@ -357,13 +361,14 @@ final class TuiModalManager
         $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
+        $resume = $this->resumeOnce($suspension);
 
-        $selectList->onSelect(function (SelectEvent $event) use ($suspension) {
-            $suspension->resume($event->getValue());
+        $selectList->onSelect(function (SelectEvent $event) use ($resume) {
+            $resume($event->getValue());
         });
 
-        $selectList->onCancel(function () use ($suspension) {
-            $suspension->resume(null);
+        $selectList->onCancel(function () use ($resume) {
+            $resume(null);
         });
 
         try {
@@ -401,36 +406,35 @@ final class TuiModalManager
         $this->flushRender();
 
         $suspension = EventLoop::getSuspension();
+        $resume = $this->resumeOnce($suspension);
 
-        $widget->onDismiss(fn () => $suspension->resume(null));
+        $widget->onDismiss(fn () => $resume(null));
 
         // Auto-refresh every 2s if refresh callback provided
         $timerId = null;
-        if ($refresh !== null) {
-            $timerId = $this->scheduler->every(2.0, function () use ($widget, $refresh) {
-                try {
-                    $data = $refresh();
-                    $widget->setData($data['summary'], $data['stats']);
-                    $this->forceRender();
-                } catch (\Throwable $e) {
-                    $this->log->warning('Dashboard refresh error', ['error' => $e->getMessage()]);
-                }
-            });
-        }
-
         try {
+            if ($refresh !== null) {
+                $timerId = $this->scheduler->every(2.0, function () use ($widget, $refresh) {
+                    try {
+                        $data = $refresh();
+                        $widget->setData($data['summary'], $data['stats']);
+                        $this->forceRender();
+                    } catch (\Throwable $e) {
+                        $this->log->warning('Dashboard refresh error', ['error' => $e->getMessage()]);
+                    }
+                });
+            }
+
             $suspension->suspend();
         } finally {
             $this->state->setActiveModal(false);
+            if ($timerId !== null) {
+                $this->scheduler->cancel($timerId);
+            }
+            $this->overlay->remove($widget);
+            $this->tui->setFocus($this->input);
+            $this->forceRender();
         }
-
-        if ($timerId !== null) {
-            $this->scheduler->cancel($timerId);
-        }
-
-        $this->overlay->remove($widget);
-        $this->tui->setFocus($this->input);
-        $this->forceRender();
     }
 
     /**
@@ -450,6 +454,19 @@ final class TuiModalManager
     public function clearAskSuspension(): void
     {
         $this->askSuspension = null;
+    }
+
+    public function resumeAskSuspension(string $answer): bool
+    {
+        $suspension = $this->askSuspension;
+        if ($suspension === null) {
+            return false;
+        }
+
+        $this->askSuspension = null;
+        $suspension->resume($answer);
+
+        return true;
     }
 
     /**
@@ -558,6 +575,23 @@ final class TuiModalManager
     private function forceRender(): void
     {
         ($this->forceRenderCallback)();
+    }
+
+    /**
+     * @return \Closure(mixed): void
+     */
+    private function resumeOnce(Suspension $suspension): \Closure
+    {
+        $resumed = false;
+
+        return static function (mixed $value = null) use ($suspension, &$resumed): void {
+            if ($resumed) {
+                return;
+            }
+
+            $resumed = true;
+            $suspension->resume($value);
+        };
     }
 
     private function focusSettingsItem(SettingsListWidget $widget, string $id): void

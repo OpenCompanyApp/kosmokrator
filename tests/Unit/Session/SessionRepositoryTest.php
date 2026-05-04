@@ -10,11 +10,14 @@ use PHPUnit\Framework\TestCase;
 
 class SessionRepositoryTest extends TestCase
 {
+    private Database $db;
+
     private SessionRepository $repo;
 
     protected function setUp(): void
     {
-        $this->repo = new SessionRepository(new Database(':memory:'));
+        $this->db = new Database(':memory:');
+        $this->repo = new SessionRepository($this->db);
     }
 
     public function test_create_returns_uuid(): void
@@ -93,5 +96,75 @@ class SessionRepositoryTest extends TestCase
 
         $after = $this->repo->find($id)['updated_at'];
         $this->assertNotSame($before, $after);
+    }
+
+    public function test_cleanup_deletes_old_unprotected_sessions_and_messages(): void
+    {
+        $oldDeleted = $this->repo->create('/project', 'model-1');
+        $oldKept = $this->repo->create('/project', 'model-1');
+        $recent = $this->repo->create('/project', 'model-1');
+
+        $this->setUpdatedAt($oldDeleted, microtime(true) - (45 * 86400));
+        $this->setUpdatedAt($oldKept, microtime(true) - (40 * 86400));
+        $this->setUpdatedAt($recent, microtime(true));
+        $this->addMessage($oldDeleted);
+
+        $deleted = $this->repo->cleanup(30, 2);
+
+        $this->assertSame(1, $deleted);
+        $this->assertNull($this->repo->find($oldDeleted));
+        $this->assertNotNull($this->repo->find($oldKept));
+        $this->assertNotNull($this->repo->find($recent));
+        $this->assertSame(0, $this->messageCount($oldDeleted));
+    }
+
+    public function test_cleanup_joins_existing_transaction(): void
+    {
+        $old = $this->repo->create('/project', 'model-1');
+        $this->setUpdatedAt($old, microtime(true) - (45 * 86400));
+        $this->addMessage($old);
+
+        $pdo = $this->db->connection();
+        $pdo->beginTransaction();
+
+        $deleted = $this->repo->cleanup(30, 0);
+        $this->assertSame(1, $deleted);
+        $this->assertNull($this->repo->find($old));
+
+        $pdo->rollBack();
+
+        $this->assertNotNull($this->repo->find($old));
+        $this->assertSame(1, $this->messageCount($old));
+    }
+
+    private function setUpdatedAt(string $id, float $timestamp): void
+    {
+        $stmt = $this->db->connection()->prepare('UPDATE sessions SET updated_at = :updated_at WHERE id = :id');
+        $stmt->execute([
+            'id' => $id,
+            'updated_at' => number_format($timestamp, 6, '.', ''),
+        ]);
+    }
+
+    private function addMessage(string $sessionId): void
+    {
+        $stmt = $this->db->connection()->prepare(
+            'INSERT INTO messages (session_id, role, content, created_at) VALUES (:session_id, :role, :content, :created_at)'
+        );
+        $stmt->execute([
+            'session_id' => $sessionId,
+            'role' => 'user',
+            'content' => 'hello',
+            'created_at' => date('c'),
+        ]);
+    }
+
+    private function messageCount(string $sessionId): int
+    {
+        $stmt = $this->db->connection()->prepare('SELECT COUNT(*) AS count FROM messages WHERE session_id = :session_id');
+        $stmt->execute(['session_id' => $sessionId]);
+        $row = $stmt->fetch();
+
+        return (int) $row['count'];
     }
 }

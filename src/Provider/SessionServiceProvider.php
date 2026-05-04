@@ -63,15 +63,15 @@ class SessionServiceProvider extends ServiceProvider
             $sessionId = $this->container->make(SessionManager::class)->currentSessionId() ?? 'default';
 
             // Build a dedicated LLM client for audio so we don't mutate the shared singleton
-            $audioProvider = $config->get('kosmokrator.agent.audio_provider');
-            $audioModel = $config->get('kosmokrator.agent.audio_model');
-            $defaultProvider = $config->get('kosmokrator.agent.default_provider', 'z');
-            $defaultModel = $config->get('kosmokrator.agent.default_model', 'claude-sonnet-4-20250514');
+            $audioProvider = $config->get('kosmo.agent.audio_provider');
+            $audioModel = $config->get('kosmo.agent.audio_model');
+            $defaultProvider = $config->get('kosmo.agent.default_provider', 'z');
+            $defaultModel = $config->get('kosmo.agent.default_model', 'claude-sonnet-4-20250514');
 
             $llm = new PrismService(
                 provider: ($audioProvider !== null && $audioProvider !== '') ? $audioProvider : $defaultProvider,
                 model: ($audioModel !== null && $audioModel !== '') ? $audioModel : $defaultModel,
-                systemPrompt: $config->get('kosmokrator.agent.system_prompt', 'You are a helpful coding assistant.'),
+                systemPrompt: $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.'),
                 relay: $this->container->make(Relay::class),
                 registry: $this->container->make(RelayRegistry::class),
             );
@@ -80,11 +80,11 @@ class SessionServiceProvider extends ServiceProvider
                 llm: $llm,
                 log: $this->container->make(LoggerInterface::class),
                 sessionId: $sessionId,
-                enabled: $config->get('kosmokrator.audio.completion_sound', false),
-                soundfont: str_replace('~', getenv('HOME') ?: sys_get_temp_dir(), $config->get('kosmokrator.audio.soundfont', '~/.kosmokrator/soundfonts/FluidR3_GM.sf2')),
-                maxDuration: (int) $config->get('kosmokrator.audio.max_duration', 8),
-                maxRetries: (int) $config->get('kosmokrator.audio.max_retries', 1),
-                llmTimeoutSeconds: (int) $config->get('kosmokrator.audio.llm_timeout', 60),
+                enabled: $config->get('kosmo.audio.completion_sound', false),
+                soundfont: str_replace('~', getenv('HOME') ?: sys_get_temp_dir(), $config->get('kosmo.audio.soundfont', '~/.kosmo/soundfonts/FluidR3_GM.sf2')),
+                maxDuration: (int) $config->get('kosmo.audio.max_duration', 8),
+                maxRetries: (int) $config->get('kosmo.audio.max_retries', 1),
+                llmTimeoutSeconds: (int) $config->get('kosmo.audio.llm_timeout', 60),
             );
         });
     }

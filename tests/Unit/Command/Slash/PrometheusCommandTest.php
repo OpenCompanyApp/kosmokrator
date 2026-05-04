@@ -104,7 +104,7 @@ class PrometheusCommandTest extends TestCase
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
             ->method('setSetting')
-            ->with('permission_mode', 'prometheus');
+            ->with('tools.default_permission_mode', 'prometheus');
 
         $ctx = $this->makeContext(sessionManager: $sessionManager);
 

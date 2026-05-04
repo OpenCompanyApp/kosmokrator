@@ -6,6 +6,8 @@ namespace Kosmokrator\Tests\Unit\LLM;
 
 use Illuminate\Config\Repository;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
+use Kosmokrator\LLM\ModelDiscovery\DiscoveredModel;
+use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
@@ -288,5 +290,78 @@ final class ProviderCatalogTest extends TestCase
         $this->assertContains('z-api', $providerIds);
         $this->assertNotContains('zai', $providerIds);
         $this->assertNotContains('zhipuai', $providerIds);
+    }
+
+    public function test_provider_catalog_overlays_cached_live_models(): void
+    {
+        $meta = new ProviderMeta([
+            'openai' => [
+                'default_model' => 'gpt-4o',
+                'url' => 'https://api.openai.com/v1',
+                'models' => [
+                    'gpt-4o' => ['display_name' => 'GPT-4o', 'context' => 128000, 'max_output' => 16384],
+                ],
+            ],
+        ]);
+        $config = new Repository([
+            'prism' => ['providers' => ['openai' => ['url' => 'https://api.openai.com/v1']]],
+        ]);
+        $settings = new SettingsRepository(new Database(':memory:'));
+        $cache = new ModelDiscoveryCacheRepository(new Database(':memory:'));
+        $cache->putSuccess('openai', [
+            new DiscoveredModel(id: 'gpt-4o', displayName: 'GPT-4o Live'),
+            new DiscoveredModel(id: 'gpt-new', displayName: 'GPT New', contextWindow: 400000, maxOutput: 128000),
+        ], 'provider_live', 3600);
+
+        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+            'openai' => ['url' => 'https://api.openai.com/v1', 'auth' => 'api_key', 'driver' => 'openai'],
+        ]), $config, $settings, new SettingsCodexTokenStore($settings), $cache);
+
+        $provider = $catalog->provider('openai');
+
+        $this->assertNotNull($provider);
+        $this->assertSame('provider_live', $provider->modelSource);
+        $this->assertTrue($provider->modelInventoryFresh);
+        $this->assertSame(['gpt-4o', 'gpt-new'], $catalog->modelIds('openai'));
+        $this->assertSame(128000, $provider->models[0]->contextWindow);
+        $this->assertSame('GPT-4o Live', $provider->models[0]->displayName);
+        $this->assertSame('provider_live', $provider->models[1]->source);
+    }
+
+    public function test_custom_openai_compatible_provider_allows_unlisted_models(): void
+    {
+        $meta = new ProviderMeta([
+            'local-ai' => [
+                'default_model' => 'known-model',
+                'url' => 'http://127.0.0.1:11434/v1',
+                'models' => [
+                    'known-model' => ['display_name' => 'Known', 'context' => 128000, 'max_output' => 4096],
+                ],
+            ],
+        ]);
+        $config = new Repository([
+            'relay' => [
+                'providers' => [
+                    'local-ai' => ['driver' => 'openai-compatible'],
+                ],
+            ],
+            'prism' => ['providers' => ['local-ai' => ['url' => 'http://127.0.0.1:11434/v1']]],
+        ]);
+        $settings = new SettingsRepository(new Database(':memory:'));
+
+        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+            'local-ai' => [
+                'url' => 'http://127.0.0.1:11434/v1',
+                'auth' => 'none',
+                'driver' => 'openai-compatible',
+                'source' => 'custom',
+            ],
+        ]), $config, $settings, new SettingsCodexTokenStore($settings));
+
+        $provider = $catalog->provider('local-ai');
+
+        $this->assertNotNull($provider);
+        $this->assertTrue($provider->freeTextModel);
+        $this->assertTrue($catalog->supportsModel('local-ai', 'brand-new-model'));
     }
 }

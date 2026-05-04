@@ -242,6 +242,23 @@ class FileEditToolTest extends TestCase
         $this->assertSame($before.$after, $content);
     }
 
+    public function test_rejects_edit_through_symlink_file(): void
+    {
+        $target = $this->createFile('Hello target', 'target.txt');
+        $link = $this->tempDir.'/link.txt';
+        symlink($target, $link);
+
+        $result = $this->tool->execute([
+            'path' => $link,
+            'old_string' => 'target',
+            'new_string' => 'edited',
+        ]);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('symlink component', $result->output);
+        $this->assertSame('Hello target', file_get_contents($target));
+    }
+
     private function createFile(string $content, string $name = 'test.txt'): string
     {
         $path = $this->tempDir.'/'.$name;
@@ -262,7 +279,9 @@ class FileEditToolTest extends TestCase
         );
 
         foreach ($items as $item) {
-            $item->isDir() ? rmdir($item->getRealPath()) : unlink($item->getRealPath());
+            $item->isDir() && ! $item->isLink()
+                ? rmdir($item->getPathname())
+                : unlink($item->getPathname());
         }
 
         rmdir($dir);

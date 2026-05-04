@@ -17,7 +17,7 @@ final class SymfonyProcessTelegramWorkerLauncher implements TelegramGatewayWorke
     public function launch(GatewayMessageEvent $event): TelegramGatewayWorkerHandleInterface
     {
         $phpBinary = (new PhpExecutableFinder)->find(false) ?: PHP_BINARY;
-        $console = $this->projectRoot.'/bin/kosmokrator';
+        $console = $this->projectRoot.'/bin/kosmo';
         $payload = base64_encode(json_encode($event->toArray(), JSON_THROW_ON_ERROR));
         $logPath = $this->projectRoot.'/storage/logs/telegram-gateway-worker.log';
 

@@ -38,6 +38,10 @@ final class TelegramGatewayRenderer implements RendererInterface
 
     private float $lastTypingAt = 0.0;
 
+    private float $lastProgressNoticeAt = 0.0;
+
+    private ?float $firstAnswerSentAt = null;
+
     /**
      * @param  \Closure(int, string, array<string, mixed>): string  $approvalCallback
      */
@@ -51,6 +55,13 @@ final class TelegramGatewayRenderer implements RendererInterface
         private readonly ?string $threadId,
         private readonly \Closure $approvalCallback,
         private readonly \Closure|Cancellation|null $cancellation = null,
+        private readonly ?string $requesterUserId = null,
+        private readonly ?string $requesterUsername = null,
+        private readonly ?int $replyToMessageId = null,
+        private readonly string $replyToMode = 'first',
+        private readonly int $freshFinalAfterSeconds = 60,
+        private readonly int $progressNoticeIntervalSeconds = 60,
+        private readonly bool $reactionsEnabled = false,
     ) {}
 
     public function setSessionId(string $sessionId): void
@@ -82,6 +93,7 @@ final class TelegramGatewayRenderer implements RendererInterface
             );
         } elseif ($phase === AgentPhase::Idle) {
             $this->updateStatusMessage('Done');
+            $this->setInputReaction('👍');
         }
     }
 
@@ -117,14 +129,17 @@ final class TelegramGatewayRenderer implements RendererInterface
     public function streamComplete(): void
     {
         $this->flushBufferedText(true);
+        $this->sendFreshFinalIfUseful();
         $this->deliverMediaAttachments();
         $this->updateStatusMessage('Done');
+        $this->setInputReaction('👍');
     }
 
     public function showError(string $message): void
     {
         $this->statusNotice = null;
         $this->updateStatusMessage("Error: {$message}");
+        $this->setInputReaction('👎');
     }
 
     public function showNotice(string $message): void
@@ -241,6 +256,7 @@ final class TelegramGatewayRenderer implements RendererInterface
             TelegramTextFormatter::formatToolSummary($name, $args),
         );
         $this->updateStatusMessage("Preparing tool: {$name}");
+        $this->maybeSendProgressNotice("Still working... preparing {$name}");
     }
 
     public function showToolResult(string $name, string $output, bool $success): void
@@ -262,6 +278,8 @@ final class TelegramGatewayRenderer implements RendererInterface
             chatId: $this->chatId,
             threadId: $this->threadId,
             requestMessageId: $this->answerMessageIds === [] ? null : $this->answerMessageIds[array_key_last($this->answerMessageIds)],
+            requesterUserId: $this->requesterUserId,
+            requesterUsername: $this->requesterUsername,
         );
 
         $lines = [
@@ -324,6 +342,7 @@ final class TelegramGatewayRenderer implements RendererInterface
                 : '<pre><code>'.htmlspecialchars($this->limitToolOutput($output), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</code></pre>';
             $this->toolMessageId = $this->sendOrEditToolMessage($this->toolMessageId, $summary);
             $this->updateStatusMessage($output);
+            $this->maybeSendProgressNotice($output);
         }
     }
 
@@ -368,10 +387,12 @@ final class TelegramGatewayRenderer implements RendererInterface
                     $this->chatId,
                     $formatted,
                     $this->threadId,
+                    $this->replyToMessageIdForChunk($index),
                 );
                 $messageId = (int) ($message['message_id'] ?? 0);
                 if ($messageId > 0) {
                     $this->answerMessageIds[$index] = $messageId;
+                    $this->firstAnswerSentAt ??= microtime(true);
                     if ($index === 0) {
                         $this->messages->save('telegram', $this->routeKey, 'response', $this->chatId, $messageId, $this->threadId);
                     }
@@ -401,21 +422,21 @@ final class TelegramGatewayRenderer implements RendererInterface
             return '…';
         }
 
-        if (mb_strlen($normalized) <= 3900) {
+        if (TelegramTextFormatter::utf16Length($normalized) <= 3900) {
             return $normalized;
         }
 
-        return rtrim(mb_substr($normalized, 0, 3897)).'...';
+        return rtrim(TelegramTextFormatter::prefixWithinUtf16Limit($normalized, 3897)).'...';
     }
 
     private function limitToolOutput(string $text): string
     {
         $normalized = trim($text);
-        if (mb_strlen($normalized) <= 2200) {
+        if (TelegramTextFormatter::utf16Length($normalized) <= 2200) {
             return $normalized;
         }
 
-        return rtrim(mb_substr($normalized, 0, 2197)).'...';
+        return rtrim(TelegramTextFormatter::prefixWithinUtf16Limit($normalized, 2197)).'...';
     }
 
     private function visibleText(): string
@@ -607,5 +628,76 @@ final class TelegramGatewayRenderer implements RendererInterface
 
         $this->client->sendChatAction($this->chatId, 'typing', $this->threadId);
         $this->lastTypingAt = $now;
+    }
+
+    private function replyToMessageIdForChunk(int $index): ?int
+    {
+        if ($this->replyToMessageId === null || $this->replyToMode === 'off') {
+            return null;
+        }
+
+        if ($this->replyToMode === 'first' && $index > 0) {
+            return null;
+        }
+
+        return $this->replyToMessageId;
+    }
+
+    private function sendFreshFinalIfUseful(): void
+    {
+        if ($this->freshFinalAfterSeconds <= 0 || $this->firstAnswerSentAt === null) {
+            return;
+        }
+
+        if ((microtime(true) - $this->firstAnswerSentAt) < $this->freshFinalAfterSeconds) {
+            return;
+        }
+
+        foreach ($this->answerChunks() as $index => $chunk) {
+            $this->sendFormattedMessage(
+                $this->chatId,
+                TelegramTextFormatter::formatHtml($chunk),
+                $this->threadId,
+                $this->replyToMessageIdForChunk($index),
+            );
+        }
+    }
+
+    private function maybeSendProgressNotice(string $message): void
+    {
+        if ($this->progressNoticeIntervalSeconds <= 0) {
+            return;
+        }
+
+        $now = microtime(true);
+        if ($this->lastProgressNoticeAt === 0.0) {
+            $this->lastProgressNoticeAt = $now;
+
+            return;
+        }
+
+        if (($now - $this->lastProgressNoticeAt) < $this->progressNoticeIntervalSeconds) {
+            return;
+        }
+
+        $elapsed = $this->firstAnswerSentAt !== null
+            ? max(1, (int) floor($now - $this->firstAnswerSentAt))
+            : 0;
+        $prefix = $elapsed > 0 ? "Still working... {$elapsed}s elapsed" : 'Still working...';
+        $this->updateStatusMessage($prefix."\n".$this->limit($message));
+        $this->lastProgressNoticeAt = $now;
+    }
+
+    private function setInputReaction(string $emoji): void
+    {
+        if (! $this->reactionsEnabled || $this->replyToMessageId === null) {
+            return;
+        }
+
+        try {
+            $this->client->setMessageReaction($this->chatId, $this->replyToMessageId, $emoji);
+        } catch (\Throwable) {
+            // Reactions are best-effort; older chats/bots may not support them.
+        }
     }
 }

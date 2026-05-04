@@ -6,10 +6,9 @@ namespace Kosmokrator\Tool\Coding;
 
 use Kosmokrator\Agent\AgentContext;
 use Kosmokrator\Agent\AgentType;
+use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
-
-use function Amp\Future\await;
 
 /**
  * Spawns child agents that run their own autonomous tool loops.
@@ -233,10 +232,15 @@ class SubagentTool extends AbstractTool
         foreach ($duplicateIds as $duplicateId) {
             $errors[] = "Duplicate agent id '{$duplicateId}'. Agent IDs must be unique within a batch.";
         }
+        foreach ($this->validateDependencies($specs, $orchestrator) as $error) {
+            $errors[] = $error;
+        }
 
         if ($errors !== []) {
             return ToolResult::error("Validation errors:\n".implode("\n", $errors));
         }
+
+        $specs = $this->sortSpecsByDependencies($specs);
 
         // Spawn all agents and collect their futures
         $futures = [];
@@ -265,15 +269,21 @@ class SubagentTool extends AbstractTool
         $orchestrator->yieldSlot($this->parentContext->id);
 
         try {
-            $results = await($futures);
-        } catch (\Throwable $e) {
-            return ToolResult::error('Batch execution failed: '.$e->getMessage());
+            $results = [];
+            $failures = [];
+            foreach ($futures as $agentId => $future) {
+                try {
+                    $results[$agentId] = $future->await();
+                } catch (\Throwable $e) {
+                    $failures[$agentId] = $e->getMessage();
+                }
+            }
         } finally {
             $orchestrator->reclaimSlot($this->parentContext->id);
         }
 
         $lines = [];
-        $lines[] = 'Batch complete: '.count($results).' agents finished.';
+        $lines[] = 'Batch complete: '.count($results).' agents finished, '.count($failures).' failed.';
         $lines[] = '';
 
         foreach ($results as $agentId => $result) {
@@ -290,7 +300,23 @@ class SubagentTool extends AbstractTool
             $lines[] = '';
         }
 
-        return ToolResult::success(implode("\n", $lines));
+        foreach ($failures as $agentId => $error) {
+            $spec = null;
+            foreach ($specs as $s) {
+                if ($s['id'] === $agentId) {
+                    $spec = $s;
+                    break;
+                }
+            }
+            $type = $spec !== null ? $spec['type']->value : 'unknown';
+            $lines[] = "--- Agent '{$agentId}' ({$type}) FAILED ---";
+            $lines[] = $error;
+            $lines[] = '';
+        }
+
+        return $failures === []
+            ? ToolResult::success(implode("\n", $lines))
+            : ToolResult::error(implode("\n", $lines));
     }
 
     /**
@@ -343,5 +369,103 @@ class SubagentTool extends AbstractTool
         }
 
         return array_values($duplicates);
+    }
+
+    /**
+     * @param  list<array{task: string, type: AgentType, id: string, depends_on: string[], group: ?string}>  $specs
+     * @return list<string>
+     */
+    private function validateDependencies(array $specs, SubagentOrchestrator $orchestrator): array
+    {
+        $ids = array_fill_keys(array_map(static fn (array $spec): string => $spec['id'], $specs), true);
+        $errors = [];
+
+        foreach ($specs as $spec) {
+            foreach ($spec['depends_on'] as $depId) {
+                if (isset($ids[$depId]) || $orchestrator->hasKnownAgent($depId)) {
+                    continue;
+                }
+
+                $errors[] = "Agent '{$spec['id']}' depends on unknown agent '{$depId}'. Include it in the batch or use an existing agent id.";
+            }
+        }
+
+        $graph = [];
+        foreach ($specs as $spec) {
+            $graph[$spec['id']] = array_values(array_filter(
+                $spec['depends_on'],
+                static fn (string $depId): bool => isset($ids[$depId]),
+            ));
+        }
+        $visiting = [];
+        $visited = [];
+        $path = [];
+        $visit = function (string $id) use (&$visit, &$graph, &$visiting, &$visited, &$path, &$errors): void {
+            if (isset($visited[$id])) {
+                return;
+            }
+            if (isset($visiting[$id])) {
+                $cycleStart = array_search($id, $path, true);
+                $cycle = $cycleStart === false ? [$id] : array_slice($path, (int) $cycleStart);
+                $cycle[] = $id;
+                $errors[] = 'Circular dependency in batch: '.implode(' -> ', $cycle);
+
+                return;
+            }
+
+            $visiting[$id] = true;
+            $path[] = $id;
+            foreach ($graph[$id] ?? [] as $depId) {
+                $visit($depId);
+            }
+            array_pop($path);
+            unset($visiting[$id]);
+            $visited[$id] = true;
+        };
+
+        foreach (array_keys($graph) as $id) {
+            $visit($id);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @param  list<array{task: string, type: AgentType, id: string, depends_on: string[], group: ?string}>  $specs
+     * @return list<array{task: string, type: AgentType, id: string, depends_on: string[], group: ?string}>
+     */
+    private function sortSpecsByDependencies(array $specs): array
+    {
+        $byId = [];
+        foreach ($specs as $spec) {
+            $byId[$spec['id']] = $spec;
+        }
+
+        $sorted = [];
+        $visiting = [];
+        $visited = [];
+
+        $visit = function (string $id) use (&$visit, &$byId, &$sorted, &$visiting, &$visited): void {
+            if (isset($visited[$id]) || ! isset($byId[$id])) {
+                return;
+            }
+            if (isset($visiting[$id])) {
+                return;
+            }
+
+            $visiting[$id] = true;
+            foreach ($byId[$id]['depends_on'] as $depId) {
+                $visit($depId);
+            }
+            unset($visiting[$id]);
+            $visited[$id] = true;
+            $sorted[] = $byId[$id];
+        };
+
+        foreach ($specs as $spec) {
+            $visit($spec['id']);
+        }
+
+        return $sorted;
     }
 }

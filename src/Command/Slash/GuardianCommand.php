@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Command\Slash;
 
+use Kosmokrator\Command\DefersWhileAgentRuns;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
@@ -12,7 +13,7 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 /**
  * Switches the session to Guardian permission mode (safe operations auto-approved).
  */
-class GuardianCommand implements SlashCommand
+class GuardianCommand implements DefersWhileAgentRuns, SlashCommand
 {
     public function name(): string
     {
@@ -46,7 +47,7 @@ class GuardianCommand implements SlashCommand
     {
         $ctx->permissions->setPermissionMode(PermissionMode::Guardian);
         $ctx->ui->setPermissionMode(PermissionMode::Guardian->statusLabel(), PermissionMode::Guardian->color());
-        $ctx->sessionManager->setSetting('permission_mode', 'guardian');
+        $ctx->sessionManager->setSetting('tools.default_permission_mode', 'guardian');
         $ctx->ui->showNotice('◈ Guardian mode — safe operations auto-approved.');
 
         return SlashCommandResult::continue();

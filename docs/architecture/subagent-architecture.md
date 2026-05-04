@@ -68,10 +68,11 @@ Dependency behavior:
 Default runtime settings:
 
 ```yaml
-agent:
-  subagent_max_depth: 3
-  subagent_concurrency: 10
-  subagent_max_retries: 2
+kosmo:
+  agent:
+    subagent_max_depth: 3
+    subagent_concurrency: 10
+    subagent_max_retries: 2
 ```
 
 Meaning:

@@ -1,0 +1,239 @@
+---
+title: "Lua"
+description: "Lua runtime, namespaces, helper functions, and scripting patterns."
+sidebar:
+  order: 15
+---
+KosmoKrator exposes a sandboxed Lua runtime for multi-step integration work. Lua sits between plain tool calls and a full agent turn: you can discover namespaces with docs tools, then run deterministic scripts against `app.integrations.*`, `app.mcp.*`, and `app.tools.*`.
+
+Use the discovery flow in this order: `lua_list_docs` to see what exists, `lua_read_doc` to confirm the exact namespace or function contract, then `execute_lua` to run code. Do not guess function names or response shapes.
+
+For scripts and other coding CLIs, use `kosmo integrations:lua` when the workflow primarily uses integrations, or `kosmo mcp:lua` when it only needs MCP servers. Both headless endpoints expose `app.mcp.*` and docs helpers without starting an agent session.
+
+## How Lua Works
+
+Lua scripts run inside a restricted sandbox. They do not get direct filesystem, shell, or network access. Instead, KosmoKrator exposes controlled entry points under the `app` namespace.
+
+There are two main surfaces:
+
+-   `app.integrations.*` — enabled integrations exposed as callable Lua namespaces
+-   `app.mcp.*` — configured MCP servers exposed as callable Lua namespaces
+-   `app.tools.*` — KosmoKrator's built-in native tools, callable from Lua
+
+In standalone headless commands, `integrations:lua` exposes `app.integrations.*`, `app.mcp.*`, and docs helpers, while `mcp:lua` exposes `app.mcp.*` and MCP helper functions. The native coding tools under `app.tools.*` are only available when Lua is executed from inside a KosmoKrator agent session.
+
+Lua also exposes helper namespaces:
+
+-   `json.decode(...)` and `json.encode(...)` for JSON parsing/serialization
+-   `regex.match(...)`, `regex.match_all(...)`, and `regex.gsub(...)` for PCRE regex work
+
+## Lua Host Tools
+
+These are the KosmoKrator tools you call from the agent side to discover or run Lua. They are not part of `app.tools`; they are top-level agent tools.
+
+| Tool | Role | When to use it |
+| --- | --- | --- |
+| `lua_list_docs` | Discovery catalog | See which namespaces exist without dumping full function references. |
+| `lua_search_docs` | Keyword search | Find likely namespaces or functions by term when you do not know the exact path. |
+| `lua_read_doc` | Detailed reference | Read one namespace, one function, or one guide page before writing code. |
+| `execute_lua` | Runtime execution | Run a Lua script after you have confirmed the contract with the docs tools. |
+
+Typical workflow:
+
+```bash
+lua_list_docs
+lua_read_doc page="integrations.coingecko"
+lua_read_doc page="integrations.coingecko.price"
+lua_read_doc page="mcp.github"
+execute_lua code="local prices = app.integrations.coingecko.price({ids={'bitcoin'}, vs_currencies={'usd'}})
+print(prices.bitcoin.usd)"
+```
+
+## Namespace Model
+
+Integration and MCP namespaces follow stable shapes:
+
+```lua
+app.integrations.{name}.*          -- default account path
+app.integrations.{name}.default.*  -- explicit default alias
+app.integrations.{name}.{account}.* -- named account/credential alias
+app.mcp.{server}.{tool}(args)      -- MCP server tool call
+app.tools.{tool_name}(args)        -- native KosmoKrator tools
+```
+
+Important rules:
+
+-   Only integrations that are enabled and configured are callable in a session.
+-   `lua_list_docs` and `lua_read_doc` can still describe installed-but-inactive integrations.
+-   The root integration namespace usually means "use the default account".
+-   `.default` is an explicit alias for the default account.
+-   `.{account}` is only present when you have multiple named credentials/accounts saved for the same integration.
+-   MCP server names and tool names are normalized to Lua-safe identifiers; read `lua_read_doc page="mcp.SERVER"` to confirm the exact path.
+-   MCP project trust and read/write permissions still apply inside Lua unless the headless command is run with `--force`.
+
+### Single vs Multi-Account
+
+Single-account integration:
+
+```lua
+app.integrations.github.search_repositories({...})
+app.integrations.github.default.search_repositories({...})  -- explicit alias
+```
+
+Multi-account integration:
+
+```lua
+app.integrations.github.default.search_repositories({...})
+app.integrations.github.work.search_repositories({...})
+app.integrations.github.personal.search_repositories({...})
+```
+
+### MCP Namespace
+
+MCP servers are configured with `.mcp.json` or `mcp:add`. After the server is trusted and permissions are configured, each discovered tool appears under `app.mcp.{server}`.
+
+```lua
+app.mcp.github.search_repositories({query = "kosmokrator"})
+app.mcp.context7.resolve_library_id({libraryName = "symfony console"})
+```
+
+In headless Lua, MCP helper functions are also available:
+
+```lua
+dump(mcp.servers())
+dump(mcp.tools("github"))
+dump(mcp.schema("github.search_repositories"))
+dump(mcp.resources("github"))
+dump(mcp.read_resource("github", "resource://..."))
+dump(mcp.prompts("github"))
+dump(mcp.get_prompt("github", "summarize", {text = "..."}))
+```
+
+## Native Lua Tools: app.tools.\*
+
+Inside `execute_lua`, KosmoKrator's built-in tools are available through `app.tools.*`. These are the internal Lua tools you can compose inside scripts.
+
+Current built-in namespaces:
+
+| Tool | Purpose |
+| --- | --- |
+| `app.tools.file_read` | Read file content from the project. |
+| `app.tools.file_write` | Create or fully overwrite a file. |
+| `app.tools.file_edit` | Apply a targeted find/replace edit. |
+| `app.tools.apply_patch` | Apply structured patch hunks to files. |
+| `app.tools.glob` | List files by pattern. |
+| `app.tools.grep` | Search file contents by pattern. |
+| `app.tools.bash` | Run a shell command through the normal permission system. |
+| `app.tools.shell_start` | Start a persistent shell session. |
+| `app.tools.shell_write` | Write to an existing shell session. |
+| `app.tools.shell_read` | Read output from an existing shell session. |
+| `app.tools.shell_kill` | Terminate a shell session. |
+| `app.tools.task_create` | Create a task in the current session task store. |
+| `app.tools.task_update` | Update task status or fields. |
+| `app.tools.task_list` | List tasks in the current session. |
+| `app.tools.task_get` | Read one task by id. |
+| `app.tools.memory_save` | Persist a memory item. |
+| `app.tools.memory_search` | Search stored memories. |
+| `app.tools.session_search` | Search prior sessions. |
+| `app.tools.session_read` | Read one prior session in detail. |
+| `app.tools.subagent` | Spawn one or more child agents from Lua. |
+
+Not exposed inside `app.tools`:
+
+-   `execute_lua` — Lua does not recursively call itself
+-   `lua_list_docs`, `lua_search_docs`, `lua_read_doc` — these stay at the host-tool level
+-   `ask_user`, `ask_choice` — interactive prompt tools are not bridged into Lua
+
+### Return Shape
+
+Native tools return structured tables rather than plain strings. Every result includes at least:
+
+-   `output` — human-readable combined result string
+-   `success` — boolean success flag
+
+Some tools expose more metadata. For example, `bash` also returns `stdout`, `stderr`, and `exit_code`.
+
+```lua
+local result = app.tools.bash({command = "git status --short"})
+if result.success then
+    print(result.stdout)
+else
+    print(result.stderr)
+end
+```
+
+## Discovery and Docs Flow
+
+`lua_list_docs` is intentionally short. It is a namespace catalog, not a partial reference. That is by design: short discovery output reduces guessing and pushes the agent to read the real docs before calling anything.
+
+Use the tools like this:
+
+1.  `lua_list_docs` — see what namespaces exist
+2.  `lua_search_docs` — search by concept when needed
+3.  `lua_read_doc page="integrations.NAME"` — inspect the namespace
+4.  `lua_read_doc page="integrations.NAME.function"` — inspect one function
+5.  `lua_read_doc page="mcp.SERVER"` — inspect one MCP server namespace
+6.  `lua_read_doc page="mcp.SERVER.function"` — inspect one MCP tool
+7.  `execute_lua` — run the script
+
+Guide pages currently include:
+
+-   `overview`
+-   `context`
+-   `errors`
+-   `examples`
+-   `tools` — generated docs for `app.tools.*`
+
+## Examples
+
+### Single Integration Call
+
+```bash
+execute_lua code="local result = app.integrations.coingecko.price({
+  ids = {'bitcoin', 'ethereum'},
+  vs_currencies = {'usd'}
+})
+dump(result)"
+```
+
+### Using Native Tools from Lua
+
+```bash
+execute_lua code="local files = app.tools.glob({pattern = 'src/**/*.php'})
+print(files.output)
+
+local status = app.tools.bash({command = 'git status --short'})
+print(status.stdout)"
+```
+
+### Calling MCP from Lua
+
+```bash
+execute_lua code="local repos = app.mcp.github.search_repositories({
+  query = 'kosmokrator language:php'
+})
+dump(repos)"
+```
+
+### Spawning Subagents from Lua
+
+```bash
+execute_lua code="local result = app.tools.subagent({
+  agents = {
+    {task = 'Inspect routing', id = 'routing'},
+    {task = 'Inspect auth', id = 'auth'},
+    {task = 'Inspect db', id = 'db'},
+  }
+})
+dump(result)"
+```
+
+## Practical Rules
+
+-   Read the docs before writing Lua. The docs-first flow is part of the system design.
+-   Do not assume raw upstream API response shapes. Integrations may normalize fields and structure.
+-   If the docs do not describe the return shape clearly, inspect with a minimal call first.
+-   Use Lua when you need deterministic multi-step orchestration; use normal tools when one direct tool call is enough.
+-   All normal permission, integration access, MCP trust, and MCP read/write rules still apply inside Lua.
+
+For per-tool parameter reference, see [Tools](/docs/tools). For integration and MCP setup, see [Configuration](/docs/configuration), [Integrations CLI](/docs/integrations), and [MCP](/docs/mcp).

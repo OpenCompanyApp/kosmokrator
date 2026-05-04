@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Command\Mcp;
 
 use Illuminate\Container\Container;
+use Kosmokrator\IO\AtomicFileWriter;
 use Kosmokrator\Mcp\McpConfigStore;
 use Kosmokrator\Settings\SettingsManager;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -43,11 +44,7 @@ final class McpExportCommand extends Command
 
         $path = $input->getOption('path');
         if (is_string($path) && $path !== '') {
-            $dir = dirname($path);
-            if (! is_dir($dir)) {
-                mkdir($dir, 0700, true);
-            }
-            file_put_contents($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            AtomicFileWriter::write($path, $this->jsonEncode($data)."\n", 0700);
         }
 
         if ($input->getOption('json')) {

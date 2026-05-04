@@ -1,0 +1,246 @@
+---
+title: "Agent SDK"
+description: "Embed KosmoKrator headless runtime in PHP applications through the Agent SDK."
+sidebar:
+  order: 11
+---
+Embed KosmoKrator's headless agent runtime directly in PHP applications. The SDK lives in the main KosmoKrator package under `Kosmokrator\Sdk` and uses the same `AgentLoop::runHeadless()` path as `kosmo -p`.
+
+## Quick Start
+
+```bash
+composer require opencompany/kosmokrator
+```
+
+```php
+<?php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Kosmokrator\Sdk\AgentBuilder;
+
+$result = AgentBuilder::create()
+    ->forProject('/path/to/project')
+    ->withMode('edit')
+    ->withPermissionMode('guardian')
+    ->withMaxTurns(20)
+    ->withTimeout(300)
+    ->build()
+    ->collect('Fix the failing tests');
+
+echo $result->text;
+```
+
+The SDK is not a separate engine. It builds a normal headless KosmoKrator session, wires the normal tools, permissions, Lua runtime, integrations, MCP runtime, session storage, context management, and subagents, then returns structured PHP results.
+
+## Headless CLI Parity
+
+| CLI | SDK |
+| --- | --- |
+| `kosmo -p "task"` | `$agent->collect('task')` |
+| `--model` | `->withModel()` |
+| `--mode edit|plan|ask` | `->withMode()` |
+| `--permission-mode` | `->withPermissionMode()` |
+| `--yolo` | `->withYolo()` |
+| `--max-turns` | `->withMaxTurns()` |
+| `--timeout` | `->withTimeout()` |
+| `--system-prompt` | `->withSystemPrompt()` |
+| `--append-system-prompt` | `->appendSystemPrompt()` |
+| `--session` | `->resumeSession()` |
+| `--continue` | `->resumeLatestSession()` |
+| `--no-session` | `->withoutSessionPersistence()` |
+| `-o stream-json` | `->stream()` or `CallbackRenderer` |
+
+## Results
+
+```php
+$result = $agent->collect('Explain src/Agent/AgentLoop.php');
+
+$result->text;           // final assistant response
+$result->sessionId;      // persisted session id, unless disabled
+$result->tokensIn;
+$result->tokensOut;
+$result->toolCalls;
+$result->elapsedSeconds;
+$result->success;
+$result->exitCode;
+$result->events;         // typed SDK events
+```
+
+Long-lived workers should call `$agent->close()` when they are done with an agent instance. Runs clean up shell sessions and MCP clients automatically, but explicit close is useful after direct `$agent->mcp()` or `$agent->integrations()` helper usage.
+
+## Streaming And Callbacks
+
+`stream()` returns the event sequence for a run. For live delivery to a WebSocket, queue worker, or custom UI, use `CallbackRenderer`; callbacks are invoked while the underlying headless run is executing.
+
+```php
+use Kosmokrator\Sdk\AgentBuilder;
+use Kosmokrator\Sdk\Renderer\CallbackRenderer;
+
+$agent = AgentBuilder::create()
+    ->forProject($repo)
+    ->withRenderer(new CallbackRenderer(
+        onText: fn (string $text) => $websocket->send($text),
+        onToolCall: fn (string $tool, array $args) => logger()->info('tool', compact('tool', 'args')),
+        onToolResult: fn (string $tool, string $output, bool $success) => null,
+    ))
+    ->build();
+
+$result = $agent->collect('Refactor the auth module');
+```
+
+## Sessions
+
+```php
+$first = AgentBuilder::create()
+    ->forProject($repo)
+    ->build()
+    ->collect('What does the billing service do?');
+
+$followup = AgentBuilder::create()
+    ->forProject($repo)
+    ->resumeSession($first->sessionId)
+    ->build()
+    ->collect('Now add tests for the edge cases');
+
+$ephemeral = AgentBuilder::create()
+    ->forProject($repo)
+    ->withoutSessionPersistence()
+    ->build()
+    ->collect('Summarize this repository');
+```
+
+## Headless Configuration
+
+SDK users can configure credentials and settings programmatically. These helpers write to the same project/global stores used by `providers:*`, `integrations:*`, `mcp:*`, and `secrets:*`.
+
+```php
+use Kosmokrator\Sdk\Config\ProviderConfigurator;
+use Kosmokrator\Sdk\Config\IntegrationConfigurator;
+use Kosmokrator\Sdk\Config\McpConfigurator;
+
+ProviderConfigurator::forProject($repo)
+    ->configure('openai', apiKey: getenv('OPENAI_API_KEY') ?: null, model: 'gpt-5.4-mini');
+
+IntegrationConfigurator::forProject($repo)
+    ->configure('plane', account: 'work', credentials: [
+        'api_key' => getenv('PLANE_API_KEY') ?: '',
+        'workspace_slug' => 'acme',
+    ], permissions: [
+        'read' => 'allow',
+        'write' => 'ask',
+    ]);
+
+McpConfigurator::forProject($repo)
+    ->addStdioServer('github', 'github-mcp-server',
+        env: ['GITHUB_TOKEN' => '@secret:mcp.github.env.GITHUB_TOKEN'],
+        permissions: ['read' => 'allow', 'write' => 'ask'],
+        trust: true,
+    )
+    ->setSecret('github', 'env.GITHUB_TOKEN', getenv('GITHUB_TOKEN') ?: '');
+```
+
+## Lua, Integrations, And MCP
+
+The SDK exposes the same runtime surfaces as the headless integration and MCP CLIs. Integration permissions and MCP trust/read/write policy are respected by default. Pass `force: true` only for trusted automation that should bypass those policies.
+
+```php
+$agent = AgentBuilder::create()
+    ->forProject($repo)
+    ->build();
+
+// Direct integration call
+$issues = $agent->integrations()->call(
+    'plane.list_issues',
+    ['workspace_slug' => 'acme'],
+    account: 'work',
+);
+
+// Integration Lua
+$lua = $agent->integrations()->lua(
+    'return app.integrations.plane.work.list_issues({workspace_slug="acme"})'
+);
+
+// Direct MCP call
+$repos = $agent->mcp()->call('github.search_repositories', [
+    'query' => 'kosmokrator',
+]);
+
+// Runtime-only MCP overlay, not written to .mcp.json
+$agent = AgentBuilder::create()
+    ->forProject($repo)
+    ->withMcpServer('fake', command: 'php', args: ['tests/fixtures/mcp/fake_stdio_server.php'])
+    ->build();
+```
+
+## Permissions
+
+```php
+$agent = AgentBuilder::create()
+    ->forProject($repo)
+    ->withPermissionMode('guardian')
+    ->withPermissionCallback(function (string $tool, array $args): string {
+        return str_starts_with($tool, 'file_read') ? 'allow' : 'deny';
+    })
+    ->build();
+```
+
+Valid callback results are `allow`, `deny`, and `always`. Boolean callbacks are also accepted: `true` maps to allow, `false` maps to deny.
+
+## Anthropic Agent SDK Comparison
+
+| Feature | Anthropic Agent SDK | KosmoKrator SDK |
+| --- | --- | --- |
+| Language | Python / TypeScript | PHP / Composer |
+| Providers | Claude | OpenAI, Anthropic, Gemini, Ollama, OpenRouter, custom OpenAI-compatible providers, and more |
+| Coding tools | Read, edit, bash, grep, glob | Read, write, edit, patch, bash, shell sessions, grep, glob |
+| Permissions | SDK modes and callbacks | Guardian, Argus, Prometheus, callbacks, project rules |
+| Subagents | Supported | Multi-level subagents with dependency and group controls |
+| MCP | Supported | Supported, including Lua `app.mcp.*` |
+| Lua code mode | No | Yes |
+| OpenCompany integrations | No | Yes, including multi-account aliases |
+
+## AgentBuilder Reference
+
+```php
+AgentBuilder::create(?string $basePath = null)
+AgentBuilder::fromContainer(Container $container)
+
+->forProject(string $cwd)
+->fromKosmokratorConfig()
+->withConfig(array $config)
+->withConfigFile(string $path)
+->withProvider(string $provider)
+->withModel(string $model)
+->withApiKey(string $key)
+->withBaseUrl(string $url)
+->withMode(string|AgentMode $mode)
+->withPermissionMode(string|PermissionMode $mode)
+->withYolo()
+->withMaxTurns(int $turns)
+->withTimeout(int $seconds)
+->withSystemPrompt(string $prompt)
+->appendSystemPrompt(string $suffix)
+->resumeSession(string $sessionId)
+->resumeLatestSession()
+->withoutSessionPersistence()
+->withOutputFormat(OutputFormat|string $format)
+->withRenderer(RendererInterface $renderer)
+->withPermissionCallback(Closure $callback)
+->withMcpServer(...)
+->build()
+```
+
+```php
+$agent->collect(string $prompt): AgentResult
+$agent->stream(string $prompt): Generator
+$agent->conversation(): AgentConversation
+$agent->integrations(): IntegrationClient
+$agent->mcp(): McpClient
+$agent->cancel(string $reason = 'SDK run cancelled'): void
+$agent->close(): void
+```
+
+## Stability
+
+The stable public API is `Kosmokrator\Sdk\*`, `Kosmokrator\Sdk\Event\*`, `Kosmokrator\Sdk\Renderer\*`, and `Kosmokrator\Sdk\Config\*`. Other namespaces are implementation details unless they are documented on this page.

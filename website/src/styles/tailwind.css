@@ -1,0 +1,347 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-kosmo-bg: #07070d;
+  --color-kosmo-panel: #101018;
+  --color-kosmo-panel-2: #15151f;
+  --color-kosmo-surface: rgba(16, 16, 24, 0.74);
+  --color-kosmo-surface-solid: #10101a;
+  --color-kosmo-code-bg: #0b0b12;
+  --color-kosmo-code-bg-2: #09090f;
+  --color-kosmo-border: rgba(220, 20, 60, 0.24);
+  --color-kosmo-white-border: rgba(255, 255, 255, 0.11);
+  --color-kosmo-white-border-strong: rgba(255, 255, 255, 0.12);
+  --color-kosmo-white-border-faint: rgba(255, 255, 255, 0.08);
+  --color-kosmo-text: #f8fafc;
+  --color-kosmo-muted: #a8b3c7;
+  --color-kosmo-crimson: #dc143c;
+  --color-kosmo-hot: #ff5c75;
+  --color-kosmo-rose: #ffd5dd;
+  --color-kosmo-code-text: #f4d6dc;
+}
+
+/* Styles that Tailwind utilities can't cover (dynamic content, pseudo-elements, table responsive) */
+
+@layer components {
+  .tool-table-wrapper {
+    @apply min-w-0 overflow-x-auto rounded-lg border border-kosmo-white-border-strong bg-white/[0.03];
+  }
+
+  .tool-table-wrapper table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .tool-table-wrapper th {
+    @apply bg-white/[0.05] px-3 py-2 text-left align-top text-kosmo-text;
+  }
+
+  .tool-table-wrapper td {
+    @apply border-t border-kosmo-white-border-faint px-3 py-2 align-top text-kosmo-muted;
+  }
+
+  .tool-table-wrapper.compact table {
+    @apply text-[0.86rem];
+  }
+
+  .function-card {
+    @apply mb-3 overflow-hidden rounded-lg border border-kosmo-white-border-strong bg-white/[0.03];
+  }
+
+  .raw-docs-details {
+    @apply my-4 overflow-hidden rounded-lg border border-kosmo-white-border-strong bg-white/[0.03];
+  }
+
+  .raw-docs-details summary {
+    @apply cursor-pointer p-3 font-bold text-kosmo-text;
+  }
+
+  .raw-docs {
+    @apply m-0 max-h-[520px] overflow-auto bg-kosmo-code-bg p-4 text-kosmo-code-text font-mono text-[0.84rem] leading-relaxed;
+  }
+
+  .code-frame pre {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .code-frame code {
+    @apply text-[0.86rem] leading-relaxed;
+  }
+
+  .command-cell-wrapper {
+    @apply grid min-w-0 gap-2;
+  }
+
+  .command-cell {
+    @apply m-0 max-w-full overflow-x-auto whitespace-pre-wrap rounded-md bg-kosmo-code-bg-2 p-3 text-kosmo-code-text font-mono text-[0.78rem] leading-relaxed;
+    overflow-wrap: anywhere;
+  }
+
+  .copy-btn {
+    @apply w-max cursor-pointer rounded-md border border-kosmo-white-border-strong bg-white/[0.06] px-2 py-1 text-xs font-bold text-kosmo-muted hover:border-kosmo-crimson hover:text-kosmo-text;
+  }
+
+  .syntax-command {
+    @apply text-kosmo-text font-extrabold;
+  }
+
+  .syntax-prompt,
+  .syntax-bullet,
+  .syntax-option,
+  .syntax-keyword {
+    @apply text-kosmo-hot font-bold;
+  }
+
+  .syntax-string,
+  .syntax-success {
+    @apply text-kosmo-rose;
+  }
+
+  .syntax-path,
+  .syntax-namespace,
+  .syntax-class {
+    @apply text-[#93c5fd];
+  }
+
+  .syntax-function,
+  .syntax-value {
+    @apply text-[#facc15];
+  }
+
+  .syntax-comment,
+  .syntax-muted {
+    @apply text-kosmo-muted;
+  }
+
+  .syntax-operator,
+  .syntax-escape,
+  .syntax-variable {
+    @apply text-[#c4b5fd];
+  }
+
+  .integration-copy {
+    @apply min-w-0 text-kosmo-muted leading-relaxed;
+  }
+
+  .integration-copy h2 {
+    @apply mt-8 mb-3 text-[clamp(1.45rem,2vw,1.9rem)] font-extrabold leading-tight tracking-normal text-kosmo-text;
+  }
+
+  .integration-copy h2:first-child {
+    @apply mt-0;
+  }
+
+  .integration-copy h3 {
+    @apply mt-5 mb-2 text-lg font-bold leading-tight tracking-normal text-kosmo-text;
+  }
+
+  .integration-copy h4 {
+    @apply mt-4 mb-2 text-sm font-extrabold tracking-[0.12em] uppercase text-kosmo-hot;
+  }
+
+  .integration-copy p {
+    @apply my-3 text-kosmo-muted leading-relaxed;
+  }
+
+  .integration-copy strong {
+    @apply text-kosmo-text;
+  }
+
+  .integration-copy code {
+    @apply rounded bg-white/[0.05] px-1 py-0.5 text-kosmo-rose font-mono text-[0.93em];
+  }
+
+  .integration-copy pre code,
+  .integration-copy .code-frame code,
+  .integration-copy .command-cell code,
+  .integration-copy .raw-docs code {
+    @apply rounded-none bg-transparent p-0 text-inherit;
+  }
+
+  .integration-copy dl {
+    @apply my-3;
+  }
+
+  .integration-copy dt {
+    @apply text-xs font-extrabold tracking-[0.12em] uppercase text-kosmo-hot;
+  }
+
+  .integration-copy dd {
+    @apply m-0 text-kosmo-text;
+  }
+}
+
+/* Responsive table collapse */
+@media (max-width: 820px) {
+  .tool-table-wrapper table {
+    display: block;
+  }
+  .tool-table-wrapper thead {
+    display: none;
+  }
+  .tool-table-wrapper tbody {
+    display: block;
+  }
+  .tool-table-wrapper tr {
+    display: block;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .tool-table-wrapper td {
+    display: block;
+    padding: 0.2rem 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+  .tool-table-wrapper td::before {
+    content: attr(data-label) " ";
+    color: var(--color-kosmo-hot);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+}
+
+/* Collapsible function card state */
+.function-card .function-card-body {
+  display: none;
+}
+.function-card.expanded .function-card-body {
+  display: block;
+}
+.function-card-toggle::after {
+  content: '+';
+}
+.function-card.expanded .function-card-toggle::after {
+  content: '\2212';
+}
+
+/* Generated markdown details that Tailwind prose can't infer from set:html content */
+.rendered-lua-docs {
+  min-width: 0;
+  margin: 1rem 0 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-kosmo-white-border-strong);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  overflow-x: auto;
+}
+
+.rendered-lua-docs h1 {
+  margin: 0 0 1rem;
+  color: var(--color-kosmo-text);
+  font-size: clamp(1.8rem, 3vw, 2.55rem);
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.rendered-lua-docs h2 {
+  margin: 2rem 0 0.75rem;
+  color: var(--color-kosmo-text);
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.rendered-lua-docs h3 {
+  margin: 1.35rem 0 0.55rem;
+  color: var(--color-kosmo-text);
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rendered-lua-docs p,
+.rendered-lua-docs li {
+  color: var(--color-kosmo-muted);
+  line-height: 1.7;
+}
+
+.rendered-lua-docs ul,
+.rendered-lua-docs ol {
+  margin: 1rem 0;
+  padding-left: 1.4rem;
+}
+
+.rendered-lua-docs ul {
+  list-style: disc;
+}
+
+.rendered-lua-docs ol {
+  list-style: decimal;
+}
+
+.rendered-lua-docs a {
+  color: var(--color-kosmo-hot);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.rendered-lua-docs code {
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.12rem 0.3rem;
+  color: var(--color-kosmo-rose);
+  font-size: 0.92em;
+}
+
+.rendered-lua-docs pre {
+  max-width: 100%;
+  margin: 1rem 0 !important;
+  padding: 1rem !important;
+  border: 1px solid var(--color-kosmo-white-border-strong);
+  border-radius: 0.5rem;
+  background: var(--color-kosmo-code-bg) !important;
+  overflow-x: auto;
+}
+
+.rendered-lua-docs table {
+  margin: 1rem 0;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+
+.rendered-lua-docs th,
+.rendered-lua-docs td {
+  border: 1px solid var(--color-kosmo-white-border-faint);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+
+.rendered-lua-docs th {
+  color: var(--color-kosmo-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rendered-lua-docs td {
+  color: var(--color-kosmo-muted);
+}
+
+.rendered-lua-docs pre code {
+  display: block;
+  min-width: max-content;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+@media (max-width: 560px) {
+  .rendered-lua-docs {
+    padding: 1rem;
+  }
+}
+
+/* Scroll margin for anchor links */
+.function-card[id] {
+  scroll-margin-top: 2rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}

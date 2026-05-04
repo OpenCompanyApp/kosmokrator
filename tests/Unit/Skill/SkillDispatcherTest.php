@@ -21,7 +21,7 @@ class SkillDispatcherTest extends TestCase
     protected function setUp(): void
     {
         $this->tmpDir = sys_get_temp_dir().'/kosmokrator_dispatcher_test_'.uniqid();
-        mkdir($this->tmpDir.'/project/.kosmokrator/skills', 0755, true);
+        mkdir($this->tmpDir.'/project/.kosmo/skills', 0755, true);
         mkdir($this->tmpDir.'/user', 0755, true);
 
         $this->ui = $this->createMock(UIManager::class);
@@ -44,7 +44,7 @@ class SkillDispatcherTest extends TestCase
     {
         $base = $scope === 'user'
             ? $this->tmpDir.'/user'
-            : $this->tmpDir.'/project/.kosmokrator/skills';
+            : $this->tmpDir.'/project/.kosmo/skills';
         $dir = $base.'/'.$name;
         mkdir($dir, 0755, true);
         file_put_contents($dir.'/SKILL.md', "---\nname: {$name}\ndescription: {$name} skill\n---\n{$name} instructions here.");
@@ -94,7 +94,7 @@ class SkillDispatcherTest extends TestCase
 
         $this->assertNotNull($result);
         $this->assertStringContains('SKILL.md', $result);
-        $this->assertTrue(is_file($this->tmpDir.'/project/.kosmokrator/skills/my-new-skill/SKILL.md'));
+        $this->assertTrue(is_file($this->tmpDir.'/project/.kosmo/skills/my-new-skill/SKILL.md'));
     }
 
     public function test_create_without_name_shows_usage(): void
@@ -151,7 +151,7 @@ class SkillDispatcherTest extends TestCase
     public function test_delete_removes_skill(): void
     {
         $this->seedSkill('deploy');
-        $this->assertTrue(is_dir($this->tmpDir.'/project/.kosmokrator/skills/deploy'));
+        $this->assertTrue(is_dir($this->tmpDir.'/project/.kosmo/skills/deploy'));
 
         $this->ui->expects($this->once())
             ->method('showNotice')
@@ -161,7 +161,7 @@ class SkillDispatcherTest extends TestCase
         $result = $dispatcher->dispatch('delete deploy');
 
         $this->assertNull($result);
-        $this->assertFalse(is_dir($this->tmpDir.'/project/.kosmokrator/skills/deploy'));
+        $this->assertFalse(is_dir($this->tmpDir.'/project/.kosmo/skills/deploy'));
     }
 
     public function test_invokes_skill_by_name(): void

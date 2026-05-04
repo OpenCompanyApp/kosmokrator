@@ -7,6 +7,7 @@ namespace Kosmokrator\Command\Slash;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
+use Throwable;
 
 /**
  * Forces an immediate context compaction to reduce conversation history size.
@@ -44,7 +45,14 @@ class CompactCommand implements SlashCommand
     public function execute(string $args, SlashCommandContext $ctx): SlashCommandResult
     {
         $before = $ctx->agentLoop->history()->count();
-        $ctx->agentLoop->performCompaction();
+        try {
+            $ctx->agentLoop->performCompaction();
+        } catch (Throwable $e) {
+            $ctx->ui->showNotice('Context compaction failed: '.$e->getMessage());
+
+            return SlashCommandResult::continue();
+        }
+
         $after = $ctx->agentLoop->history()->count();
 
         $ctx->ui->showNotice("Context compacted. {$before} messages reduced to {$after}.");

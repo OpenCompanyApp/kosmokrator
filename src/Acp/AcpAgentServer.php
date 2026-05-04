@@ -27,6 +27,10 @@ final class AcpAgentServer
 {
     private AcpSessionManager $sessions;
 
+    private bool $authenticated = false;
+
+    private ?string $authToken;
+
     public function __construct(
         private readonly Container $container,
         private readonly AcpConnection $connection,
@@ -37,15 +41,24 @@ final class AcpAgentServer
         ?string $permissionMode = null,
     ) {
         $this->sessions = new AcpSessionManager($container, $connection, $model, $mode, $permissionMode);
+        $token = getenv('KOSMO_ACP_TOKEN');
+        $this->authToken = is_string($token) && $token !== '' ? $token : null;
+        $this->authenticated = $this->authToken === null;
         $this->connection->onNotification('session/cancel', fn (array $params) => $this->cancel($params));
         $this->connection->onNotification('cancel', fn (array $params) => $this->cancel($params));
     }
 
     public function run(): int
     {
-        while (($message = $this->connection->readMessage()) !== null) {
-            $id = $message['id'] ?? null;
+        while (true) {
+            $id = null;
             try {
+                $message = $this->connection->readMessage();
+                if ($message === null) {
+                    break;
+                }
+
+                $id = $message['id'] ?? null;
                 if (! isset($message['method']) || ! is_string($message['method'])) {
                     throw JsonRpcException::invalidRequest('JSON-RPC request is missing method');
                 }
@@ -77,9 +90,13 @@ final class AcpAgentServer
      */
     private function dispatch(string $method, array $params): mixed
     {
+        if (! $this->authenticated && ! in_array($method, ['initialize', 'authenticate'], true)) {
+            throw JsonRpcException::authRequired();
+        }
+
         return match ($method) {
             'initialize' => $this->initialize($params),
-            'authenticate' => new \stdClass,
+            'authenticate' => $this->authenticate($params),
             'session/new' => $this->newSession($params),
             'session/load' => $this->loadSession($params),
             'session/resume', 'session/unstable_resume' => $this->resumeSession($params),
@@ -90,23 +107,54 @@ final class AcpAgentServer
             'session/set_mode' => $this->setMode($params),
             'session/set_model', 'session/unstable_set_model' => $this->setModel($params),
             'session/set_config_option' => $this->setConfigOption($params),
-            'kosmokrator/capabilities' => ['kosmokratorCapabilities' => AcpKosmokratorProtocol::capabilities()],
-            'kosmokrator/integrations/list' => $this->listIntegrations($params),
-            'kosmokrator/integrations/describe' => $this->describeIntegration($params),
-            'kosmokrator/integrations/call' => $this->callIntegration($params),
-            'kosmokrator/mcp/list_servers' => $this->listMcpServers($params),
-            'kosmokrator/mcp/list_tools' => $this->listMcpTools($params),
-            'kosmokrator/mcp/schema' => $this->mcpSchema($params),
-            'kosmokrator/mcp/call_tool' => $this->callMcpTool($params),
-            'kosmokrator/lua/execute' => $this->executeLua($params),
-            'kosmokrator/runtime/set' => $this->setRuntime($params),
-            'kosmokrator/settings/set' => $this->setSetting($params),
-            'kosmokrator/providers/configure' => $this->configureProvider($params),
-            'kosmokrator/integrations/configure' => $this->configureIntegration($params),
-            'kosmokrator/mcp/add_stdio_server' => $this->addMcpStdioServer($params),
-            'kosmokrator/mcp/set_secret' => $this->setMcpSecret($params),
+            'kosmo/capabilities', 'kosmokrator/capabilities' => [
+                'kosmoCapabilities' => AcpKosmokratorProtocol::capabilities(),
+                'kosmokratorCapabilities' => AcpKosmokratorProtocol::capabilities(),
+            ],
+            'kosmo/integrations/list', 'kosmokrator/integrations/list' => $this->listIntegrations($params),
+            'kosmo/integrations/describe', 'kosmokrator/integrations/describe' => $this->describeIntegration($params),
+            'kosmo/integrations/call', 'kosmokrator/integrations/call' => $this->callIntegration($params),
+            'kosmo/mcp/list_servers', 'kosmokrator/mcp/list_servers' => $this->listMcpServers($params),
+            'kosmo/mcp/list_tools', 'kosmokrator/mcp/list_tools' => $this->listMcpTools($params),
+            'kosmo/mcp/schema', 'kosmokrator/mcp/schema' => $this->mcpSchema($params),
+            'kosmo/mcp/call_tool', 'kosmokrator/mcp/call_tool' => $this->callMcpTool($params),
+            'kosmo/lua/execute', 'kosmokrator/lua/execute' => $this->executeLua($params),
+            'kosmo/runtime/set', 'kosmokrator/runtime/set' => $this->setRuntime($params),
+            'kosmo/settings/set', 'kosmokrator/settings/set' => $this->setSetting($params),
+            'kosmo/providers/configure', 'kosmokrator/providers/configure' => $this->configureProvider($params),
+            'kosmo/integrations/configure', 'kosmokrator/integrations/configure' => $this->configureIntegration($params),
+            'kosmo/mcp/add_stdio_server', 'kosmokrator/mcp/add_stdio_server' => $this->addMcpStdioServer($params),
+            'kosmo/mcp/set_secret', 'kosmokrator/mcp/set_secret' => $this->setMcpSecret($params),
             default => throw JsonRpcException::methodNotFound($method),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function authenticate(array $params): \stdClass
+    {
+        if ($this->authToken === null) {
+            $this->authenticated = true;
+
+            return new \stdClass;
+        }
+
+        $token = '';
+        if (isset($params['token']) && is_string($params['token'])) {
+            $token = $params['token'];
+        } elseif (isset($params['authorization']) && is_string($params['authorization'])) {
+            $authorization = trim($params['authorization']);
+            $token = stripos($authorization, 'bearer ') === 0 ? substr($authorization, 7) : $authorization;
+        }
+
+        if (! hash_equals($this->authToken, $token)) {
+            throw JsonRpcException::authRequired('Invalid ACP authentication token');
+        }
+
+        $this->authenticated = true;
+
+        return new \stdClass;
     }
 
     /**
@@ -140,12 +188,13 @@ final class AcpAgentServer
                     'close' => new \stdClass,
                 ],
             ],
+            'kosmoCapabilities' => AcpKosmokratorProtocol::capabilities(),
             'kosmokratorCapabilities' => AcpKosmokratorProtocol::capabilities(),
             'authMethods' => [
                 [
-                    'id' => 'kosmokrator-provider',
+                    'id' => 'kosmo-provider',
                     'name' => 'KosmoKrator provider credentials',
-                    'description' => 'Configure credentials with `kosmokrator providers:configure` or `kosmokrator setup`.',
+                    'description' => 'Configure credentials with `kosmo providers:configure` or `kosmo setup`.',
                 ],
             ],
         ];
@@ -227,7 +276,7 @@ final class AcpAgentServer
     {
         $sessionId = $this->requireString($params, 'sessionId');
         $state = $this->sessions->get($sessionId);
-        $text = $this->extractPromptText($params['prompt'] ?? []);
+        $text = $this->extractPromptText($params['prompt'] ?? [], $state->cwd);
         if (trim($text) === '') {
             return ['stopReason' => 'end_turn'];
         }
@@ -480,10 +529,10 @@ final class AcpAgentServer
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot($state->cwd);
         if (($params['trust'] ?? false) === true) {
-            $settings->setRaw("mcp.trust.{$name}.fingerprint", $this->container->make(McpPermissionEvaluator::class)->fingerprint($server), $scope);
+            $settings->setRaw("kosmo.mcp.trust.{$name}.fingerprint", $this->container->make(McpPermissionEvaluator::class)->fingerprint($server), $scope);
         }
         foreach ($permissions as $operation => $permission) {
-            $settings->setRaw("mcp.servers.{$name}.permissions.{$operation}", $permission, $scope);
+            $settings->setRaw("kosmo.mcp.servers.{$name}.permissions.{$operation}", $permission, $scope);
         }
         $this->sessions->refreshRuntime($state);
 
@@ -857,7 +906,7 @@ final class AcpAgentServer
         return is_array($servers) ? array_values(array_filter($servers, 'is_array')) : [];
     }
 
-    private function extractPromptText(mixed $prompt): string
+    private function extractPromptText(mixed $prompt, string $cwd): string
     {
         if (is_string($prompt)) {
             return $prompt;
@@ -878,13 +927,24 @@ final class AcpAgentServer
                 $parts[] = (string) $block['resource']['text'];
             } elseif (($block['type'] ?? '') === 'resource_link' && isset($block['uri']) && is_string($block['uri']) && str_starts_with($block['uri'], 'file://')) {
                 $path = parse_url($block['uri'], PHP_URL_PATH);
-                if (is_string($path) && is_readable($path)) {
-                    $parts[] = (string) file_get_contents($path);
+                if (is_string($path)) {
+                    $realPath = realpath($path);
+                    $realCwd = realpath($cwd) ?: $cwd;
+                    if ($realPath !== false && $this->isPathInside($realPath, $realCwd) && is_readable($realPath)) {
+                        $parts[] = (string) file_get_contents($realPath);
+                    }
                 }
             }
         }
 
         return implode("\n", $parts);
+    }
+
+    private function isPathInside(string $path, string $root): bool
+    {
+        $root = rtrim($root, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+
+        return str_starts_with($path.DIRECTORY_SEPARATOR, $root) || $path === rtrim($root, DIRECTORY_SEPARATOR);
     }
 
     private function normalizeModelId(string $modelId): string

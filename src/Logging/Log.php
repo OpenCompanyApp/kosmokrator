@@ -13,7 +13,7 @@ use Psr\Log\NullLogger;
  * but carry a distinct channel name for easy filtering.
  *
  * Usage: Log::channel('llm')->warning('Rate limited', [...])
- * Produces: [timestamp] kosmokrator.llm.WARNING: Rate limited {...}
+ * Produces: [timestamp] kosmo.llm.WARNING: Rate limited {...}
  */
 final class Log
 {

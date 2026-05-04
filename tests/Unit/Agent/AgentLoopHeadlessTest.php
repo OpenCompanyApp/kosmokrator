@@ -4,6 +4,7 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Amp\CancelledException;
 use Kosmokrator\Agent\AgentLoop;
+use Kosmokrator\Agent\Exception\HeadlessRunFailedException;
 use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
@@ -61,14 +62,16 @@ class AgentLoopHeadlessTest extends TestCase
         $this->assertSame('Found interfaces in 5 files.', $result);
     }
 
-    public function test_error_returns_error_string(): void
+    public function test_error_throws_typed_headless_exception(): void
     {
         $this->llm->method('chat')->willThrowException(
             new \RuntimeException('API unavailable'),
         );
 
-        $result = $this->loop->runHeadless('Do something');
-        $this->assertStringContainsString('Error: API unavailable', $result);
+        $this->expectException(HeadlessRunFailedException::class);
+        $this->expectExceptionMessage('API unavailable');
+
+        $this->loop->runHeadless('Do something');
     }
 
     public function test_returns_final_text_not_intermediate(): void

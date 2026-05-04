@@ -8,6 +8,8 @@ use Illuminate\Container\Container;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
+use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryService;
 use Kosmokrator\LLM\ProviderAuthService;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\ProviderConfigurator;
@@ -81,20 +83,8 @@ class CoreServiceProvider extends ServiceProvider
             $relayOverrides = is_array($config->get('relay.providers', []))
                 ? $config->get('relay.providers', [])
                 : [];
-            $prismProviders = is_array($config->get('prism.providers', []))
-                ? $config->get('prism.providers', [])
-                : [];
 
-            foreach ($prismProviders as $provider => $providerConfig) {
-                if (! is_array($providerConfig) || ! isset($providerConfig['url']) || ! is_string($providerConfig['url'])) {
-                    continue;
-                }
-
-                $relayOverrides[$provider] ??= [];
-                $relayOverrides[$provider]['url'] = $providerConfig['url'];
-            }
-
-            return $this->container->make(RelayRegistryBuilder::class)->build($relayOverrides);
+            return $this->container->make(RelayRegistryBuilder::class)->buildBundled($relayOverrides);
         });
         $this->container->singleton(ProviderMeta::class, fn () => new ProviderMeta(
             $this->container->make(RelayRegistry::class),
@@ -105,6 +95,13 @@ class CoreServiceProvider extends ServiceProvider
             $this->container->make('config'),
             $this->container->make(SettingsRepositoryInterface::class),
             $this->container->make(CodexTokenStoreContract::class),
+            $this->container->make(ModelDiscoveryCacheRepository::class),
+        ));
+        $this->container->singleton(ModelDiscoveryService::class, fn () => new ModelDiscoveryService(
+            $this->container->make(RelayRegistry::class),
+            $this->container->make('config'),
+            $this->container->make(SettingsRepositoryInterface::class),
+            $this->container->make(ModelDiscoveryCacheRepository::class),
         ));
         $this->container->singleton(ProviderAuthService::class, fn () => new ProviderAuthService(
             $this->container->make(ProviderCatalog::class),

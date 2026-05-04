@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Provider;
 
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\LuaDocService;
@@ -59,7 +60,7 @@ class ToolServiceProvider extends ServiceProvider
 {
     /** Paths outside the project root that tools may access without prompting. */
     private const DEFAULT_ALLOWED_PATHS = [
-        '~/.kosmokrator',
+        '~/.kosmo',
         '/tmp',
     ];
 
@@ -67,18 +68,18 @@ class ToolServiceProvider extends ServiceProvider
     {
         $config = $this->container->make('config');
 
-        $bashTimeout = $config->get('kosmokrator.tools.bash.timeout', 120);
-        $shellWaitMs = (int) $config->get('kosmokrator.tools.shell.wait_ms', 100);
-        $shellIdleTtl = (int) $config->get('kosmokrator.tools.shell.idle_ttl', 300);
+        $bashTimeout = $config->get('kosmo.tools.bash.timeout', 120);
+        $shellWaitMs = (int) $config->get('kosmo.tools.shell.wait_ms', 100);
+        $shellIdleTtl = (int) $config->get('kosmo.tools.shell.idle_ttl', 300);
         $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
         $allowedPaths = $this->resolveAllowedPaths(
-            $config->get('kosmokrator.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
+            $config->get('kosmo.tools.allowed_paths', self::DEFAULT_ALLOWED_PATHS),
         );
 
         $this->container->singleton(TaskStore::class);
         $this->container->singleton(PatchParser::class);
         $this->container->singleton(PatchApplier::class, fn () => new PatchApplier(
-            $config->get('kosmokrator.tools.blocked_paths', []),
+            $config->get('kosmo.tools.blocked_paths', []),
             $projectRoot,
             $allowedPaths,
         ));
@@ -175,7 +176,11 @@ class ToolServiceProvider extends ServiceProvider
 
                 // Set lazy resolver for native tool bridge (app.tools.* in Lua)
                 // Must be deferred — $registry is still being built here
-                ExecuteLuaTool::setNativeBridgeResolver(fn () => new NativeToolBridge(fn () => $registry));
+                ExecuteLuaTool::setNativeBridgeResolver(fn (?AgentMode $mode = null) => new NativeToolBridge(
+                    fn () => $registry,
+                    $this->container->make(PermissionEvaluator::class),
+                    $mode,
+                ));
             }
 
             return $registry;
@@ -200,7 +205,7 @@ class ToolServiceProvider extends ServiceProvider
                 $path = $home.substr($path, 1);
             }
 
-            // Strip trailing glob wildcards (e.g. ~/.kosmokrator/* → ~/.kosmokrator)
+            // Strip trailing glob wildcards (e.g. ~/.kosmo/* → ~/.kosmo)
             $path = rtrim($path, '/*');
 
             $real = realpath($path);

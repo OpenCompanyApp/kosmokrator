@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Command\Slash;
 
 use Kosmokrator\Agent\AgentMode;
+use Kosmokrator\Command\DefersWhileAgentRuns;
 use Kosmokrator\Command\SlashCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Command\SlashCommandResult;
@@ -12,7 +13,7 @@ use Kosmokrator\Command\SlashCommandResult;
 /**
  * Switches the agent loop to a specific operational mode (e.g. edit, plan, explore).
  */
-class ModeCommand implements SlashCommand
+class ModeCommand implements DefersWhileAgentRuns, SlashCommand
 {
     public function __construct(
         private readonly AgentMode $mode,
@@ -43,7 +44,7 @@ class ModeCommand implements SlashCommand
     {
         $ctx->agentLoop->setMode($this->mode);
         $ctx->ui->showMode($this->mode->label(), $this->mode->color());
-        $ctx->sessionManager->setSetting('mode', $this->mode->value);
+        $ctx->sessionManager->setSetting('agent.mode', $this->mode->value);
         $ctx->ui->showNotice("Switched to {$this->mode->label()} mode.");
 
         return SlashCommandResult::continue();

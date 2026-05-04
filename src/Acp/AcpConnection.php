@@ -68,7 +68,7 @@ final class AcpConnection
 
     public function sendError(int|string|null $id, \Throwable $error): void
     {
-        if ($id === null) {
+        if ($id === null && (! $error instanceof JsonRpcException || $error->jsonRpcCode !== -32700)) {
             return;
         }
 

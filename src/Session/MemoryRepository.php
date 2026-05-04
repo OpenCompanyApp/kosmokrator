@@ -114,6 +114,7 @@ class MemoryRepository implements MemoryRepositoryInterface
      * @param  string|null  $memoryClass  New retention class, or null to keep existing
      * @param  bool|null  $pinned  New pinned status, or null to keep existing
      * @param  string|null  $expiresAt  New expiry timestamp, or null to keep existing
+     * @param  bool  $clearExpiresAt  Clear the existing expiry timestamp
      */
     public function update(
         int $id,
@@ -122,7 +123,12 @@ class MemoryRepository implements MemoryRepositoryInterface
         ?string $memoryClass = null,
         ?bool $pinned = null,
         ?string $expiresAt = null,
+        bool $clearExpiresAt = false,
     ): void {
+        if ($clearExpiresAt && $expiresAt !== null) {
+            throw new \InvalidArgumentException('Cannot set and clear expires_at in the same memory update.');
+        }
+
         // Dynamically build SET clause from provided fields only
         $fields = ['content = :content', 'updated_at = :now'];
         $params = ['id' => $id, 'content' => $content, 'now' => date('c')];
@@ -139,7 +145,9 @@ class MemoryRepository implements MemoryRepositoryInterface
             $fields[] = 'pinned = :pinned';
             $params['pinned'] = $pinned ? 1 : 0;
         }
-        if ($expiresAt !== null) {
+        if ($clearExpiresAt) {
+            $fields[] = 'expires_at = NULL';
+        } elseif ($expiresAt !== null) {
             $fields[] = 'expires_at = :expires_at';
             $params['expires_at'] = $expiresAt;
         }
@@ -329,7 +337,7 @@ class MemoryRepository implements MemoryRepositoryInterface
      */
     public function all(?string $project = null, int $limit = 50): array
     {
-        $now = gmdate('Y-m-d\TH:i:s\Z');
+        $now = date('c');
         if ($project === null) {
             $stmt = $this->db->connection()->prepare(
                 'SELECT * FROM memories

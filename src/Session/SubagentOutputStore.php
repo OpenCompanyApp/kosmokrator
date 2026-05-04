@@ -54,7 +54,7 @@ final class SubagentOutputStore
 
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir();
 
-        return $home.'/.kosmokrator/data/swarm-output';
+        return $home.'/.kosmo/data/swarm-output';
     }
 
     private function safeName(string $value): string

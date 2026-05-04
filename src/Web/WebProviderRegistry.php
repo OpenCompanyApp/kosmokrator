@@ -62,7 +62,7 @@ final class WebProviderRegistry
     {
         $name = $requested !== null && $requested !== ''
             ? $requested
-            : (string) $this->config->get('kosmokrator.web.search.provider', '');
+            : (string) $this->config->get('kosmo.web.search.provider', '');
         if ($name === '') {
             throw new WebProviderException('No web search provider configured. Set web.search.provider or pass provider explicitly.');
         }
@@ -79,7 +79,7 @@ final class WebProviderRegistry
     {
         $name = $requested !== null && $requested !== ''
             ? $requested
-            : (string) $this->config->get('kosmokrator.web.fetch.provider', 'native');
+            : (string) $this->config->get('kosmo.web.fetch.provider', 'native');
         if ($name === 'native') {
             throw new WebProviderException('Native web_fetch is handled by the native tool, not external providers.');
         }
@@ -96,7 +96,7 @@ final class WebProviderRegistry
     {
         $name = $requested !== null && $requested !== ''
             ? $requested
-            : (string) $this->config->get('kosmokrator.web.crawl.provider', '');
+            : (string) $this->config->get('kosmo.web.crawl.provider', '');
         if ($name === '') {
             throw new WebProviderException('No web crawl provider configured. Set web.crawl.provider or pass provider explicitly.');
         }
@@ -135,7 +135,7 @@ final class WebProviderRegistry
 
     public function enabled(string $name): bool
     {
-        return $this->bool($this->config->get('kosmokrator.web.providers.'.$this->normalize($name).'.enabled', false));
+        return $this->bool($this->config->get('kosmo.web.providers.'.$this->normalize($name).'.enabled', false));
     }
 
     public function isConfigured(string $name): bool
@@ -174,14 +174,14 @@ final class WebProviderRegistry
             'openai_native' => new OpenAiNativeSearchProvider(
                 $this->apiKey($name, 'openai'),
                 $this->baseUrl($name),
-                (string) $this->config->get('kosmokrator.web.native.openai.model', $this->config->get('kosmokrator.agent.default_model', 'gpt-5')),
-                (string) $this->config->get('kosmokrator.web.native.mode', 'cached'),
+                (string) $this->config->get('kosmo.web.native.openai.model', $this->config->get('kosmo.agent.default_model', 'gpt-5')),
+                (string) $this->config->get('kosmo.web.native.mode', 'cached'),
             ),
             'anthropic_native' => new AnthropicNativeSearchProvider(
                 $this->apiKey($name, 'anthropic'),
                 $this->baseUrl($name),
-                (string) $this->config->get('kosmokrator.web.native.anthropic.model', 'claude-sonnet-4-20250514'),
-                max(1, (int) $this->config->get('kosmokrator.web.native.max_uses', 5)),
+                (string) $this->config->get('kosmo.web.native.anthropic.model', 'claude-sonnet-4-20250514'),
+                max(1, (int) $this->config->get('kosmo.web.native.max_uses', 5)),
             ),
             default => throw new WebProviderException("Unknown web provider [{$name}]."),
         };
@@ -203,7 +203,7 @@ final class WebProviderRegistry
             }
         }
 
-        $configured = $this->config->get("kosmokrator.web.providers.{$name}.api_key");
+        $configured = $this->config->get("kosmo.web.providers.{$name}.api_key");
         if (is_string($configured) && trim($configured) !== '') {
             return trim($configured);
         }
@@ -216,15 +216,15 @@ final class WebProviderRegistry
 
     private function apiKeyEnv(string $name): ?string
     {
-        $env = $this->config->get('kosmokrator.web.providers.'.$this->normalize($name).'.api_key_env');
+        $env = $this->config->get('kosmo.web.providers.'.$this->normalize($name).'.api_key_env');
 
         return is_string($env) && $env !== '' ? $env : null;
     }
 
     private function baseUrl(string $name): ?string
     {
-        $url = $this->config->get('kosmokrator.web.providers.'.$this->normalize($name).'.base_url')
-            ?? $this->config->get('kosmokrator.web.providers.'.$this->normalize($name).'.api_url');
+        $url = $this->config->get('kosmo.web.providers.'.$this->normalize($name).'.base_url')
+            ?? $this->config->get('kosmo.web.providers.'.$this->normalize($name).'.api_url');
 
         return is_string($url) && trim($url) !== '' ? trim($url) : null;
     }

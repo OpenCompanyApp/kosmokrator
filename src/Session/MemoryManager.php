@@ -111,6 +111,7 @@ class MemoryManager
      * @param  string|null  $memoryClass  Updated retention class, or null to keep existing
      * @param  bool|null  $pinned  Updated pinned flag, or null to keep existing
      * @param  string|null  $expiresAt  Updated expiration, or null to keep existing
+     * @param  bool  $clearExpiresAt  Clear the existing expiration
      */
     public function updateMemory(
         int $id,
@@ -119,8 +120,9 @@ class MemoryManager
         ?string $memoryClass = null,
         ?bool $pinned = null,
         ?string $expiresAt = null,
+        bool $clearExpiresAt = false,
     ): void {
-        $this->memories->update($id, $content, $title, $memoryClass, $pinned, $expiresAt);
+        $this->memories->update($id, $content, $title, $memoryClass, $pinned, $expiresAt, $clearExpiresAt);
     }
 
     /**

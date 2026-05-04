@@ -1,0 +1,701 @@
+---
+title: "Integrations CLI"
+description: "Use KosmoKrator integrations headlessly from the CLI and Lua runtime."
+sidebar:
+  order: 13
+---
+KosmoKrator can run as a headless integration runtime. Other coding CLIs, shell scripts, cron jobs, CI jobs, and local automation can call the same OpenCompany integration packages that KosmoKrator agents use, without opening the interactive TUI and without requiring MCP.
+
+For per-integration generated references, use the [Integration Catalog](/integrations). Each integration page includes:
+
+- the full Lua namespace docs an agent would inspect,
+- headless CLI setup and call examples,
+- MCP gateway setup for external MCP clients,
+- credential fields, auth strategy, runtime notes, and function-level schemas.
+
+This is a direct local CLI surface. Use `kosmo integrations:...` to discover functions, call one integration directly, or execute a Lua workflow. Use [`kosmo mcp:...`](/docs/mcp) for external MCP servers; both surfaces can be composed from Lua. If another agent client needs integrations through MCP, run KosmoKrator's MCP gateway with `kosmo mcp:serve --integration=plane`.
+
+## Mental Model
+
+The integrations CLI is a separate headless surface from the coding-agent REPL:
+
+PHP applications can use the same runtime through the [Agent SDK](/docs/sdk): `$agent->integrations()->call(...)` for direct calls and `$agent->integrations()->lua(...)` for Lua workflows.
+
+-   **Provider** — an installed integration package such as `plane`, `clickup`, or `github`.
+-   **Function** — a callable operation exposed by a provider, named as `provider.function`.
+-   **Operation type** — each function is either `read` or `write` for permission policy.
+-   **Account** — an optional named credential alias for the same provider.
+-   **Runtime** — the code path that validates arguments, checks provider state and permissions, invokes the package tool, and prints a structured result.
+
+The same function can be reached through three ergonomic surfaces:
+
+```bash
+# Generic function call
+kosmo integrations:call plane.list_projects --workspace-slug=kosmokrator --json
+
+# Provider shortcut
+kosmo integrations:plane list_projects --workspace-slug=kosmokrator --json
+
+# Lua workflow endpoint
+kosmo integrations:lua --eval 'print(docs.read("plane.list_projects"))'
+```
+
+Use the generic form when a tool wants a stable universal command. Use the provider shortcut for humans. Use Lua when one workflow needs multiple integration calls, branching, loops, or local data shaping before returning output to another CLI.
+
+For Claude Code or another MCP client, expose selected integrations through the gateway:
+
+```json
+{
+  "mcpServers": {
+    "kosmo": {
+      "type": "stdio",
+      "command": "kosmo",
+      "args": ["mcp:serve", "--integration=plane", "--write=deny"]
+    }
+  }
+}
+```
+
+See [MCP Gateway](/docs/mcp#kosmokrator-as-an-mcp-gateway) for install helpers and upstream MCP proxying.
+
+## Quick Start
+
+### 1\. Discover Providers
+
+```bash
+# Human-readable table
+kosmo integrations:list
+
+# Machine-readable provider catalog
+kosmo integrations:list --json
+
+# Activation, credential, account, and function counts
+kosmo integrations:status
+kosmo integrations:status --json
+```
+
+Provider status has two separate ideas:
+
+| Status field | Meaning |
+| --- | --- |
+| `configured` | Required local credentials exist for the provider. |
+| `active` | The provider is enabled and configured, so runtime calls are allowed to instantiate and execute its tools. |
+| `accounts` | The default account plus any named credential aliases. |
+| `functions` | The number of callable functions KosmoKrator discovered for that provider. |
+
+### 2\. Search for a Function
+
+```bash
+# Search by provider, action, object, or description words
+kosmo integrations:search "plane issue"
+kosmo integrations:search "clickup task" --json
+```
+
+Search returns function names, operation type, active status, and a short description. A coding CLI should search first when it does not already know the exact function name.
+
+### 3\. Read Docs and Schema
+
+```bash
+# Provider overview
+kosmo integrations:docs plane
+
+# Function reference with direct CLI, generic CLI, JSON, Lua, and parameters
+kosmo integrations:docs plane.create_issue
+
+# JSON input schema for programmatic callers
+kosmo integrations:schema plane.create_issue
+```
+
+Function docs are intentionally self-contained. They include a direct CLI example, a generic CLI example, a JSON payload example, a Lua example, the operation type, activation status, and a parameter table with required fields.
+
+### 4\. Call the Function
+
+```bash
+# Generic call
+kosmo integrations:call plane.list_projects --workspace-slug=kosmokrator --json
+
+# Provider shortcut
+kosmo integrations:plane list_projects --workspace-slug=kosmokrator --json
+
+# JSON payload as an argument
+kosmo integrations:call plane.search_issues '{"workspace_slug":"kosmokrator","search":"permission"}' --json
+
+# JSON payload from stdin
+printf '%s\n' '{"workspace_slug":"kosmokrator","search":"permission"}' \
+  | kosmo integrations:call plane.search_issues --json
+```
+
+Runtime calls return exit code `0` when the integration function succeeds and a non-zero exit code when validation, permission checks, provider activation, credentials, or the provider API fail.
+
+By default, headless calls still follow each provider's read/write permission policy. Add `--force` only when the caller deliberately wants to bypass that integration read/write policy for a trusted automation run. Force does not bypass missing credentials, disabled providers, unknown functions, required argument validation, Lua resource limits, or provider API failures.
+
+## Command Reference
+
+| Command | Purpose | Machine-readable mode |
+| --- | --- | --- |
+| `integrations:list` | List providers, status, function counts, and example functions. | `--json` |
+| `integrations:status` | Show active/configured state, account aliases, and function counts. | `--json` |
+| `integrations:doctor [provider]` | Diagnose activation, credentials, permissions, functions, and exact next commands. | `--json` |
+| `integrations:fields &lt;provider&gt;` | Show required/optional credential fields and whether each field is configured. | `--json` |
+| `integrations:configure &lt;provider&gt;` | Configure credentials, account aliases, activation, and read/write permissions without opening the TUI. | `--json`, `--stdin-json` |
+| `integrations:search &lt;query&gt;` | Search all provider functions by name, title, and description. | `--json` |
+| `integrations:docs [page]` | Read global, provider, or function docs. Pages use `provider` or `provider.function`. | `--json` |
+| `integrations:schema &lt;function&gt;` | Print the JSON input schema for one function. | Always JSON |
+| `integrations:examples &lt;page&gt;` | Show the same focused examples/docs for a provider or function. | `--json` |
+| `integrations:call &lt;function&gt;` | Call any function by full name. Supports `--dry-run` and `--force`. | `--json` |
+| `integrations:&lt;provider&gt; [function]` | Provider shortcut. With no function, prints provider docs. With a function, calls `provider.function`. Supports `--dry-run` and `--force`. | `--json` |
+| `integrations:lua` | Execute a Lua workflow against configured integrations. Supports `--force`. | `--json` |
+
+The catalog intentionally includes integrations that are not fully usable from the local CLI yet. For example, redirect-based OAuth integrations can appear in `integrations:list`, `integrations:status`, `integrations:search`, and `integrations:docs` even when `cli_setup_supported` or `cli_runtime_supported` is false. They remain visible so agents can discover the integration surface now and move to proxy-backed execution when support lands.
+
+### Capability Metadata
+
+Machine-readable output includes capability fields from the integration package when available:
+
+| Field | Meaning |
+| --- | --- |
+| `auth_strategy` | Authentication style such as `api_key`, `bearer_token`, or `oauth2_authorization_code`. |
+| `cli_setup_supported` | Whether `integrations:configure` can set credentials headlessly. |
+| `cli_runtime_supported` | Whether local `integrations:call` / `integrations:lua` execution is supported. |
+| `host_availability` | Where the integration can run, including CLI, web, or future proxy hosts. |
+| `runtime_requirements` | External runtime dependencies, such as rendering CLIs. |
+| `compatibility_summary` | Short human-readable compatibility guidance for agents and users. |
+
+## Argument Passing
+
+Integration functions accept structured arguments. The CLI supports several input styles so humans and tools can choose the least awkward form.
+
+### Flags
+
+```bash
+kosmo integrations:plane create_issue \
+  --workspace-slug=kosmokrator \
+  --project-id=e5420c79-d899-4c4d-b372-320ae3915073 \
+  --name="Investigate integration CLI docs" \
+  --priority=medium \
+  --json
+```
+
+Flag names are normalized from kebab-case to snake\_case, so `--workspace-slug` becomes `workspace_slug`. Both `--key=value` and `--key value` forms work.
+
+### JSON Payloads
+
+```bash
+kosmo integrations:call plane.create_issue '{
+  "workspace_slug": "kosmokrator",
+  "project_id": "e5420c79-d899-4c4d-b372-320ae3915073",
+  "name": "Investigate integration CLI docs",
+  "priority": "medium"
+}' --json
+```
+
+JSON payloads must decode to an object. This is the most robust option for coding CLIs because it avoids shell quoting problems for arrays, nested objects, multiline descriptions, and HTML.
+
+### Stdin Payloads
+
+```bash
+jq -n '{
+  workspace_slug: "kosmokrator",
+  search: "execute_lua"
+}' | kosmo integrations:call plane.search_issues --json
+```
+
+If no payload argument is present and stdin is piped, KosmoKrator reads stdin as the JSON payload. This is the recommended bridge for other tools that already produce JSON.
+
+### Repeated `--arg` Pairs
+
+```bash
+kosmo integrations:call plane.search_issues \
+  --arg workspace_slug=kosmokrator \
+  --arg search=permission \
+  --json
+```
+
+`--arg key=value` is useful when another CLI prefers repeated key-value pairs over shell flags. It uses the same coercion rules as normal flags.
+
+### Merge and Override Rules
+
+When you provide both JSON and flags, JSON is loaded first and flags override matching keys:
+
+```bash
+kosmo integrations:call plane.search_issues \
+  '{"workspace_slug":"kosmokrator","search":"old"}' \
+  --search="new" \
+  --json
+```
+
+Scalar strings are coerced where obvious:
+
+| CLI value | Runtime value |
+| --- | --- |
+| `true` | boolean `true` |
+| `false` | boolean `false` |
+| `null` | `null` |
+| `123` | integer `123` |
+| `12.5` | float `12.5` |
+| `medium` | string `medium` |
+
+For arrays and objects, prefer JSON payloads instead of trying to encode them as shell flags.
+
+## Validation, Dry Runs, and Force
+
+Use `--dry-run` before write operations when another agent or script needs to check whether a call is well-formed without touching the provider API. Dry runs resolve the function, parse arguments, check provider activation, verify credentials, validate required parameters, and enforce read/write permissions. They do not execute the provider tool.
+
+```bash
+kosmo integrations:call plane.create_issue \
+  --project-id=PROJECT_UUID \
+  --name="Check payload only" \
+  --dry-run \
+  --json
+```
+
+Use `--force` to bypass only the integration read/write permission policy. This is intentionally narrower than Prometheus mode in the coding agent. It does not bypass credential checks, provider activation, argument validation, CLI compatibility, Lua resource limits, or provider API errors.
+
+```bash
+kosmo integrations:plane create_issue \
+  --project-id=PROJECT_UUID \
+  --name="Trusted automation write" \
+  --force \
+  --json
+
+kosmo integrations:lua workflow.lua --force --json
+```
+
+## JSON Output
+
+Discovery commands use stable JSON envelopes. For example, `integrations:list --json` returns `success` and a `providers` object keyed by provider ID; `integrations:search --json` returns `success`, `query`, and `functions`.
+
+Add `--json` to runtime calls when another process needs a stable result envelope:
+
+```json
+{
+  "function": "plane.list_workspaces",
+  "success": true,
+  "data": {
+    "workspaces": [
+      {"slug": "kosmokrator", "name": "kosmokrator", "id": null, "owner": null}
+    ],
+    "count": 1
+  },
+  "error": null,
+  "meta": [],
+  "duration_ms": 321.8
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `function` | The fully qualified function that ran. |
+| `success` | Boolean success flag from validation, permissions, and provider execution. |
+| `data` | Provider-specific result data. Shape depends on the function schema and package implementation. |
+| `error` | Error message when `success` is false. |
+| `meta` | Runtime metadata such as dry-run state, selected account, operation type, and force state. |
+| `duration_ms` | Runtime duration for the integration function call. |
+
+Validation errors also use JSON when requested:
+
+```bash
+$ kosmo integrations:call plane.create_issue --json
+{
+  "success": false,
+  "error": "Missing required parameter(s): project_id, name"
+}
+```
+
+## Lua Endpoint
+
+`integrations:lua` runs a Lua script in a sandbox with integration namespaces, MCP namespaces, and documentation helpers. This is the ergonomic path for multi-step workflows that would be clumsy as a sequence of shell calls.
+
+```bash
+# Inline Lua
+kosmo integrations:lua --eval 'print(docs.read("plane.create_issue"))'
+
+# Lua file
+kosmo integrations:lua workflow.lua
+
+# Pipe Lua on stdin
+cat workflow.lua | kosmo integrations:lua
+
+# Machine-readable envelope
+kosmo integrations:lua workflow.lua --json
+
+# Interactive integration Lua REPL
+kosmo integrations:lua --repl
+```
+
+### Lua Discovery Helpers
+
+The headless Lua endpoint exposes a small `docs` table:
+
+| Helper | Returns |
+| --- | --- |
+| `docs.list()` | Global integration CLI overview and provider list. |
+| `docs.search(query)` | Matching functions as `provider.function - description` lines. |
+| `docs.read(page)` | Provider docs for `provider` or function docs for `provider.function`. |
+
+```lua
+print(docs.list())
+print(docs.search("issue"))
+print(docs.read("plane.create_issue"))
+```
+
+### Lua Integration Namespaces
+
+Active providers are callable under `app.integrations`:
+
+```lua
+local projects = app.integrations.plane.list_projects({
+  workspace_slug = "kosmokrator"
+})
+
+for _, project in ipairs(projects.projects or {}) do
+  print(project.identifier .. " " .. project.name .. " " .. project.id)
+end
+```
+
+Account-aware paths are also generated when named account aliases exist:
+
+```lua
+app.integrations.plane.list_projects({...})          -- default account
+app.integrations.plane.default.list_projects({...})  -- explicit default account
+app.integrations.plane.work.list_projects({...})     -- named account alias
+```
+
+### Workflow Example
+
+This Lua script lists projects, finds the KosmoKrator project, searches issues, and prints compact JSON for a calling process:
+
+```lua
+local projects = app.integrations.plane.list_projects({
+  workspace_slug = "kosmokrator"
+})
+
+local kosmo_project = nil
+for _, project in ipairs(projects.projects or {}) do
+  if project.identifier == "KOS" then
+    kosmo_project = project
+    break
+  end
+end
+
+if not kosmo_project then
+  error("KosmoKrator project not found")
+end
+
+local issues = app.integrations.plane.list_issues({
+  workspace_slug = "kosmokrator",
+  project_id = kosmo_project.id,
+  search = "integration"
+})
+
+print(json.encode({
+  project = kosmo_project.name,
+  count = issues.count,
+  issues = issues.issues
+}))
+```
+
+### Lua JSON Result Envelope
+
+With `--json`, `integrations:lua` returns the Lua execution envelope rather than only printed output:
+
+```json
+{
+  "success": true,
+  "output": "{\"project\":\"KosmoKrator\",\"count\":4,\"issues\":[...]}",
+  "result": null,
+  "error": null,
+  "execution_time_ms": 42.5,
+  "memory_usage": 1048576,
+  "call_log": [
+    {"function": "app.integrations.plane.list_projects", "tool": "plane_list_projects"},
+    {"function": "app.integrations.plane.list_issues", "tool": "plane_list_issues"}
+  ]
+}
+```
+
+### Lua Sandbox Limits
+
+```bash
+# Override Lua memory and CPU limits for this script
+kosmo integrations:lua workflow.lua \
+  --memory-limit=67108864 \
+  --cpu-limit=10 \
+  --json
+```
+
+The Lua endpoint is for deterministic integration orchestration, not arbitrary local scripting. It does not provide direct filesystem, shell, or network access. Provider calls go through the same integration runtime and permission checks as direct CLI calls.
+
+### Headless Lua vs Agent Lua
+
+There are two Lua environments:
+
+| Surface | Available namespaces | Use case |
+| --- | --- | --- |
+| `kosmo integrations:lua` | `docs.*`, `json.*`, `regex.*`, `app.integrations.*`, `app.mcp.*` | Headless integration and MCP workflows for scripts and external coding CLIs. |
+| `kosmo mcp:lua` | `mcp.*`, `json.*`, `regex.*`, `app.mcp.*` | Headless MCP-only workflows with MCP resources, prompts, and tool calls. |
+| Agent tool `execute_lua` | `json.*`, `regex.*`, `app.integrations.*`, `app.mcp.*`, `app.tools.*` | Inside a KosmoKrator agent session, where Lua can compose integrations and MCP with native coding tools. |
+
+If another coding CLI needs integrations, prefer `integrations:lua`. If it only needs MCP, use `mcp:lua`. If the KosmoKrator agent itself needs to combine integration or MCP data with file edits, shell commands, or subagents, use the agent-side Lua tools documented on the [Lua](/docs/lua) page.
+
+## Permissions and Activation
+
+Integration calls are governed by provider activation, credentials, and read/write permissions. The runtime checks these before executing a provider tool.
+
+| Gate | Failure message shape | Fix |
+| --- | --- | --- |
+| Unknown function | `Unknown integration function: provider.function` | Run `integrations:search` or `integrations:docs provider`. |
+| Inactive provider | `Integration 'provider' is installed but not active...` | Run `integrations:doctor provider --json`, then configure with `integrations:configure` or `/settings`. |
+| CLI runtime unsupported | `Integration 'provider' is discoverable but is not supported by the local CLI runtime yet.` | Inspect `integrations:doctor provider --json`. The provider is visible for discovery and future proxy support. |
+| Missing account credentials | `Integration 'provider' is missing required credentials for account 'work'...` | Run `integrations:fields provider --account work --json`, then configure that account. |
+| Missing required parameters | `Missing required parameter(s): ...` | Read `integrations:schema provider.function`. |
+| Permission denied | `Integration 'provider' write access denied...` | Change provider read/write permission with `integrations:configure provider --read/--write` or `/settings`. |
+| Permission requires approval | `Integration 'provider' write requires approval...` | For non-interactive use, set that operation to `allow`, avoid the write, or pass `--force` only for trusted automation. |
+| Provider API error | Provider-specific structured failure. | Inspect `error`, credentials, workspace/project IDs, and provider API availability. |
+
+In interactive KosmoKrator sessions, `ask` permissions can route through user approval. In a pure headless integration CLI call, there is no interactive approval prompt. For automation, explicitly set the intended provider operation to `allow` and keep destructive operations on `deny` unless the workflow is trusted.
+
+## Configuration Workflow
+
+The recommended headless configuration flow is discoverable and scriptable:
+
+```bash
+kosmo integrations:doctor plane --json
+kosmo integrations:fields plane --json
+
+kosmo integrations:configure plane \
+  --set api_key="$PLANE_API_KEY" \
+  --set url="$PLANE_URL" \
+  --enable \
+  --read=allow \
+  --write=ask \
+  --json
+```
+
+`integrations:configure` stores credentials through the same local secret settings path used by `/settings`. Activation and read/write permissions are written globally by default; pass `--project` when the current repository should override those settings.
+
+Avoid putting literal API keys in shell history or checked-in config files. Prefer environment variables or stdin JSON from a secret-aware process:
+
+```bash
+jq -n \
+  --arg api_key "$PLANE_API_KEY" \
+  --arg url "$PLANE_URL" \
+  '{
+    account: "default",
+    set: {api_key: $api_key, url: $url},
+    enabled: true,
+    permissions: {read: "allow", write: "ask"}
+  }' | kosmo integrations:configure plane --stdin-json --json
+```
+
+Stdin JSON also accepts `credentials` as an alias for `set`, plus `account` and `scope` (`global` or `project`) fields.
+
+Interactive setup is still available: open `/settings`, go to **Integrations**, select the provider, store credentials, enable it, and set the read/write defaults for the workflows you want to run headlessly.
+
+For providers with multiple credential sets, use account aliases:
+
+```bash
+# Default account
+kosmo integrations:call plane.list_projects --json
+
+# Configure a named account
+kosmo integrations:configure plane \
+  --account work \
+  --set api_key="$PLANE_WORK_API_KEY" \
+  --set url="$PLANE_WORK_URL" \
+  --json
+
+# Named account alias
+kosmo integrations:call plane.list_projects --account work --json
+kosmo integrations:plane list_projects --account work --json
+```
+
+Headless multi-credential support is account-scoped end to end. Credential discovery checks the requested alias with `integrations:fields provider --account work --json`, configuration stores values under that alias with `integrations:configure --account`, direct calls validate that alias before execution, and provider tools receive the selected account in their execution context. This lets a caller keep separate work, personal, staging, or production credentials for the same integration.
+
+```bash
+# Agent-friendly named-account setup from JSON
+jq -n \
+  --arg api_key "$PLANE_WORK_API_KEY" \
+  --arg url "$PLANE_WORK_URL" \
+  '{
+    account: "work",
+    credentials: {api_key: $api_key, url: $url},
+    enabled: true,
+    permissions: {read: "allow", write: "ask"}
+  }' | kosmo integrations:configure plane --stdin-json --json
+
+# Validate and run against the named account
+kosmo integrations:fields plane --account work --json
+kosmo integrations:call plane.list_projects --account work --dry-run --json
+kosmo integrations:call plane.list_projects --account work --json
+```
+
+Lua exposes the same aliases as namespaces:
+
+```lua
+app.integrations.plane.list_projects({...})          -- default account
+app.integrations.plane.default.list_projects({...})  -- explicit default account
+app.integrations.plane.work.list_projects({...})     -- work account
+```
+
+## Patterns for Other Coding CLIs
+
+A coding CLI that wants to use KosmoKrator as a unified integration layer should follow a conservative discover-read-call loop:
+
+1.  Run `kosmo integrations:doctor provider --json` to check activation, credentials, permissions, functions, and next commands.
+2.  Run `kosmo integrations:fields provider --json` when credentials are missing or the agent needs field names.
+3.  Use `kosmo integrations:configure provider ... --json` to set credentials, activation, accounts, and permissions headlessly when policy allows it.
+4.  Run `kosmo integrations:search "terms" --json` to find candidate functions.
+5.  Run `kosmo integrations:schema provider.function` before constructing arguments.
+6.  Prefer JSON payloads over flags for anything non-trivial.
+7.  Dry-run writes with `--dry-run --json` before executing them.
+8.  Use `--force` only when a trusted workflow explicitly bypasses the integration read/write permission policy.
+9.  Always pass `--json`, check the process exit code, and check the returned `success` field.
+
+### Read-Only Lookup
+
+```bash
+function_json=$(
+  kosmo integrations:search "plane list issues" --json
+)
+
+schema_json=$(
+  kosmo integrations:schema plane.list_issues
+)
+
+result_json=$(
+  jq -n '{
+    workspace_slug: "kosmokrator",
+    project_id: "e5420c79-d899-4c4d-b372-320ae3915073",
+    search: "integration"
+  }' | kosmo integrations:call plane.list_issues --json
+)
+```
+
+### Write Operation Policy
+
+For write calls, an external CLI should be explicit about intent:
+
+```bash
+# 1. Read schema
+kosmo integrations:schema plane.create_issue
+
+# 2. Show the planned payload to the user
+jq -n '{
+  workspace_slug: "kosmokrator",
+  project_id: "PROJECT_UUID",
+  name: "Issue title from external CLI",
+  description_html: "<p>Created by a scripted workflow.</p>"
+}'
+
+# 3. Validate without executing
+jq -n '{
+  workspace_slug: "kosmokrator",
+  project_id: "PROJECT_UUID",
+  name: "Issue title from external CLI",
+  description_html: "<p>Created by a scripted workflow.</p>"
+}' | kosmo integrations:call plane.create_issue --dry-run --json
+
+# 4. Only call after policy or user approval allows it
+jq -n '{
+  workspace_slug: "kosmokrator",
+  project_id: "PROJECT_UUID",
+  name: "Issue title from external CLI",
+  description_html: "<p>Created by a scripted workflow.</p>"
+}' | kosmo integrations:call plane.create_issue --json
+```
+
+### Multi-Step Workflow Through Lua
+
+When another CLI needs a compact answer assembled from several integration calls, make a Lua file and treat KosmoKrator as a local integration endpoint:
+
+```bash
+# workflow.lua
+local docs_text = docs.read("plane.search_issues")
+local issues = app.integrations.plane.search_issues({
+  workspace_slug = "kosmokrator",
+  search = "permission"
+})
+print(json.encode({
+  docs_checked = string.find(docs_text, "plane.search_issues") ~= nil,
+  count = issues.count,
+  issues = issues.issues
+}))
+```
+
+```bash
+kosmo integrations:lua workflow.lua --json
+```
+
+## Plane Example
+
+Plane is a good example because it includes provider-level discovery, read operations, and write operations with required project and issue identifiers.
+
+```bash
+# Provider docs and status
+kosmo integrations:docs plane
+kosmo integrations:status --json
+
+# Current user / workspace verification
+kosmo integrations:plane get_current_user --json
+kosmo integrations:plane list_workspaces --json
+
+# Project discovery
+kosmo integrations:plane list_projects --workspace-slug=kosmokrator --json
+
+# Project-scoped metadata
+kosmo integrations:plane list_states \
+  --workspace-slug=kosmokrator \
+  --project-id=e5420c79-d899-4c4d-b372-320ae3915073 \
+  --json
+
+kosmo integrations:plane list_labels \
+  --workspace-slug=kosmokrator \
+  --project-id=e5420c79-d899-4c4d-b372-320ae3915073 \
+  --json
+
+# Issue search
+kosmo integrations:plane list_issues \
+  --workspace-slug=kosmokrator \
+  --project-id=e5420c79-d899-4c4d-b372-320ae3915073 \
+  --search=integration \
+  --json
+```
+
+Before creating or updating an issue, inspect the schema:
+
+```bash
+kosmo integrations:schema plane.create_issue
+```
+
+The runtime validates required parameters before it calls Plane. For example, this fails locally and does not create anything:
+
+```bash
+kosmo integrations:plane create_issue --json
+```
+
+## Best Practices
+
+-   Use `integrations:doctor provider --json` as the first health check before automation.
+-   Use `integrations:fields provider --json` to discover credential keys before headless setup.
+-   Use `integrations:schema` as the source of truth for required arguments.
+-   Use JSON payloads for arrays, objects, HTML, multiline text, or generated input.
+-   Use `--dry-run` to validate write payloads before execution.
+-   Use provider shortcuts for humans and `integrations:call` for reusable scripts.
+-   Keep read operations broadly available and restrict write operations per provider.
+-   Reserve `--force` for trusted automation that intentionally bypasses integration read/write policy.
+-   Check exit codes. Do not parse human table output in automation.
+-   Keep secrets in KosmoKrator's settings store. Do not pass API keys as shell flags.
+-   For multi-step workflows, prefer `integrations:lua` over long chains of fragile shell parsing.
+-   When integrating another coding CLI, make it discover docs and schemas at runtime instead of hardcoding stale assumptions.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Next step |
+| --- | --- | --- |
+| Provider appears but `active` is false. | The package is installed, but it is disabled or missing required credentials. | Run `integrations:doctor provider --json`, then `integrations:fields` and `integrations:configure`. |
+| `Missing required parameter(s)`. | The payload does not satisfy the function schema. | Run `integrations:schema provider.function`. |
+| `requires approval` in a script. | The provider operation is set to `ask`, but headless calls cannot prompt. | Set that read/write operation to `allow` for trusted automation. |
+| Shell flags behave oddly for arrays. | Flags are scalar-oriented. | Use a JSON payload or stdin JSON. |
+| Lua cannot call `app.tools.bash`. | `integrations:lua` exposes integration and MCP namespaces, not native coding tools. | Use agent-side `execute_lua` inside a KosmoKrator session for `app.tools.*`. |
+| A provider endpoint returns a 404 or unavailable feature. | The provider API version or self-hosted deployment may not support that endpoint. | Use the structured `error` field and fall back to supported read operations. |

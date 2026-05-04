@@ -62,7 +62,7 @@ DESC;
         $request = new WebSearchRequest(
             query: trim((string) ($args['query'] ?? '')),
             provider: $this->nullableString($args['provider'] ?? null),
-            maxResults: max(1, min(10, (int) ($args['max_results'] ?? ($this->settings->getRaw('kosmokrator.web.search.max_results') ?? 5)))),
+            maxResults: max(1, min(10, (int) ($args['max_results'] ?? ($this->settings->getRaw('kosmo.web.search.max_results') ?? 5)))),
             allowedDomains: $this->stringList($args['allowed_domains'] ?? []),
             blockedDomains: $this->stringList($args['blocked_domains'] ?? []),
             searchDepth: in_array((string) ($args['search_depth'] ?? 'basic'), ['basic', 'advanced'], true) ? (string) ($args['search_depth'] ?? 'basic') : 'basic',

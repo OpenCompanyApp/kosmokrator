@@ -42,6 +42,9 @@ class EventRenderer extends NullRenderer
     /** @var null|\Closure(AgentEvent): void */
     private ?\Closure $eventCallback = null;
 
+    /** @var array<string, \Closure(AgentEvent): void> */
+    private array $eventListeners = [];
+
     /** @var null|\Closure(string, array<string, mixed>): (string|bool) */
     private ?\Closure $permissionCallback = null;
 
@@ -103,6 +106,21 @@ class EventRenderer extends NullRenderer
         if (! $this->cancellation->isCancelled()) {
             $this->cancellation->cancel(new \RuntimeException($reason));
         }
+    }
+
+    /**
+     * Register a temporary event listener.
+     *
+     * @return \Closure(): void Removes the listener.
+     */
+    public function addEventListener(\Closure $listener): \Closure
+    {
+        $id = spl_object_hash($listener);
+        $this->eventListeners[$id] = $listener;
+
+        return function () use ($id): void {
+            unset($this->eventListeners[$id]);
+        };
     }
 
     public function setPhase(AgentPhase $phase): void
@@ -189,6 +207,10 @@ class EventRenderer extends NullRenderer
 
         if ($this->eventCallback !== null) {
             ($this->eventCallback)($event);
+        }
+
+        foreach ($this->eventListeners as $listener) {
+            $listener($event);
         }
     }
 }

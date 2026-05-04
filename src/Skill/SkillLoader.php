@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Skill;
 
 use Kosmokrator\Security\PromptInjectionScanner;
+use Kosmokrator\Settings\ConfigCompatibility;
+use Kosmokrator\Settings\SettingsPaths;
 use Symfony\Component\Yaml\Yaml;
 
 class SkillLoader
@@ -13,8 +15,8 @@ class SkillLoader
     private readonly array $sources;
 
     /**
-     * @param  string  $projectRoot  Project root directory (for .kosmokrator/skills/ and .agents/skills/)
-     * @param  string  $userSkillsDir  User-global skills directory (~/.kosmokrator/skills/)
+     * @param  string  $projectRoot  Project root directory (for .kosmo/skills/ and .agents/skills/)
+     * @param  string  $userSkillsDir  User-global skills directory (~/.kosmo/skills/)
      */
     public function __construct(
         private readonly string $projectRoot,
@@ -23,9 +25,11 @@ class SkillLoader
     ) {
         // Lowest precedence first — later entries override earlier ones
         $this->sources = [
+            ['dir' => $this->legacyUserSkillsDir(), 'scope' => SkillScope::User],
             ['dir' => $this->userSkillsDir, 'scope' => SkillScope::User],
+            ['dir' => SettingsPaths::projectDirectory($this->projectRoot, ConfigCompatibility::LEGACY_ROOT).'/skills', 'scope' => SkillScope::Project],
             ['dir' => $this->projectRoot.'/.agents/skills', 'scope' => SkillScope::Project],
-            ['dir' => $this->projectRoot.'/.kosmokrator/skills', 'scope' => SkillScope::Project],
+            ['dir' => SettingsPaths::projectDirectory($this->projectRoot).'/skills', 'scope' => SkillScope::Project],
         ];
     }
 
@@ -33,9 +37,9 @@ class SkillLoader
      * Load all skills from all discovery directories.
      *
      * Precedence (highest → lowest):
-     *   1. .kosmokrator/skills/  (project canonical)
+     *   1. .kosmo/skills/  (project canonical)
      *   2. .agents/skills/       (ecosystem standard)
-     *   3. ~/.kosmokrator/skills/ (user global)
+     *   3. ~/.kosmo/skills/ (user global)
      *
      * @return array<string, Skill> name → Skill
      */
@@ -144,12 +148,22 @@ class SkillLoader
      */
     public function getProjectSkillsDir(): string
     {
-        return $this->projectRoot.'/.kosmokrator/skills';
+        return SettingsPaths::projectDirectory($this->projectRoot).'/skills';
     }
 
     public function getUserSkillsDir(): string
     {
         return $this->userSkillsDir;
+    }
+
+    private function legacyUserSkillsDir(): string
+    {
+        $canonicalSegment = '/.'.ConfigCompatibility::CANONICAL_ROOT.'/';
+        if (str_contains($this->userSkillsDir, $canonicalSegment)) {
+            return str_replace($canonicalSegment, '/.'.ConfigCompatibility::LEGACY_ROOT.'/', $this->userSkillsDir);
+        }
+
+        return SettingsPaths::globalDirectory(ConfigCompatibility::LEGACY_ROOT).'/skills';
     }
 
     /**

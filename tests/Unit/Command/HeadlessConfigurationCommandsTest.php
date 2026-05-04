@@ -50,12 +50,12 @@ final class HeadlessConfigurationCommandsTest extends TestCase
     {
         $this->originalHome = (string) getenv('HOME');
         $this->tempHome = sys_get_temp_dir().'/kk-headless-config-test-'.uniqid();
-        mkdir($this->tempHome.'/.kosmokrator', 0777, true);
+        mkdir($this->tempHome.'/.kosmo', 0777, true);
         putenv("HOME={$this->tempHome}");
 
         $configDir = dirname(__DIR__, 3).'/config';
         $config = new Repository([
-            'kosmokrator' => Yaml::parseFile($configDir.'/kosmokrator.yaml'),
+            'kosmo' => Yaml::parseFile($configDir.'/kosmo.yaml'),
         ]);
 
         $schema = new SettingsSchema;
@@ -152,8 +152,8 @@ final class HeadlessConfigurationCommandsTest extends TestCase
         $data = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame(['bash', 'file_write'], $data['written_value']);
         $this->assertSame(['bash', 'file_write'], $data['effective_setting']['value']);
-        $config = Yaml::parseFile($this->tempHome.'/.kosmokrator/config.yaml');
-        $this->assertSame(['bash', 'file_write'], $config['kosmokrator']['tools']['denied_tools']);
+        $config = Yaml::parseFile($this->tempHome.'/.kosmo/config.yaml');
+        $this->assertSame(['bash', 'file_write'], $config['kosmo']['tools']['denied_tools']);
     }
 
     public function test_settings_set_uses_provider_context_for_model_options(): void
@@ -170,8 +170,8 @@ final class HeadlessConfigurationCommandsTest extends TestCase
         $this->assertSame(0, $exit);
         $data = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame('gpt-test', $data['written_value']);
-        $config = Yaml::parseFile($this->tempHome.'/.kosmokrator/config.yaml');
-        $this->assertSame('gpt-test', $config['kosmokrator']['agent']['default_model']);
+        $config = Yaml::parseFile($this->tempHome.'/.kosmo/config.yaml');
+        $this->assertSame('gpt-test', $config['kosmo']['agent']['default_model']);
     }
 
     public function test_config_set_validates_dynamic_model_context(): void
@@ -229,9 +229,9 @@ final class HeadlessConfigurationCommandsTest extends TestCase
 
         $this->assertSame(0, $exit);
         $this->assertSame('sk-test-secret', $this->settingsRepository->get('global', 'provider.openai.api_key'));
-        $config = Yaml::parseFile($this->tempHome.'/.kosmokrator/config.yaml');
-        $this->assertSame('openai', $config['kosmokrator']['agent']['default_provider']);
-        $this->assertSame('gpt-test', $config['kosmokrator']['agent']['default_model']);
+        $config = Yaml::parseFile($this->tempHome.'/.kosmo/config.yaml');
+        $this->assertSame('openai', $config['kosmo']['agent']['default_provider']);
+        $this->assertSame('gpt-test', $config['kosmo']['agent']['default_model']);
     }
 
     public function test_custom_provider_upsert_writes_definition_and_secret(): void
@@ -250,7 +250,7 @@ final class HeadlessConfigurationCommandsTest extends TestCase
 
         $this->assertSame(0, $exit);
         $this->assertSame('local-secret', $this->settingsRepository->get('global', 'provider.local_ai.api_key'));
-        $config = Yaml::parseFile($this->tempHome.'/.kosmokrator/config.yaml');
+        $config = Yaml::parseFile($this->tempHome.'/.kosmo/config.yaml');
         $this->assertSame('http://localhost:8000/v1', $config['relay']['providers']['local_ai']['url']);
     }
 
@@ -299,10 +299,10 @@ final class HeadlessConfigurationCommandsTest extends TestCase
 
         $this->assertSame(0, $exit);
         $this->assertSame('telegram-secret', $this->settingsRepository->get('global', 'gateway.telegram.token'));
-        $config = Yaml::parseFile($this->tempHome.'/.kosmokrator/config.yaml');
-        $this->assertSame('on', $config['kosmokrator']['gateway']['telegram']['enabled']);
-        $this->assertSame('thread_user', $config['kosmokrator']['gateway']['telegram']['session_mode']);
-        $this->assertSame(['123', '@maintainer'], $config['kosmokrator']['gateway']['telegram']['allowed_users']);
+        $config = Yaml::parseFile($this->tempHome.'/.kosmo/config.yaml');
+        $this->assertSame('on', $config['kosmo']['gateway']['telegram']['enabled']);
+        $this->assertSame('thread_user', $config['kosmo']['gateway']['telegram']['session_mode']);
+        $this->assertSame(['123', '@maintainer'], $config['kosmo']['gateway']['telegram']['allowed_users']);
     }
 
     private function tokenStore(): CodexTokenStore

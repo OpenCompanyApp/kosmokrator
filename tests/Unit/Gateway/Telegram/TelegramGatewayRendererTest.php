@@ -8,6 +8,7 @@ use Kosmokrator\Agent\AgentPhase;
 use Kosmokrator\Gateway\GatewayApprovalStore;
 use Kosmokrator\Gateway\GatewayMessageStore;
 use Kosmokrator\Gateway\Telegram\TelegramGatewayRenderer;
+use Kosmokrator\Gateway\Telegram\TelegramTextFormatter;
 use Kosmokrator\Session\Database;
 use PHPUnit\Framework\TestCase;
 
@@ -165,6 +166,83 @@ final class TelegramGatewayRendererTest extends TestCase
         $this->assertGreaterThanOrEqual(3, count($client->sent));
         $this->assertSame('HTML', $client->sent[1]['parse_mode']);
         $this->assertSame('HTML', $client->sent[2]['parse_mode']);
+    }
+
+    public function test_stream_chunks_use_configured_reply_mode(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->prepare('INSERT INTO sessions (id, project, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute(['sess-1', null, null, 'test/model', date(DATE_ATOM), date(DATE_ATOM)]);
+        $client = new FakeTelegramClient;
+        $renderer = new TelegramGatewayRenderer(
+            client: $client,
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            routeKey: 'telegram:123',
+            sessionId: 'sess-1',
+            chatId: '123',
+            threadId: null,
+            approvalCallback: static fn (): string => 'deny',
+            replyToMessageId: 55,
+            replyToMode: 'first',
+        );
+
+        $renderer->streamChunk(str_repeat("alpha beta gamma\n", 350));
+        $renderer->streamComplete();
+
+        $this->assertSame(55, $client->sent[0]['reply_to_message_id']);
+        $this->assertNull($client->sent[1]['reply_to_message_id'] ?? null);
+    }
+
+    public function test_stream_split_respects_utf16_telegram_limit(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->prepare('INSERT INTO sessions (id, project, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute(['sess-1', null, null, 'test/model', date(DATE_ATOM), date(DATE_ATOM)]);
+        $client = new FakeTelegramClient;
+        $renderer = new TelegramGatewayRenderer(
+            client: $client,
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            routeKey: 'telegram:123',
+            sessionId: 'sess-1',
+            chatId: '123',
+            threadId: null,
+            approvalCallback: static fn (): string => 'deny',
+        );
+
+        $renderer->streamChunk(str_repeat('😀', 2200));
+        $renderer->streamComplete();
+
+        $this->assertGreaterThanOrEqual(2, count($client->sent));
+        foreach ($client->sent as $message) {
+            $this->assertLessThanOrEqual(3600, TelegramTextFormatter::utf16Length((string) $message['text']));
+        }
+    }
+
+    public function test_reactions_are_best_effort_on_completion(): void
+    {
+        $db = new Database(':memory:');
+        $db->connection()->prepare('INSERT INTO sessions (id, project, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute(['sess-1', null, null, 'test/model', date(DATE_ATOM), date(DATE_ATOM)]);
+        $client = new FakeTelegramClient;
+        $renderer = new TelegramGatewayRenderer(
+            client: $client,
+            messages: new GatewayMessageStore($db),
+            approvals: new GatewayApprovalStore($db),
+            routeKey: 'telegram:123',
+            sessionId: 'sess-1',
+            chatId: '123',
+            threadId: null,
+            approvalCallback: static fn (): string => 'deny',
+            replyToMessageId: 55,
+            reactionsEnabled: true,
+        );
+
+        $renderer->streamChunk('done');
+        $renderer->streamComplete();
+
+        $this->assertSame([['chatId' => '123', 'messageId' => 55, 'emoji' => '👍']], $client->reactions);
     }
 
     public function test_stream_complete_formats_code_blocks_and_tables_as_html(): void

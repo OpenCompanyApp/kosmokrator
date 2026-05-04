@@ -72,17 +72,41 @@ final class YamlConfigStoreTest extends TestCase
     public function test_load_valid_yaml_file_returns_parsed_data(): void
     {
         $path = $this->tmpFile();
-        file_put_contents($path, "kosmokrator:\n  agent:\n    mode: autonomous\n");
+        file_put_contents($path, "kosmo:\n  agent:\n    mode: autonomous\n");
 
         $result = $this->store->load($path);
 
         $this->assertSame([
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'mode' => 'autonomous',
                 ],
             ],
         ], $result);
+    }
+
+    public function test_load_legacy_kosmokrator_root_normalizes_to_kosmo(): void
+    {
+        $path = $this->tmpFile();
+        file_put_contents($path, "kosmokrator:\n  agent:\n    mode: autonomous\n");
+
+        $result = $this->store->load($path);
+
+        $this->assertSame('autonomous', $result['kosmo']['agent']['mode'] ?? null);
+        $this->assertArrayNotHasKey('kosmokrator', $result);
+    }
+
+    public function test_load_flat_runtime_sections_normalize_under_kosmo(): void
+    {
+        $path = $this->tmpFile();
+        file_put_contents($path, "agent:\n  mode: plan\nmcp:\n  permissions_default: deny\n");
+
+        $result = $this->store->load($path);
+
+        $this->assertSame('plan', $result['kosmo']['agent']['mode'] ?? null);
+        $this->assertSame('deny', $result['kosmo']['mcp']['permissions_default'] ?? null);
+        $this->assertArrayNotHasKey('agent', $result);
+        $this->assertArrayNotHasKey('mcp', $result);
     }
 
     public function test_load_empty_file_returns_empty_array(): void
@@ -102,7 +126,7 @@ final class YamlConfigStoreTest extends TestCase
     public function test_save_writes_yaml_to_file(): void
     {
         $path = $this->tmpFile();
-        $data = ['kosmokrator' => ['debug' => true]];
+        $data = ['kosmo' => ['debug' => true]];
 
         $this->store->save($path, $data);
 
@@ -144,21 +168,21 @@ final class YamlConfigStoreTest extends TestCase
     public function test_get_retrieves_nested_value_by_dot_path(): void
     {
         $data = [
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'mode' => 'autonomous',
                 ],
             ],
         ];
 
-        $this->assertSame('autonomous', $this->store->get($data, 'kosmokrator.agent.mode'));
+        $this->assertSame('autonomous', $this->store->get($data, 'kosmo.agent.mode'));
     }
 
     public function test_get_returns_null_for_missing_path(): void
     {
-        $data = ['kosmokrator' => ['agent' => ['mode' => 'autonomous']]];
+        $data = ['kosmo' => ['agent' => ['mode' => 'autonomous']]];
 
-        $this->assertNull($this->store->get($data, 'kosmokrator.agent.nonexistent'));
+        $this->assertNull($this->store->get($data, 'kosmo.agent.nonexistent'));
         $this->assertNull($this->store->get($data, 'missing.entirely'));
     }
 
@@ -170,10 +194,10 @@ final class YamlConfigStoreTest extends TestCase
     {
         $data = [];
 
-        $this->store->set($data, 'kosmokrator.agent.mode', 'autonomous');
+        $this->store->set($data, 'kosmo.agent.mode', 'autonomous');
 
         $this->assertSame([
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'mode' => 'autonomous',
                 ],
@@ -184,16 +208,34 @@ final class YamlConfigStoreTest extends TestCase
     public function test_set_overwrites_existing_value(): void
     {
         $data = [
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'mode' => 'manual',
                 ],
             ],
         ];
 
-        $this->store->set($data, 'kosmokrator.agent.mode', 'autonomous');
+        $this->store->set($data, 'kosmo.agent.mode', 'autonomous');
 
-        $this->assertSame('autonomous', $data['kosmokrator']['agent']['mode']);
+        $this->assertSame('autonomous', $data['kosmo']['agent']['mode']);
+    }
+
+    public function test_set_rejects_non_array_intermediate_values(): void
+    {
+        $data = [
+            'kosmo' => [
+                'agent' => 'manual',
+            ],
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot set nested config path kosmo.agent.mode: kosmo.agent is not a map.');
+
+        try {
+            $this->store->set($data, 'kosmo.agent.mode', 'autonomous');
+        } finally {
+            $this->assertSame(['kosmo' => ['agent' => 'manual']], $data);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -203,24 +245,24 @@ final class YamlConfigStoreTest extends TestCase
     public function test_unset_removes_value_and_cleans_up_empty_parents(): void
     {
         $data = [
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'mode' => 'autonomous',
                 ],
             ],
         ];
 
-        $this->store->unset($data, 'kosmokrator.agent.mode');
+        $this->store->unset($data, 'kosmo.agent.mode');
 
         $this->assertSame([], $data);
     }
 
     public function test_unset_non_existent_path_does_nothing(): void
     {
-        $data = ['kosmokrator' => ['agent' => ['mode' => 'autonomous']]];
+        $data = ['kosmo' => ['agent' => ['mode' => 'autonomous']]];
 
-        $this->store->unset($data, 'kosmokrator.agent.nonexistent');
+        $this->store->unset($data, 'kosmo.agent.nonexistent');
 
-        $this->assertSame(['kosmokrator' => ['agent' => ['mode' => 'autonomous']]], $data);
+        $this->assertSame(['kosmo' => ['agent' => ['mode' => 'autonomous']]], $data);
     }
 }

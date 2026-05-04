@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Settings;
 
+use Kosmokrator\IO\AtomicFileWriter;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -38,7 +39,7 @@ final class YamlConfigStore
         }
 
         try {
-            return Yaml::parse($content) ?? [];
+            return $this->normalizeNamespaces(Yaml::parse($content) ?? []);
         } catch (ParseException $e) {
             $this->log?->warning("Failed to parse YAML config file {$path}: ".$e->getMessage());
 
@@ -69,9 +70,7 @@ final class YamlConfigStore
         }
 
         // Atomic write: write to temp file then rename
-        $tmpPath = $dir.'/'.basename($path).'.tmp.'.uniqid('', true);
-        file_put_contents($tmpPath, Yaml::dump($data, 8, 2, Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE));
-        rename($tmpPath, $path);
+        AtomicFileWriter::write($path, Yaml::dump($data, 8, 2, Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE), 0700);
     }
 
     /**
@@ -104,7 +103,7 @@ final class YamlConfigStore
      * Retrieve a value from a nested array using dot notation.
      *
      * @param  array<string, mixed>  $data  Config array to search
-     * @param  string  $path  Dot-separated key path (e.g. "kosmokrator.agent.mode")
+     * @param  string  $path  Dot-separated key path (e.g. "kosmo.agent.mode")
      * @return mixed The value at the given path, or null if not found
      */
     public function get(array $data, string $path): mixed
@@ -133,17 +132,26 @@ final class YamlConfigStore
     public function set(array &$data, string $path, mixed $value): void
     {
         $segments = explode('.', $path);
+        $leaf = array_pop($segments);
+        if ($leaf === null || $leaf === '') {
+            return;
+        }
+
         $current = &$data;
 
-        foreach ($segments as $segment) {
-            if (! isset($current[$segment]) || ! is_array($current[$segment])) {
+        foreach ($segments as $index => $segment) {
+            if (! array_key_exists($segment, $current)) {
                 $current[$segment] = [];
+            } elseif (! is_array($current[$segment])) {
+                $prefix = implode('.', array_slice($segments, 0, $index + 1));
+
+                throw new \RuntimeException("Cannot set nested config path {$path}: {$prefix} is not a map.");
             }
 
             $current = &$current[$segment];
         }
 
-        $current = $value;
+        $current[$leaf] = $value;
     }
 
     /**
@@ -192,5 +200,14 @@ final class YamlConfigStore
         if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
             throw new \RuntimeException("Unable to create directory: {$dir}");
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeNamespaces(array $data): array
+    {
+        return ConfigCompatibility::normalizeKosmoNamespace($data);
     }
 }

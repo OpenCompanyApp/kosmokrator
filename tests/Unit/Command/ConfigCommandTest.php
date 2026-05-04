@@ -31,7 +31,7 @@ class ConfigCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->tmpDir = sys_get_temp_dir().'/kosmokrator_test_config_'.uniqid();
-        mkdir($this->tmpDir.'/.kosmokrator', 0777, true);
+        mkdir($this->tmpDir.'/.kosmo', 0777, true);
 
         $this->schema = new SettingsSchema;
         $store = new YamlConfigStore;
@@ -169,6 +169,20 @@ class ConfigCommandTest extends TestCase
 
         $this->assertSame(1, $exit);
         $this->assertStringContainsString('Unknown setting [unknown]', $this->tester->getDisplay());
+    }
+
+    public function test_set_invalid_number_returns_json_failure(): void
+    {
+        $exit = $this->tester->execute([
+            'action' => 'set',
+            'key' => 'agent.max_tokens',
+            'value' => 'abc',
+            '--json' => true,
+        ]);
+
+        $this->assertSame(1, $exit);
+        $this->assertJson($this->tester->getDisplay());
+        $this->assertStringContainsString('Invalid value for [agent.max_tokens]: expected a number.', $this->tester->getDisplay());
     }
 
     // ── Unset action ──────────────────────────────────────────────────

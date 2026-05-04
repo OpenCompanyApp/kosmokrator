@@ -66,29 +66,29 @@ final class WebConfigureCommand extends Command
             $this->container->make(SettingsRepositoryInterface::class)->set('global', "provider.{$provider}.api_key", $secret);
         }
         if (is_string($input->getOption('api-key-env')) && $input->getOption('api-key-env') !== '') {
-            $settings->setRaw("kosmokrator.web.providers.{$provider}.api_key_env", $input->getOption('api-key-env'), $scope);
+            $settings->setRaw("kosmo.web.providers.{$provider}.api_key_env", $input->getOption('api-key-env'), $scope);
         }
         if (is_string($input->getOption('base-url')) && $input->getOption('base-url') !== '') {
-            $settings->setRaw("kosmokrator.web.providers.{$provider}.base_url", $input->getOption('base-url'), $scope);
+            $settings->setRaw("kosmo.web.providers.{$provider}.base_url", $input->getOption('base-url'), $scope);
         }
 
         if ($input->getOption('enable') || (! $input->getOption('disable') && ($input->getOption('search') || $input->getOption('fetch') || $input->getOption('crawl')))) {
-            $settings->setRaw("kosmokrator.web.providers.{$provider}.enabled", 'on', $scope);
+            $settings->setRaw("kosmo.web.providers.{$provider}.enabled", 'on', $scope);
         }
         if ($input->getOption('disable')) {
-            $settings->setRaw("kosmokrator.web.providers.{$provider}.enabled", 'off', $scope);
+            $settings->setRaw("kosmo.web.providers.{$provider}.enabled", 'off', $scope);
         }
         if ($input->getOption('search')) {
-            $settings->setRaw('kosmokrator.web.search.enabled', 'on', $scope);
-            $settings->setRaw('kosmokrator.web.search.provider', $provider, $scope);
+            $settings->setRaw('kosmo.web.search.enabled', 'on', $scope);
+            $settings->setRaw('kosmo.web.search.provider', $provider, $scope);
         }
         if ($input->getOption('fetch')) {
-            $settings->setRaw('kosmokrator.web.fetch.allow_external', 'on', $scope);
-            $settings->setRaw('kosmokrator.web.fetch.provider', $provider, $scope);
+            $settings->setRaw('kosmo.web.fetch.allow_external', 'on', $scope);
+            $settings->setRaw('kosmo.web.fetch.provider', $provider, $scope);
         }
         if ($input->getOption('crawl')) {
-            $settings->setRaw('kosmokrator.web.crawl.enabled', 'on', $scope);
-            $settings->setRaw('kosmokrator.web.crawl.provider', $provider, $scope);
+            $settings->setRaw('kosmo.web.crawl.enabled', 'on', $scope);
+            $settings->setRaw('kosmo.web.crawl.provider', $provider, $scope);
         }
 
         $payload = ['success' => true, 'provider' => $provider, 'scope' => $scope, 'stored_secret' => $secret !== null && $secret !== ''];

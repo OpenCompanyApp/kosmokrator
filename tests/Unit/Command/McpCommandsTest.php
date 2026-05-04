@@ -92,7 +92,11 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(1, $blocked['exit']);
         $this->assertStringContainsString('not trusted', $blocked['json']['error']);
 
-        $forced = $this->runKosmo(['mcp:call', 'fake.echo', '--message=ok', '--force', '--json']);
+        $forcedBlocked = $this->runKosmo(['mcp:call', 'fake.echo', '--message=blocked', '--force', '--json']);
+        $this->assertSame(1, $forcedBlocked['exit']);
+        $this->assertStringContainsString('force bypass is disabled', $forcedBlocked['json']['error']);
+
+        $forced = $this->runKosmo(['mcp:call', 'fake.echo', '--message=ok', '--force', '--json'], ['KOSMO_MCP_ALLOW_FORCE' => '1']);
         $this->assertSame(0, $forced['exit']);
         $this->assertSame('ok', $forced['json']['data']);
         $this->assertTrue($forced['json']['meta']['permission_bypassed']);
@@ -105,7 +109,7 @@ final class McpCommandsTest extends TestCase
         $this->assertSame(1, $luaBlocked['exit']);
         $this->assertStringContainsString('not trusted', $luaBlocked['json']['error']);
 
-        $luaForced = $this->runKosmo(['mcp:lua', '--eval', 'dump(app.mcp.fake.echo({message="lua-force"}))', '--force', '--json']);
+        $luaForced = $this->runKosmo(['mcp:lua', '--eval', 'dump(app.mcp.fake.echo({message="lua-force"}))', '--force', '--json'], ['KOSMO_MCP_ALLOW_FORCE' => '1']);
         $this->assertSame(0, $luaForced['exit']);
         $this->assertSame('lua-force', $luaForced['json']['output']);
     }
@@ -130,6 +134,139 @@ final class McpCommandsTest extends TestCase
         $this->assertArrayHasKey('fake', $export['json']['config']['servers']);
     }
 
+    public function test_gateway_export_and_install_write_claude_compatible_stdio_config(): void
+    {
+        $export = $this->runKosmo([
+            'mcp:gateway:export',
+            '--integration=plane',
+            '--upstream=context7',
+            '--write=deny',
+            '--json',
+        ]);
+
+        $this->assertSame(0, $export['exit'], $export['output']);
+        $server = $export['json']['config']['mcpServers']['kosmo'] ?? null;
+        $this->assertIsArray($server);
+        $this->assertSame('stdio', $server['type']);
+        $this->assertContains('mcp:serve', $server['args']);
+        $this->assertContains('--integration=plane', $server['args']);
+        $this->assertContains('--upstream=context7', $server['args']);
+
+        $install = $this->runKosmo([
+            'mcp:gateway:install',
+            '--integration=plane',
+            '--upstream=context7',
+            '--write=deny',
+            '--json',
+        ]);
+
+        $this->assertSame(0, $install['exit'], $install['output']);
+        $this->assertFileExists($this->project.'/.mcp.json');
+        $installed = json_decode((string) file_get_contents($this->project.'/.mcp.json'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertContains('mcp:serve', $installed['mcpServers']['kosmo']['args']);
+        $this->assertContains('--integration=plane', $installed['mcpServers']['kosmo']['args']);
+    }
+
+    public function test_gateway_export_with_profile_does_not_override_profile_write_policy(): void
+    {
+        $export = $this->runKosmo([
+            'mcp:gateway:export',
+            '--profile=claude',
+            '--json',
+        ]);
+
+        $this->assertSame(0, $export['exit'], $export['output']);
+        $args = $export['json']['config']['mcpServers']['kosmo']['args'];
+        $this->assertContains('--profile=claude', $args);
+        $this->assertNotContains('--write=deny', $args);
+    }
+
+    public function test_gateway_serves_selected_hyphenated_upstream_mcp_tools_over_json_rpc(): void
+    {
+        $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';
+        file_put_contents($this->project.'/.mcp.json', json_encode([
+            'mcpServers' => [
+                'fake-server' => ['command' => 'php', 'args' => [$server]],
+                'kosmo' => ['command' => 'kosmo', 'args' => ['mcp:serve', '--upstream=fake-server']],
+            ],
+        ], JSON_PRETTY_PRINT));
+
+        $process = new Process([
+            'php', $this->root.'/bin/kosmo',
+            'mcp:serve',
+            '--upstream=fake-server',
+            '--write=allow',
+            '--force',
+        ], $this->project, [
+            'HOME' => $this->home,
+            'KOSMO_MCP_ALLOW_FORCE' => '1',
+        ]);
+        $process->setInput(implode("\n", [
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}',
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mcp__fake_server__echo","arguments":{"message":"from gateway"}}}',
+            '{"jsonrpc":"2.0","id":4,"method":"unknown/method"}',
+            '',
+        ]));
+        $process->setTimeout(15);
+        $process->run();
+
+        $this->assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        $lines = array_values(array_filter(explode("\n", trim($process->getOutput()))));
+        $responses = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), $lines);
+
+        $this->assertSame('kosmo', $responses[0]['result']['serverInfo']['name']);
+        $toolNames = array_column($responses[1]['result']['tools'], 'name');
+        $this->assertContains('mcp__fake_server__echo', $toolNames);
+        $this->assertSame('from gateway', $responses[2]['result']['structuredContent']['value']);
+        $this->assertSame(-32601, $responses[3]['error']['code']);
+    }
+
+    public function test_gateway_profile_write_policy_is_not_overridden_by_missing_cli_write_option(): void
+    {
+        $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';
+        mkdir($this->project.'/.kosmo', 0777, true);
+        file_put_contents($this->project.'/.mcp.json', json_encode([
+            'mcpServers' => [
+                'fake-server' => ['command' => 'php', 'args' => [$server]],
+            ],
+        ], JSON_PRETTY_PRINT));
+        file_put_contents($this->project.'/.kosmo/config.yaml', <<<'YAML'
+kosmo:
+  mcp_gateway:
+    profiles:
+      claude:
+        upstream_mcp:
+          include: [fake-server]
+        write_policy: allow
+YAML);
+
+        $process = new Process([
+            'php', $this->root.'/bin/kosmo',
+            'mcp:serve',
+            '--profile=claude',
+            '--force',
+        ], $this->project, [
+            'HOME' => $this->home,
+            'KOSMO_MCP_ALLOW_FORCE' => '1',
+        ]);
+        $process->setInput(implode("\n", [
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
+            '',
+        ]));
+        $process->setTimeout(15);
+        $process->run();
+
+        $this->assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        $lines = array_values(array_filter(explode("\n", trim($process->getOutput()))));
+        $responses = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), $lines);
+
+        $toolNames = array_column($responses[1]['result']['tools'], 'name');
+        $this->assertContains('mcp__fake_server__create_issue', $toolNames);
+    }
+
     public function test_parallel_headless_mcp_adds_do_not_lose_config_or_permissions(): void
     {
         $server = $this->root.'/tests/fixtures/mcp/fake_stdio_server.php';
@@ -137,7 +274,7 @@ final class McpCommandsTest extends TestCase
 
         foreach (['one', 'two', 'three'] as $name) {
             $processes[$name] = new Process([
-                'php', $this->root.'/bin/kosmokrator',
+                'php', $this->root.'/bin/kosmo',
                 'mcp:add', $name,
                 '--project',
                 '--type=stdio',
@@ -171,10 +308,11 @@ final class McpCommandsTest extends TestCase
      * @param  list<string>  $args
      * @return array{exit: int, output: string, json: array<string, mixed>}
      */
-    private function runKosmo(array $args): array
+    private function runKosmo(array $args, array $env = []): array
     {
-        $process = new Process(array_merge(['php', $this->root.'/bin/kosmokrator'], $args), $this->project, [
+        $process = new Process(array_merge(['php', $this->root.'/bin/kosmo'], $args), $this->project, [
             'HOME' => $this->home,
+            ...$env,
         ]);
         $process->setTimeout(15);
         $process->run();

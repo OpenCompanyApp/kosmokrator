@@ -11,7 +11,7 @@ This document is the current-state architecture summary. Proposal and roadmap ma
 The runtime entry path is:
 
 ```text
-bin/kosmokrator
+bin/kosmo
   → Kernel
   → AgentCommand
   → AgentSessionBuilder
@@ -62,7 +62,7 @@ Blocked paths and blocked command patterns are always enforced.
 
 ### Persistence and State
 
-KosmoKrator persists state in SQLite under `~/.kosmokrator/data`:
+KosmoKrator persists state in SQLite under `~/.kosmo/data`:
 
 - Sessions and message history
 - Global and project-scoped settings
@@ -111,7 +111,7 @@ KosmoKrator also reads portable MCP config:
 
 - project `.mcp.json` with top-level `mcpServers`
 - compatibility reads for `.vscode/mcp.json` and `.cursor/mcp.json` with top-level `servers`
-- global `~/.kosmokrator/mcp.json`
+- global `~/.kosmo/mcp.json`
 - `mcp:list`, `mcp:add`, `mcp:trust`, `mcp:tools`, `mcp:schema`, `mcp:call`, dynamic `mcp:<server>` shortcuts, `mcp:lua`, resource/prompt commands, and MCP secret commands
 - MCP servers are exposed to Lua under `app.mcp.*`, not registered as native model tools
 
@@ -123,7 +123,7 @@ documentation discovery via `lua_list_docs`, `lua_search_docs`, and
 
 KosmoKrator exposes the headless runtime as a PHP SDK under `Kosmokrator\Sdk`.
 
-- `AgentBuilder` is the stable entry point for embedding `kosmokrator -p` behavior in PHP applications.
+- `AgentBuilder` is the stable entry point for embedding `kosmo -p` behavior in PHP applications.
 - `Agent::collect()` executes one headless task and returns `AgentResult`.
 - `Agent::stream()` returns the event sequence for a run, while `CallbackRenderer` receives events during execution for WebSocket/custom UI surfaces.
 - SDK runs use `AgentSessionBuilder::buildHeadless()` with an SDK renderer, so model/mode/permission overrides, sessions, Lua, integrations, MCP, context management, subagents, max turns, timeout, and stuck detection share the CLI headless path.
@@ -135,14 +135,14 @@ KosmoKrator exposes the headless runtime as a PHP SDK under `Kosmokrator\Sdk`.
 
 KosmoKrator ships an Agent Client Protocol stdio server:
 
-- `kosmokrator acp` starts newline-delimited JSON-RPC over stdin/stdout for editors and IDEs.
+- `kosmo acp` starts newline-delimited JSON-RPC over stdin/stdout for editors and IDEs.
 - ACP sessions are normal persisted KosmoKrator sessions and can be resumed from either ACP clients or the terminal CLI.
 - ACP prompt turns use the same `AgentLoop`, permission evaluator, tool registry, Lua runtime, integrations, MCP runtime, memory, tasks, and subagent infrastructure as the terminal UI.
 - Guardian and Argus permission prompts are bridged to ACP `session/request_permission`; Prometheus remains autonomous while hard policy denies still apply.
 - Client-provided stdio `mcpServers` are runtime-only session overlays and are not written to project `.mcp.json`.
 - Supported base ACP methods include initialize, authenticate, session new/load/resume/list/prompt/cancel/close, mode switching, model switching, and config option updates.
-- The server advertises `kosmokratorCapabilities` and emits `kosmokrator/*` extension notifications for native UI wrappers: phase changes, text/thinking deltas, tool lifecycle, permission lifecycle, runtime changes, usage, subagent spawn/tree/dashboard/completion, integration events, MCP events, and errors.
-- Direct extension methods expose the same headless runtime surfaces to non-PHP clients: runtime settings, provider configuration, integration configuration/list/describe/call, MCP configuration/server/tool/schema/call, and `kosmokrator/lua/execute`.
+- The server advertises `kosmoCapabilities` and emits `kosmo/*` extension notifications for native UI wrappers: phase changes, text/thinking deltas, tool lifecycle, permission lifecycle, runtime changes, usage, subagent spawn/tree/dashboard/completion, integration events, MCP events, and errors.
+- Direct extension methods expose the same headless runtime surfaces to non-PHP clients: runtime settings, provider configuration, integration configuration/list/describe/call, MCP configuration/server/tool/schema/call, and `kosmo/lua/execute`.
 
 ### Key Directories
 
@@ -157,10 +157,14 @@ KosmoKrator ships an Agent Client Protocol stdio server:
 | `src/Command/Power/` | 22 power commands (`:autopilot`, `:review`, `:team`, `:unleash`, etc.) |
 | `src/Command/Integration/` | Headless integration CLI commands and dynamic provider shortcuts |
 | `src/Command/Mcp/` | Headless MCP CLI commands and dynamic server shortcuts |
+| `src/Command/Web/` | Optional web provider CLI commands for search, fetch/extract, crawl, provider setup, and diagnostics |
+| `src/Command/Gateway/` | Gateway configuration/status commands such as Telegram headless setup |
 | `src/Sdk/` | Stable embeddable PHP SDK over headless execution: AgentBuilder, Agent, events, renderers, config helpers |
 | `src/Integration/` | Integration catalog, runtime, credential resolution, command argument coercion, Lua invoker |
 | `src/Mcp/` | MCP config store, stdio client, catalog, trust/permissions, secrets, runtime, Lua invoker |
 | `src/Lua/` | Lua sandbox service, documentation registry, native tool bridge |
+| `src/Web/` | Web provider abstractions, fetch/search/crawl providers, safety guards, extraction, cache |
+| `src/Gateway/` | Telegram gateway runtime, routing, approval/pending input stores, gateway renderers |
 | `src/Session/` | SQLite persistence: sessions, messages, memories, settings |
 | `src/Task/` | Task tracking with tree structure and dependency enforcement |
 | `src/Skill/` | Skill system: YAML-based custom prompts with `$skillname` dispatch |
@@ -185,14 +189,14 @@ Documents that discuss these topics are design docs in `docs/proposals/`, not cu
 Config is loaded in layers, with later layers overriding earlier ones:
 
 1. bundled defaults in `config/*.yaml`
-2. user config in `~/.kosmokrator/config.yaml`
-3. project config in `.kosmokrator.yaml`
+2. user config in `~/.kosmo/config.yaml`
+3. project config in `.kosmo.yaml`
 
 Important config areas:
 
 - `config/prism.yaml` for provider endpoints and API keys
 - `config/models.yaml` for model metadata such as context windows and pricing
-- `config/kosmokrator.yaml` for agent behavior, permission defaults, UI settings, and context thresholds
+- `config/kosmo.yaml` for agent behavior, permission defaults, UI settings, and context thresholds
 
 Environment variables in YAML are expanded using `${VAR_NAME}`.
 

@@ -1,0 +1,255 @@
+---
+title: "Settings Reference"
+description: "Complete reference for KosmoKrator settings, scopes, types, defaults, effects, and headless configuration commands."
+sidebar:
+  order: 6
+---
+
+KosmoKrator settings are schema-backed. The schema drives `/settings`, `settings:*`, validation, type parsing, choices, source reporting, and effect timing.
+
+Use this page when you need an exhaustive list. Use [Configuration](/docs/configuration) for concepts and examples.
+
+## Scopes And Precedence
+
+Settings can be written to two user-editable scopes:
+
+| Scope | Path | Use for |
+| --- | --- | --- |
+| Global | `~/.kosmo/config.yaml` | Personal defaults, provider/model choice, secrets references, UI preference. |
+| Project | `.kosmo/config.yaml` or `.kosmo.yaml` | Repository policy, team-safe permissions, project model overrides. |
+
+Effective precedence is:
+
+```text
+project override -> global override -> bundled default
+```
+
+The CLI reports both the source and the effective value:
+
+```bash
+kosmo settings:get agent.default_provider --json
+kosmo settings:list --json
+```
+
+## Type Parsing
+
+| Type | Accepted input |
+| --- | --- |
+| `toggle` | `on`, `off`, `true`, `false`, `1`, `0`, `yes`, `no`. |
+| `choice` | One of the option values from `settings:options`. |
+| `dynamic_choice` | A value discovered from runtime catalogs, such as provider/model IDs. |
+| `number` | Integer or decimal depending on the setting. |
+| `text` | Raw string. |
+| `string_list` | Comma-separated, whitespace-separated, newline-separated, or JSON array. |
+
+Batch apply JSON when setting many values:
+
+```bash
+jq -n '{
+  settings: {
+    "agent.mode": "plan",
+    "tools.default_permission_mode": "guardian",
+    "context.auto_compact": "on"
+  }
+}' | kosmo settings:apply --stdin-json --project --json
+```
+
+## Effect Timing
+
+| Effect | Meaning |
+| --- | --- |
+| `applies_now` | Active runtime can observe it immediately or on the next tool/prompt boundary. |
+| `next_turn` | The next user prompt or LLM turn will use it. |
+| `next_session` | Restart the session to guarantee the new value is wired into all services. |
+
+## General
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `ui.renderer` | choice: `auto`, `tui`, `ansi` | `auto` | next session | Preferred renderer for sessions. |
+| `ui.theme` | choice | `default` | next session | Terminal theme preset. |
+| `ui.intro_animated` | toggle | `on` | next session | Play startup animation. |
+| `ui.show_reasoning` | toggle | `off` | applies now | Display provider reasoning/thinking content when available. |
+
+## Models
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `agent.default_provider` | dynamic choice | bundled provider default | next session | Provider used when a session starts. |
+| `agent.default_model` | dynamic choice | bundled model default | next session | Model used when a session starts. |
+
+Provider and model options are dynamic:
+
+```bash
+kosmo settings:options agent.default_provider --json
+kosmo settings:options agent.default_model --provider anthropic --json
+```
+
+## Agent
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `agent.mode` | choice: `edit`, `plan`, `ask` | `edit` | applies now | Starting operational mode. |
+| `agent.reasoning_effort` | choice: `off`, `low`, `medium`, `high` | `high` | applies now | Extended reasoning effort for providers that support it. |
+| `agent.temperature` | number | `0` | applies now | Sampling temperature. |
+| `agent.max_tokens` | number | unset | applies now | Override output token limit. |
+| `agent.max_retries` | number | `0` | applies now | Retry limit for transient provider failures. `0` means unlimited. |
+| `agent.system_prompt` | text | bundled prompt | next session | Base system prompt for agent sessions. |
+
+## Subagents
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `agent.subagent_provider` | dynamic choice | inherit main provider | next session | Provider for depth-1 subagents. |
+| `agent.subagent_model` | dynamic choice | inherit main model | next session | Model for depth-1 subagents. |
+| `agent.subagent_depth2_provider` | dynamic choice | inherit depth-1 provider | next session | Provider for depth-2 and deeper subagents. |
+| `agent.subagent_depth2_model` | dynamic choice | inherit depth-1 model | next session | Model for depth-2 and deeper subagents. |
+| `agent.subagent_max_depth` | number | `3` | next session | Maximum spawned agent tree depth. |
+| `agent.subagent_concurrency` | number | `10` | next session | Maximum concurrent subagents. `0` means unlimited. |
+| `agent.subagent_max_retries` | number | `2` | next session | Retries for transient subagent failures. |
+| `agent.subagent_idle_watchdog_seconds` | number | `900` | next session | Cancel a running subagent after no progress for this many seconds. `0` disables. |
+
+## Permissions
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `tools.default_permission_mode` | choice: `guardian`, `argus`, `prometheus` | `guardian` | applies now | Default tool approval policy. |
+| `tools.denied_tools` | string list | empty | next session | Tools that are always denied, even in Prometheus. |
+| `tools.safe_tools` | string list | bundled list | next session | Tools treated as safe under Guardian. |
+| `tools.approval_required` | string list | bundled list | next session | Tools requiring approval unless policy bypasses them. |
+| `tools.blocked_paths` | string list | bundled list | next session | Glob patterns blocked for file tools. |
+| `tools.allowed_paths` | string list | empty | next session | Path allowlist supplementing project-local access. |
+| `tools.guardian_safe_commands` | string list | bundled list | next session | Bash command patterns Guardian can auto-approve. |
+
+See [Permissions](/docs/permissions) for the evaluation chain and examples.
+
+## Shell And Advanced Tooling
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `tools.bash.timeout` | number | `120` | next session | Default bash timeout in seconds. |
+| `tools.bash.blocked_commands` | string list | bundled list | next session | Shell command patterns always denied. |
+| `tools.shell.wait_ms` | number | `100` | next session | Poll interval for persistent shell sessions. |
+| `tools.shell.idle_ttl` | number | `300` | next session | Seconds before idle shell sessions are cleaned up. |
+
+## Context And Memory
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `context.memories` | toggle | `on` | next turn | Enable memory recall and persistence. |
+| `context.auto_compact` | toggle | `on` | next turn | Compact automatically before model context overflow. |
+| `context.compact_threshold` | number | `60` | next turn | Legacy percentage threshold fallback. |
+| `context.reserve_output_tokens` | number | `16000` | next turn | Tokens reserved for the assistant response. |
+| `context.warning_buffer_tokens` | number | `24000` | next turn | Show warnings below this input-budget buffer. |
+| `context.auto_compact_buffer_tokens` | number | `12000` | next turn | Auto-compact below this input-budget buffer. |
+| `context.blocking_buffer_tokens` | number | `3000` | next turn | Hard stop buffer to avoid context overflow. |
+| `context.prune_protect` | number | `40000` | next turn | Recent tool-result tokens protected from pruning. |
+| `context.prune_min_savings` | number | `20000` | next turn | Minimum savings required for a prune pass to be accepted. |
+| `context.max_output_lines` | number | `2000` | next turn | Maximum tool-output lines retained in context. |
+| `context.max_output_bytes` | number | `50000` | next turn | Maximum tool-output bytes retained in context. |
+
+## Integrations
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `integrations.permissions_default` | choice: `allow`, `ask`, `deny` | `ask` | applies now | Default read/write policy for integration calls without provider-specific policy. |
+
+Integration activation, credentials, named accounts, and provider read/write policies are configured with `integrations:configure`, not through generic `settings:set`, because the command knows each provider credential schema.
+
+```bash
+kosmo integrations:configure plane --account production \
+  --set api_key="$PLANE_API_KEY" \
+  --set workspace_slug=my-workspace \
+  --enable \
+  --read allow \
+  --write ask \
+  --json
+```
+
+## MCP
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `kosmo.mcp.permissions_default` | choice: `allow`, `ask`, `deny` | `ask` | applies now | Default read/write policy for MCP operations without server-specific policy. |
+| `kosmo.mcp.servers.SERVER.permissions.read` | choice: `allow`, `ask`, `deny` | inherit default | applies now | Read policy for one server. |
+| `kosmo.mcp.servers.SERVER.permissions.write` | choice: `allow`, `ask`, `deny` | inherit default | applies now | Write policy for one server. |
+| `kosmo.mcp.trust.SERVER.fingerprint` | text | unset | applies now | Project server trust fingerprint written by `mcp:trust`. |
+
+Server definitions live in JSON files, not YAML settings. See [MCP](/docs/mcp).
+
+## Web
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `web.search.enabled` | toggle | `off` | next session | Enable optional external `web_search`. |
+| `web.search.provider` | choice | unset | next session | Default external search provider. |
+| `web.search.max_results` | number | `8` | next session | Default search result count. |
+| `web.fetch.provider` | choice | `native` | next session | Default fetch provider. `native` keeps built-in fetch. |
+| `web.fetch.allow_external` | toggle | `off` | next session | Allow `web_fetch_external` and provider extract calls. |
+| `web.crawl.enabled` | toggle | `off` | next session | Enable optional `web_crawl`. |
+| `web.crawl.provider` | choice | unset | next session | Default crawl provider. |
+| `web.native.provider` | choice | unset | next session | Provider-native web search backend. |
+| `web.native.mode` | choice: `cached`, `live` | `cached` | next session | Native provider search freshness hint. |
+| `web.providers.tavily.enabled` | toggle | `off` | next session | Enable Tavily. |
+| `web.providers.firecrawl.enabled` | toggle | `off` | next session | Enable Firecrawl. |
+| `web.providers.exa.enabled` | toggle | `off` | next session | Enable Exa. |
+| `web.providers.brave.enabled` | toggle | `off` | next session | Enable Brave Search. |
+| `web.providers.parallel.enabled` | toggle | `off` | next session | Enable Parallel. |
+| `web.providers.jina.enabled` | toggle | `off` | next session | Enable Jina Reader/Search. |
+| `web.providers.searxng.enabled` | toggle | `off` | next session | Enable configured SearXNG. |
+| `web.providers.searxng.base_url` | text | unset | next session | Base URL for a trusted SearXNG instance. |
+| `web.providers.perplexity.enabled` | toggle | `off` | next session | Enable Perplexity search. |
+| `web.providers.openai_native.enabled` | toggle | `off` | next session | Enable OpenAI native web search provider. |
+| `web.providers.anthropic_native.enabled` | toggle | `off` | next session | Enable Anthropic native web search provider. |
+| `web.search.default_provider` | choice | `tavily` | next session | Advanced fallback default used by internal provider managers. |
+| `web.fetch.default_provider` | choice | `direct` | next session | Advanced fetch fallback default. |
+| `web.fetch.max_chars` | number | `12000` | next session | Default maximum characters before chunking. |
+
+Use `web:configure` when storing API key status or setting provider defaults from a script.
+
+## Gateway
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `gateway.telegram.enabled` | toggle | `off` | next session | Enable Telegram gateway worker. |
+| `gateway.telegram.session_mode` | choice: `thread`, `thread_user`, `chat`, `chat_user` | `thread` | next session | Map Telegram messages to Kosmo sessions. |
+| `gateway.telegram.allowed_users` | string list | empty | next session | Allowed Telegram user IDs or usernames. Empty allows any reachable user. |
+| `gateway.telegram.admin_users` | string list | empty | next session | Users allowed to approve any request and press global control buttons. |
+| `gateway.telegram.allowed_chats` | string list | empty | next session | Allowed chat IDs. Empty allows all chats. |
+| `gateway.telegram.require_mention` | toggle | `on` | next session | In groups, respond only when mentioned or replied to unless the chat is free-response. |
+| `gateway.telegram.free_response_chats` | string list | empty | next session | Chat IDs where mention is not required. |
+| `gateway.telegram.poll_timeout_seconds` | number | `20` | next session | Long-poll timeout. |
+| `gateway.telegram.reply_to_mode` | choice: `off`, `first`, `all` | `first` | next session | Whether answer chunks reply to the original Telegram message. |
+| `gateway.telegram.disable_link_previews` | toggle | `on` | next session | Disable Telegram link previews for gateway messages. |
+| `gateway.telegram.fresh_final_after_seconds` | number | `60` | next session | Send a fresh final message after long streamed edits. `0` disables it. |
+| `gateway.telegram.progress_notice_interval_seconds` | number | `60` | next session | Minimum seconds between long-run progress status updates. `0` disables it. |
+| `gateway.telegram.reactions` | toggle | `off` | next session | Mark processing and completion with Telegram reactions when supported. |
+
+The bot token is a managed secret under `gateway.telegram.token`, configured with `gateway:telegram:configure --token-stdin`, `--token-env`, or `secrets:set`.
+
+## Audio
+
+| Setting | Type | Default | Effect | Description |
+| --- | --- | --- | --- | --- |
+| `audio.completion_sound` | toggle | `off` | applies now | Compose and play a short musical piece after each agent response. |
+| `audio.soundfont` | text | `~/.kosmo/soundfonts/FluidR3_GM.sf2` | applies now | SoundFont path for MIDI playback. |
+| `audio.llm_timeout` | number | `60` | applies now | Seconds to wait for AI music composition before fallback. |
+| `audio.max_duration` | number | `8` | applies now | Maximum length of composed piece. |
+| `audio.max_retries` | number | `1` | applies now | Composition retry count. |
+| `agent.audio_provider` | dynamic choice | inherit main provider | next session | Provider for completion sound composition. |
+| `agent.audio_model` | dynamic choice | inherit main model | next session | Model for completion sound composition. |
+
+## Discovery Commands For Agents
+
+Agents and wrappers should discover rather than hard-code:
+
+```bash
+kosmo settings:list --json
+kosmo settings:list --category web --json
+kosmo settings:get web.search.enabled --json
+kosmo settings:options tools.default_permission_mode --json
+kosmo settings:options agent.default_model --provider anthropic --json
+kosmo settings:doctor --json
+```
+
+When adding new settings in code, update this page, [Configuration](/docs/configuration), and the website navigation if a new category deserves its own guide.

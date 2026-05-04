@@ -1,0 +1,154 @@
+---
+title: "Skills"
+description: "Create, discover, invoke, and manage reusable KosmoKrator skill prompts with the dollar-command system."
+sidebar:
+  order: 16
+---
+
+Skills are reusable prompt packages invoked from the interactive terminal with `$` commands. They are useful for repeatable workflows, project-specific review rituals, coding conventions, and team playbooks.
+
+## Discovery Paths
+
+Skills are directories containing `SKILL.md`.
+
+Precedence, highest first:
+
+| Path | Scope | Notes |
+| --- | --- | --- |
+| `.kosmo/skills/&lt;name&gt;/SKILL.md` | project | Canonical project-local path. |
+| `.agents/skills/&lt;name&gt;/SKILL.md` | project | Ecosystem-compatible project path. |
+| `~/.kosmo/skills/&lt;name&gt;/SKILL.md` | user | Personal global skills. |
+
+If the same skill name exists in multiple paths, the higher-precedence project skill wins.
+
+## File Format
+
+Each skill uses YAML frontmatter followed by markdown instructions:
+
+```markdown
+---
+name: code-review
+description: Review a change for regressions, missing tests, and maintainability risks
+---
+
+# Code Review
+
+Use a review stance. Findings first, ordered by severity.
+Reference files and line numbers.
+Run relevant tests when possible.
+```
+
+Required field:
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Invocation name used as `$name`. |
+
+Optional field:
+
+| Field | Purpose |
+| --- | --- |
+| `description` | Displayed in `$list` and command completion. |
+
+Skill content is scanned for prompt-injection patterns before loading. Unsafe content is skipped.
+
+## Commands
+
+Type these in the KosmoKrator prompt, not in your shell:
+
+| Command | Purpose |
+| --- | --- |
+| `$` | List skills. |
+| `$list` or `$skills` | List skills. |
+| `$create &lt;name&gt;` | Create a project skill template under `.kosmo/skills`. |
+| `$show &lt;name&gt;` | Show skill content and path. |
+| `$edit &lt;name&gt;` | Ask the agent to help edit the skill file. |
+| `$delete &lt;name&gt;` | Delete the skill directory. |
+| `$name [task]` | Invoke a skill and inject its prompt into the agent turn. |
+
+Examples:
+
+```text
+$list
+$create migration-review
+$show migration-review
+$migration-review Review the database migration in this branch
+```
+
+## Invocation Semantics
+
+When you invoke a skill, KosmoKrator injects a prompt shaped like:
+
+```text
+SKILL: skill-name
+
+Task: optional user args
+
+---
+
+skill markdown content
+```
+
+The active agent mode and permission mode still apply. A skill cannot bypass Plan/Ask read-only constraints, hard denied tools, blocked paths, MCP trust, integration permissions, or approval policy.
+
+## Project Skills
+
+Project skills are best for workflows everyone on a repository should share:
+
+```text
+.kosmo/
+  skills/
+    release-check/
+      SKILL.md
+    api-review/
+      SKILL.md
+```
+
+Good project skill examples:
+
+- "Review changes against our API compatibility rules."
+- "Update docs after any new CLI flag or setting."
+- "Run the repository release checklist."
+- "Audit database migrations for rollback and lock risks."
+
+## User Skills
+
+User skills are personal and live outside the repo:
+
+```text
+~/.kosmo/skills/
+  my-review-style/
+    SKILL.md
+```
+
+Use user skills for private preferences that should not affect a team repository.
+
+## Skill Design Guidelines
+
+Good skills:
+
+- Say when they should be used.
+- Define output shape.
+- Tell the agent what evidence to gather.
+- Mention verification steps.
+- Stay scoped to one workflow.
+- Avoid secrets, private tokens, and large copied documents.
+
+Weak skills:
+
+- Contain vague advice without a concrete workflow.
+- Try to override system safety or permission behavior.
+- Mix several unrelated workflows.
+- Duplicate content that already belongs in `AGENTS.md` or project docs.
+
+## Relationship To Power Commands
+
+| Feature | Skills | Power commands |
+| --- | --- | --- |
+| Prefix | `$` | `:` |
+| Defined by | Markdown files | PHP command classes |
+| Best for | Project/user playbooks | Built-in animated workflows |
+| Editable by user | yes | code change required |
+| Can be project-specific | yes | no |
+
+Use a skill when the workflow is mainly instructions. Use a power command when the product should ship a named first-class behavior.

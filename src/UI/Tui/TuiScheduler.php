@@ -25,6 +25,11 @@ final class TuiScheduler
         private readonly \Closure $cancel,
     ) {}
 
+    public static function fromCallbacks(\Closure $schedule, \Closure $cancel): self
+    {
+        return new self($schedule, $cancel);
+    }
+
     public static function fromTui(Tui $tui): self
     {
         return new self(

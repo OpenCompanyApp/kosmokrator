@@ -3,10 +3,12 @@
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
+use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
 use Kosmokrator\Audio\CompletionSound;
+use Kosmokrator\Bootstrap\BootstrapSignalGuard;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\Sdk\AgentBuilder as SdkAgentBuilder;
@@ -178,12 +180,12 @@ class AgentCommand extends Command
             pcntl_signal(SIGINT, function () use ($agent) {
                 $agent->cancel('Interrupted by SIGINT');
                 $this->container->make(ShellSessionManager::class)->killAll();
-                exit(130);
+                exit(BootstrapSignalGuard::exitCodeForSignal(SIGINT));
             });
             pcntl_signal(SIGTERM, function () use ($agent) {
                 $agent->cancel('Interrupted by SIGTERM');
                 $this->container->make(ShellSessionManager::class)->killAll();
-                exit(143);
+                exit(BootstrapSignalGuard::exitCodeForSignal(SIGTERM));
             });
         }
 
@@ -191,7 +193,7 @@ class AgentCommand extends Command
         $result = $agent->collect($prompt);
         if ($result->error !== null && $result->text === 'Error: '.$result->error) {
             if ($format === OutputFormat::Json) {
-                $renderer->emitError($result->error, $result->exitCode);
+                $renderer->emitError($result->error, $result->exitCode, $result->errorClass, $result->errorTrace);
             }
         } else {
             $renderer->emitResult($result->text, $result->turns, $result->tokensIn, $result->tokensOut);
@@ -206,8 +208,8 @@ class AgentCommand extends Command
     private function runInteractive(InputInterface $input, OutputInterface $output): int
     {
         $config = $this->container->make('config');
-        $rendererPref = $input->getOption('renderer') ?: $config->get('kosmokrator.ui.renderer', 'auto');
-        $animated = ! $input->getOption('no-animation') && $config->get('kosmokrator.ui.intro_animated', true);
+        $rendererPref = $input->getOption('renderer') ?: $config->get('kosmo.ui.renderer', 'auto');
+        $animated = ! $input->getOption('no-animation') && $config->get('kosmo.ui.intro_animated', true);
         $setup = $this->container->make(SetupFlowInterface::class);
 
         if ($setup->needsProviderSetup()) {
@@ -236,7 +238,7 @@ class AgentCommand extends Command
             $white = "\033[1;37m";
 
             echo "{$accent}  ⚡ {$e->getMessage()}{$r}\n";
-            echo "{$dim}  Run {$white}kosmokrator setup{$dim} to configure your provider and API key.{$r}\n\n";
+            echo "{$dim}  Run {$white}kosmo setup{$dim} to configure your provider and API key.{$r}\n\n";
 
             return Command::FAILURE;
         }
@@ -263,7 +265,7 @@ class AgentCommand extends Command
             $currentVersion = $this->getApplication()?->getVersion() ?? 'dev';
             $updateAvailable = (new UpdateChecker($currentVersion))->check();
             if ($updateAvailable !== null) {
-                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmokrator update` to install.");
+                $session->ui->showNotice("Update available: v{$updateAvailable} (current: v{$currentVersion}). Run `kosmo update` to install.");
             }
         }
 
@@ -278,11 +280,11 @@ class AgentCommand extends Command
         // Install signal handlers for graceful cleanup on SIGINT/SIGTERM.
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
-            $signalHandler = function () use ($session) {
+            $signalHandler = function (int $signal) use ($session): never {
                 $session->orchestrator?->cancelAll();
                 $this->container->make(ShellSessionManager::class)->killAll();
                 $session->ui->teardown();
-                exit(0);
+                exit(BootstrapSignalGuard::exitCodeForSignal($signal));
             };
             pcntl_signal(SIGINT, $signalHandler);
             pcntl_signal(SIGTERM, $signalHandler);
@@ -296,11 +298,11 @@ class AgentCommand extends Command
         $providers = $this->container->make(ProviderCatalog::class);
 
         // Build skill system (user-defined $skills)
-        // Discovers from: .kosmokrator/skills/, .agents/skills/, ~/.kosmokrator/skills/
+        // Discovers from: .kosmo/skills/, .agents/skills/, ~/.kosmo/skills/
         $projectRoot = $this->container->make('path.base');
         $skillLoader = new SkillLoader(
             $projectRoot,
-            ($_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp').'/.kosmokrator/skills',
+            ($_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp').'/.kosmo/skills',
         );
         $skillRegistry = new SkillRegistry;
         $skillRegistry->load($skillLoader);
@@ -313,13 +315,22 @@ class AgentCommand extends Command
         $ctx = new SlashCommandContext($session->ui, $session->agentLoop, $session->permissions, $session->sessionManager, $session->llm, $taskStore, $config, $settings, $session->orchestrator, $models, $providers);
         $nextInput = null;
         $nextInputShown = false;
+        $deferredImmediateInputs = [];
 
         // Dispatch immediate slash commands (e.g. /guardian) even while the agent is mid-run.
-        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx, $session): bool {
+        $session->ui->setImmediateCommandHandler(function (string $input) use ($registry, $ctx, $session, &$deferredImmediateInputs): bool {
             $command = $registry->resolve($input);
             if ($command === null || ! $command->immediate()) {
                 return false;
             }
+
+            if ($this->shouldDeferImmediateCommand($command, $session->agentLoop)) {
+                $deferredImmediateInputs[] = $input;
+                $session->ui->showNotice($command->name().' will apply after the current agent turn.');
+
+                return true;
+            }
+
             $args = $registry->extractArgs($input, $command);
             $result = $command->execute($args, $ctx);
 
@@ -423,27 +434,17 @@ class AgentCommand extends Command
             }
             $session->agentLoop->run($input);
 
-            // Auto-continue: if background subagents are running, wait for them
-            // to finish, then feed their results back to the LLM automatically
-            // so it can synthesize without requiring the user to type anything.
-            $backgroundWaitInterrupted = false;
-            if ($session->agentLoop->hasActiveBackgroundAgents() || $session->agentLoop->hasPendingBackgroundResults()) {
-                while ($session->agentLoop->hasActiveBackgroundAgents()) {
-                    \Amp\delay(0.25);
+            if ($this->drainDeferredImmediateCommands($deferredImmediateInputs, $registry, $ctx)->action === SlashCommandAction::Quit) {
+                break;
+            }
 
-                    $queued = $session->ui->consumeQueuedMessage();
-                    if ($queued !== null) {
-                        $nextInput = $queued;
-                        $nextInputShown = true;
-                        $backgroundWaitInterrupted = true;
-
-                        break;
-                    }
-                }
-
-                if (! $backgroundWaitInterrupted && $session->agentLoop->hasPendingBackgroundResults()) {
-                    $session->agentLoop->run('[system: all background agents have completed — their results follow]');
-                }
+            // Background swarms detach from the prompt loop. Their results are
+            // injected on the next agent turn, and /agents remains available for
+            // live inspection while they run.
+            if ($session->agentLoop->hasActiveBackgroundAgents()) {
+                $session->ui->showNotice('Background agents are still running. Use /agents to inspect progress; results will be injected on the next turn.');
+            } elseif ($session->agentLoop->hasPendingBackgroundResults()) {
+                $session->ui->showNotice('Background agent results are ready and will be injected on the next turn.');
             }
 
             // Completion sound: compose and play a musical piece reflecting what happened
@@ -512,6 +513,33 @@ class AgentCommand extends Command
         $session->ui->teardown();
 
         return Command::SUCCESS;
+    }
+
+    private function shouldDeferImmediateCommand(SlashCommand $command, AgentLoop $agentLoop): bool
+    {
+        return $agentLoop->isRunning() && $command instanceof DefersWhileAgentRuns;
+    }
+
+    /**
+     * @param  list<string>  $inputs
+     */
+    private function drainDeferredImmediateCommands(array &$inputs, SlashCommandRegistry $registry, SlashCommandContext $ctx): SlashCommandResult
+    {
+        while ($inputs !== []) {
+            $input = array_shift($inputs);
+            $command = $registry->resolve($input);
+            if ($command === null) {
+                continue;
+            }
+
+            $args = $registry->extractArgs($input, $command);
+            $result = $command->execute($args, $ctx);
+            if ($result->action !== SlashCommandAction::Continue) {
+                return $result;
+            }
+        }
+
+        return SlashCommandResult::continue();
     }
 
     /**

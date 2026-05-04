@@ -20,13 +20,13 @@ use PHPUnit\Framework\TestCase;
 
 class ModeCommandTest extends TestCase
 {
-    private function makeContext(?AgentLoop $agentLoop = null): SlashCommandContext
+    private function makeContext(?AgentLoop $agentLoop = null, ?SessionManager $sessionManager = null): SlashCommandContext
     {
         return new SlashCommandContext(
             ui: $this->createStub(UIManager::class),
             agentLoop: $agentLoop ?? $this->createStub(AgentLoop::class),
             permissions: $this->createStub(PermissionEvaluator::class),
-            sessionManager: $this->createStub(SessionManager::class),
+            sessionManager: $sessionManager ?? $this->createStub(SessionManager::class),
             llm: $this->createStub(LlmClientInterface::class),
             taskStore: $this->createStub(TaskStore::class),
             config: $this->createStub(Repository::class),
@@ -57,6 +57,19 @@ class ModeCommandTest extends TestCase
 
         $command = new ModeCommand(AgentMode::Edit);
         $ctx = $this->makeContext(agentLoop: $agentLoop);
+
+        $command->execute('', $ctx);
+    }
+
+    public function test_execute_persists_canonical_mode_setting(): void
+    {
+        $sessionManager = $this->createMock(SessionManager::class);
+        $sessionManager->expects($this->once())
+            ->method('setSetting')
+            ->with('agent.mode', 'plan');
+
+        $command = new ModeCommand(AgentMode::Plan);
+        $ctx = $this->makeContext(sessionManager: $sessionManager);
 
         $command->execute('', $ctx);
     }

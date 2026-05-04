@@ -29,7 +29,7 @@ final class CodexStatusCommand extends Command
         $token = $this->container->make(CodexTokenStore::class)->current();
 
         if ($token === null) {
-            $output->writeln('<comment>Codex is not configured. Run `kosmokrator codex:login`.</comment>');
+            $output->writeln('<comment>Codex is not configured. Run `kosmo codex:login`.</comment>');
 
             return Command::SUCCESS;
         }

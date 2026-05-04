@@ -29,7 +29,7 @@ final class McpImportCommand extends Command
     {
         $this
             ->addArgument('path', InputArgument::REQUIRED, 'JSON file to import')
-            ->addOption('global', null, InputOption::VALUE_NONE, 'Import into global ~/.kosmokrator/mcp.json')
+            ->addOption('global', null, InputOption::VALUE_NONE, 'Import into global ~/.kosmo/mcp.json')
             ->addOption('project', null, InputOption::VALUE_NONE, 'Import into project .mcp.json')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Emit machine-readable JSON');
     }

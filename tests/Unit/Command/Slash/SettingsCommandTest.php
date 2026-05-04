@@ -260,7 +260,7 @@ final class SettingsCommandTest extends TestCase
         $this->assertSame('gpt-5.4', $llm->getModel());
         $this->assertSame('openai-key', $llm->apiKey);
         $this->assertSame('https://api.openai.com/v1', $llm->baseUrl);
-        $this->assertFileExists($this->projectDir.'/.kosmokrator/config.yaml');
+        $this->assertFileExists($this->projectDir.'/.kosmo/config.yaml');
     }
 
     public function test_settings_view_includes_integration_credentials_and_project_sources(): void
@@ -274,8 +274,8 @@ final class SettingsCommandTest extends TestCase
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
         $settingsManager->setProjectRoot($this->projectDir);
-        $settingsManager->setRaw('integrations.github.enabled', true, 'project');
-        $settingsManager->setRaw('integrations.github.permissions.read', 'deny', 'project');
+        $settingsManager->setRaw('kosmo.integrations.github.enabled', true, 'project');
+        $settingsManager->setRaw('kosmo.integrations.github.permissions.read', 'deny', 'project');
 
         $settingsRepository = $this->memorySettingsRepository([
             'global' => [
@@ -401,14 +401,13 @@ final class SettingsCommandTest extends TestCase
         $command->execute('', $ctx);
         $command->execute('', $ctx);
 
-        $this->assertSame(
-            [
-                ['scope' => 'global', 'key' => 'integration.github.accounts', 'value' => json_encode(['default' => true])],
-                ['scope' => 'global', 'key' => 'integration.github.accounts.default.api_key', 'value' => 'ghp_new_secret'],
-                ['scope' => 'global', 'key' => 'integration.github.accounts.default.base_url', 'value' => 'https://api.github.example'],
-            ],
-            $settingsRepository->setCalls,
-        );
+        $this->assertSame('global', $settingsRepository->setCalls[0]['scope']);
+        $this->assertSame('integration.github.accounts', $settingsRepository->setCalls[0]['key']);
+        $this->assertSame(json_encode(['default' => true]), $settingsRepository->setCalls[0]['value']);
+        $this->assertSame('integration.github.accounts.default.api_key', $settingsRepository->setCalls[1]['key']);
+        $this->assertStringStartsWith('enc:v1:', $settingsRepository->setCalls[1]['value']);
+        $this->assertSame('integration.github.accounts.default.base_url', $settingsRepository->setCalls[2]['key']);
+        $this->assertStringStartsWith('enc:v1:', $settingsRepository->setCalls[2]['value']);
         $this->assertSame(
             [
                 ['scope' => 'global', 'key' => 'integration.github.accounts.default.api_key'],

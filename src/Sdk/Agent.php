@@ -6,6 +6,7 @@ namespace Kosmokrator\Sdk;
 
 use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentSession;
+use Kosmokrator\Agent\Exception\HeadlessRunFailedException;
 use Kosmokrator\Agent\Exception\MaxTurnsExceededException;
 use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
@@ -41,10 +42,37 @@ final class Agent
      */
     public function stream(string $prompt): \Generator
     {
-        $result = $this->run($prompt);
+        if (! $this->renderer instanceof EventRenderer) {
+            $result = $this->run($prompt);
 
-        foreach ($result->events as $event) {
-            yield $event;
+            foreach ($result->events as $event) {
+                yield $event;
+            }
+
+            return;
+        }
+
+        $queue = new \SplQueue;
+        $removeListener = $this->renderer->addEventListener(static function (AgentEvent $event) use ($queue): void {
+            $queue->enqueue($event);
+        });
+
+        $future = \Amp\async(fn (): AgentResult => $this->run($prompt));
+
+        try {
+            while (! $future->isComplete() || ! $queue->isEmpty()) {
+                while (! $queue->isEmpty()) {
+                    yield $queue->dequeue();
+                }
+
+                if (! $future->isComplete()) {
+                    \Amp\delay(0.01);
+                }
+            }
+
+            $future->await();
+        } finally {
+            $removeListener();
         }
     }
 
@@ -60,6 +88,8 @@ final class Agent
             $resultText = '';
             $exitCode = 0;
             $error = null;
+            $errorClass = null;
+            $errorTrace = null;
             $session = null;
             if ($this->renderer instanceof EventRenderer) {
                 $this->renderer->reset();
@@ -85,7 +115,12 @@ final class Agent
                 $resultText = $e->partialResult;
             } catch (\Throwable $e) {
                 $exitCode = 1;
+                $diagnostic = $e instanceof HeadlessRunFailedException && $e->getPrevious() !== null
+                    ? $e->getPrevious()
+                    : $e;
                 $error = $e->getMessage();
+                $errorClass = get_class($diagnostic);
+                $errorTrace = $diagnostic->getTraceAsString();
                 $this->renderer->showError($error);
                 $resultText = 'Error: '.$error;
             } finally {
@@ -130,6 +165,8 @@ final class Agent
                 success: $exitCode === 0,
                 exitCode: $exitCode,
                 error: $error,
+                errorClass: $errorClass,
+                errorTrace: $errorTrace,
             );
         });
     }

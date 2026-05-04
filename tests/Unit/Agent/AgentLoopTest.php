@@ -67,6 +67,27 @@ class AgentLoopTest extends TestCase
         $this->assertCount(2, $messages); // user + assistant
     }
 
+    public function test_is_running_reflects_active_run(): void
+    {
+        $llm = $this->createMock(LlmClientInterface::class);
+        $ui = $this->createMock(RendererInterface::class);
+        $loop = new AgentLoop($llm, $ui, new NullLogger, 'You are a test assistant.');
+
+        $llm->method('getProvider')->willReturn('test');
+        $llm->method('getModel')->willReturn('model');
+        $llm->expects($this->once())
+            ->method('chat')
+            ->willReturnCallback(function () use ($loop): LlmResponse {
+                $this->assertTrue($loop->isRunning());
+
+                return new LlmResponse('Done.', FinishReason::Stop, [], 100, 50);
+            });
+
+        $this->assertFalse($loop->isRunning());
+        $loop->run('Hi');
+        $this->assertFalse($loop->isRunning());
+    }
+
     public function test_queued_user_messages_are_included_before_memory_selection_for_same_turn(): void
     {
         $db = new Database(':memory:');

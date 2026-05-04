@@ -318,7 +318,7 @@ final class ModelsCommand implements SlashCommand
         $inner = self::innerClient($ctx->llm);
 
         if ($provider !== 'codex' && method_exists($inner, 'setBaseUrl')) {
-            $inner->setBaseUrl(rtrim($registry->url($provider), '/'));
+            $inner->setBaseUrl(rtrim($catalog->provider($provider)?->url ?? $registry->url($provider), '/'));
         }
 
         if (method_exists($inner, 'setApiKey')) {

@@ -74,8 +74,8 @@ class InstructionLoaderTest extends TestCase
     public function test_gather_loads_dotfolder_instructions(): void
     {
         $this->initGitRepo($this->tmpDir);
-        mkdir($this->tmpDir.'/.kosmokrator', 0755);
-        file_put_contents($this->tmpDir.'/.kosmokrator/instructions.md', 'Private project notes.');
+        mkdir($this->tmpDir.'/.kosmo', 0755);
+        file_put_contents($this->tmpDir.'/.kosmo/instructions.md', 'Private project notes.');
 
         $original = getcwd();
         chdir($this->tmpDir);

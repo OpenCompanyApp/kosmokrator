@@ -41,7 +41,7 @@ final class ModelsCommandTest extends TestCase
         $this->projectDir = sys_get_temp_dir().'/kosmokrator-models-project-'.bin2hex(random_bytes(4));
         $this->homeDir = sys_get_temp_dir().'/kosmokrator-models-home-'.bin2hex(random_bytes(4));
         mkdir($this->projectDir, 0777, true);
-        mkdir($this->homeDir.'/.kosmokrator', 0777, true);
+        mkdir($this->homeDir.'/.kosmo', 0777, true);
         $this->originalHome = (string) getenv('HOME');
         putenv("HOME={$this->homeDir}");
     }
@@ -80,8 +80,8 @@ final class ModelsCommandTest extends TestCase
         $this->assertSame(['provider' => 'openai', 'model' => 'gpt-5.4', 'maxContext' => 400000], $renderer->lastRefresh);
         $this->assertStringContainsString('Switched to OpenAI · gpt-5.4.', end($renderer->notices));
 
-        $recentModels = json_decode((string) $settingsRepo->get('global', 'kosmokrator.model_switcher.recent_models'), true, 512, JSON_THROW_ON_ERROR);
-        $recentProviders = json_decode((string) $settingsRepo->get('global', 'kosmokrator.model_switcher.recent_providers'), true, 512, JSON_THROW_ON_ERROR);
+        $recentModels = json_decode((string) $settingsRepo->get('global', 'kosmo.model_switcher.recent_models'), true, 512, JSON_THROW_ON_ERROR);
+        $recentProviders = json_decode((string) $settingsRepo->get('global', 'kosmo.model_switcher.recent_providers'), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertSame([['provider' => 'openai', 'model' => 'gpt-5.4']], $recentModels);
         $this->assertSame(['openai'], $recentProviders);
@@ -93,11 +93,11 @@ final class ModelsCommandTest extends TestCase
         $renderer = new RecordingRenderer('dismissed');
         $llm = new FakeLlmClient('openai', 'gpt-5.4');
 
-        $settingsRepo->set('global', 'kosmokrator.model_switcher.recent_models', (string) json_encode([
+        $settingsRepo->set('global', 'kosmo.model_switcher.recent_models', (string) json_encode([
             ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-20250514'],
             ['provider' => 'openai', 'model' => 'gpt-5.4'],
         ], JSON_THROW_ON_ERROR));
-        $settingsRepo->set('global', 'kosmokrator.model_switcher.recent_providers', (string) json_encode([
+        $settingsRepo->set('global', 'kosmo.model_switcher.recent_providers', (string) json_encode([
             'anthropic',
             'openai',
         ], JSON_THROW_ON_ERROR));
@@ -137,10 +137,10 @@ final class ModelsCommandTest extends TestCase
         $renderer = new RecordingRenderer;
         $llm = new FakeLlmClient('z', 'GLM-5.1');
 
-        $settingsRepo->set('global', 'kosmokrator.model_switcher.recent_models', (string) json_encode([
+        $settingsRepo->set('global', 'kosmo.model_switcher.recent_models', (string) json_encode([
             ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-20250514'],
         ], JSON_THROW_ON_ERROR));
-        $settingsRepo->set('global', 'kosmokrator.model_switcher.recent_providers', (string) json_encode([
+        $settingsRepo->set('global', 'kosmo.model_switcher.recent_providers', (string) json_encode([
             'anthropic',
         ], JSON_THROW_ON_ERROR));
 
@@ -167,7 +167,7 @@ final class ModelsCommandTest extends TestCase
     private function makeEnvironment(): array
     {
         $config = new Repository([
-            'kosmokrator' => [
+            'kosmo' => [
                 'agent' => [
                     'default_provider' => 'z',
                     'default_model' => 'GLM-5.1',

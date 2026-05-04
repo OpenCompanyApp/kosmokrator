@@ -5,7 +5,7 @@ namespace Kosmokrator\Tool\Permission;
 use Illuminate\Config\Repository;
 
 /**
- * Reads the kosmokrator.tools config section and converts it into the structured
+ * Reads the kosmo.tools config section and converts it into the structured
  * arrays and PermissionRule objects consumed by PermissionEvaluator.
  *
  * Single entry-point for turning raw config into permission infrastructure.
@@ -28,17 +28,42 @@ class PermissionConfigParser
         'web_search', 'web_fetch',
     ];
 
+    /** Commands that are denied even in Prometheus mode. */
+    public const DEFAULT_BLOCKED_COMMANDS = [
+        'rm -rf *',
+        'rm -fr *',
+        'rm -r *',
+        'sudo rm *',
+        'mkfs*',
+        'dd *of=*',
+        'shred *',
+        'truncate -s 0 *',
+        'git reset --hard*',
+        'git clean -fd*',
+        'git clean -df*',
+        'git push --force*',
+        'git push -f*',
+        'chmod -R 777 *',
+        'chown -R *',
+        'docker system prune*',
+        'kubectl delete *',
+    ];
+
     public function parse(Repository $config): array
     {
         $rules = [];
 
-        $approvalRequired = $config->get('kosmokrator.tools.approval_required', []);
-        $blockedCommands = $config->get('kosmokrator.tools.bash.blocked_commands', []);
-        $blockedPaths = $config->get('kosmokrator.tools.blocked_paths', []);
-        $safeCommands = $config->get('kosmokrator.tools.guardian_safe_commands', []);
-        $defaultMode = $config->get('kosmokrator.tools.default_permission_mode', 'guardian');
-        $safeTools = $config->get('kosmokrator.tools.safe_tools', self::DEFAULT_SAFE_TOOLS);
-        $deniedTools = $config->get('kosmokrator.tools.denied_tools', []);
+        $approvalRequired = $config->get('kosmo.tools.approval_required', []);
+        $configuredBlockedCommands = $config->get('kosmo.tools.bash.blocked_commands', []);
+        $blockedCommands = array_values(array_unique([
+            ...self::DEFAULT_BLOCKED_COMMANDS,
+            ...$configuredBlockedCommands,
+        ]));
+        $blockedPaths = $config->get('kosmo.tools.blocked_paths', []);
+        $safeCommands = $config->get('kosmo.tools.guardian_safe_commands', []);
+        $defaultMode = $config->get('kosmo.tools.default_permission_mode', 'guardian');
+        $safeTools = $config->get('kosmo.tools.safe_tools', self::DEFAULT_SAFE_TOOLS);
+        $deniedTools = $config->get('kosmo.tools.denied_tools', []);
 
         // Deny rules FIRST — these override everything including Prometheus
         foreach ($deniedTools as $toolName) {

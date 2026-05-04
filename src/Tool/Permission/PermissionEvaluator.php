@@ -79,6 +79,10 @@ class PermissionEvaluator
     /** Switch the active permission mode at runtime. */
     public function setPermissionMode(PermissionMode $mode): void
     {
+        if ($this->permissionMode !== $mode) {
+            $this->grants->reset();
+        }
+
         $this->permissionMode = $mode;
     }
 
@@ -89,9 +93,9 @@ class PermissionEvaluator
     }
 
     /** Mark a tool as session-approved so future calls skip the Ask prompt. */
-    public function grantSession(string $toolName): void
+    public function grantSession(string $toolName, array $args = []): void
     {
-        $this->grants->grant($toolName);
+        $this->grants->grant($toolName, $args);
     }
 
     /** Clear all session grants. */

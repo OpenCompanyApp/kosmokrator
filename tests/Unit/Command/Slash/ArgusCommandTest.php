@@ -99,7 +99,7 @@ class ArgusCommandTest extends TestCase
         $sessionManager = $this->createMock(SessionManager::class);
         $sessionManager->expects($this->once())
             ->method('setSetting')
-            ->with('permission_mode', 'argus');
+            ->with('tools.default_permission_mode', 'argus');
 
         $command = new ArgusCommand;
         $ctx = $this->makeContext(sessionManager: $sessionManager);

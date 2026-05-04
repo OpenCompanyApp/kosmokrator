@@ -1,0 +1,178 @@
+---
+title: "Troubleshooting"
+description: "Diagnose setup, providers, credentials, permissions, MCP, integrations, web providers, sessions, and terminal rendering issues."
+sidebar:
+  order: 99
+---
+
+Start with the command that matches the failing surface, then inspect the effective settings and credentials.
+
+## Baseline Checks
+
+```bash
+kosmo --version
+kosmokrator smoke:startup --json
+kosmo config paths --json
+kosmo settings:doctor --json
+```
+
+For source checkouts:
+
+```bash
+composer install
+php vendor/bin/phpunit
+php vendor/bin/pint --test
+```
+
+## Provider Or Model Fails
+
+```bash
+kosmo providers:list --json
+kosmo providers:status --json
+kosmo providers:status openai --json
+kosmo settings:get agent.default_provider --json
+kosmo settings:get agent.default_model --json
+kosmo settings:options agent.default_model --provider openai --json
+```
+
+Common fixes:
+
+| Symptom | Fix |
+| --- | --- |
+| Missing API key | `printf %s "$OPENAI_API_KEY" | kosmo providers:configure openai --api-key-stdin --json` |
+| Wrong default model | `kosmo settings:set agent.default_model &lt;model&gt; --provider &lt;provider&gt; --json` |
+| OAuth provider not logged in | `kosmo providers:configure codex --device --json` |
+| Custom provider unreachable | Verify `providers:custom:list --json`, URL, auth mode, and model ID. |
+
+## Headless Run Hangs Or Exits Early
+
+Use explicit guards:
+
+```bash
+kosmo -p "Run tests" --max-turns 10 --timeout 600 --output-format stream-json
+```
+
+Checks:
+
+| Symptom | Fix |
+| --- | --- |
+| Needs an approval modal | Use a policy that fits automation, or configure permissions. |
+| Writes are denied | Verify `--mode edit`, `tools.denied_tools`, blocked paths, and permission mode. |
+| Too many repeated tool calls | Check stream JSON for stuck detection nudges and lower task scope. |
+| No session should be persisted | Add `--no-session`. |
+
+## Permission Denied
+
+```bash
+kosmo settings:get tools.default_permission_mode --json
+kosmo settings:get tools.denied_tools --json
+kosmo settings:get tools.blocked_paths --json
+kosmo settings:get tools.allowed_paths --json
+```
+
+Remember:
+
+- `denied_tools` always wins.
+- Blocked paths always win unless explicitly allowed.
+- Plan and Ask modes remove write tools before permission evaluation.
+- Prometheus auto-approves governed calls, but does not bypass hard denies.
+- Integration and MCP read/write permissions are separate from native tool approval.
+
+## Integrations Fail
+
+```bash
+kosmo integrations:list --json
+kosmo integrations:status --json
+kosmo integrations:doctor plane --json
+kosmo integrations:fields plane --json
+kosmo integrations:schema plane.list_issues
+```
+
+Common fixes:
+
+| Symptom | Fix |
+| --- | --- |
+| Integration not active | `kosmo integrations:configure plane --enable --json` |
+| Missing credentials | Use `integrations:fields` then `integrations:configure --set key=value`. |
+| Named account not found | Pass `--account &lt;alias&gt;` consistently. |
+| Write denied in headless mode | Set write permission to `allow` or use `--force` only for trusted automation. |
+| Function name unknown | Use `integrations:search &lt;query&gt; --json`. |
+
+## MCP Fails
+
+```bash
+kosmo mcp:list --all --json
+kosmo mcp:status --json
+kosmo mcp:doctor --json
+kosmo mcp:tools &lt;server&gt; --json
+```
+
+Common fixes:
+
+| Symptom | Fix |
+| --- | --- |
+| Project server is untrusted | Review command, then run `kosmo mcp:trust &lt;server&gt; --project --json`. |
+| Env token missing | `printf %s "$TOKEN" | kosmo mcp:secret:set &lt;server&gt; env.TOKEN --stdin --json`. |
+| Tool discovery fails | Confirm server command exists in `PATH` and can run outside KosmoKrator. |
+| Tool treated as write | Set `--read allow --write ask/allow` explicitly; tools without `readOnlyHint` are conservative. |
+| Config shape not detected | Use top-level `mcpServers`, or import compatible `servers` JSON with `mcp:import`. |
+
+## Web Search Or Fetch Fails
+
+```bash
+kosmokrator web:providers --json
+kosmokrator web:doctor --json
+kosmo settings:list --category web --json
+```
+
+Common fixes:
+
+| Symptom | Fix |
+| --- | --- |
+| Search tool unavailable | `kosmo settings:set web.search.enabled on --json` and restart. |
+| Provider unconfigured | Use `web:configure &lt;provider&gt; --api-key-env ... --enable`. |
+| External fetch unavailable | Set `web.fetch.allow_external` to `on` and choose a provider. |
+| Crawl unavailable | Set `web.crawl.enabled` and choose Tavily or Firecrawl. |
+
+## Telegram Gateway Fails
+
+```bash
+kosmo gateway:telegram:status --json
+kosmo settings:list --category gateway --json
+kosmo secrets:status gateway.telegram.token --json
+```
+
+Common fixes:
+
+| Symptom | Fix |
+| --- | --- |
+| Gateway disabled | `kosmo gateway:telegram:configure --enabled on --json` |
+| Missing token | Set `kosmo.gateway.telegram.token` or `KOSMO_TELEGRAM_BOT_TOKEN`. |
+| Bot ignores group | Mention/reply to the bot, or configure `free_response_chats`. |
+| Unauthorized chat/user | Check `allowed_chats` and `allowed_users`. |
+
+## Terminal UI Looks Wrong
+
+```bash
+kosmo --renderer=ansi --no-animation
+kosmo settings:set ui.renderer ansi --global --json
+```
+
+Checks:
+
+| Symptom | Fix |
+| --- | --- |
+| TUI rendering glitches | Use a modern terminal, or force ANSI. |
+| Animation causes startup issues | Use `--no-animation` or set `ui.intro_animated off`. |
+| Colors are unreadable | Try ANSI mode and check terminal theme contrast. |
+| Readline issues in remote shell | Force `--renderer=ansi`. |
+
+## Docs Site Build
+
+```bash
+cd website
+npm ci
+npm run build
+```
+
+If syntax highlighting or MDX fails, check fenced code blocks first. Astro/Starlight treats MDX as JSX, so raw `<` and `{` in prose sometimes need escaping or code fences.

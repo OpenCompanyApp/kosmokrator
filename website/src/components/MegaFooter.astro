@@ -1,0 +1,173 @@
+---
+import { getMegaFooterSections } from '../lib/site-navigation';
+
+const sections = getMegaFooterSections();
+---
+
+<footer class="kosmo-megafooter" aria-label="KosmoKrator footer navigation">
+  <div class="megafooter-inner">
+    <div class="megafooter-top">
+      <a class="megafooter-brand" href="/" aria-label="KosmoKrator home">
+        <img src="/favicon.svg" alt="" width="28" height="28" loading="lazy" />
+        <span>KosmoKrator</span>
+      </a>
+      <div class="megafooter-actions" aria-label="Footer shortcuts">
+        <a href="/site-map">Website Map</a>
+        <a href="/docs/installation">Install</a>
+        <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+      </div>
+    </div>
+
+    <nav class="megafooter-grid" aria-label="Footer navigation">
+      {sections.map((section) => (
+        <section class="megafooter-section" aria-labelledby={`footer-${section.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>
+          <h3 id={`footer-${section.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>{section.title}</h3>
+          <ul>
+            {section.links.map((link) => (
+              <li><a href={link.href}>{link.label}</a></li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </nav>
+
+    <div class="megafooter-bottom">
+      <a href="/site-map">Website Map</a>
+      <a href="/docs/changelog">Changelog</a>
+      <a href="/integrations">Integrations</a>
+      <a href="https://github.com/OpenCompanyApp/kosmokrator">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .kosmo-megafooter {
+    margin-top: 4rem;
+    border-top: 1px solid rgba(220, 20, 60, 0.22);
+    color: #cbd5e1;
+    background:
+      radial-gradient(circle at 8% 0%, rgba(220, 20, 60, 0.14), transparent 24rem),
+      linear-gradient(180deg, rgba(12, 12, 20, 0.82), rgba(7, 7, 13, 0.96));
+  }
+
+  .megafooter-inner {
+    box-sizing: border-box;
+    width: min(1180px, calc(100% - 2.5rem));
+    margin-inline: auto;
+    padding: 2.5rem 0 2.75rem;
+  }
+
+  .megafooter-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.8rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .megafooter-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .megafooter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.55rem;
+  }
+
+  .megafooter-actions a {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    color: #dce4f3;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.86rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .megafooter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.25rem 1rem;
+    align-items: start;
+  }
+
+  .megafooter-section {
+    min-width: 0;
+  }
+
+  .megafooter-section h3 {
+    margin: 0 0 0.75rem;
+    color: #f8fafc;
+    font-size: 0.86rem;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  .megafooter-section ul {
+    display: grid;
+    gap: 0.38rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .megafooter-section a,
+  .megafooter-bottom a {
+    color: #a8b3c7;
+    text-decoration: none;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  .megafooter-section a:hover,
+  .megafooter-bottom a:hover {
+    color: #f8fafc;
+    text-decoration: underline;
+    text-decoration-color: #dc143c;
+    text-underline-offset: 0.18em;
+  }
+
+  .megafooter-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem 1.2rem;
+    margin-top: 2.25rem;
+    padding-top: 1.15rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  @media (max-width: 640px) {
+    .megafooter-inner {
+      width: min(100% - 2rem, 720px);
+      padding: 2.25rem 0 2.5rem;
+    }
+
+    .megafooter-top {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .megafooter-actions {
+      justify-content: flex-start;
+    }
+
+    .megafooter-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

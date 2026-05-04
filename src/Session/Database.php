@@ -4,34 +4,49 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
+use Kosmokrator\Settings\ConfigCompatibility;
+use Kosmokrator\Settings\SettingsPaths;
+
 /**
  * SQLite-backed persistence layer for sessions, messages, settings, and memories.
  * Manages schema creation and migration, providing a shared PDO connection for the Session subsystem.
  */
 class Database
 {
-    private \PDO $pdo;
+    private ?\PDO $pdo = null;
 
-    private const SCHEMA_VERSION = 9;
+    private bool $closed = false;
+
+    private bool $isMemory = false;
+
+    private const SCHEMA_VERSION = 13;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
-     *                             Defaults to ~/.kosmokrator/data/kosmokrator.db.
+     *                             Defaults to ~/.kosmo/data/kosmo.db.
      */
     public function __construct(?string $path = null)
     {
         $initLock = null;
         if ($path === null) {
-            $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
-            $dir = $home.'/.kosmokrator/data';
+            $dir = SettingsPaths::globalDirectory().'/data';
             if (! is_dir($dir) && ! @mkdir($dir, 0700, true) && ! is_dir($dir)) {
                 throw new \RuntimeException("Unable to create data directory: {$dir}");
             }
-            $path = $dir.'/kosmokrator.db';
+            $path = $dir.'/kosmo.db';
+            $legacyPath = SettingsPaths::globalDirectory(ConfigCompatibility::LEGACY_ROOT).'/data/kosmokrator.db';
+            if (! file_exists($path) && file_exists($legacyPath)) {
+                @copy($legacyPath, $path);
+                foreach (['-wal', '-shm'] as $suffix) {
+                    if (file_exists($legacyPath.$suffix)) {
+                        @copy($legacyPath.$suffix, $path.$suffix);
+                    }
+                }
+            }
         }
 
-        $isMemory = $path === ':memory:';
-        if (! $isMemory) {
+        $this->isMemory = $path === ':memory:';
+        if (! $this->isMemory) {
             $initLock = fopen($path.'.init.lock', 'c');
             if ($initLock === false || ! flock($initLock, LOCK_EX)) {
                 throw new \RuntimeException("Unable to lock database initialization: {$path}");
@@ -43,7 +58,7 @@ class Database
             $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
 
-            if (! $isMemory) {
+            if (! $this->isMemory) {
                 $this->pdo->exec('PRAGMA busy_timeout=5000'); // Wait up to 5s for locked database
                 $this->pdo->exec('PRAGMA journal_mode=WAL'); // Enable Write-Ahead Logging for concurrent reads
             }
@@ -61,6 +76,10 @@ class Database
     /** @return \PDO The raw PDO connection for direct queries. */
     public function connection(): \PDO
     {
+        if ($this->pdo === null) {
+            throw new \RuntimeException('Database connection is closed.');
+        }
+
         return $this->pdo;
     }
 
@@ -70,7 +89,7 @@ class Database
      */
     public function checkpoint(): void
     {
-        $this->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        $this->connection()->exec('PRAGMA wal_checkpoint(TRUNCATE)');
     }
 
     /**
@@ -78,11 +97,26 @@ class Database
      */
     public function close(): void
     {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->closed = true;
+
         try {
-            $this->checkpoint();
+            if (! $this->isMemory && $this->pdo !== null) {
+                $this->checkpoint();
+            }
         } catch (\Throwable) {
             // Best-effort checkpoint — ignore errors during shutdown
+        } finally {
+            $this->pdo = null;
         }
+    }
+
+    public function __destruct()
+    {
+        $this->close();
     }
 
     /** Creates or migrates the schema to the current version. */
@@ -94,6 +128,7 @@ class Database
         try {
             $stmt = $this->pdo->query('SELECT version FROM schema_version LIMIT 1');
             $row = $stmt->fetch();
+            $stmt->closeCursor();
             $currentVersion = $row ? (int) $row['version'] : 0;
 
             if ($currentVersion === 0) {
@@ -158,7 +193,7 @@ class Database
             CREATE TABLE IF NOT EXISTS memories (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 project     TEXT,
-                session_id  TEXT REFERENCES sessions(id),
+                session_id  TEXT REFERENCES sessions(id) ON DELETE CASCADE,
                 type        TEXT NOT NULL,
                 memory_class TEXT NOT NULL DEFAULT \'durable\',
                 title       TEXT NOT NULL,
@@ -171,15 +206,7 @@ class Database
             )
         ');
 
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)');
-
-        // Composite index for memory lookups filtered by project + expiry
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
-        // Index for expired memory pruning
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_expires_at ON memories(expires_at)');
-        // Index for memory type and class lookups
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
-        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
+        $this->createMemoryIndexes();
         // Index for session listing by project
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_updated ON sessions(project, updated_at DESC)');
 
@@ -225,6 +252,8 @@ class Database
                 chat_id             TEXT NOT NULL,
                 thread_id           TEXT,
                 request_message_id  INTEGER,
+                requester_user_id   TEXT,
+                requester_username  TEXT,
                 created_at          TEXT,
                 resolved_at         TEXT
             )
@@ -255,6 +284,7 @@ class Database
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_gateway_pending_inputs_route ON gateway_pending_inputs(platform, route_key, id)');
 
         $this->createSwarmMetadataSchema();
+        $this->createProviderModelCacheSchema();
     }
 
     /** Runs incremental schema migrations starting from the given version. */
@@ -327,6 +357,8 @@ class Database
                     chat_id             TEXT NOT NULL,
                     thread_id           TEXT,
                     request_message_id  INTEGER,
+                    requester_user_id   TEXT,
+                    requester_username  TEXT,
                     created_at          TEXT,
                     resolved_at         TEXT
                 )
@@ -365,6 +397,40 @@ class Database
             $this->addColumnIfMissing('swarm_agents', 'output_bytes', 'INTEGER NOT NULL DEFAULT 0');
             $this->addColumnIfMissing('swarm_agents', 'output_preview', 'TEXT');
         }
+
+        if ($from < 10) {
+            $this->addColumnIfMissing('gateway_approvals', 'requester_user_id', 'TEXT');
+            $this->addColumnIfMissing('gateway_approvals', 'requester_username', 'TEXT');
+        }
+
+        if ($from < 11) {
+            // v11: session-scoped memories must not block session deletion.
+            $this->ensureMemoriesSessionCascade();
+        }
+
+        if ($from < 12) {
+            if (! $this->tableExists('swarm_agents')) {
+                $this->createSwarmMetadataSchema();
+            } else {
+                $this->addColumnIfMissing('swarm_agents', 'current_tool', 'TEXT');
+                $this->addColumnIfMissing('swarm_agents', 'last_activity_description', 'TEXT');
+                $this->addColumnIfMissing('swarm_agents', 'provider', 'TEXT');
+                $this->addColumnIfMissing('swarm_agents', 'model', 'TEXT');
+                $this->createSwarmEventsSchema();
+            }
+        }
+
+        if ($from < 13) {
+            $this->createProviderModelCacheSchema();
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name");
+        $stmt->execute(['name' => $table]);
+
+        return $stmt->fetch() !== false;
     }
 
     /** Adds a column to a table only if it does not already exist. */
@@ -421,6 +487,74 @@ class Database
         );
     }
 
+    private function createMemoryIndexes(): void
+    {
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_project_expires ON memories(project, expires_at)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_expires_at ON memories(expires_at)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_memories_memory_class ON memories(memory_class)');
+    }
+
+    private function ensureMemoriesSessionCascade(): void
+    {
+        if ($this->memoriesSessionForeignKeyCascades()) {
+            return;
+        }
+
+        $this->pdo->exec('ALTER TABLE memories RENAME TO memories_old');
+        $this->pdo->exec('
+            CREATE TABLE memories (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                project     TEXT,
+                session_id  TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+                type        TEXT NOT NULL,
+                memory_class TEXT NOT NULL DEFAULT \'durable\',
+                title       TEXT NOT NULL,
+                content     TEXT NOT NULL,
+                pinned      INTEGER NOT NULL DEFAULT 0,
+                expires_at  TEXT,
+                last_surfaced_at TEXT,
+                created_at  TEXT,
+                updated_at  TEXT
+            )
+        ');
+        $this->pdo->exec('
+            INSERT INTO memories (
+                id, project, session_id, type, memory_class, title, content,
+                pinned, expires_at, last_surfaced_at, created_at, updated_at
+            )
+            SELECT
+                id, project, session_id, type,
+                COALESCE(memory_class, \'durable\'),
+                title, content,
+                COALESCE(pinned, 0),
+                expires_at, last_surfaced_at, created_at, updated_at
+            FROM memories_old
+            WHERE session_id IS NULL
+               OR EXISTS (SELECT 1 FROM sessions WHERE sessions.id = memories_old.session_id)
+        ');
+        $this->pdo->exec('DROP TABLE memories_old');
+        $this->createMemoryIndexes();
+    }
+
+    private function memoriesSessionForeignKeyCascades(): bool
+    {
+        $stmt = $this->pdo->query('PRAGMA foreign_key_list(memories)');
+        $rows = $stmt->fetchAll();
+        $stmt->closeCursor();
+
+        foreach ($rows as $row) {
+            if (($row['from'] ?? null) === 'session_id'
+                && ($row['table'] ?? null) === 'sessions'
+                && strtoupper((string) ($row['on_delete'] ?? '')) === 'CASCADE') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function createSwarmMetadataSchema(): void
     {
         $this->pdo->exec(
@@ -441,7 +575,11 @@ class Database
                 retries               INTEGER NOT NULL DEFAULT 0,
                 queue_reason          TEXT,
                 last_tool             TEXT,
+                current_tool          TEXT,
                 last_message_preview  TEXT,
+                last_activity_description TEXT,
+                provider              TEXT,
+                model                 TEXT,
                 next_retry_at         TEXT,
                 output_ref            TEXT,
                 output_bytes          INTEGER NOT NULL DEFAULT 0,
@@ -458,6 +596,46 @@ class Database
         );
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_agents_session_status ON swarm_agents(root_session_id, status, updated_at DESC)');
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_agents_session_parent ON swarm_agents(root_session_id, parent_id)');
+        $this->createSwarmEventsSchema();
+    }
+
+    private function createSwarmEventsSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS swarm_events (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                root_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                agent_id        TEXT NOT NULL,
+                event_type      TEXT NOT NULL,
+                status          TEXT,
+                message         TEXT,
+                payload_json    TEXT,
+                created_at      TEXT NOT NULL
+            )
+            SQL
+        );
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_agent ON swarm_events(root_session_id, agent_id, id)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_type ON swarm_events(root_session_id, event_type, id)');
+    }
+
+    private function createProviderModelCacheSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS provider_model_cache (
+                provider     TEXT NOT NULL,
+                account      TEXT NOT NULL DEFAULT 'default',
+                source       TEXT NOT NULL,
+                models_json  TEXT NOT NULL,
+                error        TEXT,
+                fetched_at   TEXT NOT NULL,
+                expires_at   TEXT NOT NULL,
+                PRIMARY KEY (provider, account)
+            )
+            SQL
+        );
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_provider_model_cache_expires ON provider_model_cache(expires_at)');
     }
 
     private function rebuildMessagesFtsIndex(): void

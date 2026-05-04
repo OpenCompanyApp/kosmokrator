@@ -45,7 +45,7 @@ final class SetupCommandTest extends TestCase
             'Open settings to configure your default provider, model, and credentials.',
             $flow->notice,
         );
-        $this->assertStringContainsString('Setup complete. Run `kosmokrator` to start.', $tester->getDisplay());
+        $this->assertStringContainsString('Setup complete. Run `kosmo` to start.', $tester->getDisplay());
     }
 
     public function test_setup_command_fails_when_setup_is_incomplete(): void

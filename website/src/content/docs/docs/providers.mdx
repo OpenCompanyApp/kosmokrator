@@ -1,0 +1,296 @@
+---
+title: "Providers"
+description: "Configure LLM providers and model behavior."
+sidebar:
+  order: 7
+---
+KosmoKrator supports a large LLM provider catalog through Prism, direct provider clients, and OpenAI-compatible custom providers. Providers are configured once and then reused by terminal sessions, headless runs, SDK runs, ACP clients, Telegram gateway sessions, and subagents.
+
+Provider configuration can be performed interactively, through `setup`, through `providers:*`, or through the SDK config helpers. The full shell command reference is in [CLI Reference](/docs/cli-reference).
+
+## Built-in Providers
+
+Every built-in provider is ready to use after entering credentials. The live catalog is large and is sourced from the application provider registry, so use `kosmo providers:list --json` and `kosmo providers:models <provider> --json` as the source of truth. The table below highlights common providers and their setup shape.
+
+| Provider ID | Label | Auth Mode | Notes |
+| --- | --- | --- | --- |
+| `anthropic` | Anthropic | API Key | Claude family — Opus 4.5, Sonnet 4.5, Haiku 4.5 |
+| `openai` | OpenAI | API Key | GPT-4o, GPT-4.1 family, o-series reasoning models |
+| `codex` | Codex (ChatGPT) | OAuth | Browser/device login flow, uses your ChatGPT subscription |
+| `gemini` | Google Gemini | API Key | Gemini 2.5 Pro and Flash |
+| `deepseek` | DeepSeek | API Key | DeepSeek V3 (chat), R1 (reasoning) |
+| `groq` | Groq | API Key | Ultra-fast inference on dedicated hardware |
+| `mistral` | Mistral | API Key | Mistral Large, Codestral |
+| `xai` | xAI | API Key | Grok 3, with reasoning support |
+| `openrouter` | OpenRouter | API Key | Meta-router for 100+ models from multiple providers |
+| `perplexity` | Perplexity | API Key | Online search-augmented models |
+| `ollama` | Ollama | None | Local models, no remote credentials required |
+| `kimi` | Kimi (Moonshot) | API Key | Long-context Chinese/English models |
+| `kimi-coding` | Kimi Coding | API Key | Code-optimized Moonshot endpoint |
+| `mimo` | Xiaomi MiMo Token Plan | API Key | MiMo models via token-plan key (free tier available) |
+| `mimo-api` | Xiaomi MiMo API | API Key | MiMo pay-as-you-go API |
+| `minimax` | MiniMax | API Key | MiniMax models |
+| `minimax-cn` | MiniMax CN | API Key | MiniMax China-region endpoint |
+| `z` | Z.AI | API Key | Z.AI coding endpoint |
+| `z-api` | Z.AI API | API Key | Z.AI standard API endpoint |
+| `stepfun` | StepFun | API Key | Step models |
+| `stepfun-plan` | StepFun Plan | API Key | Step Plan subscription endpoint with reasoning support |
+
+## Authentication Setup
+
+### First-run wizard
+
+The easiest way to configure credentials is the interactive setup command, which walks you through provider selection and API key entry:
+
+```bash
+kosmo setup
+```
+
+The same setup can run headlessly. Use this form for containers, CI, and remote machines:
+
+```bash
+# Configure an API-key provider and default model without exposing the key in argv
+printf %s "$OPENAI_API_KEY" | \
+  kosmo setup --provider openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# Equivalent provider-specific command
+printf %s "$OPENAI_API_KEY" | \
+  kosmo providers:configure openai --model gpt-5.4-mini \
+  --api-key-stdin --global --json
+
+# OAuth providers can use device login when available
+kosmo providers:configure codex --device --global --json
+```
+
+### Headless provider discovery
+
+Provider commands are designed for agents and scripts: they expose stable JSON, never print raw secrets, and include enough metadata to choose valid next commands.
+
+```bash
+# List providers, auth mode, source, and configured status
+kosmo providers:list --json
+
+# Show one provider's status
+kosmo providers:status openai --json
+
+# List advertised models for a provider
+kosmo providers:models openai --json
+
+# Refresh the cached inventory directly from the provider API
+kosmo providers:models openai --live --json
+kosmo providers:refresh-models openai --json
+
+# Diagnose auth, endpoint, catalog freshness, and a specific model ID
+kosmo providers:doctor openai --model gpt-5.4-mini --json
+
+# Clear a stored API key
+kosmo providers:logout openai --json
+```
+
+Provider commands reject unknown provider IDs with `success: false` and a non-zero exit code. This keeps automation from mistaking an empty result for a valid provider.
+
+### Live model inventory
+
+The normal provider catalog is available offline from the bundled Prism Relay registry. When you want the newest provider model list, run a live refresh. KosmoKrator stores the result in SQLite and overlays it on top of bundled metadata, preserving known context windows and pricing where provider APIs only return model IDs.
+
+Live refresh is explicit so ordinary `kosmo` startup does not block on provider APIs. JSON output includes `model_source`, `model_fetched_at`, `model_inventory_fresh`, and any `model_inventory_error`.
+
+If a provider launched a model before the catalog knows about it, headless setup can still pin it intentionally:
+
+```bash
+kosmo providers:configure openai \
+  --model future-model-id \
+  --allow-unlisted-model \
+  --global --json
+
+kosmo settings:set agent.default_model future-model-id \
+  --provider openai \
+  --allow-unlisted-model \
+  --global --json
+```
+
+Custom OpenAI-compatible providers accept free-text model identifiers by default, unless their relay definition sets `strict_models: true`.
+
+### API key storage
+
+API keys entered through the setup wizard, `providers:configure`, or `secrets:set` are stored in the local SQLite database at `~/.kosmo/data/kosmo.db`. Keys are never written to plain-text config files and JSON output only reports masked/configured status.
+
+```bash
+# Set a provider key without putting it in argv history
+printf %s "$OPENAI_API_KEY" | \
+  kosmo secrets:set provider.openai.api_key --stdin --json
+
+# Check managed secret status
+kosmo secrets:status provider.openai.api_key --json
+kosmo secrets:list --json
+kosmo secrets:unset provider.openai.api_key --json
+```
+
+### Environment variables
+
+Alternatively, you can set provider API keys via environment variables. These are read from your Prism PHP configuration and take effect if no key is stored in the database. Common variables:
+
+-   `ANTHROPIC_API_KEY` — Anthropic
+-   `OPENAI_API_KEY` — OpenAI
+-   `DEEPSEEK_API_KEY` — DeepSeek
+-   `GROQ_API_KEY` — Groq
+-   `MISTRAL_API_KEY` — Mistral
+-   `XAI_API_KEY` — xAI
+-   `OPENROUTER_API_KEY` — OpenRouter
+-   `PERPLEXITY_API_KEY` — Perplexity
+-   `GEMINI_API_KEY` — Google Gemini
+-   `KIMI_API_KEY` — Kimi / Kimi Coding
+-   `MIMO_API_KEY` — MiMo (token plan)
+-   `MIMO_PAYG_API_KEY` — MiMo (pay-as-you-go API)
+-   `MINIMAX_API_KEY` — MiniMax
+-   `MINIMAX_CN_API_KEY` — MiniMax CN (China region)
+-   `STEPFUN_API_KEY` — StepFun / StepFun Plan
+-   `ZAI_API_KEY` — Z.AI / Z.AI API
+
+Database-stored keys always take priority over environment variables. If you set a key via `/settings` and also have an environment variable, the stored key is used.
+
+### OAuth flow (Codex / ChatGPT)
+
+The `codex` provider uses a browser-based OAuth device login flow tied to your ChatGPT subscription. When you select Codex as your provider:
+
+1.  KosmoKrator starts a local callback server on port `9876` (configurable in `config/kosmo.yaml`).
+2.  Your browser opens to a ChatGPT authorization page.
+3.  After granting access, the OAuth tokens are stored and refreshed automatically.
+
+Token status is shown in the settings UI — including the associated email, expiration state, and whether a refresh is due.
+
+## Switching Providers
+
+You can change the active provider and model at any time during a session:
+
+1.  Open the settings panel with the `/settings` command.
+2.  Navigate to the **Agent** category.
+3.  Change `default_provider` to the desired provider ID.
+4.  Change `default_model` to a model supported by that provider.
+
+Both settings have `applies_now` effect — the change takes effect on the very next LLM call without restarting the session.
+
+The model selector is filtered by the currently selected provider. Change the provider first, then pick from its available models.
+
+## Per-Depth Model Overrides
+
+KosmoKrator supports running different models at different agent depths. This lets you use a powerful (and more expensive) model for the main agent while routing subagents to faster or cheaper models.
+
+| Depth | Role | Settings | Fallback |
+| --- | --- | --- | --- |
+| 0 | Main agent | `default_provider` / `default_model` | — |
+| 1 | Subagents | `subagent_provider` / `subagent_model` | Inherits from depth 0 |
+| 2+ | Sub-subagents | `subagent_depth2_provider` / `subagent_depth2_model` | Inherits from depth 1, then depth 0 |
+
+The resolution cascade works as follows: depth-2+ overrides fall back to depth-1 overrides, which fall back to the main agent defaults. Leave a setting empty to inherit from the parent depth.
+
+### Example: cost-optimized hierarchy
+
+```bash
+# Main agent — most capable model
+default_provider: anthropic
+default_model: claude-opus-4-5-20250929
+
+# Subagents — fast and affordable
+subagent_provider: anthropic
+subagent_model: claude-haiku-4-5-20251001
+
+# Sub-subagents — inherit from subagent settings
+# (leave subagent_depth2_provider and subagent_depth2_model empty)
+```
+
+Per-depth overrides are configured under the **Subagents** category in `/settings`. Each setting applies immediately when changed.
+
+## Custom Providers
+
+Any OpenAI-compatible API endpoint can be added as a custom provider. This is useful for self-hosted models, corporate proxies, or providers not yet included in the built-in catalog.
+
+### Adding a custom provider
+
+1.  Open `/settings` and navigate to **Provider Setup**.
+2.  Add a new provider with a unique ID.
+3.  Configure the required fields:
+
+Or create/update the provider headlessly:
+
+```bash
+printf %s "$CORP_LLM_API_KEY" | kosmo providers:custom:upsert corp_llm \
+  --label "Corporate LLM" \
+  --url https://llm.corp.example/v1 \
+  --model llama-3.1-70b \
+  --context 128000 \
+  --max-output 8192 \
+  --api-key-stdin \
+  --global --json
+
+kosmo providers:custom:list --json
+kosmo providers:custom:delete corp_llm --json
+```
+
+For richer definitions, pass JSON on stdin. The payload may include `id`, `scope`, `api_key`, and a `definition` object with the same fields used in YAML (`label`, `driver`, `auth`, `url`, `default_model`, `modalities`, and `models`).
+
+| Field | Description | Example |
+| --- | --- | --- |
+| `label` | Human-readable name shown in the UI | My Corporate LLM |
+| `base_url` | Full URL to the chat completions endpoint | `https://llm.corp.example/v1` |
+| `api_key` | API key for authentication | `sk-corp-...` |
+| `default_model` | Model identifier to use by default | `llama-3.1-70b` |
+
+Custom providers use the relay system for request/response normalization, so they work with tool calling, streaming, and all other agent features as long as the endpoint implements the OpenAI chat completions format.
+
+## Reasoning Support
+
+Some providers support extended thinking / reasoning modes, where the model performs chain-of-thought reasoning before producing its final answer. KosmoKrator controls this via the `reasoning_effort` setting (under the **Agent** category in `/settings`).
+
+| Provider | Reasoning Behavior | Effort Levels |
+| --- | --- | --- |
+| `openai` | Controllable via `reasoning_effort` for o-series models (o1, o3, o4-mini) | `low` / `medium` / `high` |
+| `xai` | Controllable via `reasoning_effort` for Grok 3 Think models | `low` / `medium` / `high` |
+| `deepseek` | Always-on reasoning for R1 models | Not configurable |
+| `stepfun`, `stepfun-plan` | Always-on reasoning | Not configurable |
+| `kimi`, `kimi-coding` | Always-on reasoning | Not configurable |
+| `groq` | Always-on reasoning | Not configurable |
+| `mistral` | Always-on reasoning | Not configurable |
+| `perplexity` | Always-on reasoning | Not configurable |
+| `openrouter` | Always-on reasoning | Not configurable |
+| `z`, `z-api` | Always-on reasoning | Not configurable |
+| `minimax`, `minimax-cn` | Always-on reasoning | Not configurable |
+| `mimo`, `mimo-api` | Always-on reasoning | Not configurable |
+| All others | No reasoning support | Setting is safely ignored |
+
+**Anthropic** supports extended thinking (chain-of-thought) via Prism's native driver, but this is not controlled through the `reasoning_effort` parameter. It is handled internally by the driver when supported models are used.
+
+The available effort levels are `off`, `low`, `medium`, and `high`. Setting the value to `off` disables reasoning parameters entirely, even for providers that support it.
+
+Reasoning models tend to produce longer, more thorough responses but use significantly more tokens. Use `low` or `medium` for routine tasks and reserve `high` for complex multi-step problems.
+
+## LLM Clients
+
+Under the hood, KosmoKrator uses two client implementations to communicate with LLM providers. The correct client is selected automatically based on the provider.
+
+### AsyncLlmClient
+
+The primary client for most providers. Built on **Amp HTTP**, it sends raw HTTP requests to OpenAI-compatible chat completions endpoints with full async streaming support. Used for:
+
+-   OpenAI, DeepSeek, Groq, Mistral, xAI, OpenRouter, Perplexity
+-   Ollama, Kimi, Kimi Coding, MiMo, MiMo API, Z.AI, Z.AI API, StepFun, StepFun Plan
+-   All custom providers (OpenAI-compatible endpoints)
+
+### PrismService
+
+A synchronous client backed by the **Prism PHP SDK**. Used for providers that have native Prism drivers with specialized request/response handling:
+
+-   Anthropic (Claude) — uses Prism's native Anthropic driver with prompt caching
+-   Google Gemini — uses Prism's native Gemini driver
+-   MiniMax, MiniMax CN — uses Prism's Anthropic-compatible driver (Anthropic-format endpoints)
+
+### RetryableLlmClient
+
+A decorator that wraps either client, adding automatic retry logic with exponential backoff and jitter. Retries are triggered on:
+
+-   **Rate limits** (HTTP 429) — honors `Retry-After` headers from the provider
+-   **Server errors** (HTTP 5xx) — transient provider outages
+-   **Network failures** — connection timeouts, DNS resolution errors
+
+The maximum number of retry attempts is configurable via the `max_retries` setting. A value of `0` means unlimited retries (the agent keeps trying until the provider responds successfully).

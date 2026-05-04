@@ -27,7 +27,7 @@ class OutputTruncator
     /**
      * @param  int  $maxLines  Maximum lines allowed in truncated output
      * @param  int  $maxBytes  Maximum bytes allowed in truncated output
-     * @param  string|null  $storagePath  Directory for full-output files (defaults to ~/.kosmokrator/data/truncations)
+     * @param  string|null  $storagePath  Directory for full-output files (defaults to ~/.kosmo/data/truncations)
      * @param  int  $retentionSeconds  How long full-output files are kept before cleanup
      */
     public function __construct(
@@ -38,7 +38,7 @@ class OutputTruncator
     ) {
         if ($this->storagePath === null) {
             $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
-            $this->storagePath = $home.'/.kosmokrator/data/truncations';
+            $this->storagePath = $home.'/.kosmo/data/truncations';
         }
 
         // Purge stale files on every instantiation to prevent unbounded disk growth

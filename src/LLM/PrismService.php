@@ -112,7 +112,7 @@ class PrismService implements LlmClientInterface
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
         $cancellation?->throwIfRequested();
-        $response = $this->text($messages, $tools);
+        $response = $this->text($messages, $tools, $cancellation);
         $cancellation?->throwIfRequested();
 
         // Extract reasoning/thinking content from Prism's additionalContent
@@ -209,12 +209,15 @@ class PrismService implements LlmClientInterface
      * @param  Message[]  $messages
      * @param  Tool[]  $tools
      */
-    public function text(array $messages, array $tools = []): Response
+    public function text(array $messages, array $tools = [], ?Cancellation $cancellation = null): Response
     {
+        $cancellation?->throwIfRequested();
         $this->relay->beforeRequest($this->provider, $this->model);
 
         try {
+            $cancellation?->throwIfRequested();
             $response = $this->buildRequest($messages, $tools)->asText();
+            $cancellation?->throwIfRequested();
         } catch (\Throwable $e) {
             throw $this->relay->normalizeError($e, $this->provider, $this->model);
         }

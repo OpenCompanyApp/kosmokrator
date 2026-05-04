@@ -20,12 +20,29 @@ final class StuckDetector
     /** @var string[] Rolling window of tool call signatures */
     private array $toolCallWindow = [];
 
+    /** @var string[] Rolling window of recent tool names */
+    private array $toolNameWindow = [];
+
+    /** @var string[] Rolling window of repeated content chunks */
+    private array $contentWindow = [];
+
+    /** @var string[] Rolling window of reasoning chunks */
+    private array $thinkingWindow = [];
+
     private int $stuckEscalation = 0;
 
     private int $turnsSinceEscalation = 0;
 
     /** Number of consecutive non-stuck turns required to reset escalation (cool-down). */
     private int $cooldownCounter = 0;
+
+    private ?string $lastReason = null;
+
+    private ?string $lastToolName = null;
+
+    private int $sameToolNameStreak = 0;
+
+    private bool $hasSeenNonReadTool = false;
 
     /**
      * @param  int  $windowSize  Number of recent tool call signatures to track
@@ -46,23 +63,49 @@ final class StuckDetector
      */
     public function check(array $toolCalls): string
     {
-        // Build signatures and add to rolling window
-        foreach ($toolCalls as $tc) {
-            $this->toolCallWindow[] = $tc->name.':'.md5(json_encode(ToolCallMapper::safeArguments($tc), JSON_INVALID_UTF8_SUBSTITUTE));
-        }
-        $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
+        $isStuck = false;
+        $reason = null;
 
-        // Count occurrences of every unique signature in the window
+        // Build signatures and add to rolling window. Evaluate after each call
+        // so a large multi-tool batch cannot hide a repeated prefix by pushing
+        // it out of the final sliced window.
+        foreach ($toolCalls as $tc) {
+            $latestSig = $this->signature($tc);
+            $this->toolCallWindow[] = $latestSig;
+            $this->toolCallWindow = array_slice($this->toolCallWindow, -$this->windowSize);
+            $this->trackToolName($tc->name);
+
+            $counts = array_count_values($this->toolCallWindow);
+            if (($counts[$latestSig] ?? 0) >= $this->repetitionThreshold) {
+                $isStuck = true;
+                $reason ??= 'repeated tool call arguments';
+            }
+        }
+
         $counts = array_count_values($this->toolCallWindow);
         $maxCount = $counts !== [] ? max($counts) : 0;
+        if (! $isStuck && $this->sameToolNameStreak >= max(10, $this->repetitionThreshold + 7)) {
+            $isStuck = true;
+            $reason = 'same tool name repeated with changing arguments';
+        }
 
-        // Only consider stuck if the latest call matches the dominant repeated signature
-        $latestSig = end($this->toolCallWindow);
-        $dominantSig = $maxCount > 0 ? array_search($maxCount, $counts, true) : null;
-        $isStuck = $maxCount >= $this->repetitionThreshold && $latestSig === $dominantSig;
+        if (! $isStuck && $this->hasSeenNonReadTool && $this->readLikeToolChurnDetected()) {
+            $isStuck = true;
+            $reason = 'read/search churn without progress';
+        }
+
+        if (! $isStuck && $this->repeatedChunkDetected($this->contentWindow, 5)) {
+            $isStuck = true;
+            $reason = 'repeated streamed content';
+        }
+
+        if (! $isStuck && $this->repeatedChunkDetected($this->thinkingWindow, 3)) {
+            $isStuck = true;
+            $reason = 'repeated reasoning content';
+        }
 
         if (! $isStuck) {
-            if ($this->stuckEscalation > 0) {
+            if ($this->stuckEscalation > 0 && $maxCount < $this->repetitionThreshold) {
                 $this->cooldownCounter++;
                 if ($this->cooldownCounter >= $this->cooldownThreshold) {
                     $this->stuckEscalation = 0;
@@ -76,6 +119,7 @@ final class StuckDetector
 
         // Still stuck — reset cooldown
         $this->cooldownCounter = 0;
+        $this->lastReason = $reason;
 
         // First detection → nudge
         if ($this->stuckEscalation === 0) {
@@ -109,9 +153,26 @@ final class StuckDetector
     public function reset(): void
     {
         $this->toolCallWindow = [];
+        $this->toolNameWindow = [];
+        $this->contentWindow = [];
+        $this->thinkingWindow = [];
         $this->stuckEscalation = 0;
         $this->turnsSinceEscalation = 0;
         $this->cooldownCounter = 0;
+        $this->lastReason = null;
+        $this->lastToolName = null;
+        $this->sameToolNameStreak = 0;
+        $this->hasSeenNonReadTool = false;
+    }
+
+    public function observeText(string $delta): void
+    {
+        $this->trackContentChunk($delta, $this->contentWindow);
+    }
+
+    public function observeThinking(string $delta): void
+    {
+        $this->trackContentChunk($delta, $this->thinkingWindow);
     }
 
     /**
@@ -148,5 +209,118 @@ final class StuckDetector
     public function getWindow(): array
     {
         return $this->toolCallWindow;
+    }
+
+    public function getReason(): ?string
+    {
+        return $this->lastReason;
+    }
+
+    private function signature(ToolCall $toolCall): string
+    {
+        $parts = [];
+        foreach (ToolCallMapper::safeArguments($toolCall) as $key => $value) {
+            $key = (string) $key;
+            $parts[$key] = $this->isPathLikeArg($key) ? '*' : $this->signatureValue($value);
+        }
+        ksort($parts);
+
+        return $toolCall->name.':'.json_encode($parts, JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    private function isPathLikeArg(string $key): bool
+    {
+        return in_array($key, ['path', 'file', 'filename', 'cwd', 'dir', 'directory'], true)
+            || str_ends_with($key, '_path')
+            || str_ends_with($key, '_file');
+    }
+
+    private function signatureValue(mixed $value): string
+    {
+        if (is_scalar($value) || $value === null) {
+            return mb_substr((string) $value, 0, 120);
+        }
+
+        if (is_array($value)) {
+            return 'array:'.implode(',', array_map('strval', array_keys($value)));
+        }
+
+        return get_debug_type($value);
+    }
+
+    private function trackToolName(string $name): void
+    {
+        $this->toolNameWindow[] = $name;
+        $this->toolNameWindow = array_slice($this->toolNameWindow, -15);
+
+        if ($this->lastToolName === $name) {
+            $this->sameToolNameStreak++;
+        } else {
+            $this->lastToolName = $name;
+            $this->sameToolNameStreak = 1;
+        }
+
+        if (! $this->hasSeenNonReadTool && ! $this->isReadLikeTool($name)) {
+            $this->hasSeenNonReadTool = true;
+        }
+    }
+
+    private function readLikeToolChurnDetected(): bool
+    {
+        if (count($this->toolNameWindow) < 10) {
+            return false;
+        }
+
+        $readLike = 0;
+        foreach ($this->toolNameWindow as $name) {
+            if ($this->isReadLikeTool($name)) {
+                $readLike++;
+            }
+        }
+
+        return $readLike >= 8;
+    }
+
+    private function isReadLikeTool(string $name): bool
+    {
+        return in_array($name, ['file_read', 'glob', 'grep', 'web_search', 'web_fetch', 'session_search', 'session_read', 'memory_search', 'lua_list_docs', 'lua_search_docs', 'lua_read_doc'], true)
+            || str_starts_with($name, 'read_')
+            || str_starts_with($name, 'list_')
+            || str_contains($name, 'search');
+    }
+
+    /**
+     * @param  string[]  $window
+     */
+    private function repeatedChunkDetected(array $window, int $threshold): bool
+    {
+        if (count($window) < $threshold) {
+            return false;
+        }
+
+        $counts = array_count_values($window);
+
+        return max($counts) >= $threshold;
+    }
+
+    /**
+     * @param  string[]  $window
+     */
+    private function trackContentChunk(string $delta, array &$window): void
+    {
+        $normalized = trim((string) preg_replace('/\s+/', ' ', $delta));
+        if ($normalized === '' || str_contains($normalized, '```') || mb_strlen($normalized) < 24) {
+            return;
+        }
+
+        foreach (str_split($normalized, 80) as $chunk) {
+            $chunk = trim($chunk);
+            if (mb_strlen($chunk) < 24) {
+                continue;
+            }
+            $window[] = md5(mb_substr($chunk, 0, 160));
+        }
+
+        $window = array_slice($window, -40);
     }
 }

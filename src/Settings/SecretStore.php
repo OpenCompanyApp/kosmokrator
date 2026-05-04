@@ -64,7 +64,7 @@ final class SecretStore
     private function normalizeKey(string $key): string
     {
         return match ($key) {
-            'kosmokrator.gateway.telegram.token' => 'gateway.telegram.token',
+            'kosmo.gateway.telegram.token' => 'gateway.telegram.token',
             default => $key,
         };
     }

@@ -30,7 +30,7 @@ final class StreamableMcpToolInvoker implements McpToolInvokerInterface
                     'protocolVersion' => '2025-11-25',
                     'capabilities' => (object) [],
                     'clientInfo' => [
-                        'name' => 'kosmokrator',
+                        'name' => 'kosmo',
                         'version' => '0.1',
                     ],
                 ],

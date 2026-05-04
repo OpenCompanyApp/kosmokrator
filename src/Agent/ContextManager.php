@@ -98,7 +98,7 @@ final class ContextManager
                     'consecutive_failures' => $this->consecutiveCompactionFailures,
                 ]);
                 if ($snapshot['is_at_blocking_limit']) {
-                    $history->trimOldest();
+                    $this->trimOldestForRecovery($history, $mode, $agentContext);
                 }
 
                 return [0, 0];
@@ -110,7 +110,7 @@ final class ContextManager
 
             // Last resort: drop oldest messages when at the hard blocking limit
             if ($snapshot['is_at_blocking_limit']) {
-                $history->trimOldest();
+                $this->trimOldestForRecovery($history, $mode, $agentContext, minimumTurns: 1);
             }
 
             return [0, 0];
@@ -232,7 +232,7 @@ final class ContextManager
             SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
             $this->consecutiveCompactionFailures++;
             $messagesBefore = count($history->messages());
-            $history->trimOldest();
+            $this->trimOldestForRecovery($history, $mode, $agentContext);
             $this->log->warning('Compaction failed with known exception', [
                 'exception' => get_class($e),
                 'error' => $e->getMessage(),
@@ -246,8 +246,7 @@ final class ContextManager
             SafeDisplay::call(fn () => $this->ui->clearCompacting(), $this->log);
             $this->consecutiveCompactionFailures++;
             $messagesBefore = count($history->messages());
-            // Fallback: drop the oldest message to free up space
-            $history->trimOldest();
+            $this->trimOldestForRecovery($history, $mode, $agentContext);
             $this->log->error('Compaction failed, falling back to trimOldest', [
                 'error' => $e->getMessage(),
                 'messages_before' => $messagesBefore,
@@ -306,12 +305,23 @@ final class ContextManager
                     $block .= MemoryInjector::formatSessionRecall($recall);
                 }
 
-                $this->frozenMemoryBlock = $block;
+                if ($markSurfacedMemories) {
+                    $this->frozenMemoryBlock = $block;
+                } else {
+                    $prompt .= $block;
+
+                    return $this->appendVolatileSystemPrompt($prompt, $mode, $agentContext);
+                }
             }
 
             $prompt .= $this->frozenMemoryBlock;
         }
 
+        return $this->appendVolatileSystemPrompt($prompt, $mode, $agentContext);
+    }
+
+    private function appendVolatileSystemPrompt(string $prompt, AgentMode $mode, ?AgentContext $agentContext): string
+    {
         $prompt .= $mode->systemPromptSuffix();
 
         if ($agentContext !== null && $agentContext->task !== '') {
@@ -392,11 +402,11 @@ final class ContextManager
                 'effective_window' => $this->getContextWindow(),
                 'warning_threshold' => $threshold,
                 'auto_compact_threshold' => $threshold,
-                'blocking_threshold' => $this->getContextWindow(),
-                'percent_left' => max(0, (int) round((($this->getContextWindow() - $estimated) / $this->getContextWindow()) * 100)),
+                'blocking_threshold' => max($threshold, $this->getContextWindow() - 3000),
+                'percent_left' => max(0, (int) round((($this->getContextWindow() - $estimated) / max(1, $this->getContextWindow())) * 100)),
                 'is_above_warning' => $estimated >= $threshold,
                 'is_above_auto_compact' => $estimated >= $threshold,
-                'is_at_blocking_limit' => false,
+                'is_at_blocking_limit' => $estimated >= max($threshold, $this->getContextWindow() - 3000),
             ];
         }
         $snapshot['consecutive_failures'] = $this->consecutiveCompactionFailures;
@@ -425,5 +435,33 @@ final class ContextManager
             'previous_failures' => $this->consecutiveCompactionFailures,
         ]);
         $this->consecutiveCompactionFailures = 0;
+    }
+
+    private function trimOldestForRecovery(
+        ConversationHistory $history,
+        AgentMode $mode,
+        ?AgentContext $agentContext,
+        int $minimumTurns = 3,
+        int $maximumTurns = 8,
+    ): int {
+        $trimmed = 0;
+
+        while ($trimmed < $maximumTurns) {
+            if (! $history->trimOldest()) {
+                break;
+            }
+
+            $trimmed++;
+            if ($trimmed < $minimumTurns) {
+                continue;
+            }
+
+            $snapshot = $this->snapshot($history, $mode, $agentContext);
+            if (! $snapshot['is_at_blocking_limit'] && ! $snapshot['is_above_auto_compact']) {
+                break;
+            }
+        }
+
+        return $trimmed;
     }
 }

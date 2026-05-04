@@ -50,7 +50,7 @@ final class CodexLoginCommand extends Command
             $output->writeln('');
             $output->writeln('<error>  '.$e->getMessage().'</error>');
             $output->writeln('');
-            $output->writeln('Try the device authorization flow instead: <info>php bin/kosmokrator codex:login --device</info>');
+            $output->writeln('Try the device authorization flow instead: <info>php bin/kosmo codex:login --device</info>');
 
             return Command::FAILURE;
         }

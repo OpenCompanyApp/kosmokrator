@@ -31,9 +31,12 @@ final class SwarmMetadataStoreTest extends TestCase
         $stats->retries = 2;
         $stats->queueReason = 'retry backoff';
         $stats->lastTool = 'grep';
+        $stats->currentTool = 'grep';
+        $stats->markModel('anthropic', 'claude-sonnet-4-5');
         $stats->lastMessagePreview = 'Found cache adapter mismatch';
         $stats->nextRetryAt = 1_800_000_010.0;
         $stats->markOutput('/tmp/swarm-output/session-1/agent-1.txt', 12345, 'Cache audit summary');
+        $stats->lastActivityDescription = 'running tool: grep';
         $stats->startTime = 1_800_000_000.0;
         $stats->lastActivityTime = 1_800_000_005.0;
 
@@ -56,6 +59,10 @@ final class SwarmMetadataStoreTest extends TestCase
         $this->assertSame(2, $agent->retries);
         $this->assertSame('retry backoff', $agent->queueReason);
         $this->assertSame('grep', $agent->lastTool);
+        $this->assertSame('grep', $agent->currentTool);
+        $this->assertSame('running tool: grep', $agent->lastActivityDescription);
+        $this->assertSame('anthropic', $agent->provider);
+        $this->assertSame('claude-sonnet-4-5', $agent->model);
         $this->assertSame('Found cache adapter mismatch', $agent->lastMessagePreview);
         $this->assertSame(1_800_000_010.0, $agent->nextRetryAt);
         $this->assertSame('/tmp/swarm-output/session-1/agent-1.txt', $agent->outputRef);
@@ -85,6 +92,27 @@ final class SwarmMetadataStoreTest extends TestCase
         $this->assertSame('done', $loaded['agent-1']->status);
         $this->assertSame(3, $loaded['agent-1']->toolCalls);
         $this->assertSame(1_800_000_100.0, $loaded['agent-1']->endTime);
+    }
+
+    public function test_append_event_and_filter_by_agent(): void
+    {
+        $db = new Database(':memory:');
+        $this->insertSession($db, 'session-1');
+        $store = new SwarmMetadataStore($db);
+
+        $store->appendEvent('session-1', 'agent-1', 'status', 'running', 'running tool: grep', ['tool' => 'grep']);
+        $store->appendEvent('session-1', 'agent-2', 'status', 'done', 'completed');
+
+        $all = $store->eventsForSession('session-1');
+        $filtered = $store->eventsForSession('session-1', 'agent-1');
+
+        $this->assertCount(2, $all);
+        $this->assertCount(1, $filtered);
+        $this->assertSame('agent-1', $filtered[0]['agent_id']);
+        $this->assertSame('status', $filtered[0]['event_type']);
+        $this->assertSame('running', $filtered[0]['status']);
+        $this->assertSame('running tool: grep', $filtered[0]['message']);
+        $this->assertSame(['tool' => 'grep'], $filtered[0]['payload']);
     }
 
     private function insertSession(Database $db, string $id): void

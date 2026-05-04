@@ -1,0 +1,476 @@
+---
+title: "Permissions"
+description: "Permission modes, approval rules, path policies, and headless behavior."
+sidebar:
+  order: 8
+---
+KosmoKrator's permission system controls what the agent can do on your machine. Three permission modes balance safety and autonomy, while a configurable evaluation chain ensures every tool call is checked against blocked paths, deny patterns, session grants, project boundaries, custom rules, and mode-specific heuristics before it executes.
+
+## Permission Modes
+
+Every KosmoKrator session operates in one of three permission modes. The mode determines how the agent handles tool calls that require approval — whether it asks the user, auto-approves via heuristics, or auto-approves governed prompts while still enforcing hard denies.
+
+### Guardian (Default)
+
+Guardian is the default mode and the recommended choice for everyday development work. It uses heuristic evaluation to classify tool calls as safe or risky. Safe operations — reads, searches, and known-safe shell commands — are auto-approved silently. Risky operations such as file writes, edits, and unrecognized bash commands prompt the user for approval before executing.
+
+-   **Symbol:** `◈` (diamond)
+-   Smart auto-approve for known-safe operations
+-   Asks for writes, edits, and unknown or risky commands
+-   Uses static heuristic analysis — no LLM calls for permission decisions
+-   File writes and edits inside the project directory are auto-approved
+-   Best for daily development use
+
+### Argus
+
+Argus mode requires explicit user approval for every tool call that has an Ask rule (tools in the `approval_required` list). Tools in the `safe_tools` list (such as `file_read`, `glob`, and `grep`) are still auto-approved via their Allow rules. This provides a detailed audit trail of every action the agent takes, making it ideal for security-sensitive work, exploring unfamiliar codebases, or learning how the agent operates.
+
+-   **Symbol:** `◉` (target)
+-   Every Ask-ruled tool call requires explicit approval
+-   Full visibility and audit trail for governed tools
+-   Safe tools still bypass the chain via Allow rules
+-   Best for learning, exploring new codebases, or security-sensitive work
+
+### Prometheus
+
+Prometheus mode auto-approves governed tool calls that would otherwise ask. The agent executes without pausing for user confirmation, providing maximum speed and autonomy. Explicit deny rules and blocked paths are still enforced — Prometheus removes the "ask" step, not the safety rails.
+
+-   **Symbol:** `⚡` (lightning)
+-   No approval prompts for governed tool calls
+-   Maximum speed and autonomy
+-   Blocked paths and explicit deny rules still enforced
+-   Project boundary check is bypassed
+-   Best for trusted CI/CD pipelines, [headless mode](/docs/headless), or known-safe tasks
+
+### Mode Comparison
+
+| Mode | Auto-Approve Reads | Auto-Approve Writes | Auto-Approve Bash | Notes |
+| --- | --- | --- | --- | --- |
+| Guardian | Yes | In-project only | Heuristic | Default mode |
+| Argus | Yes (safe\_tools) | No (asks) | No (asks) | Full audit for Ask-ruled tools |
+| Prometheus | Yes | Yes | Yes | No prompts, boundary bypassed |
+
+### Switching Modes
+
+Switch between permission modes at any time during a session using slash commands. The change takes effect immediately for all subsequent tool calls.
+
+```bash
+/guardian      # Switch to Guardian mode (default)
+/argus         # Switch to Argus mode
+/prometheus    # Switch to Prometheus mode
+```
+
+You can also set the default mode in your configuration file so every new session starts in your preferred mode:
+
+```yaml
+kosmo:
+  tools:
+    default_permission_mode: guardian   # guardian | argus | prometheus
+```
+
+## Evaluation Chain
+
+Every tool call passes through a chain of six permission checks before execution. The checks run in a fixed order, and the first check that returns a definitive result halts the chain. If no check halts the chain, the call is **denied by default** (fail-closed).
+
+### Chain Order
+
+1.  **Blocked Path Check** — Matches the tool call's `path` argument against a list of glob patterns for unconditionally denied paths (e.g., `*.env`, `.git/*`, `*.pem`). Both the raw path and the resolved (symlink-followed) path are checked. If either matches, the call is denied immediately. This check overrides everything else in the chain.
+2.  **Deny Pattern Check** — Evaluates the tool call against explicit deny rules from the configuration. For bash and shell tools, this checks command arguments against blocked command patterns (e.g., `rm -rf /`). Also checks tools listed in `denied_tools` (see below). A match produces an unconditional deny that overrides even Prometheus mode.
+3.  **Project Boundary Check** — For file tools (`file_write`, `file_edit`, `file_read`, `glob`, `grep`), checks whether the target path is outside the project root. If the path is outside the project and not in `allowed_paths`, the call triggers an Ask prompt. Prometheus mode is exempt from boundary enforcement. This check applies to both read and write tools — even `file_read`, `glob`, and `grep` trigger a prompt when accessing files outside the project root.
+4.  **Session Grant Check** — Checks whether the user has previously approved this tool for the current session. If so, the call is allowed without prompting. Session grants are per-tool (not per-path or per-command) and do not bypass blocked paths, deny patterns, or project boundary checks.
+5.  **Rule Check** — Matches against the permission rules defined in the configuration (`safe_tools`, `approval_required`, and `denied_tools`). If a rule matches with an Allow action, the call is allowed. If a rule matches with a Deny action, the call is denied. If a rule matches with an Ask action, the check returns `null` and passes through to the remaining checks in the chain.
+6.  **Mode Override Check** — Applies the active permission mode's logic to any tool that has an Ask rule. Only tools with Ask rules reach this stage. In Prometheus mode, the Ask is upgraded to Allow. In Guardian mode, the Guardian heuristic evaluator decides whether to auto-approve or ask the user. In Argus mode, the Ask stands and the user is prompted.
+
+### Result
+
+Every evaluation produces one of three outcomes:
+
+-   **Allow** — The tool call executes immediately, with no user interaction.
+-   **Ask** — The user is prompted to approve, grant for session, or deny the call.
+-   **Deny** — The tool call is blocked. The agent receives an error message explaining why.
+
+**Tip:** The evaluation chain runs synchronously in the tool-call hot path. It is pure static analysis with no LLM calls, so permission decisions add negligible latency.
+
+## MCP And Integration Permissions
+
+Headless integrations and MCP servers have their own read/write policies in addition to native tool permissions. This keeps external API calls governed even when they are invoked from `integrations:call`, `mcp:call`, `integrations:lua`, `mcp:lua`, or agent-side `execute_lua`.
+
+| Surface | Policy Keys | Force Behavior |
+| --- | --- | --- |
+| Integrations | `integrations.permissions_default` and provider/account read/write config | `--force` bypasses integration read/write policy for the one headless call. |
+| MCP | `kosmo.mcp.permissions_default`, `kosmo.mcp.servers.SERVER.permissions.read`, `.write`, and `kosmo.mcp.trust.SERVER.fingerprint` | `--force` bypasses MCP project trust and MCP read/write policy for the one headless call. |
+
+In pure headless mode, `ask` cannot open an approval modal. Configure the relevant operation as `allow` or run trusted automation with `--force`. MCP tools marked with MCP `readOnlyHint` are treated as read operations; other MCP tools are conservatively treated as write operations.
+
+## Guardian Heuristics
+
+When Guardian mode encounters a tool call that has an Ask rule and reaches the Mode Override Check, it delegates to the `GuardianEvaluator` for static heuristic analysis. The evaluator classifies the call as safe or risky without making any LLM calls. Safe calls are auto-approved silently; risky calls prompt the user.
+
+### Always-Safe Tools
+
+The following tools are always auto-approved in Guardian mode, regardless of their arguments:
+
+-   `file_read` — Reading files
+-   `glob` — File pattern matching
+-   `grep` — Content search
+-   `task_create`, `task_update`, `task_list`, `task_get` — Task management
+-   `shell_read`, `shell_kill` — Reading shell output and killing sessions
+-   `memory_save`, `memory_search` — Persistent memory operations
+-   `session_search`, `session_read` — Prior session discovery and transcript reads
+-   `lua_list_docs`, `lua_search_docs`, `lua_read_doc` — Lua API documentation
+-   `execute_lua` — Lua script execution (inner integration and MCP permissions enforce per-call granularity)
+
+### File Operation Heuristics
+
+For `file_write` and `file_edit`, Guardian mode checks whether the target path resolves inside the current project directory. Writes within the project are auto-approved; writes outside the project require user confirmation.
+
+-   `file_write` — Auto-approved if the path is inside the project root
+-   `file_edit` — Auto-approved if the path is inside the project root
+-   Paths outside the project — Ask in Guardian/Argus unless covered by `allowed_paths`; Prometheus bypasses this boundary prompt, but blocked paths still deny
+
+### Safe Bash Commands
+
+Guardian mode evaluates bash commands in two stages: first it checks for shell metacharacters, then it matches against a configurable list of safe command patterns. This same logic applies to `shell_start` (the startup command) and `shell_write` (the input text sent to an existing session).
+
+**Shell metacharacter check:** If a command contains any of the following characters, it is immediately classified as risky, regardless of the command itself: `;` `&` `|` `` ` `` `$` `>` `<` and newlines. This prevents bypassing the safe list via command chaining, piping, or redirection.
+
+**Safe command patterns:** If the command passes the metacharacter check, it is matched against glob patterns defined in the `guardian_safe_commands` config. The default safe commands include:
+
+| Category | Commands |
+| --- | --- |
+| Version control | `git *` (status, log, diff, branch, etc.) |
+| File inspection | `ls *`, `cat *`, `head *`, `tail *`, `wc *` |
+| Navigation | `pwd`, `which *`, `find *` |
+| Output | `echo *`, `diff *` |
+| PHP tooling | `php vendor/bin/phpunit*`, `php vendor/bin/pint*`, `composer *` |
+| JavaScript | `npm *`, `npx *`, `node *` |
+| Other languages | `python *`, `cargo *`, `go *`, `make *` |
+
+**Tip:** The safe command list uses glob-style matching. `git *` matches `git status`, `git log --oneline`, and any other git command — but only when the command contains no shell operators. A command like `git log | head` would still require approval because of the pipe character.
+
+### Risky Commands (Require Approval)
+
+Any bash command that does not match a safe pattern, or that contains shell metacharacters, requires user approval in Guardian mode. Common examples include:
+
+-   `rm`, `mv`, `cp` — Destructive or mutative file operations
+-   `git push`, `git reset --hard` — Destructive git operations
+-   `curl`, `wget` — Network access
+-   Commands with `|`, `>`, `>>` — Pipe and redirect operators
+-   `sudo`, `chmod`, `chown` — Privilege escalation and permission changes
+-   `docker`, `kubectl` — Container orchestration
+-   Any command not in the safe list
+
+### Mutative Command Detection
+
+Separately from the safe command analysis, Guardian mode maintains a list of mutative command patterns used to enforce read-only bash in Ask mode. Mutative commands include file deletion, package installation, git operations that modify history, container commands, and process management. Commands containing shell operators are also treated as mutative.
+
+## Session Grants
+
+When the user approves a tool call, they can choose the scope of the approval:
+
+-   **Allow once** — Approves this specific call only. The next call to the same tool will prompt again.
+-   **Allow for session** — Grants blanket approval for the tool for the remainder of the session. All subsequent calls to that tool are auto-approved without prompting.
+-   **Deny** — Blocks this specific call. The agent receives an error and must find an alternative approach.
+
+Session grants are tracked per tool name — not per path, command, or argument combination. Granting session approval for `bash` means all bash commands are approved for the rest of the session.
+
+Grants are cleared automatically when:
+
+-   The session ends
+-   The conversation is reset
+-   The user explicitly resets grants
+
+**Tip:** Session grants sit after blocked paths, deny patterns, and project-boundary checks. This means blocked paths, explicit denies, and outside-project file prompts still take precedence, even if you granted session approval for the tool.
+
+## Blocked Paths
+
+Blocked paths define files and directories that are unconditionally denied access, regardless of the active permission mode. Even Prometheus mode cannot override a blocked path. This is the strongest safety mechanism in the permission system.
+
+Blocked paths use glob-style patterns and are checked against both the raw path and the resolved (symlink-followed) path, so symlink tricks cannot bypass the block. Both the full path and the basename are tested against each pattern.
+
+### Default Blocked Paths
+
+The default configuration blocks these patterns:
+
+```yaml
+kosmo:
+  tools:
+    blocked_paths:
+      - "*.env"           # Environment files with secrets
+      - ".git/*"          # Git internal directory
+      - "*.pem"           # SSL/TLS certificates
+      - "*id_rsa*"        # RSA private keys
+      - "*id_ed25519*"    # Ed25519 private keys
+      - "*.key"           # Generic key files
+```
+
+### Adding Custom Blocked Paths
+
+Add your own blocked path patterns in the configuration file. Patterns use glob syntax where `*` matches any sequence of characters and `?` matches any single character.
+
+```yaml
+kosmo:
+  tools:
+    blocked_paths:
+      - "*.env"
+      - ".git/*"
+      - "*.pem"
+      - "*id_rsa*"
+      - "*id_ed25519*"
+      - "*.key"
+      - "/etc/shadow"           # System password file
+      - "/etc/passwd"           # User database
+      - "*.credentials"         # Credential files
+      - "~/.aws/*"              # AWS configuration
+```
+
+Blocked paths apply to all tools that accept a `path` argument: `file_read`, `file_write`, `file_edit`, and `apply_patch`.
+
+## Approval Flow UI
+
+When a tool call requires approval (the evaluation chain returned Ask), KosmoKrator presents the user with the details and waits for a decision. The presentation varies by renderer, but the information and options are the same.
+
+### TUI Mode
+
+In TUI mode, an overlay dialog appears showing the tool name, a summary of the arguments (file path, command text, etc.), and three action buttons. The dialog is rendered by the `PermissionPromptWidget` and supports keyboard navigation.
+
+### ANSI Mode
+
+In ANSI mode, the tool call details are printed inline, followed by a prompt line showing the available choices. Input is read from the terminal via readline.
+
+### Options
+
+| Key | Action | Effect |
+| --- | --- | --- |
+| `y` | Allow once | Execute this call, prompt again for the next one |
+| `s` | Allow for session | Execute this call and auto-approve all future calls to this tool |
+| `n` | Deny | Block this call, return an error to the agent |
+
+## Permission Rules
+
+Permission rules are defined in the configuration and control which tools are allowed, denied, or require approval. Three configuration options define these rules:
+
+### Safe Tools (`safe_tools`)
+
+The `safe_tools` list creates unconditional Allow rules for the specified tools. These tools are auto-approved without any permission check or user prompt, regardless of the active mode (including Argus). Tools in this list skip the Mode Override Check entirely.
+
+```yaml
+kosmo:
+  tools:
+    safe_tools:
+      - file_read
+      - glob
+      - grep
+      - task_create
+      - task_update
+      - task_list
+      - task_get
+      - shell_read
+      - shell_kill
+      - memory_save
+      - memory_search
+      - ask_user
+      - ask_choice
+      - subagent
+      - lua_list_docs
+      - lua_search_docs
+      - lua_read_doc
+```
+
+### Denied Tools (`denied_tools`)
+
+The `denied_tools` list creates unconditional Deny rules for the specified tools. This is the strongest form of denial — it overrides everything, including Prometheus mode and session grants. Use it to hard-disable specific tools in a project or CI environment.
+
+```yaml
+kosmo:
+  tools:
+    # Completely disable specific tools, overriding all modes
+    denied_tools:
+      - bash           # No shell access
+      - file_write     # Read-only project
+```
+
+### Approval Required (`approval_required`)
+
+The `approval_required` list creates Ask rules for the specified tools. These tools pass through the full evaluation chain, where the outcome depends on the active permission mode, session grants, project boundaries, and heuristics.
+
+```yaml
+kosmo:
+  tools:
+    approval_required:
+      - file_write
+      - file_edit
+      - apply_patch
+      - bash
+      - shell_start
+      - shell_write
+      - execute_lua
+```
+
+Note: `execute_lua` is in the approval list, but Guardian mode auto-approves it because the inner integration permissions enforce per-tool granularity within Lua scripts.
+
+### Blocked Commands
+
+For bash and shell tools, you can define command patterns that are always denied, regardless of mode. These are unconditional — even Prometheus mode cannot override them.
+
+```yaml
+kosmo:
+  tools:
+    bash:
+      blocked_commands:
+        - "rm -rf /"               # Catastrophic deletion
+        - "dd if=/dev/zero*"       # Disk overwrite
+        - "mkfs*"                  # Filesystem formatting
+```
+
+### Safe Command Configuration
+
+The Guardian safe command list is fully configurable. Add or remove patterns to match your workflow:
+
+```yaml
+kosmo:
+  tools:
+    guardian_safe_commands:
+      - "git *"
+      - "ls *"
+      - "pwd"
+      - "cat *"
+      - "head *"
+      - "tail *"
+      - "wc *"
+      - "find *"
+      - "which *"
+      - "echo *"
+      - "diff *"
+      - "php vendor/bin/phpunit*"
+      - "php vendor/bin/pint*"
+      - "composer *"
+      - "npm *"
+      - "npx *"
+      - "node *"
+      - "python *"
+      - "cargo *"
+      - "go *"
+      - "make *"
+      - "terraform plan*"          # Custom: allow terraform plan
+      - "kubectl get *"            # Custom: allow read-only kubectl
+```
+
+**Tip:** Safe command patterns only apply in Guardian mode. In Argus mode, every Ask-ruled tool call asks regardless of the safe list. In Prometheus mode, Ask-ruled tool calls are auto-approved regardless of the safe list, while hard denies still apply.
+
+## Project Boundary
+
+The Project Boundary Check (stage 3 in the evaluation chain) enforces that file tools operate within the project root. When a file tool targets a path outside the project directory, an Ask prompt is triggered so the user can approve or deny the access. This applies to both read and write tools — even `file_read`, `glob`, and `grep` trigger a prompt when accessing files outside the project root.
+
+Prometheus mode is exempt from boundary enforcement. Session grants do not bypass this check because they are evaluated later in the chain.
+
+### Allowed Paths
+
+The `allowed_paths` configuration defines additional path prefixes that are treated as if they were inside the project root. Paths matching these prefixes bypass the project boundary check entirely.
+
+```yaml
+kosmo:
+  tools:
+    allowed_paths:
+      - "~/.kosmo"    # KosmoKrator config directory
+      - "/tmp"        # Temporary files
+```
+
+Paths in `allowed_paths` are resolved at startup (including `~` expansion and symlink resolution), so they work correctly across different environments.
+
+## Interaction with Agent Modes
+
+Permission modes and agent modes are orthogonal systems. Permission modes control _whether_ the agent can execute tool calls; agent modes control _what_ the agent is allowed to do at a higher level. Their effects combine:
+
+| Agent Mode | Permission Mode | Behavior |
+| --- | --- | --- |
+| Edit | Guardian | Default safe development — reads auto-approved, writes prompt, safe bash auto-approved |
+| Edit | Argus | Full audit — every Ask-ruled tool call prompts; safe tools still auto-approved |
+| Edit | Prometheus | Fully autonomous — agent reads, writes, and executes without prompting |
+| Plan | Any | Read-only — the agent can read and search but cannot write or execute. Permission mode is irrelevant for blocked operations. |
+| Ask | Any | Read-only — same as Plan mode. Mutative bash commands are blocked regardless of permission mode. |
+
+In Ask and Plan modes, the agent mode restriction takes precedence. Even Prometheus mode cannot write files or execute destructive commands when the agent mode forbids it. The permission system only governs tool calls that the agent mode has already allowed.
+
+## Subagent Permissions
+
+Subagents inherit the parent agent's permission mode and evaluation chain. The same blocked paths, deny patterns, rules, and mode settings apply to all subagents in the hierarchy.
+
+-   **Explore subagents** — Limited to read-only tools. Permission prompts are rare since reads are auto-approved in Guardian and Prometheus modes.
+-   **Plan subagents** — Read-only, same as Explore.
+-   **General subagents** — Full tool access, subject to the same permission evaluation as the parent agent. In Prometheus or [headless mode](/docs/headless), these run without prompts.
+
+**Tip:** In [headless mode](/docs/headless) (CI/CD pipelines), the permission mode is typically set to Prometheus so subagents can execute without blocking on approval prompts. Blocked paths and explicit denies still apply as a safety net.
+
+## Configuration Reference
+
+All permission-related user and project settings live under `kosmo.tools` in the configuration file. Settings can be defined in bundled defaults (`config/kosmo.yaml`), user config (`~/.kosmo/config.yaml`), or project-local config (`.kosmo.yaml` in the working directory). Project-local settings override user settings, which override the global defaults.
+
+```yaml
+kosmo:
+  tools:
+    # Tools that are always denied, overriding all modes including Prometheus
+    denied_tools: []
+    # Example: denied_tools: [file_write, bash]
+
+    # Tools that are always allowed without prompting (Allow rules)
+    safe_tools:
+      - file_read
+      - glob
+      - grep
+      - task_create
+      - task_update
+      - task_list
+      - task_get
+      - shell_read
+      - shell_kill
+      - memory_save
+      - memory_search
+      - ask_user
+      - ask_choice
+      - subagent
+      - lua_list_docs
+      - lua_search_docs
+      - lua_read_doc
+
+    # Tools that require approval (Ask rules)
+    approval_required:
+      - file_write
+      - file_edit
+      - apply_patch
+      - bash
+      - shell_start
+      - shell_write
+      - execute_lua
+
+    # Default permission mode for new sessions
+    default_permission_mode: guardian   # guardian | argus | prometheus
+
+    # Paths that are always denied access (glob patterns)
+    blocked_paths:
+      - "*.env"
+      - ".git/*"
+      - "*.pem"
+      - "*id_rsa*"
+      - "*id_ed25519*"
+      - "*.key"
+
+    # Paths that bypass the project boundary check
+    allowed_paths:
+      - "~/.kosmo"
+      - "/tmp"
+
+    # Bash commands blocked unconditionally (glob patterns)
+    bash:
+      blocked_commands:
+        - "rm -rf /"
+
+    # Commands auto-approved in Guardian mode (glob patterns)
+    guardian_safe_commands:
+      - "git *"
+      - "ls *"
+      - "pwd"
+      - "cat *"
+      - "composer *"
+      # ... add your own patterns
+```

@@ -40,7 +40,7 @@ class BashTool extends AbstractTool
         $this->log = $log ?? new NullLogger;
         if ($this->storagePath === null) {
             $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
-            $this->storagePath = $home.'/.kosmokrator/data/truncations';
+            $this->storagePath = $home.'/.kosmo/data/truncations';
         }
     }
 

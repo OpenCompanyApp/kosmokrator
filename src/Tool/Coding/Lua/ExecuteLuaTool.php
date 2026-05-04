@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding\Lua;
 
+use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\NativeToolBridge;
 use Kosmokrator\Tool\AbstractTool;
@@ -11,7 +12,7 @@ use Kosmokrator\Tool\ToolResult;
 
 class ExecuteLuaTool extends AbstractTool
 {
-    /** @var \Closure(): NativeToolBridge|null Lazy resolver to avoid circular dependency */
+    /** @var \Closure(AgentMode|null): NativeToolBridge|null Lazy resolver to avoid circular dependency */
     private static ?\Closure $nativeBridgeResolver = null;
 
     public function __construct(
@@ -53,6 +54,9 @@ class ExecuteLuaTool extends AbstractTool
     protected function handle(array $args): ToolResult
     {
         $code = $args['code'] ?? '';
+        $agentMode = isset($args['_agent_mode']) && is_string($args['_agent_mode'])
+            ? AgentMode::tryFrom($args['_agent_mode'])
+            : null;
 
         if (! is_string($code) || trim($code) === '') {
             return ToolResult::error('Missing required parameter "code". Provide the Lua source code to execute.');
@@ -68,7 +72,7 @@ class ExecuteLuaTool extends AbstractTool
 
         $nativeBridge = null;
         if (self::$nativeBridgeResolver !== null) {
-            $nativeBridge = (self::$nativeBridgeResolver)();
+            $nativeBridge = (self::$nativeBridgeResolver)($agentMode);
         }
 
         $execution = $this->runtime->executeLua($code, $options, $nativeBridge);

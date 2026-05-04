@@ -184,7 +184,7 @@ final class SettingsCommand implements SlashCommand
                 $choice = $ctx->ui->askChoice('Codex needs ChatGPT authentication. Start login now?', [
                     ['label' => 'Browser login', 'detail' => 'Opens ChatGPT in your browser and waits for the callback on localhost.', 'recommended' => true],
                     ['label' => 'Device login', 'detail' => 'Shows a device code for headless or remote environments.', 'recommended' => false],
-                    ['label' => 'Later', 'detail' => 'Keep Codex selected and authenticate later with `kosmokrator auth login codex`.', 'recommended' => false],
+                    ['label' => 'Later', 'detail' => 'Keep Codex selected and authenticate later with `kosmo auth login codex`.', 'recommended' => false],
                 ]);
 
                 if ($choice === 'Browser login') {
@@ -622,7 +622,7 @@ final class SettingsCommand implements SlashCommand
         $inner = self::innerClient($ctx->llm);
 
         if ($provider !== 'codex' && method_exists($inner, 'setBaseUrl')) {
-            $inner->setBaseUrl(rtrim($registry->url($provider), '/'));
+            $inner->setBaseUrl(rtrim($catalog->provider($provider)?->url ?? $registry->url($provider), '/'));
         }
 
         if (method_exists($inner, 'setApiKey')) {
@@ -818,6 +818,10 @@ final class SettingsCommand implements SlashCommand
                 'input_modalities' => $provider->inputModalities,
                 'output_modalities' => $provider->outputModalities,
                 'free_text_model' => $provider->freeTextModel,
+                'model_source' => $provider->modelSource,
+                'model_fetched_at' => $provider->modelFetchedAt,
+                'model_inventory_fresh' => $provider->modelInventoryFresh,
+                'model_inventory_error' => $provider->modelInventoryError,
             ];
         }
 
@@ -1159,36 +1163,36 @@ final class SettingsCommand implements SlashCommand
         ];
 
         // Enabled toggle
-        $enabled = $settings->getRaw("integrations.{$name}.enabled");
+        $enabled = $settings->getRaw("kosmo.integrations.{$name}.enabled");
         $fields[] = [
             'id' => "integration.{$name}.enabled",
             'label' => '  Enabled',
             'value' => ($enabled === true || $enabled === 'on') ? 'on' : 'off',
-            'source' => $settings->rawSource("integrations.{$name}.enabled") ?? 'default',
+            'source' => $settings->rawSource("kosmo.integrations.{$name}.enabled") ?? 'default',
             'effect' => 'next_session',
             'type' => 'toggle',
             'options' => ['on', 'off'],
             'description' => "Enable or disable the {$name} integration.",
         ];
 
-        $readPerm = $settings->getRaw("integrations.{$name}.permissions.read") ?? 'allow';
+        $readPerm = $settings->getRaw("kosmo.integrations.{$name}.permissions.read") ?? 'allow';
         $fields[] = [
             'id' => "integration.{$name}.permissions.read",
             'label' => '  Read access',
             'value' => $readPerm,
-            'source' => $settings->rawSource("integrations.{$name}.permissions.read") ?? 'default',
+            'source' => $settings->rawSource("kosmo.integrations.{$name}.permissions.read") ?? 'default',
             'effect' => 'applies_now',
             'type' => 'choice',
             'options' => ['allow', 'ask', 'deny'],
             'description' => "Read access for {$name}. allow = auto-approve, ask = require approval, deny = blocked.",
         ];
 
-        $writePerm = $settings->getRaw("integrations.{$name}.permissions.write") ?? 'allow';
+        $writePerm = $settings->getRaw("kosmo.integrations.{$name}.permissions.write") ?? 'allow';
         $fields[] = [
             'id' => "integration.{$name}.permissions.write",
             'label' => '  Write access',
             'value' => $writePerm,
-            'source' => $settings->rawSource("integrations.{$name}.permissions.write") ?? 'default',
+            'source' => $settings->rawSource("kosmo.integrations.{$name}.permissions.write") ?? 'default',
             'effect' => 'applies_now',
             'type' => 'choice',
             'options' => ['allow', 'ask', 'deny'],
@@ -1309,7 +1313,7 @@ final class SettingsCommand implements SlashCommand
 
         // Parse integration.{name}.enabled → set in YAML
         if (preg_match('/^integration\.([^.]+)\.enabled$/', $id, $m)) {
-            $settings->setRaw("integrations.{$m[1]}.enabled", $value === 'on', $scope);
+            $settings->setRaw("kosmo.integrations.{$m[1]}.enabled", $value === 'on', $scope);
 
             return;
         }
@@ -1317,7 +1321,7 @@ final class SettingsCommand implements SlashCommand
         // Parse integration.{name}.permissions.{operation} → set in YAML
         if (preg_match('/^integration\.([^.]+)\.permissions\.(read|write)$/', $id, $m)) {
             if (in_array($value, ['allow', 'ask', 'deny'], true)) {
-                $settings->setRaw("integrations.{$m[1]}.permissions.{$m[2]}", $value, $scope);
+                $settings->setRaw("kosmo.integrations.{$m[1]}.permissions.{$m[2]}", $value, $scope);
             }
 
             return;
@@ -1468,7 +1472,7 @@ final class SettingsCommand implements SlashCommand
             static fn (array $field): bool => $field['configured'] === true,
         );
 
-        $enabled = $settings->getRaw("integrations.{$name}.enabled");
+        $enabled = $settings->getRaw("kosmo.integrations.{$name}.enabled");
         $rawLabel = trim((string) ($meta['label'] ?? ''));
         $displayName = $this->integrationDisplayName($name, $provider, $meta, $integrationMeta);
         $label = $this->integrationDisplayLabel($rawLabel, $displayName);
@@ -1488,8 +1492,8 @@ final class SettingsCommand implements SlashCommand
             'enabled' => $enabled === true || $enabled === 'on',
             'accounts' => $accounts,
             'credential_fields' => $credentialViews,
-            'read_permission' => (string) ($settings->getRaw("integrations.{$name}.permissions.read") ?? 'allow'),
-            'write_permission' => (string) ($settings->getRaw("integrations.{$name}.permissions.write") ?? 'allow'),
+            'read_permission' => (string) ($settings->getRaw("kosmo.integrations.{$name}.permissions.read") ?? 'allow'),
+            'write_permission' => (string) ($settings->getRaw("kosmo.integrations.{$name}.permissions.write") ?? 'allow'),
             'tool_count' => count($provider->tools()),
         ];
     }

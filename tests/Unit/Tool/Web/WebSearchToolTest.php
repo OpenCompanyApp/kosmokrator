@@ -117,7 +117,7 @@ final class WebSearchToolTest extends TestCase
 
         return new SettingsManager(
             new Repository([
-                'kosmokrator' => [
+                'kosmo' => [
                     'web' => [
                         'search' => ['default_provider' => 'tavily', 'fallback_providers' => [], 'max_results' => 5],
                         'fetch' => ['default_provider' => 'direct', 'fallback_providers' => [], 'max_chars' => 12000],

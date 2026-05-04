@@ -13,7 +13,7 @@ use Monolog\Processor\IntrospectionProcessor;
 use Psr\Log\LoggerInterface;
 
 /**
- * Creates a rotating file logger under ~/.kosmokrator/logs with:
+ * Creates a rotating file logger under ~/.kosmo/logs with:
  *  - Correlation ID for session-level grouping
  *  - Introspection (file:line) on WARNING+
  *  - Deduplication to suppress repeated messages within 60s
@@ -25,16 +25,16 @@ class LoggingServiceProvider extends ServiceProvider
     public function register(): void
     {
         $home = getenv('HOME') ?: getenv('USERPROFILE') ?: '/tmp';
-        $logDir = $home.'/.kosmokrator/logs';
+        $logDir = $home.'/.kosmo/logs';
 
         if (! is_dir($logDir) && ! @mkdir($logDir, 0700, true) && ! is_dir($logDir)) {
             throw new \RuntimeException("Unable to create log directory: {$logDir}");
         }
 
-        $logger = new Logger('kosmokrator');
+        $logger = new Logger('kosmo');
 
         // Core rotating file handler — 7 days retention, DEBUG level
-        $rotating = new RotatingFileHandler($logDir.'/kosmokrator.log', 7, Logger::DEBUG);
+        $rotating = new RotatingFileHandler($logDir.'/kosmo.log', 7, Logger::DEBUG);
 
         // Deduplication wrapper: suppresses identical messages within 60s window.
         // This prevents floods like 546 identical "Display call failed" lines.

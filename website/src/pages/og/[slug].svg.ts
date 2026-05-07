@@ -1,11 +1,8 @@
 import type { APIRoute } from 'astro';
 import { getIntegrations } from '../../lib/integrations-catalog';
 import {
-  cliEnvironments,
   comparisonPages,
   integrationCliTitle,
-  integrationEnvironmentTitle,
-  integrationFrameworkTitle,
   integrationMcpTitle,
   integrationOverviewTitle,
   matrixClients,
@@ -121,17 +118,8 @@ function ogImages(): OgImage[] {
     const count = `${integration.tools.length} functions`;
     add(['integration', integration.route_slug], integrationOverviewTitle(integration), `${count}, ${integration.auth_strategy_label} auth, CLI commands, MCP gateway setup, Lua API, and schema docs.`, 'Integration');
     add(['integration', integration.route_slug, 'cli'], integrationCliTitle(integration), `Headless ${integration.name} commands for scripts, CI, coding agents, JSON output, and schema discovery.`, 'CLI');
-    add(['cli', integration.route_slug], integrationCliTitle(integration), `Exact-match ${integration.name} CLI shortcut for headless automation and coding-agent workflows.`, 'CLI');
-    add(['integration', integration.route_slug, 'mcp'], integrationMcpTitle(integration), `Expose ${integration.name} tools to Claude Code, Cursor, Codex, and other MCP clients through a local gateway.`, 'MCP');
+    add(['integration', integration.route_slug, 'mcp'], integrationMcpTitle(integration), `Expose ${integration.name} tools to Claude Code, Cursor, Codex, LangChain, and other MCP clients.`, 'MCP');
     add(['integration', integration.route_slug, 'lua'], `${integration.name} Lua API for KosmoKrator Agents`, `Agent-facing Lua namespace and function reference for ${integration.name}.`, 'Lua');
-
-    for (const client of matrixClients) {
-      add(['integration', integration.route_slug, 'framework', client.slug], integrationFrameworkTitle(integration, client), `Connect ${integration.name} to ${client.label} through KosmoKrator's local MCP gateway.`, 'Framework');
-    }
-
-    for (const environment of cliEnvironments) {
-      add(['integration', integration.route_slug, 'cli', environment.slug], integrationEnvironmentTitle(integration, environment), `Use the ${integration.name} CLI for ${environment.label} with headless JSON commands and local credentials.`, 'Automation');
-    }
   }
 
   for (const client of matrixClients) {

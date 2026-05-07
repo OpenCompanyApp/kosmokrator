@@ -1,0 +1,3 @@
+/cli/:slug /integrations/:slug/cli/ 301
+/integrations/:slug/framework/:client /integrations/:slug/mcp/ 301
+/integrations/:slug/cli/:environment /integrations/:slug/cli/ 301

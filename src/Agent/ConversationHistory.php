@@ -66,6 +66,18 @@ class ConversationHistory
         $this->messages[] = $message;
     }
 
+    public function removeSystemMessagesContaining(string $needle): void
+    {
+        if ($needle === '') {
+            return;
+        }
+
+        $this->messages = array_values(array_filter(
+            $this->messages,
+            fn (Message $message): bool => ! ($message instanceof SystemMessage && str_contains($message->content, $needle)),
+        ));
+    }
+
     /**
      * @return array<int, Message>
      */

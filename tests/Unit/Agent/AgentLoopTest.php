@@ -7,6 +7,8 @@ use Amp\CancelledException;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\Goal\GoalRepository;
+use Kosmokrator\Goal\GoalStatus;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\LlmStreamingEvent;
@@ -28,6 +30,7 @@ use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Tool;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
@@ -150,6 +153,112 @@ class AgentLoopTest extends TestCase
         $this->ui->expects($this->once())->method('showToolResult');
 
         $this->loop->run('Do something');
+    }
+
+    public function test_active_goal_continues_until_update_goal_completes(): void
+    {
+        $db = new Database(':memory:');
+        $sessionManager = new SessionManager(
+            new SessionRepository($db),
+            new MessageRepository($db),
+            new SettingsRepository($db),
+            new MemoryRepository($db),
+            new NullLogger,
+            goals: new GoalRepository($db),
+        );
+        $sessionManager->setProject('/project');
+        $sessionManager->createSession('model');
+        $sessionManager->setGoal('Finish the active goal');
+
+        $toolCall = new ToolCall(id: 'goal_1', name: 'update_goal', arguments: '{"status":"complete"}');
+        $llm = $this->createMock(LlmClientInterface::class);
+        $llm->expects($this->exactly(3))
+            ->method('chat')
+            ->willReturnOnConsecutiveCalls(
+                new LlmResponse('Still working.', FinishReason::Stop, [], 100, 20),
+                new LlmResponse('', FinishReason::ToolCalls, [$toolCall], 80, 10),
+                new LlmResponse('Goal complete.', FinishReason::Stop, [], 50, 10),
+            );
+        $llm->method('getProvider')->willReturn('test');
+        $llm->method('getModel')->willReturn('model');
+
+        $ui = $this->createMock(RendererInterface::class);
+        $ui->method('consumeQueuedMessage')->willReturn(null);
+        $loop = new AgentLoop($llm, $ui, new NullLogger, 'You are a test assistant.', sessionManager: $sessionManager);
+        $loop->setTools([
+            (new Tool)
+                ->as('update_goal')
+                ->for('Update goal')
+                ->withStringParameter('status', 'Status', true)
+                ->using(function (string $status) use ($sessionManager): string {
+                    if ($status === 'complete') {
+                        $sessionManager->updateGoal(GoalStatus::Complete);
+                    }
+
+                    return 'goal updated';
+                }),
+        ]);
+
+        $loop->run('Start');
+
+        $this->assertSame(GoalStatus::Complete, $sessionManager->currentGoal()?->status);
+        $goalRuntimeMessages = array_filter(
+            $loop->history()->messages(),
+            fn ($message): bool => $message instanceof SystemMessage && str_contains($message->content, 'kosmo:goal-runtime'),
+        );
+        $this->assertCount(0, $goalRuntimeMessages);
+    }
+
+    public function test_budget_limited_goal_gets_one_wrap_up_turn_and_clears_runtime_context(): void
+    {
+        $db = new Database(':memory:');
+        $sessionManager = new SessionManager(
+            new SessionRepository($db),
+            new MessageRepository($db),
+            new SettingsRepository($db),
+            new MemoryRepository($db),
+            new NullLogger,
+            goals: new GoalRepository($db),
+        );
+        $sessionManager->setProject('/project');
+        $sessionManager->createSession('model');
+        $sessionManager->setGoal('Spend a tiny budget', tokenBudget: 1);
+
+        $call = 0;
+        $llm = $this->createMock(LlmClientInterface::class);
+        $llm->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function (array $messages) use (&$call): LlmResponse {
+                $call++;
+                if ($call === 2) {
+                    $this->assertTrue(
+                        array_any(
+                            $messages,
+                            fn ($message): bool => $message instanceof SystemMessage && str_contains($message->content, 'reached its token budget'),
+                        ),
+                    );
+                }
+
+                return $call === 1
+                    ? new LlmResponse('Spent the budget.', FinishReason::Stop, [], 100, 20)
+                    : new LlmResponse('Budget wrap-up.', FinishReason::Stop, [], 5, 5);
+            });
+        $llm->method('getProvider')->willReturn('test');
+        $llm->method('getModel')->willReturn('model');
+
+        $ui = $this->createMock(RendererInterface::class);
+        $ui->method('consumeQueuedMessage')->willReturn(null);
+        $ui->expects($this->once())->method('showNotice')->with('Goal reached its token budget.');
+        $loop = new AgentLoop($llm, $ui, new NullLogger, 'You are a test assistant.', sessionManager: $sessionManager);
+
+        $loop->run('Start');
+
+        $this->assertSame(GoalStatus::BudgetLimited, $sessionManager->currentGoal()?->status);
+        $goalRuntimeMessages = array_filter(
+            $loop->history()->messages(),
+            fn ($message): bool => $message instanceof SystemMessage && str_contains($message->content, 'kosmo:goal-runtime'),
+        );
+        $this->assertCount(0, $goalRuntimeMessages);
     }
 
     public function test_streaming_flushes_long_partial_text_before_stream_end(): void

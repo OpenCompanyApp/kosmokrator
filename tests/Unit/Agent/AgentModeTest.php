@@ -26,6 +26,9 @@ class AgentModeTest extends TestCase
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
         $this->assertContains('task_get', $tools);
+        $this->assertContains('get_goal', $tools);
+        $this->assertContains('create_goal', $tools);
+        $this->assertContains('update_goal', $tools);
         $this->assertContains('ask_user', $tools);
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
@@ -34,7 +37,7 @@ class AgentModeTest extends TestCase
         $this->assertContains('subagent', $tools);
         $this->assertContains('web_search', $tools);
         $this->assertContains('web_fetch', $tools);
-        $this->assertCount(27, $tools);
+        $this->assertCount(30, $tools);
     }
 
     public function test_plan_mode_has_read_only_tools(): void
@@ -53,6 +56,9 @@ class AgentModeTest extends TestCase
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
         $this->assertContains('task_get', $tools);
+        $this->assertContains('get_goal', $tools);
+        $this->assertNotContains('create_goal', $tools);
+        $this->assertNotContains('update_goal', $tools);
         $this->assertContains('ask_user', $tools);
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);
@@ -81,6 +87,9 @@ class AgentModeTest extends TestCase
         $this->assertContains('task_update', $tools);
         $this->assertContains('task_list', $tools);
         $this->assertContains('task_get', $tools);
+        $this->assertContains('get_goal', $tools);
+        $this->assertNotContains('create_goal', $tools);
+        $this->assertNotContains('update_goal', $tools);
         $this->assertContains('ask_user', $tools);
         $this->assertContains('ask_choice', $tools);
         $this->assertContains('memory_search', $tools);

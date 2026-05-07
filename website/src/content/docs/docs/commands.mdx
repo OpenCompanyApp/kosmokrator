@@ -107,6 +107,18 @@ Delete a specific memory by its numeric ID. Use `/memories` first to find the ID
 /forget 42
 ```
 
+#### `/goal [objective|pause|resume|clear]`
+
+Set a persistent goal for the current session. While an active goal exists in Edit mode, KosmoKrator continues working across agent turns until the goal is completed, paused, cleared, or reaches its configured token budget.
+
+```bash
+/goal finish the release prep and verify CI
+/goal
+/goal pause
+/goal resume
+/goal clear
+```
+
 ### Monitoring
 
 #### `/agents` (alias: `/swarm`)
@@ -394,6 +406,7 @@ Complete reference table of all slash commands, their arguments, and description
 | `/compact` | None | Manually trigger context compaction. |
 | `/memories` | None | List all stored persistent memories. |
 | `/forget` | `&lt;id&gt;` | Delete a specific memory by numeric ID. |
+| `/goal` | `[objective\|pause\|resume\|clear]` | Set, view, pause, resume, or clear the active session goal. |
 | `/agents` | None | Open the live swarm dashboard. (alias: `/swarm`) |
 | `/settings` | None | Open the interactive settings workspace. |
 | `/clear` | None | Clear the terminal display. |

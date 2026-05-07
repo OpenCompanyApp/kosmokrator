@@ -5,6 +5,7 @@ namespace Kosmokrator\Tests\Unit\Agent;
 use Kosmokrator\Agent\ConversationHistory;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Prism\Prism\ValueObjects\ToolCall;
@@ -92,6 +93,21 @@ class ConversationHistoryTest extends TestCase
         $this->history->clear();
 
         $this->assertEmpty($this->history->messages());
+    }
+
+    public function test_remove_system_messages_containing_needle_only_removes_matching_system_messages(): void
+    {
+        $this->history->addMessage(new SystemMessage('keep system'));
+        $this->history->addMessage(new SystemMessage('remove marker'));
+        $this->history->addUser('user marker');
+        $this->history->removeSystemMessagesContaining('marker');
+
+        $messages = $this->history->messages();
+        $this->assertCount(2, $messages);
+        $this->assertInstanceOf(SystemMessage::class, $messages[0]);
+        $this->assertSame('keep system', $messages[0]->content);
+        $this->assertInstanceOf(UserMessage::class, $messages[1]);
+        $this->assertSame('user marker', $messages[1]->content);
     }
 
     public function test_trim_oldest_removes_first_turn(): void

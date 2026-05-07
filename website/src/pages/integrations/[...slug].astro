@@ -1,14 +1,17 @@
 ---
 import '../../styles/tailwind.css';
-import { Code } from 'astro:components';
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
+import AnalyticsContext from '../../components/AnalyticsContext.astro';
+import AnalyticsScripts from '../../components/AnalyticsScripts.astro';
+import CommandBlock from '../../components/CommandBlock.astro';
+import IntegrationSideRail from '../../components/IntegrationSideRail.astro';
+import IntegrationToc from '../../components/IntegrationToc.astro';
 import MegaFooter from '../../components/MegaFooter.astro';
 import {
   credentialTypeLabel,
   getIntegrations,
   integrationUrl,
   jsonExampleForTool,
-  luaExampleForTool,
   operationLabel,
   toolFullName,
   toolMcpName,
@@ -22,8 +25,6 @@ import {
   cliEnvironments,
   faqJsonLd,
   integrationCliTitle,
-  integrationEnvironmentTitle,
-  integrationFrameworkTitle,
   integrationKeywords,
   integrationMcpTitle,
   integrationOverviewTitle,
@@ -32,87 +33,47 @@ import {
   ogImageUrl,
   shouldIndexIntegration,
   siteUrl,
-  type CliEnvironment,
-  type MatrixClient,
 } from '../../lib/seo';
 
-type PageType = 'overview' | 'lua' | 'cli' | 'mcp' | 'framework' | 'environment';
+type PageType = 'overview' | 'lua' | 'cli' | 'mcp';
+type TocItem = { id: string; label: string; depth?: 2 | 3 };
 
 export function getStaticPaths() {
   const integrations = getIntegrations();
 
-  return integrations.flatMap((integration) => {
-    const corePages = [
-      { params: { slug: integration.route_slug }, props: { integration, pageType: 'overview' } },
-      { params: { slug: `${integration.route_slug}/lua` }, props: { integration, pageType: 'lua' } },
-      { params: { slug: `${integration.route_slug}/cli` }, props: { integration, pageType: 'cli' } },
-      { params: { slug: `${integration.route_slug}/mcp` }, props: { integration, pageType: 'mcp' } },
-    ];
-    const frameworkPages = matrixClients.map((client) => ({
-      params: { slug: `${integration.route_slug}/framework/${client.slug}` },
-      props: { integration, pageType: 'framework', client },
-    }));
-    const environmentPages = cliEnvironments.map((environment) => ({
-      params: { slug: `${integration.route_slug}/cli/${environment.slug}` },
-      props: { integration, pageType: 'environment', environment },
-    }));
-
-    return [...corePages, ...frameworkPages, ...environmentPages];
-  });
+  return integrations.flatMap((integration) => [
+    { params: { slug: integration.route_slug }, props: { integration, pageType: 'overview' } },
+    { params: { slug: `${integration.route_slug}/lua` }, props: { integration, pageType: 'lua' } },
+    { params: { slug: `${integration.route_slug}/cli` }, props: { integration, pageType: 'cli' } },
+    { params: { slug: `${integration.route_slug}/mcp` }, props: { integration, pageType: 'mcp' } },
+  ]);
 }
 
-const { integration, pageType, client, environment } = Astro.props as {
+const { integration, pageType } = Astro.props as {
   integration: Integration;
   pageType: PageType;
-  client?: MatrixClient;
-  environment?: CliEnvironment;
 };
+
 const primaryTool = integration.tools[0];
-const fallbackLuaDocs = `No package Lua docs were provided. Use the function reference below for ${integration.name}.`;
-const luaDocsMarkdown = integration.lua_docs || fallbackLuaDocs;
-const luaDocsHtml = pageType === 'lua'
-  ? (await (await createMarkdownProcessor()).render(luaDocsMarkdown)).code
-  : '';
 const pageTitle = pageType === 'overview'
   ? integrationOverviewTitle(integration)
   : pageType === 'cli'
     ? integrationCliTitle(integration)
     : pageType === 'mcp'
       ? integrationMcpTitle(integration)
-      : pageType === 'lua'
-        ? `${integration.name} Lua API for KosmoKrator Agents`
-        : pageType === 'framework' && client
-          ? integrationFrameworkTitle(integration, client)
-          : pageType === 'environment' && environment
-            ? integrationEnvironmentTitle(integration, environment)
-            : integrationOverviewTitle(integration);
+      : `${integration.name} Lua API for KosmoKrator Agents`;
 const pageDescription = pageType === 'overview'
   ? `${integration.name} integration docs for AI agents: MCP gateway setup, ${integration.name} CLI commands, Lua API reference, credentials, and function schemas.`
   : pageType === 'cli'
     ? `Use the ${integration.name} CLI from KosmoKrator to call ${integration.name} tools headlessly, return JSON, inspect schemas, and automate workflows from coding agents, scripts, and CI.`
     : pageType === 'mcp'
       ? `Expose ${integration.name} tools to Claude Code, Cursor, Codex, and other MCP clients through the local KosmoKrator MCP gateway.`
-      : pageType === 'lua'
-        ? `Agent-facing Lua documentation and function reference for the ${integration.name} KosmoKrator integration.`
-        : pageType === 'framework' && client
-          ? `Connect ${integration.name} to ${client.label} through the local KosmoKrator MCP gateway with scoped tools, credentials, and write policy.`
-          : pageType === 'environment' && environment
-            ? `Use the ${integration.name} CLI for ${environment.label} with headless JSON commands, schema discovery, credentials, and permission controls.`
-            : integration.seo.meta_description;
-const pagePath = pageType === 'overview'
-  ? integrationUrl(integration)
-  : pageType === 'framework' && client
-    ? `${integrationUrl(integration)}/framework/${client.slug}`
-    : pageType === 'environment' && environment
-      ? `${integrationUrl(integration, 'cli')}/${environment.slug}`
-      : integrationUrl(integration, pageType === 'lua' || pageType === 'cli' || pageType === 'mcp' ? pageType : undefined);
+      : `Agent-facing Lua documentation and function reference for the ${integration.name} KosmoKrator integration.`;
+const pagePath = pageType === 'overview' ? integrationUrl(integration) : integrationUrl(integration, pageType);
 const pageOgImage = pageType === 'overview'
   ? ogImageUrl(['integration', integration.route_slug])
-  : pageType === 'framework' && client
-    ? ogImageUrl(['integration', integration.route_slug, 'framework', client.slug])
-    : pageType === 'environment' && environment
-      ? ogImageUrl(['integration', integration.route_slug, 'cli', environment.slug])
-      : ogImageUrl(['integration', integration.route_slug, pageType]);
+  : ogImageUrl(['integration', integration.route_slug, pageType]);
+const packageUrl = `https://github.com/OpenCompanyApp/integrations/tree/main/packages/${integration.package}`;
 const configureSnippet = [
   '# Install KosmoKrator first if it is not available on PATH.',
   'curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash',
@@ -123,11 +84,18 @@ const configureSnippet = [
   integration.setup.status_command,
 ].join('\n');
 const genericCallSnippet = primaryTool
-  ? `kosmo integrations:call ${toolFullName(integration, primaryTool)} '${jsonExampleForTool(primaryTool)}' --json`
+  ? `kosmo integrations:call ${toolFullName(integration, primaryTool)} '${compactJsonExample(primaryTool)}' --json`
   : `kosmo integrations:docs ${integration.slug} --json`;
 const providerShortcutSnippet = primaryTool
-  ? `kosmo integrations:${integration.slug} ${primaryTool.function_name} '${jsonExampleForTool(primaryTool)}' --json`
+  ? `kosmo integrations:${integration.slug} ${primaryTool.function_name} '${compactJsonExample(primaryTool)}' --json`
   : `kosmo integrations:${integration.slug} --json`;
+const discoverySnippet = [
+  `kosmo integrations:docs ${integration.slug} --json`,
+  primaryTool ? `kosmo integrations:docs ${toolFullName(integration, primaryTool)} --json` : null,
+  primaryTool ? `kosmo integrations:schema ${toolFullName(integration, primaryTool)} --json` : null,
+  `kosmo integrations:search "${integration.name}" --json`,
+  `kosmo integrations:list --json`,
+].filter(Boolean).join('\n');
 const mcpJson = JSON.stringify({
   mcpServers: {
     [`kosmokrator-${integration.slug}`]: {
@@ -137,21 +105,11 @@ const mcpJson = JSON.stringify({
     },
   },
 }, null, 2);
-const clientMcpJson = client ? JSON.stringify({
-  mcpServers: {
-    [`kosmokrator-${integration.slug}`]: {
-      type: 'stdio',
-      command: 'kosmo',
-      args: ['mcp:serve', `--integration=${integration.slug}`, '--write=deny'],
-    },
-  },
-}, null, 2) : mcpJson;
-const environmentSnippet = environment ? [
-  `# ${integration.name} CLI for ${environment.titleSuffix}`,
-  integration.setup.cli_configure_command,
-  primaryTool ? `kosmo integrations:call ${toolFullName(integration, primaryTool)} '${compactJsonExample(primaryTool)}' --json` : `kosmo integrations:docs ${integration.slug} --json`,
-].join('\n') : '';
-const packageUrl = `https://github.com/OpenCompanyApp/integrations/tree/main/packages/${integration.package}`;
+const fallbackLuaDocs = `No package Lua docs were provided. Use the function reference below for ${integration.name}.`;
+const luaDocsMarkdown = integration.lua_docs || fallbackLuaDocs;
+const luaDocsHtml = pageType === 'lua'
+  ? (await (await createMarkdownProcessor()).render(luaDocsMarkdown)).code
+  : '';
 const feedbackIssueUrl = `https://github.com/OpenCompanyApp/integrations/issues/new?title=${encodeURIComponent(`${integration.name} integration feedback`)}&body=${encodeURIComponent([
   `## ${integration.name} integration feedback`,
   '',
@@ -171,15 +129,6 @@ const feedbackIssueUrl = `https://github.com/OpenCompanyApp/integrations/issues/
   '## Actual behavior',
   '',
 ].join('\n'))}`;
-const discoverySnippet = [
-  `kosmo integrations:docs ${integration.slug} --json`,
-  primaryTool ? `kosmo integrations:docs ${toolFullName(integration, primaryTool)} --json` : null,
-  primaryTool ? `kosmo integrations:schema ${toolFullName(integration, primaryTool)} --json` : null,
-  `kosmo integrations:search "${integration.name}" --json`,
-  `kosmo integrations:list --json`,
-].filter(Boolean).join('\n');
-
-const showToc = integration.tools.length > 5;
 const indexable = shouldIndexIntegration(integration);
 const integrationFaqs = [
   {
@@ -209,6 +158,45 @@ const pageJsonLd = [
   ]),
   faqJsonLd(integrationFaqs),
 ];
+const pageToc = tocForPage(pageType);
+const schemaOpen = pageType === 'cli' || integration.tools.length <= 8;
+const popularFunctions = integration.tools.slice(0, 10);
+const hasRuntimeRequirements = integration.runtime_requirements.length > 0;
+const luaNamespace = integration.slug.replace(/-/g, '_');
+const luaHeadlessEvalSnippet = primaryTool
+  ? `kosmo integrations:lua --eval 'dump(app.integrations.${luaNamespace}.${luaFunctionName(primaryTool)}(${luaTableExampleForTool(primaryTool)}))' --json`
+  : `kosmo integrations:lua --eval 'print(docs.read("${integration.slug}"))' --json`;
+const luaHeadlessDocsSnippet = primaryTool
+  ? [
+      `kosmo integrations:lua --eval 'print(docs.read("${integration.slug}"))' --json`,
+      `kosmo integrations:lua --eval 'print(docs.read("${integration.slug}.${luaFunctionName(primaryTool)}"))' --json`,
+    ].join('\n')
+  : `kosmo integrations:lua --eval 'print(docs.read("${integration.slug}"))' --json`;
+const luaWorkflowSnippet = primaryTool
+  ? [
+      `local ${luaNamespace} = app.integrations.${luaNamespace}`,
+      `local result = ${luaNamespace}.${luaFunctionName(primaryTool)}(${luaTableExampleForTool(primaryTool)})`,
+      '',
+      'dump(result)',
+    ].join('\n')
+  : [
+      `print(docs.read("${integration.slug}"))`,
+      `dump(app.integrations.${luaNamespace})`,
+    ].join('\n');
+const luaWorkflowCommandSnippet = [
+  'kosmo integrations:lua workflow.lua --json',
+  'kosmo integrations:lua workflow.lua --force --json',
+].join('\n');
+const mcpLuaSnippet = [
+  '# Use mcp:lua for MCP-only scripts; use integrations:lua for this integration namespace.',
+  "kosmo mcp:lua --eval 'dump(mcp.servers())' --json",
+].join('\n');
+const luaExampleSnippet = primaryTool
+  ? [
+      `local result = app.integrations.${luaNamespace}.${luaFunctionName(primaryTool)}(${luaTableExampleForTool(primaryTool)})`,
+      'print(result)',
+    ].join('\n')
+  : '';
 
 function compactJsonExample(tool: IntegrationTool): string {
   try {
@@ -226,9 +214,82 @@ function providerCliCommand(tool: IntegrationTool): string {
   return `kosmo integrations:${integration.slug} ${tool.function_name} '${compactJsonExample(tool)}' --json`;
 }
 
+function schemaCliCommand(tool: IntegrationTool): string {
+  return `kosmo integrations:schema ${toolFullName(integration, tool)} --json`;
+}
+
+function luaTableExampleForTool(tool: IntegrationTool): string {
+  return compactJsonExample(tool)
+    .replace(/"([^"]+)":/g, '$1 = ')
+    .replace(/,/g, ', ');
+}
+
+function luaFunctionName(tool: IntegrationTool): string {
+  const snake = (tool.name || tool.function_name || tool.slug || 'tool')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (snake === '') {
+    return 'tool';
+  }
+
+  const appBase = integration.slug.toLowerCase().replace(/s+$/g, '');
+  const words = snake.split('_').filter((word) => {
+    if (['on', 'of', 'for', 'in', 'to', 'the', 'a', 'an'].includes(word)) {
+      return false;
+    }
+
+    const wordBase = word.replace(/s+$/g, '');
+
+    return !wordBase.includes(appBase) && !appBase.includes(wordBase);
+  });
+
+  return words.join('_') || snake;
+}
+
 function parameterSummary(tool: IntegrationTool): string {
   const names = Object.keys(tool.parameters);
   return names.length > 0 ? names.join(', ') : 'none';
+}
+
+function tocForPage(type: PageType): TocItem[] {
+  if (type === 'overview') {
+    return [
+      { id: 'overview', label: 'Overview' },
+      { id: 'surfaces', label: 'Agent Surfaces' },
+      { id: 'metadata', label: 'Metadata' },
+      { id: 'catalog', label: 'Function Catalog' },
+    ];
+  }
+
+  if (type === 'cli') {
+    return [
+      { id: 'setup', label: 'Setup' },
+      { id: 'credentials', label: 'Credentials' },
+      { id: 'commands', label: 'Command Patterns' },
+      { id: 'automation-contexts', label: 'Automation Contexts' },
+      { id: 'functions', label: 'CLI Functions' },
+      { id: 'schemas', label: 'Schemas' },
+      { id: 'permissions', label: 'Permissions' },
+    ];
+  }
+
+  if (type === 'mcp') {
+    return [
+      { id: 'gateway', label: 'Gateway Setup' },
+      { id: 'clients', label: 'Client Notes' },
+      { id: 'tools', label: 'MCP Tool Names' },
+      { id: 'write-access', label: 'Write Access' },
+    ];
+  }
+
+  return [
+    { id: 'namespace', label: 'Namespace' },
+    { id: 'headless-lua', label: 'Headless CLI' },
+    { id: 'lua-docs', label: 'Lua Docs' },
+    { id: 'lua-functions', label: 'Functions' },
+  ];
 }
 ---
 
@@ -239,7 +300,7 @@ function parameterSummary(tool: IntegrationTool): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle} - KosmoKrator</title>
     <meta name="description" content={pageDescription} />
-    <meta name="keywords" content={integrationKeywords(integration, pageType === 'framework' && client ? [client.label, `${integration.name} ${client.label}`, `${client.label} MCP`] : pageType === 'environment' && environment ? [environment.label, `${integration.name} ${environment.titleSuffix}`] : [])} />
+    <meta name="keywords" content={integrationKeywords(integration, pageType === 'mcp' ? matrixClients.flatMap((item) => [item.label, `${integration.name} ${item.label}`, `${item.label} MCP`]) : pageType === 'cli' ? cliEnvironments.flatMap((item) => [item.label, `${integration.name} ${item.titleSuffix}`]) : [])} />
     {!indexable && <meta name="robots" content="noindex,follow" />}
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDescription} />
@@ -252,125 +313,87 @@ function parameterSummary(tool: IntegrationTool): string {
     <meta name="twitter:image" content={pageOgImage} />
     <link rel="canonical" href={siteUrl(pagePath)} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <!-- Privacy-friendly analytics by Plausible -->
-    <script async src="https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js"></script>
-    <script is:inline>
-      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
-      plausible.init()
-    </script>
     {pageJsonLd.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+    <AnalyticsContext context={{ surface: 'integration', integration_slug: integration.slug, integration_name: integration.name, page_type: pageType, category: integration.category, function_count: integration.tools.length, read_tool_count: integration.read_tool_count, write_tool_count: integration.write_tool_count, cli_runtime_supported: integration.cli_runtime_supported, mcp_gateway_supported: integration.seo.mcp_gateway_supported }} />
+    <AnalyticsScripts />
   </head>
-  <body class="min-h-screen text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
-    <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-4 max-[640px]:flex-col max-[640px]:items-start">
-      <a class="text-kosmo-text no-underline font-extrabold flex items-center gap-4" href="/" aria-label="KosmoKrator home">
+  <body class="min-h-screen text-kosmo-text font-sans bg-kosmo-bg">
+    <header class="site-topbar">
+      <a class="site-brand" href="/" aria-label="KosmoKrator home">
         <img src="/favicon.svg" alt="" width="28" height="28" />
         <span>KosmoKrator</span>
       </a>
-      <nav class="flex flex-wrap items-center gap-x-4 gap-y-2 justify-end max-[640px]:justify-start" aria-label="Main navigation">
-        <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="/integrations">Integrations</a>
-        <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="/docs/integrations">CLI docs</a>
-        <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="/docs/mcp">MCP docs</a>
-        <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href={feedbackIssueUrl}>Submit feedback</a>
-        <a class="text-kosmo-muted hover:text-kosmo-text no-underline" href="https://github.com/OpenCompanyApp/integrations">Contribute</a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/integrations">Integrations</a>
+        <a href="/docs/integrations">CLI docs</a>
+        <a href="/docs/mcp">MCP docs</a>
+        <a href={feedbackIssueUrl}>Feedback</a>
+        <a href="https://github.com/OpenCompanyApp/integrations">Contribute</a>
       </nav>
     </header>
 
-    <main class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto pt-12 pb-20">
-      <section class="max-w-[900px] mb-8">
-        <p class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">{integration.category}</p>
-        <h1 class="text-[clamp(2.4rem,5vw,4.1rem)]">{pageTitle}</h1>
-        <p class="text-kosmo-muted leading-relaxed">{pageDescription}</p>
-        <div class="flex flex-wrap gap-3 mt-5">
-          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.tools.length}</strong> functions</span>
-          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.read_tool_count}</strong> read</span>
-          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.write_tool_count}</strong> write</span>
-          <span class="border border-kosmo-border rounded-lg bg-kosmo-surface-solid p-2 px-3 text-kosmo-muted"><strong>{integration.auth_strategy_label}</strong> auth</span>
-        </div>
-        <div class="mt-5 flex flex-wrap gap-3">
-          <a class="inline-flex min-h-[42px] items-center justify-center rounded-md border border-kosmo-crimson bg-kosmo-crimson px-4 py-2 font-bold text-white no-underline" href={feedbackIssueUrl}>
-            Submit {integration.name} feedback
-          </a>
-          <a class="inline-flex min-h-[42px] items-center justify-center rounded-md border border-kosmo-white-border-strong bg-white/[0.05] px-4 py-2 font-bold text-kosmo-text no-underline" href={packageUrl}>
-            View package source
-          </a>
-        </div>
-      </section>
+    <main class="integration-shell">
+      <IntegrationSideRail integration={integration} pageType={pageType} feedbackIssueUrl={feedbackIssueUrl} packageUrl={packageUrl} />
 
-      <nav class="flex flex-wrap gap-3 my-6 mb-8" aria-label={`${integration.name} sections`}>
-        <a class:list={['p-2 px-3 rounded-md bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white', pageType === 'overview' && 'bg-kosmo-crimson text-white']} href={integrationUrl(integration)}>Overview</a>
-        <a class:list={['p-2 px-3 rounded-md bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white', pageType === 'lua' && 'bg-kosmo-crimson text-white']} href={integrationUrl(integration, 'lua')}>Lua</a>
-        <a class:list={['p-2 px-3 rounded-md bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white', pageType === 'cli' && 'bg-kosmo-crimson text-white']} href={integrationUrl(integration, 'cli')}>CLI</a>
-        <a class:list={['p-2 px-3 rounded-md bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white', pageType === 'mcp' && 'bg-kosmo-crimson text-white']} href={integrationUrl(integration, 'mcp')}>MCP</a>
-      </nav>
+      <article class="integration-main">
+        <nav class="integration-breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/integrations">Integrations</a>
+          <span>/</span>
+          <span>{integration.name}</span>
+        </nav>
 
-      {pageType === 'overview' && (
-        <div class="grid grid-cols-[280px_minmax(0,1fr)] gap-5 items-start max-md:block">
-          <aside class="integration-copy min-w-0 sticky top-4 p-4 border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
-            <h2>Status</h2>
-            <dl>
-              <div><dt>CLI setup</dt><dd>{integration.cli_setup_supported ? 'supported' : 'limited'}</dd></div>
-              <div><dt>CLI runtime</dt><dd>{integration.cli_runtime_supported ? 'supported' : 'limited'}</dd></div>
-              <div><dt>MCP gateway</dt><dd>{integration.seo.mcp_gateway_supported ? 'supported' : 'limited'}</dd></div>
-              <div><dt>Multi-account</dt><dd>{integration.setup.supports_multi_account ? 'supported' : 'single account'}</dd></div>
-            </dl>
-          </aside>
+        <header class="integration-hero">
+          <p>{integration.category}</p>
+          <h1>{pageTitle}</h1>
+          <span>{pageDescription}</span>
+        </header>
 
-          <section class="integration-copy min-w-0 grid gap-4">
-            <h2>{integration.name} for agents</h2>
-            <p>{integration.compatibility_summary || integration.auth_summary}</p>
-            <p>
-              Use this integration from Lua code mode, the headless integrations CLI, or the KosmoKrator MCP gateway.
-              The same package metadata powers all three surfaces.
-            </p>
+        <nav class="surface-tabs" aria-label={`${integration.name} sections`}>
+          <a class:list={[pageType === 'overview' && 'active']} href={integrationUrl(integration)}>Overview</a>
+          <a class:list={[pageType === 'cli' && 'active']} href={integrationUrl(integration, 'cli')}>CLI</a>
+          <a class:list={[pageType === 'mcp' && 'active']} href={integrationUrl(integration, 'mcp')}>MCP</a>
+          <a class:list={[pageType === 'lua' && 'active']} href={integrationUrl(integration, 'lua')}>Lua</a>
+        </nav>
 
-            <details class="raw-docs-details" open>
-              <summary>Machine-Readable Metadata</summary>
-              <dl class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>integration_slug</dt><dd><code class="text-kosmo-rose">{integration.slug}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>route_slug</dt><dd><code class="text-kosmo-rose">{integration.route_slug}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>package</dt><dd><code class="text-kosmo-rose">{integration.package}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>auth_strategy</dt><dd><code class="text-kosmo-rose">{integration.auth_strategy}</code> <span>{integration.auth_strategy_label}</span></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>cli_setup_supported</dt><dd><code class="text-kosmo-rose">{String(integration.cli_setup_supported)}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>cli_runtime_supported</dt><dd><code class="text-kosmo-rose">{String(integration.cli_runtime_supported)}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>mcp_gateway_supported</dt><dd><code class="text-kosmo-rose">{String(integration.seo.mcp_gateway_supported)}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>lua_supported</dt><dd><code class="text-kosmo-rose">{String(integration.seo.lua_supported)}</code></dd></div>
-                <div class="min-w-0 p-3 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><dt>supports_multi_account</dt><dd><code class="text-kosmo-rose">{String(integration.setup.supports_multi_account)}</code></dd></div>
+        {pageType === 'overview' && (
+          <div class="integration-copy content-stack">
+            <section id="overview" class="content-section">
+              <h2>{integration.name} for agents</h2>
+              <p>{integration.compatibility_summary || integration.auth_summary}</p>
+              <p>
+                Use this integration from Lua code mode, the headless integrations CLI, or the KosmoKrator MCP gateway.
+                The same package metadata powers all three surfaces.
+              </p>
+            </section>
+
+            <section id="surfaces" class="content-section">
+              <h2>Agent Surfaces</h2>
+              <div class="surface-card-grid">
+                <a href={integrationUrl(integration, 'cli')}><strong>{integration.name} CLI</strong><span>Headless setup, JSON output, direct function calls.</span></a>
+                <a href={integrationUrl(integration, 'mcp')}><strong>{integration.name} MCP</strong><span>Expose selected tools to local MCP clients.</span></a>
+                <a href={integrationUrl(integration, 'lua')}><strong>{integration.name} Lua</strong><span>Agent-facing namespace and Lua reference.</span></a>
+                <a href={feedbackIssueUrl}><strong>Feedback</strong><span>Report missing tools, auth issues, or bad metadata.</span></a>
+              </div>
+            </section>
+
+            <section id="metadata" class="content-section">
+              <h2>Machine-Readable Metadata</h2>
+              <dl class="metadata-grid">
+                <div><dt>integration_slug</dt><dd><code>{integration.slug}</code></dd></div>
+                <div><dt>route_slug</dt><dd><code>{integration.route_slug}</code></dd></div>
+                <div><dt>package</dt><dd><code>{integration.package}</code></dd></div>
+                <div><dt>auth_strategy</dt><dd><code>{integration.auth_strategy}</code></dd></div>
+                <div><dt>cli_setup_supported</dt><dd><code>{String(integration.cli_setup_supported)}</code></dd></div>
+                <div><dt>cli_runtime_supported</dt><dd><code>{String(integration.cli_runtime_supported)}</code></dd></div>
+                <div><dt>mcp_gateway_supported</dt><dd><code>{String(integration.seo.mcp_gateway_supported)}</code></dd></div>
+                <div><dt>lua_supported</dt><dd><code>{String(integration.seo.lua_supported)}</code></dd></div>
               </dl>
-            </details>
+            </section>
 
-            <h2>Quick Links</h2>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3">
-              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'lua')}><strong>Lua API</strong><span>Agent-facing namespace and function reference.</span></a>
-              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'cli')}><strong>{integration.name} CLI</strong><span>Headless setup and direct function calls.</span></a>
-              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'mcp')}><strong>{integration.name} MCP</strong><span>MCP gateway setup for external clients.</span></a>
-              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={feedbackIssueUrl}><strong>Submit feedback</strong><span>Report missing tools, auth problems, wrong docs, or runtime issues.</span></a>
-              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={packageUrl}><strong>Contribute</strong><span>Add tools or improve metadata in the integrations repo.</span></a>
-            </div>
-
-            <h2>{integration.name} MCP Client Matrix</h2>
-            <p>Use these pages when a specific agent client or framework needs copy-pasteable MCP setup for {integration.name}.</p>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
-              {matrixClients.map((matrixClient) => (
-                <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`${integrationUrl(integration)}/framework/${matrixClient.slug}`}>
-                  <strong>{matrixClient.shortLabel}</strong>
-                  <span>{integration.name} MCP setup for {matrixClient.label}.</span>
-                </a>
-              ))}
-            </div>
-
-            <h2>{integration.name} CLI Matrix</h2>
-            <p>Use these pages for direct {integration.name} CLI workflows in scripts, CI, cron, and agent wrappers.</p>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
-              {cliEnvironments.map((cliEnvironment) => (
-                <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`${integrationUrl(integration, 'cli')}/${cliEnvironment.slug}`}>
-                  <strong>{cliEnvironment.titleSuffix}</strong>
-                  <span>{integration.name} CLI for {cliEnvironment.label}.</span>
-                </a>
-              ))}
-            </div>
-
-            {integration.runtime_requirements.length > 0 && (
-              <>
+            {hasRuntimeRequirements && (
+              <section class="content-section">
                 <h2>Runtime Requirements</h2>
                 <div class="tool-table-wrapper compact">
                   <table>
@@ -378,7 +401,7 @@ function parameterSummary(tool: IntegrationTool): string {
                     <tbody>
                       {integration.runtime_requirements.map((requirement) => (
                         <tr>
-                          <td data-label="Name"><code class="text-kosmo-rose">{String(requirement.name ?? 'runtime')}</code></td>
+                          <td data-label="Name"><code>{String(requirement.name ?? 'runtime')}</code></td>
                           <td data-label="Type">{String(requirement.type ?? 'dependency')}</td>
                           <td data-label="Description">{String(requirement.description ?? '')}</td>
                         </tr>
@@ -386,141 +409,43 @@ function parameterSummary(tool: IntegrationTool): string {
                     </tbody>
                   </table>
                 </div>
-              </>
+              </section>
             )}
 
-            <h2>Function Catalog</h2>
-            <div class="tool-table-wrapper">
-              <table>
-                <thead><tr><th>Function</th><th>Type</th><th>Parameters</th><th>Description</th></tr></thead>
-                <tbody>
-                  {integration.tools.map((tool) => (
-                    <tr>
-                      <td data-label="Function"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
-                      <td data-label="Type">{operationLabel(tool.type)} <code class="text-kosmo-rose">{tool.type}</code></td>
-                      <td data-label="Parameters">{tool.parameter_count}</td>
-                      <td data-label="Description">{tool.description || tool.short_description || tool.name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {pageType === 'lua' && (
-        <div class:list={[
-          'min-w-0',
-          'grid',
-          'gap-4',
-          'max-w-[1080px]',
-          showToc && 'grid-cols-[minmax(0,1fr)_220px]',
-          !showToc && 'grid-cols-1',
-          showToc && 'max-lg:grid-cols-1',
-        ]}>
-          <div class="integration-copy">
-            <h2>Lua Namespace</h2>
-            <p>
-              Agents call this integration through <code class="text-kosmo-rose">app.integrations.{integration.slug.replace(/-/g, '_')}.*</code>.
-              Use <code class="text-kosmo-rose">lua_read_doc("integrations.{integration.slug}")</code> inside KosmoKrator to discover the same reference at runtime.
-            </p>
-
-            <h2>Agent-Facing Lua Docs</h2>
-            <p>This is the rendered version of the full Lua documentation exposed to agents when they inspect the integration namespace.</p>
-            <div
-              class="rendered-lua-docs prose prose-invert max-w-none prose-headings:text-kosmo-text prose-p:text-kosmo-muted prose-li:text-kosmo-muted prose-a:text-kosmo-hot prose-strong:text-kosmo-text prose-code:text-kosmo-rose prose-pre:bg-kosmo-code-bg prose-pre:border prose-pre:border-kosmo-white-border-strong prose-pre:rounded-lg prose-table:text-sm prose-th:text-kosmo-text prose-td:text-kosmo-muted"
-              set:html={luaDocsHtml}
-            />
-
-            <details class="raw-docs-details" open>
-              <summary>Raw agent markdown</summary>
-              <pre class="raw-docs"><code>{luaDocsMarkdown}</code></pre>
-            </details>
-
-            {primaryTool && (
-              <>
-                <h2>Metadata-Derived Lua Example</h2>
-                <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-                  <Code code={luaExampleForTool(integration, primaryTool)} lang="lua" />
-                </div>
-              </>
-            )}
-
-            <h2>Functions</h2>
-            {integration.tools.map((tool, index) => (
-              <article class="function-card expanded" id={tool.function_name}>
-                <div class="function-card-header flex justify-between items-center p-3 px-4 cursor-pointer select-none hover:bg-white/[0.03]">
-                  <div>
-                    <h3><code class="text-kosmo-rose">{tool.function_name}</code></h3>
-                    <p class="mt-1 text-kosmo-muted text-sm leading-relaxed">{tool.description || tool.short_description || tool.name}</p>
-                  </div>
-                  <span class="function-card-toggle shrink-0 w-6 h-6 flex items-center justify-center border border-kosmo-white-border rounded bg-white/[0.04] text-kosmo-muted text-base leading-none pointer-events-none" aria-label="Collapse"></span>
-                </div>
-                <div class="function-card-body px-4 pb-4 border-t border-kosmo-white-border-faint">
-                  <dl class="flex flex-wrap gap-3">
-                    <div class="grid gap-0.5"><dt>Operation</dt><dd>{operationLabel(tool.type)} <code class="text-kosmo-rose">{tool.type}</code></dd></div>
-                    <div class="grid gap-0.5"><dt>Full name</dt><dd><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></dd></div>
-                  </dl>
-                  <div class="tool-table-wrapper compact">
-                    <table>
-                      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
-                      <tbody>
-                        {Object.entries(tool.parameters).length > 0 ? Object.entries(tool.parameters).map(([name, schema]) => (
-                          <tr>
-                            <td data-label="Parameter"><code class="text-kosmo-rose">{name}</code></td>
-                            <td data-label="Type">{String(schema.type ?? 'mixed')}</td>
-                            <td data-label="Required">{schema.required ? 'yes' : 'no'}</td>
-                            <td data-label="Description">{String(schema.description ?? '')}</td>
-                          </tr>
-                        )) : (
-                          <tr>
-                            <td colspan="4">No parameters.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </article>
-            ))}
+            <section id="catalog" class="content-section">
+              <h2>Function Catalog</h2>
+              <div class="tool-table-wrapper">
+                <table>
+                  <thead><tr><th>Function</th><th>Type</th><th>Parameters</th><th>Description</th></tr></thead>
+                  <tbody>
+                    {integration.tools.map((tool) => (
+                      <tr>
+                        <td data-label="Function"><code>{toolFullName(integration, tool)}</code></td>
+                        <td data-label="Type">{operationLabel(tool.type)} <code>{tool.type}</code></td>
+                        <td data-label="Parameters">{tool.parameter_count}</td>
+                        <td data-label="Description">{tool.description || tool.short_description || tool.name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
+        )}
 
-          {showToc && (
-            <nav class="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto p-4 border border-kosmo-border rounded-lg bg-kosmo-surface-solid text-sm max-lg:static max-lg:max-h-none" aria-label="Function index">
-              <h2 class="mb-2 text-xs font-extrabold tracking-[0.12em] uppercase text-kosmo-hot">Functions</h2>
-              <ol class="m-0 pl-4">
-                {integration.tools.map((tool) => (
-                  <li class="mb-1"><a class="text-kosmo-muted no-underline hover:text-kosmo-text" href={`#${tool.function_name}`}>{tool.function_name}</a></li>
-                ))}
-              </ol>
-            </nav>
-          )}
-        </div>
-      )}
+        {pageType === 'cli' && (
+          <div class="integration-copy content-stack">
+            <section id="setup" class="content-section">
+              <h2>{integration.name} CLI Setup</h2>
+              <p>{integration.setup.cli_setup_summary || integration.seo.cli_setup_summary}</p>
+              {!integration.cli_setup_supported && (
+                <p class="callout">Headless setup is limited for this integration. It remains documented because stored credentials or future proxy-backed execution can still make the runtime useful.</p>
+              )}
+              <CommandBlock label="Install, configure, and verify" code={configureSnippet} />
+            </section>
 
-      {pageType === 'cli' && (
-        <div class:list={[
-          'min-w-0',
-          'grid',
-          'gap-4',
-          'max-w-[1080px]',
-          showToc && 'grid-cols-[minmax(0,1fr)_220px]',
-          !showToc && 'grid-cols-1',
-          showToc && 'max-lg:grid-cols-1',
-        ]}>
-          <div class="integration-copy">
-            <h2>{integration.name} CLI Setup</h2>
-            <p>{integration.setup.cli_setup_summary || integration.seo.cli_setup_summary}</p>
-            {!integration.cli_setup_supported && (
-              <p class="p-3 px-4 text-kosmo-text border border-kosmo-border rounded-lg bg-kosmo-surface-solid">Headless setup is limited for this integration. It remains documented because stored credentials or future proxy-backed execution can still make the runtime useful.</p>
-            )}
-            <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-              <Code code={configureSnippet} lang="bash" />
-            </div>
-
-            {integration.runtime_requirements.length > 0 && (
-              <>
+            {hasRuntimeRequirements && (
+              <section class="content-section">
                 <h2>Runtime Requirements</h2>
                 <p>Install these host dependencies before calling {integration.name} locally.</p>
                 <div class="tool-table-wrapper compact">
@@ -529,7 +454,7 @@ function parameterSummary(tool: IntegrationTool): string {
                     <tbody>
                       {integration.runtime_requirements.map((requirement) => (
                         <tr>
-                          <td data-label="Name"><code class="text-kosmo-rose">{String(requirement.name ?? 'runtime')}</code></td>
+                          <td data-label="Name"><code>{String(requirement.name ?? 'runtime')}</code></td>
                           <td data-label="Type">{String(requirement.type ?? 'dependency')}</td>
                           <td data-label="Description">{String(requirement.description ?? '')}</td>
                         </tr>
@@ -537,358 +462,288 @@ function parameterSummary(tool: IntegrationTool): string {
                     </tbody>
                   </table>
                 </div>
-              </>
+              </section>
             )}
 
-            <h2>Credentials</h2>
-            <p>
-              Authentication type: <strong>{integration.auth_strategy_label}</strong>
-              <code class="text-kosmo-rose">{integration.auth_strategy}</code>. Configure credentials once, then use the same stored profile from
-              scripts, coding CLIs, Lua code mode, and the MCP gateway.
-            </p>
-            {integration.credentials.length > 0 ? (
-              <div class="tool-table-wrapper compact">
-                <table>
-                  <thead><tr><th>Key</th><th>Env var</th><th>Type</th><th>Required</th><th>Label</th></tr></thead>
-                  <tbody>
-                    {integration.credentials.map((field, index) => (
-                      <tr>
-                        <td data-label="Key"><code class="text-kosmo-rose">{field.key}</code></td>
-                        <td data-label="Env var"><code class="text-kosmo-rose">{integration.setup.env_vars[index] ?? ''}</code></td>
-                        <td data-label="Type">{credentialTypeLabel(field.type)} <code class="text-kosmo-rose">{field.type}</code></td>
-                        <td data-label="Required">{field.required ? 'yes' : 'no'}</td>
-                        <td data-label="Label">{field.label}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <section id="credentials" class="content-section">
+              <h2>Credentials</h2>
+              <p>
+                Authentication type: <strong>{integration.auth_strategy_label}</strong>
+                <code>{integration.auth_strategy}</code>. Configure credentials once, then reuse the same stored profile from scripts, coding CLIs, Lua, and MCP.
+              </p>
+              {integration.credentials.length > 0 ? (
+                <div class="tool-table-wrapper compact">
+                  <table>
+                    <thead><tr><th>Key</th><th>Env var</th><th>Type</th><th>Required</th><th>Label</th></tr></thead>
+                    <tbody>
+                      {integration.credentials.map((field, index) => (
+                        <tr>
+                          <td data-label="Key"><code>{field.key}</code></td>
+                          <td data-label="Env var"><code>{integration.setup.env_vars[index] ?? ''}</code></td>
+                          <td data-label="Type">{credentialTypeLabel(field.type)} <code>{field.type}</code></td>
+                          <td data-label="Required">{field.required ? 'yes' : 'no'}</td>
+                          <td data-label="Label">{field.label}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p>No credentials are required.</p>}
+            </section>
+
+            <section id="commands" class="content-section">
+              <h2>Command Patterns</h2>
+              <p>The generic command is stable across every integration. The provider shortcut is shorter for humans.</p>
+              <div class="command-grid">
+                <CommandBlock label="Generic CLI call" code={genericCallSnippet} analyticsProps={{ command_surface: 'page_primary', command_type: 'generic' }} />
+                <CommandBlock label="Provider shortcut" code={providerShortcutSnippet} analyticsProps={{ command_surface: 'page_primary', command_type: 'shortcut' }} />
               </div>
-            ) : <p>No credentials are required.</p>}
+              <h3>Discovery</h3>
+              <p>These commands return structured output for coding agents that need to inspect capabilities before choosing a function.</p>
+              <CommandBlock label="Discovery commands" code={discoverySnippet} analyticsProps={{ command_surface: 'discovery' }} />
+            </section>
 
-            <h2>Call {integration.name} Headlessly</h2>
-            <p>Use the generic call form when another coding CLI or script needs a stable universal interface.</p>
-            <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-              <Code code={genericCallSnippet} lang="bash" />
-            </div>
-            <p>Use the provider shortcut form for shorter human-facing commands.</p>
-            <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-              <Code code={providerShortcutSnippet} lang="bash" />
-            </div>
-
-            <h2>Agent Discovery Commands</h2>
-            <p>
-              These commands return structured output for coding agents that need to inspect capabilities before choosing a function.
-            </p>
-            <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-              <Code code={discoverySnippet} lang="bash" />
-            </div>
-
-            <h2>All CLI Functions</h2>
-            <p>
-              Every function below can be called headlessly. The generic form is stable across all integrations;
-              the provider shortcut is shorter but specific to {integration.name}.
-            </p>
-            <div class="grid gap-3">
-              {integration.tools.map((tool) => (
-                <article id={`cli-${tool.function_name}`} class="grid gap-3 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.03] scroll-mt-8">
-                  <div class="grid gap-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="m-0 text-lg"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></h3>
-                      <span class="rounded-md border border-kosmo-white-border bg-white/[0.04] px-2 py-1 text-xs font-bold text-kosmo-muted">{operationLabel(tool.type)} <code class="text-kosmo-rose">{tool.type}</code></span>
-                    </div>
-                    <p class="m-0 text-kosmo-muted leading-relaxed">{tool.description || tool.short_description || tool.name}</p>
-                    <dl class="m-0 flex flex-wrap gap-3 text-sm">
-                      <div class="grid gap-1 min-w-0">
-                        <dt class="text-kosmo-hot text-xs font-extrabold tracking-[0.12em] uppercase">Parameters</dt>
-                        <dd class="m-0 text-kosmo-text">{parameterSummary(tool)}</dd>
-                      </div>
-                    </dl>
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-3 max-[820px]:grid-cols-1">
-                    <div class="grid gap-2 min-w-0">
-                      <h4 class="m-0 text-xs font-extrabold tracking-[0.12em] uppercase text-kosmo-hot">Generic CLI call</h4>
-                      <div class="command-cell-wrapper">
-                        <pre class="command-cell"><code>{genericCliCommand(tool)}</code></pre>
-                        <button class="copy-btn" aria-label={`Copy generic CLI command for ${toolFullName(integration, tool)}`}>copy</button>
-                      </div>
-                    </div>
-                    <div class="grid gap-2 min-w-0">
-                      <h4 class="m-0 text-xs font-extrabold tracking-[0.12em] uppercase text-kosmo-hot">Provider shortcut</h4>
-                      <div class="command-cell-wrapper">
-                        <pre class="command-cell"><code>{providerCliCommand(tool)}</code></pre>
-                        <button class="copy-btn" aria-label={`Copy provider shortcut for ${toolFullName(integration, tool)}`}>copy</button>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <h2>Function Schemas</h2>
-            <p>Use these parameter tables when building CLI payloads without calling <code class="text-kosmo-rose">integrations:schema</code> first.</p>
-            {integration.tools.map((tool, index) => (
-              <article class="function-card expanded" id={`schema-${tool.function_name}`}>
-                <div class="function-card-header flex justify-between items-center p-3 px-4 cursor-pointer select-none hover:bg-white/[0.03]">
-                  <div>
-                    <h3><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></h3>
-                    <p class="mt-1 text-kosmo-muted text-sm leading-relaxed">{tool.description || tool.short_description || tool.name}</p>
-                  </div>
-                  <span class="function-card-toggle shrink-0 w-6 h-6 flex items-center justify-center border border-kosmo-white-border rounded bg-white/[0.04] text-kosmo-muted text-base leading-none pointer-events-none" aria-label="Collapse"></span>
-                </div>
-                <div class="function-card-body px-4 pb-4 border-t border-kosmo-white-border-faint">
-                  <dl class="flex flex-wrap gap-3">
-                    <div class="grid gap-0.5"><dt>Operation</dt><dd>{operationLabel(tool.type)} <code class="text-kosmo-rose">{tool.type}</code></dd></div>
-                    <div class="grid gap-0.5"><dt>Schema command</dt><dd><code class="text-kosmo-rose">kosmo integrations:schema {toolFullName(integration, tool)} --json</code></dd></div>
-                  </dl>
-                  <div class="tool-table-wrapper compact">
-                    <table>
-                      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
-                      <tbody>
-                        {Object.entries(tool.parameters).length > 0 ? Object.entries(tool.parameters).map(([name, schema]) => (
-                          <tr>
-                            <td data-label="Parameter"><code class="text-kosmo-rose">{name}</code></td>
-                            <td data-label="Type">{String(schema.type ?? 'mixed')}</td>
-                            <td data-label="Required">{schema.required ? 'yes' : 'no'}</td>
-                            <td data-label="Description">{String(schema.description ?? '')}</td>
-                          </tr>
-                        )) : (
-                          <tr>
-                            <td colspan="4">No parameters.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </article>
-            ))}
-
-            <h2>Permissions</h2>
-            <p>
-              Headless calls still follow the integration read/write permission policy. Configure read/write defaults
-              with <code class="text-kosmo-rose">integrations:configure</code>. Add <code class="text-kosmo-rose">--force</code> only for trusted automation that should bypass that policy.
-            </p>
-          </div>
-
-          {showToc && (
-            <nav class="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto p-4 border border-kosmo-border rounded-lg bg-kosmo-surface-solid text-sm max-lg:static max-lg:max-h-none" aria-label="Function index">
-              <h2 class="mb-2 text-xs font-extrabold tracking-[0.12em] uppercase text-kosmo-hot">Functions</h2>
-              <ol class="m-0 pl-4">
-                {integration.tools.map((tool) => (
-                  <li class="mb-1"><a class="text-kosmo-muted no-underline hover:text-kosmo-text" href={`#schema-${tool.function_name}`}>{tool.function_name}</a></li>
+            <section id="automation-contexts" class="content-section">
+              <h2>Automation Contexts</h2>
+              <p>
+                The same configured command surface works in these environments. The command does not change unless the host wrapper, credentials, or permissions change.
+              </p>
+              <div class="context-grid">
+                {cliEnvironments.map((item) => (
+                  <a href={`#functions`}>
+                    <strong>{item.titleSuffix}</strong>
+                    <span>{item.description}</span>
+                  </a>
                 ))}
-              </ol>
-            </nav>
-          )}
-        </div>
-      )}
+              </div>
+            </section>
 
-      {pageType === 'mcp' && (
-        <section class="integration-copy min-w-0 grid gap-4 max-w-[1080px]">
-          <h2>{integration.name} MCP Gateway</h2>
-          <p>{integration.setup.mcp_setup_summary || integration.seo.mcp_setup_summary}</p>
-          <p>
-            If the client has never used KosmoKrator before, install it first, then register this integration as a
-            stdio MCP server. The gateway exposes only the selected integration in the example below.
-          </p>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code="curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash" lang="bash" />
-          </div>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={integration.setup.mcp_gateway_install_command} lang="bash" />
-          </div>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={mcpJson} lang="json" />
-          </div>
+            <section id="functions" class="content-section">
+              <h2>CLI Functions</h2>
+              <p>
+                Every function below can be called headlessly. Commands are highlighted, copyable, and scroll horizontally when payloads are long.
+              </p>
+              <div class="function-list">
+                {integration.tools.map((tool) => (
+                  <article id={`cli-${tool.function_name}`} class="function-entry">
+                    <header>
+                      <div>
+                        <h3><code>{toolFullName(integration, tool)}</code></h3>
+                        <p>{tool.description || tool.short_description || tool.name}</p>
+                      </div>
+                      <span>{operationLabel(tool.type)} <code>{tool.type}</code></span>
+                    </header>
+                    <dl>
+                      <div><dt>Parameters</dt><dd>{parameterSummary(tool)}</dd></div>
+                    </dl>
+                    <div class="command-grid">
+                      <CommandBlock compact label="Generic call" code={genericCliCommand(tool)} />
+                      <CommandBlock compact label="Shortcut" code={providerCliCommand(tool)} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
 
-          <h2>Serve Manually</h2>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={integration.setup.mcp_gateway_serve_command} lang="bash" />
-          </div>
+            <section id="schemas" class="content-section">
+              <h2>Function Schemas</h2>
+              <p>Use these parameter tables when building CLI payloads without calling <code>integrations:schema</code> first.</p>
+              <div class="schema-list">
+                {integration.tools.map((tool) => (
+                  <details
+                    class="function-details"
+                    id={`schema-${tool.function_name}`}
+                    open={schemaOpen}
+                    data-analytics-event="integration_schema_viewed"
+                    data-analytics-surface="schema"
+                  >
+                    <summary>
+                      <span><code>{toolFullName(integration, tool)}</code></span>
+                      <small>{tool.parameter_count} parameters</small>
+                    </summary>
+                    <div class="function-details-body">
+                      <CommandBlock compact label="Schema command" code={schemaCliCommand(tool)} />
+                      <div class="tool-table-wrapper compact">
+                        <table>
+                          <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                          <tbody>
+                            {Object.entries(tool.parameters).length > 0 ? Object.entries(tool.parameters).map(([name, schema]) => (
+                              <tr>
+                                <td data-label="Parameter"><code>{name}</code></td>
+                                <td data-label="Type">{String(schema.type ?? 'mixed')}</td>
+                                <td data-label="Required">{schema.required ? 'yes' : 'no'}</td>
+                                <td data-label="Description">{String(schema.description ?? '')}</td>
+                              </tr>
+                            )) : (
+                              <tr><td colspan="4">No parameters.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </section>
 
-          <h2>MCP Tool Names</h2>
-          <p>KosmoKrator exposes integration tools through the gateway with stable names:</p>
-          {integration.tools.length > 10 ? (
-            <details class="raw-docs-details" open>
-              <summary>MCP Tool Names ({integration.tools.length} tools)</summary>
+            <section id="permissions" class="content-section">
+              <h2>Permissions</h2>
+              <p>
+                Headless calls still follow the integration read/write permission policy. Configure read/write defaults with
+                <code>integrations:configure</code>. Add <code>--force</code> only for trusted automation that should bypass that policy.
+              </p>
+            </section>
+          </div>
+        )}
+
+        {pageType === 'mcp' && (
+          <div class="integration-copy content-stack">
+            <section id="gateway" class="content-section">
+              <h2>{integration.name} MCP Gateway</h2>
+              <p>{integration.setup.mcp_setup_summary || integration.seo.mcp_setup_summary}</p>
+              <p>If the client has never used KosmoKrator before, install it first, then register this integration as a stdio MCP server.</p>
+              <CommandBlock label="Install KosmoKrator" code="curl -fsSL https://raw.githubusercontent.com/OpenCompanyApp/kosmokrator/main/install.sh | bash" analyticsProps={{ command_surface: 'mcp_gateway', install_target: 'kosmokrator' }} />
+              <CommandBlock label="Install gateway entry" code={integration.setup.mcp_gateway_install_command} analyticsProps={{ command_surface: 'mcp_gateway', install_target: 'gateway_entry' }} />
+              <CommandBlock label="MCP configuration" code={mcpJson} lang="json" analyticsProps={{ command_surface: 'mcp_gateway', client: 'generic_mcp' }} />
+              <CommandBlock label="Serve manually" code={integration.setup.mcp_gateway_serve_command} analyticsProps={{ command_surface: 'mcp_gateway', command_type: 'serve' }} />
+            </section>
+
+            <section id="clients" class="content-section">
+              <h2>Client Notes</h2>
+              <p>Use one scoped MCP gateway entry, then adapt the config location to the client or framework.</p>
+              <div class="context-grid">
+                {matrixClients.map((item) => (
+                  <section id={item.slug}>
+                    <strong>{item.label}</strong>
+                    <span>{item.description} {item.installHint}</span>
+                  </section>
+                ))}
+              </div>
+            </section>
+
+            <section id="tools" class="content-section">
+              <h2>MCP Tool Names</h2>
+              <p>KosmoKrator exposes integration tools through the gateway with stable names.</p>
               <div class="tool-table-wrapper">
                 <table>
                   <thead><tr><th>MCP tool</th><th>Source function</th><th>Type</th></tr></thead>
                   <tbody>
                     {integration.tools.map((tool) => (
                       <tr>
-                        <td data-label="MCP tool"><code class="text-kosmo-rose">{toolMcpName(integration, tool)}</code></td>
-                        <td data-label="Source"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
-                        <td data-label="Type">{operationLabel(tool.type)} <code class="text-kosmo-rose">{tool.type}</code></td>
+                        <td data-label="MCP tool"><code>{toolMcpName(integration, tool)}</code></td>
+                        <td data-label="Source"><code>{toolFullName(integration, tool)}</code></td>
+                        <td data-label="Type">{operationLabel(tool.type)} <code>{tool.type}</code></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </details>
-          ) : (
-            <div class="tool-table-wrapper">
-              <table>
-                <thead><tr><th>MCP tool</th><th>Source function</th><th>Type</th></tr></thead>
-                <tbody>
-                  {integration.tools.map((tool) => (
-                    <tr>
-                      <td data-label="MCP tool"><code class="text-kosmo-rose">{toolMcpName(integration, tool)}</code></td>
-                      <td data-label="Source"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
-                      <td data-label="Type">{operationLabel(tool.type)} <code class="text-kosmo-rose">{tool.type}</code></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            </section>
 
-          <h2>Write Access</h2>
-          <p>
-            Start with <code class="text-kosmo-rose">--write=deny</code> for read-only MCP clients. Use <code class="text-kosmo-rose">--write=ask</code> or
-            <code class="text-kosmo-rose"> --write=allow</code> only when the client and workspace are trusted.
-          </p>
-        </section>
-      )}
-
-      {pageType === 'framework' && client && (
-        <section class="integration-copy min-w-0 grid gap-4 max-w-[1080px]">
-          <h2>Connect {integration.name} to {client.label}</h2>
-          <p>{client.description}</p>
-          <p>
-            {client.configIntro} The gateway is local, scoped to this integration, and starts with
-            <code class="text-kosmo-rose"> --write=deny</code> so {client.shortLabel} can inspect read-capable tools without receiving write access by default.
-          </p>
-
-          <h2>{integration.name} MCP Config for {client.label}</h2>
-          <p>{client.installHint}</p>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={clientMcpJson} lang="json" />
+            <section id="write-access" class="content-section">
+              <h2>Write Access</h2>
+              <p>
+                Start with <code>--write=deny</code> for read-only MCP clients. Use <code>--write=ask</code> or
+                <code> --write=allow</code> only when the client and workspace are trusted.
+              </p>
+            </section>
           </div>
+        )}
 
-          <h2>Run the Gateway Manually</h2>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={integration.setup.mcp_gateway_serve_command} lang="bash" />
-          </div>
+        {pageType === 'lua' && (
+          <div class="integration-copy content-stack">
+            <section id="namespace" class="content-section">
+              <h2>Lua Namespace</h2>
+              <p>
+                Agents call this integration through <code>app.integrations.{luaNamespace}.*</code>.
+                Use <code>lua_read_doc("integrations.{integration.slug}")</code> inside KosmoKrator to discover the same reference at runtime.
+              </p>
+            </section>
 
-          <h2>Why Use KosmoKrator Here</h2>
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
-            <div class="p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><strong>Scoped tools</strong><p>Expose only {integration.name} instead of a broad multi-service tool list.</p></div>
-            <div class="p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><strong>Local credentials</strong><p>Reuse credentials already configured for the KosmoKrator CLI and Lua runtime.</p></div>
-            <div class="p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04]"><strong>Write policy</strong><p>Start read-only, then opt into ask or allow for trusted workspaces.</p></div>
-          </div>
+            <section id="headless-lua" class="content-section">
+              <h2>Call Lua from the Headless CLI</h2>
+              <p>
+                Use <code>kosmo integrations:lua</code> when a shell script, CI job, cron job, or another coding CLI should run a deterministic
+                {integration.name} workflow without starting an interactive agent session.
+              </p>
+              <div class="command-grid">
+                <CommandBlock label="Inline Lua call" code={luaHeadlessEvalSnippet} analyticsProps={{ example_type: 'inline', command_surface: 'headless_lua' }} />
+                <CommandBlock label="Read Lua docs headlessly" code={luaHeadlessDocsSnippet} analyticsProps={{ example_type: 'docs', command_surface: 'headless_lua' }} />
+              </div>
+              <h3>Workflow file</h3>
+              <p>Put repeatable logic in a Lua file, then execute it with JSON output for the calling process.</p>
+              <CommandBlock label="workflow.lua" code={luaWorkflowSnippet} lang="lua" analyticsProps={{ example_type: 'workflow', command_surface: 'headless_lua' }} />
+              <CommandBlock label="Run the workflow" code={luaWorkflowCommandSnippet} analyticsProps={{ example_type: 'workflow_command', command_surface: 'headless_lua' }} />
+              <div class="callout">
+                <strong>Namespace note.</strong> <code>integrations:lua</code> exposes <code>app.integrations.{luaNamespace}</code>, <code>app.mcp.*</code>, <code>docs.*</code>, <code>json.*</code>, and <code>regex.*</code>. Use <code>app.integrations.{luaNamespace}.default.*</code> or <code>app.integrations.{luaNamespace}.work.*</code> when you configured named credential accounts.
+              </div>
+              <h3>MCP-only Lua</h3>
+              <p>If the script only needs configured MCP servers and does not need {integration.name}, use the narrower <code>mcp:lua</code> command.</p>
+              <CommandBlock label="MCP Lua command" code={mcpLuaSnippet} analyticsProps={{ example_type: 'mcp', command_surface: 'headless_lua' }} />
+            </section>
 
-          <h2>{integration.name} Tools Visible to {client.shortLabel}</h2>
-          <p>{client.shortLabel} sees stable MCP tool names generated from the {integration.name} integration catalog.</p>
-          <div class="tool-table-wrapper">
-            <table>
-              <thead><tr><th>MCP tool</th><th>Source function</th><th>Type</th><th>Description</th></tr></thead>
-              <tbody>
-                {integration.tools.slice(0, 30).map((tool) => (
-                  <tr>
-                    <td data-label="MCP tool"><code class="text-kosmo-rose">{toolMcpName(integration, tool)}</code></td>
-                    <td data-label="Source"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
-                    <td data-label="Type">{operationLabel(tool.type)}</td>
-                    <td data-label="Description">{tool.description || tool.short_description || tool.name}</td>
-                  </tr>
+            <section id="lua-docs" class="content-section">
+              <h2>Agent-Facing Lua Docs</h2>
+              <p>This is the rendered version of the full Lua documentation exposed to agents when they inspect the integration namespace.</p>
+              <div class="rendered-lua-docs" set:html={luaDocsHtml} />
+              <details class="raw-docs-details">
+                <summary>Raw agent markdown</summary>
+                <pre class="raw-docs"><code>{luaDocsMarkdown}</code></pre>
+              </details>
+              {primaryTool && <CommandBlock label="Metadata-derived Lua example" code={luaExampleSnippet} lang="lua" analyticsProps={{ example_type: 'metadata', command_surface: 'lua_reference', function_name: luaFunctionName(primaryTool) }} />}
+            </section>
+
+            <section id="lua-functions" class="content-section">
+              <h2>Functions</h2>
+              <div class="schema-list">
+                {integration.tools.map((tool) => (
+                  <details
+                    class="function-details"
+                    id={luaFunctionName(tool)}
+                    open={schemaOpen}
+                    data-analytics-event="integration_function_opened"
+                    data-analytics-surface="lua"
+                  >
+                    <summary>
+                      <span><code>{luaFunctionName(tool)}</code></span>
+                      <small>{operationLabel(tool.type)}</small>
+                    </summary>
+                    <div class="function-details-body">
+                      <p>{tool.description || tool.short_description || tool.name}</p>
+                      <dl>
+                        <div><dt>Lua path</dt><dd><code>app.integrations.{luaNamespace}.{luaFunctionName(tool)}</code></dd></div>
+                        <div><dt>Full name</dt><dd><code>{toolFullName(integration, tool)}</code></dd></div>
+                      </dl>
+                      <div class="tool-table-wrapper compact">
+                        <table>
+                          <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                          <tbody>
+                            {Object.entries(tool.parameters).length > 0 ? Object.entries(tool.parameters).map(([name, schema]) => (
+                              <tr>
+                                <td data-label="Parameter"><code>{name}</code></td>
+                                <td data-label="Type">{String(schema.type ?? 'mixed')}</td>
+                                <td data-label="Required">{schema.required ? 'yes' : 'no'}</td>
+                                <td data-label="Description">{String(schema.description ?? '')}</td>
+                              </tr>
+                            )) : (
+                              <tr><td colspan="4">No parameters.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </section>
           </div>
-          {integration.tools.length > 30 && <p>Showing 30 of {integration.tools.length} functions. See the <a href={integrationUrl(integration, 'mcp')}>{integration.name} MCP reference</a> for the full list.</p>}
+        )}
+      </article>
 
-          <h2>Related {integration.name} Pages</h2>
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
-            <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'cli')}><strong>{integration.name} CLI</strong><span>Use direct JSON commands instead of MCP discovery.</span></a>
-            <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={integrationUrl(integration, 'mcp')}><strong>{integration.name} MCP</strong><span>Full gateway reference and MCP tool names.</span></a>
-            <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`/mcp/${client.slug}`}><strong>KosmoKrator for {client.shortLabel}</strong><span>Client-level gateway setup.</span></a>
-          </div>
-        </section>
-      )}
-
-      {pageType === 'environment' && environment && (
-        <section class="integration-copy min-w-0 grid gap-4 max-w-[1080px]">
-          <h2>{integration.name} CLI for {environment.titleSuffix}</h2>
-          <p>{environment.description}</p>
-          <p>
-            {environment.exampleIntro} The {integration.name} CLI uses the same integration registry as the TUI, Lua runtime, and MCP gateway,
-            but returns predictable command output for automation.
-          </p>
-
-          <h2>Command Shape</h2>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={environmentSnippet} lang="bash" />
-          </div>
-
-          <h2>Discovery Before Execution</h2>
-          <p>Agents and scripts can inspect {integration.name} docs and schemas before choosing a function.</p>
-          <div class="code-frame my-0.5 mb-4 p-4 overflow-auto border border-kosmo-white-border-strong rounded-lg leading-relaxed bg-kosmo-code-bg">
-            <Code code={discoverySnippet} lang="bash" />
-          </div>
-
-          <h2>Useful {integration.name} CLI Functions</h2>
-          <div class="tool-table-wrapper">
-            <table>
-              <thead><tr><th>Function</th><th>Type</th><th>Parameters</th><th>Description</th></tr></thead>
-              <tbody>
-                {integration.tools.slice(0, 40).map((tool) => (
-                  <tr>
-                    <td data-label="Function"><code class="text-kosmo-rose">{toolFullName(integration, tool)}</code></td>
-                    <td data-label="Type">{operationLabel(tool.type)}</td>
-                    <td data-label="Parameters">{parameterSummary(tool)}</td>
-                    <td data-label="Description">{tool.description || tool.short_description || tool.name}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {integration.tools.length > 40 && <p>Showing 40 of {integration.tools.length} functions. See the <a href={integrationUrl(integration, 'cli')}>{integration.name} CLI reference</a> for every function.</p>}
-
-          <h2>Automation Notes</h2>
-          <ul>
-            <li>Use <code class="text-kosmo-rose">--json</code> for machine-readable output.</li>
-            <li>Keep credentials out of argv by using environment variables or stored KosmoKrator configuration.</li>
-            <li>Configure read/write policy before unattended runs; use <code class="text-kosmo-rose">--force</code> only for trusted automation.</li>
-            <li>Use the MCP gateway instead when the agent needs dynamic tool discovery inside a conversation.</li>
-          </ul>
-
-          <h2>Related {integration.name} CLI Pages</h2>
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3">
-            {cliEnvironments.filter((item) => item.slug !== environment.slug).map((item) => (
-              <a class="grid gap-1.5 p-4 border border-kosmo-white-border-strong rounded-lg bg-white/[0.04] text-kosmo-text no-underline" href={`${integrationUrl(integration, 'cli')}/${item.slug}`}>
-                <strong>{item.titleSuffix}</strong>
-                <span>{integration.name} CLI for {item.label}.</span>
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      <IntegrationToc items={pageToc} />
     </main>
+
     <MegaFooter />
 
-    <script>
-      // Function card toggle
-      document.querySelectorAll('.function-card-header').forEach(header => {
-        header.addEventListener('click', () => {
-          header.parentElement.classList.toggle('expanded');
-        });
-      });
-
-      // Copy buttons
-      document.querySelectorAll('.copy-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const wrapper = (btn as HTMLElement).closest('.command-cell-wrapper');
-          if (!wrapper) return;
-          const code = wrapper.querySelector('code');
-          if (!code) return;
-          navigator.clipboard.writeText(code.textContent || '').then(() => {
-            btn.textContent = 'copied';
-            setTimeout(() => { btn.textContent = 'copy'; }, 1500);
-          }).catch(() => {});
-        });
-      });
-    </script>
   </body>
 </html>

@@ -187,11 +187,15 @@ class IntegrationServiceProvider extends ServiceProvider
         $providerClasses = $package['extra']['laravel']['providers'] ?? [];
 
         foreach ($providerClasses as $providerClass) {
-            if (! is_string($providerClass) || ! class_exists($providerClass)) {
+            if (! is_string($providerClass)) {
                 continue;
             }
 
             try {
+                if (! class_exists($providerClass)) {
+                    continue;
+                }
+
                 $provider = new $providerClass($this->container);
                 if (method_exists($provider, 'register')) {
                     $provider->register();
@@ -215,16 +219,24 @@ class IntegrationServiceProvider extends ServiceProvider
      */
     private function discoverLocalMonorepoIntegrations(array &$discoveredPackages, array $availablePackageNames = []): void
     {
+        $localPackages = [];
+
         foreach ($this->localMonorepoComposerFiles() as $composerFile) {
             $package = json_decode((string) file_get_contents($composerFile), true);
             if (! is_array($package)) {
                 continue;
             }
 
+            $packageDir = dirname($composerFile);
+            $localPackages[] = [$package, $packageDir];
+            $this->registerLocalPackageAutoload($package, $packageDir);
+        }
+
+        foreach ($localPackages as [$package, $packageDir]) {
             $this->registerIntegrationPackage(
                 $package,
                 $discoveredPackages,
-                dirname($composerFile),
+                $packageDir,
                 $availablePackageNames,
             );
         }

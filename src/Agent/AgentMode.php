@@ -30,6 +30,10 @@ enum AgentMode: string
      */
     private const TASK_TOOLS = ['task_create', 'task_update', 'task_list', 'task_get'];
 
+    private const GOAL_READ_TOOLS = ['get_goal'];
+
+    private const GOAL_WRITE_TOOLS = ['create_goal', 'update_goal'];
+
     private const ASK_TOOLS = ['ask_user', 'ask_choice'];
 
     private const MEMORY_READ_TOOLS = ['memory_search', 'session_search'];
@@ -48,9 +52,9 @@ enum AgentMode: string
     public function allowedTools(): array
     {
         return match ($this) {
-            self::Edit => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::MEMORY_WRITE_TOOLS, ...self::WEB_TOOLS, ...self::LUA_TOOLS],
-            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::WEB_TOOLS, ...self::LUA_TOOLS],
-            self::Ask => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', ...self::TASK_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::WEB_TOOLS, 'lua_list_docs', 'lua_search_docs', 'lua_read_doc'],
+            self::Edit => ['file_read', 'file_write', 'file_edit', 'apply_patch', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::GOAL_READ_TOOLS, ...self::GOAL_WRITE_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::MEMORY_WRITE_TOOLS, ...self::WEB_TOOLS, ...self::LUA_TOOLS],
+            self::Plan => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', 'subagent', ...self::TASK_TOOLS, ...self::GOAL_READ_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::WEB_TOOLS, ...self::LUA_TOOLS],
+            self::Ask => ['file_read', 'glob', 'grep', 'bash', 'shell_start', 'shell_write', 'shell_read', 'shell_kill', ...self::TASK_TOOLS, ...self::GOAL_READ_TOOLS, ...self::ASK_TOOLS, ...self::MEMORY_READ_TOOLS, ...self::WEB_TOOLS, 'lua_list_docs', 'lua_search_docs', 'lua_read_doc'],
         };
     }
 

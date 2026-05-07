@@ -1,5 +1,7 @@
 ---
 import '../../styles/tailwind.css';
+import AnalyticsContext from '../../components/AnalyticsContext.astro';
+import AnalyticsScripts from '../../components/AnalyticsScripts.astro';
 import MegaFooter from '../../components/MegaFooter.astro';
 import {
   SITE_URL,
@@ -51,6 +53,8 @@ const schemas = [
     <link rel="canonical" href={siteUrl(pagePath)} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     {schemas.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+    <AnalyticsContext context={{ surface: 'use_case', use_case_slug: page.slug, audience: page.audience }} />
+    <AnalyticsScripts />
   </head>
   <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
     <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
@@ -90,7 +94,7 @@ const schemas = [
       <section class="my-8 p-5 border border-kosmo-border rounded-lg bg-kosmo-surface-solid">
         <h2 class="mt-0">Start Here</h2>
         <p class="text-kosmo-muted leading-relaxed">The implementation details live in the product docs and generated integration catalog.</p>
-        <a class="inline-flex items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href={page.primaryLink}>Open the relevant docs</a>
+        <a class="inline-flex items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href={page.primaryLink} data-analytics-event="cta_clicked" data-analytics-props={JSON.stringify({ cta: 'open_relevant_docs', location: 'use_case_start', href: page.primaryLink })}>Open the relevant docs</a>
       </section>
 
       <section>

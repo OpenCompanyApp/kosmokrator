@@ -7,8 +7,11 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 ## [Unreleased]
 
 ### Added
+- Footer contact link to the RuttyBuilds X profile for public site inquiries.
+- Session-scoped `/goal` support with persisted goal state, model goal tools, usage accounting, and active-goal continuation.
 
 ### Changed
+- Pruned generated website integration SEO pages to canonical overview, CLI, MCP, and Lua pages, folding framework/client and automation variants into anchored sections with cleaner layouts and redirects.
 
 ### Fixed
 

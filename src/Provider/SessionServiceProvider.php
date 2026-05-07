@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Kosmokrator\Audio\CompletionSound;
+use Kosmokrator\Goal\GoalRepository;
 use Kosmokrator\LLM\PrismService;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
@@ -46,6 +47,9 @@ class SessionServiceProvider extends ServiceProvider
             $this->container->make(SessionDatabase::class),
         ));
         $this->container->singleton(SubagentOutputStore::class, fn () => new SubagentOutputStore);
+        $this->container->singleton(GoalRepository::class, fn () => new GoalRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
         $this->container->singleton(SessionManager::class, fn () => new SessionManager(
             sessions: $this->container->make(SessionRepositoryInterface::class),
             messages: $this->container->make(MessageRepositoryInterface::class),
@@ -55,6 +59,7 @@ class SessionServiceProvider extends ServiceProvider
             configSettings: $this->container->make(SettingsManager::class),
             swarmMetadata: $this->container->make(SwarmMetadataStore::class),
             subagentOutputs: $this->container->make(SubagentOutputStore::class),
+            goals: $this->container->make(GoalRepository::class),
         ));
 
         // Completion sound — compose music via LLM after each agent response

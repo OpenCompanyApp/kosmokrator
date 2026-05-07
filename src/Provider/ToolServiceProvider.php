@@ -6,6 +6,9 @@ namespace Kosmokrator\Provider;
 
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Goal\Tool\CreateGoalTool;
+use Kosmokrator\Goal\Tool\GetGoalTool;
+use Kosmokrator\Goal\Tool\UpdateGoalTool;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\NativeToolBridge;
@@ -159,6 +162,9 @@ class ToolServiceProvider extends ServiceProvider
             $registry->register(new TaskGetTool($taskStore));
 
             $sessionManager = $this->container->make(SessionManager::class);
+            $registry->register(new GetGoalTool($sessionManager));
+            $registry->register(new CreateGoalTool($sessionManager));
+            $registry->register(new UpdateGoalTool($sessionManager));
             $registry->register(new MemorySaveTool($sessionManager));
             $registry->register(new MemorySearchTool($sessionManager));
             $registry->register(new SessionSearchTool($sessionManager));

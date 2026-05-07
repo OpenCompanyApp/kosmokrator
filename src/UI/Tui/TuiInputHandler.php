@@ -46,6 +46,7 @@ final class TuiInputHandler
         ['value' => '/settings', 'label' => '/settings', 'description' => 'Open the settings panel'],
         ['value' => '/resume', 'label' => '/resume', 'description' => 'Resume a previous session'],
         ['value' => '/sessions', 'label' => '/sessions', 'description' => 'List recent sessions'],
+        ['value' => '/goal', 'label' => '/goal', 'description' => 'Set or view the active goal'],
         ['value' => '/memories', 'label' => '/memories', 'description' => 'Show stored memories'],
         ['value' => '/forget', 'label' => '/forget', 'description' => 'Delete a memory by ID'],
         ['value' => '/agents', 'label' => '/agents', 'description' => 'Show swarm progress dashboard'],

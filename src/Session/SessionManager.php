@@ -7,6 +7,9 @@ namespace Kosmokrator\Session;
 use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\ToolResultDeduplicator;
+use Kosmokrator\Goal\Goal;
+use Kosmokrator\Goal\GoalRepository;
+use Kosmokrator\Goal\GoalStatus;
 use Kosmokrator\LLM\MessageSerializer;
 use Kosmokrator\Settings\SettingsManager;
 use Prism\Prism\Contracts\Message;
@@ -40,6 +43,7 @@ class SessionManager
         private readonly ?SettingsManager $configSettings = null,
         private readonly ?SwarmMetadataStore $swarmMetadata = null,
         private readonly ?SubagentOutputStore $subagentOutputs = null,
+        private readonly ?GoalRepository $goals = null,
     ) {
         $this->serializer = new MessageSerializer;
         $this->memoryManager = new MemoryManager($this->memories, log: $this->log);
@@ -108,6 +112,61 @@ class SessionManager
         return $this->currentSessionId;
     }
 
+    public function currentGoal(): ?Goal
+    {
+        if ($this->currentSessionId === null || $this->goals === null) {
+            return null;
+        }
+
+        return $this->goals->get($this->currentSessionId);
+    }
+
+    public function setGoal(string $objective, GoalStatus $status = GoalStatus::Active, ?int $tokenBudget = null): Goal
+    {
+        $sessionId = $this->requireCurrentSessionIdForGoal();
+
+        return $this->goals()->replace($sessionId, $objective, $status, $tokenBudget);
+    }
+
+    public function createGoal(string $objective, ?int $tokenBudget = null): Goal
+    {
+        $sessionId = $this->requireCurrentSessionIdForGoal();
+
+        return $this->goals()->create($sessionId, $objective, $tokenBudget);
+    }
+
+    public function updateGoal(?GoalStatus $status = null, ?int $tokenBudget = null, bool $changeBudget = false): ?Goal
+    {
+        $sessionId = $this->requireCurrentSessionIdForGoal();
+
+        return $this->goals()->update($sessionId, $status, $tokenBudget, $changeBudget);
+    }
+
+    public function clearGoal(): bool
+    {
+        $sessionId = $this->requireCurrentSessionIdForGoal();
+
+        return $this->goals()->clear($sessionId);
+    }
+
+    public function accountGoalUsage(int $tokenDelta, int $timeDeltaSeconds): ?Goal
+    {
+        if ($this->currentSessionId === null || $this->goals === null) {
+            return null;
+        }
+
+        return $this->goals->accountUsage($this->currentSessionId, $tokenDelta, $timeDeltaSeconds);
+    }
+
+    public function pauseActiveGoal(): ?Goal
+    {
+        if ($this->currentSessionId === null || $this->goals === null) {
+            return null;
+        }
+
+        return $this->goals->pauseActive($this->currentSessionId);
+    }
+
     /**
      * Switch the active session to an existing one.
      *
@@ -117,6 +176,24 @@ class SessionManager
     {
         $this->currentSessionId = $id;
         $this->memoryManager->setCurrentSessionId($id);
+    }
+
+    private function requireCurrentSessionIdForGoal(): string
+    {
+        if ($this->currentSessionId === null) {
+            throw new \RuntimeException('session goals require a persisted session');
+        }
+
+        return $this->currentSessionId;
+    }
+
+    private function goals(): GoalRepository
+    {
+        if ($this->goals === null) {
+            throw new \RuntimeException('session goals require a goal repository');
+        }
+
+        return $this->goals;
     }
 
     /**

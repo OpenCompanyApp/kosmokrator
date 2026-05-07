@@ -19,11 +19,187 @@
   --color-kosmo-hot: #ff5c75;
   --color-kosmo-rose: #ffd5dd;
   --color-kosmo-code-text: #f4d6dc;
+  --color-kosmo-blue: #93c5fd;
+  --color-kosmo-yellow: #facc15;
+  --color-kosmo-green: #86efac;
+  --color-kosmo-violet: #c4b5fd;
 }
 
 /* Styles that Tailwind utilities can't cover (dynamic content, pseudo-elements, table responsive) */
 
 @layer components {
+  .site-topbar {
+    @apply sticky top-0 z-40 mx-auto flex w-full items-center justify-between gap-4 border-b border-kosmo-white-border-faint bg-kosmo-bg/92 px-4 py-3 backdrop-blur sm:px-6 lg:px-8;
+  }
+
+  .site-brand {
+    @apply flex items-center gap-3 text-kosmo-text no-underline font-black;
+  }
+
+  .site-nav {
+    @apply flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm;
+  }
+
+  .site-nav a {
+    @apply text-kosmo-muted no-underline hover:text-kosmo-text;
+  }
+
+  .integration-shell {
+    @apply mx-auto grid w-full max-w-[1680px] grid-cols-1 gap-6 px-4 pb-20 pt-8 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:px-8 xl:grid-cols-[16rem_minmax(0,1fr)_15rem];
+  }
+
+  .integration-main {
+    @apply min-w-0;
+  }
+
+  .integration-side-rail {
+    @apply hidden min-w-0 lg:grid lg:content-start lg:gap-3 lg:sticky lg:top-[4.75rem] lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto lg:pr-2;
+  }
+
+  .rail-panel {
+    @apply min-w-0 rounded-lg border border-kosmo-white-border-faint bg-white/[0.025] p-3;
+  }
+
+  .rail-eyebrow {
+    @apply m-0 text-xs font-extrabold uppercase tracking-[0.12em] text-kosmo-hot;
+  }
+
+  .rail-title {
+    @apply mt-1 block text-lg font-black leading-tight text-kosmo-text no-underline;
+  }
+
+  .rail-stats {
+    @apply mt-4 grid grid-cols-2 gap-2;
+  }
+
+  .rail-stats div {
+    @apply min-w-0 rounded-md bg-white/[0.035] p-2;
+  }
+
+  .rail-stats dt {
+    @apply text-[0.68rem] font-extrabold uppercase tracking-[0.1em] text-kosmo-hot;
+  }
+
+  .rail-stats dd {
+    @apply m-0 truncate text-sm font-bold text-kosmo-text;
+  }
+
+  .rail-nav,
+  .rail-actions {
+    @apply grid gap-1.5;
+  }
+
+  .rail-nav a,
+  .rail-actions a {
+    @apply rounded-md px-2.5 py-2 text-sm font-bold text-kosmo-muted no-underline hover:bg-white/[0.05] hover:text-kosmo-text;
+  }
+
+  .rail-nav a.active {
+    @apply bg-kosmo-crimson text-white;
+  }
+
+  .integration-toc {
+    @apply hidden min-w-0 xl:block xl:sticky xl:top-[4.75rem] xl:max-h-[calc(100svh-6rem)] xl:overflow-y-auto xl:border-l xl:border-kosmo-white-border-faint xl:pl-4;
+  }
+
+  .integration-toc p {
+    @apply m-0 mb-3 text-xs font-extrabold uppercase tracking-[0.12em] text-kosmo-hot;
+  }
+
+  .integration-toc ol {
+    @apply m-0 grid list-none gap-1 p-0;
+  }
+
+  .integration-toc a {
+    @apply block rounded-md px-2 py-1.5 text-[0.82rem] leading-snug text-kosmo-muted no-underline hover:bg-white/[0.045] hover:text-kosmo-text;
+  }
+
+  .integration-toc li.nested a {
+    @apply pl-5;
+  }
+
+  .integration-breadcrumb {
+    @apply mb-5 flex flex-wrap items-center gap-2 text-sm text-kosmo-muted;
+  }
+
+  .integration-breadcrumb a {
+    @apply text-kosmo-muted no-underline hover:text-kosmo-text;
+  }
+
+  .integration-hero {
+    @apply border-b border-kosmo-white-border-faint pb-7;
+  }
+
+  .integration-hero p {
+    @apply m-0 mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-kosmo-hot;
+  }
+
+  .integration-hero h1 {
+    @apply m-0 max-w-5xl text-[clamp(2rem,4vw,3.8rem)] font-black leading-tight tracking-normal text-kosmo-text;
+  }
+
+  .integration-hero span {
+    @apply mt-4 block max-w-4xl text-base leading-7 text-kosmo-muted;
+  }
+
+  .surface-tabs {
+    @apply my-6 flex flex-wrap gap-2 border-b border-kosmo-white-border-faint pb-4;
+  }
+
+  .surface-tabs a {
+    @apply rounded-md border border-kosmo-white-border bg-white/[0.035] px-3 py-2 text-sm font-bold text-kosmo-muted no-underline hover:border-kosmo-crimson hover:text-kosmo-text;
+  }
+
+  .surface-tabs a.active {
+    @apply border-kosmo-crimson bg-kosmo-crimson text-white;
+  }
+
+  .content-stack {
+    @apply grid gap-7;
+  }
+
+  .content-section {
+    @apply min-w-0 scroll-mt-24;
+  }
+
+  .callout {
+    @apply rounded-lg border border-kosmo-border bg-white/[0.035] p-4 text-kosmo-text;
+  }
+
+  .surface-card-grid,
+  .context-grid {
+    @apply grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3;
+  }
+
+  .surface-card-grid a,
+  .context-grid a,
+  .context-grid section {
+    @apply grid min-w-0 gap-1.5 rounded-lg border border-kosmo-white-border-faint bg-white/[0.025] p-4 text-kosmo-muted no-underline;
+  }
+
+  .surface-card-grid a:hover,
+  .context-grid a:hover {
+    @apply border-kosmo-crimson text-kosmo-text;
+  }
+
+  .surface-card-grid strong,
+  .context-grid strong {
+    @apply text-kosmo-text;
+  }
+
+  .surface-card-grid span,
+  .context-grid span {
+    @apply text-sm leading-6 text-kosmo-muted;
+  }
+
+  .metadata-grid {
+    @apply grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3;
+  }
+
+  .metadata-grid div {
+    @apply min-w-0 rounded-lg border border-kosmo-white-border-faint bg-white/[0.025] p-3;
+  }
+
   .tool-table-wrapper {
     @apply min-w-0 overflow-x-auto rounded-lg border border-kosmo-white-border-strong bg-white/[0.03];
   }
@@ -42,10 +218,6 @@
 
   .tool-table-wrapper.compact table {
     @apply text-[0.86rem];
-  }
-
-  .function-card {
-    @apply mb-3 overflow-hidden rounded-lg border border-kosmo-white-border-strong bg-white/[0.03];
   }
 
   .raw-docs-details {
@@ -70,13 +242,29 @@
     @apply text-[0.86rem] leading-relaxed;
   }
 
-  .command-cell-wrapper {
-    @apply grid min-w-0 gap-2;
+  .command-block {
+    @apply my-3 min-w-0 overflow-hidden rounded-lg border border-kosmo-white-border-strong bg-kosmo-code-bg;
   }
 
-  .command-cell {
-    @apply m-0 max-w-full overflow-x-auto whitespace-pre-wrap rounded-md bg-kosmo-code-bg-2 p-3 text-kosmo-code-text font-mono text-[0.78rem] leading-relaxed;
-    overflow-wrap: anywhere;
+  .command-block-compact {
+    @apply my-0;
+  }
+
+  .command-block-bar {
+    @apply flex min-h-9 items-center justify-between gap-3 border-b border-kosmo-white-border-faint bg-white/[0.035] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-kosmo-muted;
+  }
+
+  .command-block-code {
+    @apply min-w-0 overflow-x-auto p-4;
+  }
+
+  .command-block-compact .command-block-code {
+    @apply p-3;
+  }
+
+  .command-block pre,
+  .shell-highlight {
+    @apply m-0 min-w-max bg-transparent p-0 font-mono text-[0.84rem] leading-relaxed text-kosmo-code-text;
   }
 
   .copy-btn {
@@ -121,16 +309,100 @@
     @apply text-[#c4b5fd];
   }
 
+  .sh-bin {
+    @apply font-extrabold text-kosmo-text;
+  }
+
+  .sh-subcommand,
+  .sh-function {
+    @apply text-kosmo-blue;
+  }
+
+  .sh-flag {
+    @apply font-bold text-kosmo-hot;
+  }
+
+  .sh-json {
+    @apply text-kosmo-yellow;
+  }
+
+  .sh-env {
+    @apply text-kosmo-green;
+  }
+
+  .sh-comment {
+    @apply text-kosmo-muted;
+  }
+
+  .command-grid {
+    @apply grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2;
+  }
+
+  .function-list,
+  .schema-list {
+    @apply grid min-w-0 gap-3;
+  }
+
+  .function-entry,
+  .function-details {
+    @apply min-w-0 scroll-mt-24 overflow-hidden rounded-lg border border-kosmo-white-border-faint bg-white/[0.025];
+  }
+
+  .function-entry {
+    @apply grid gap-3 p-4;
+  }
+
+  .function-entry header {
+    @apply flex min-w-0 flex-wrap items-start justify-between gap-3;
+  }
+
+  .function-entry header div {
+    @apply min-w-0;
+  }
+
+  .function-entry header h3 {
+    @apply m-0 text-lg;
+  }
+
+  .function-entry header p {
+    @apply m-0 mt-2 text-sm leading-6 text-kosmo-muted;
+  }
+
+  .function-entry header > span {
+    @apply shrink-0 rounded-md border border-kosmo-white-border bg-white/[0.04] px-2 py-1 text-xs font-bold text-kosmo-muted;
+  }
+
+  .function-entry dl,
+  .function-details dl {
+    @apply m-0 flex flex-wrap gap-3 text-sm;
+  }
+
+  .function-details summary {
+    @apply flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-white/[0.035];
+  }
+
+  .function-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .function-details summary span {
+    @apply min-w-0 truncate text-kosmo-text;
+  }
+
+  .function-details summary small {
+    @apply shrink-0 text-xs font-bold text-kosmo-muted;
+  }
+
+  .function-details-body {
+    @apply grid gap-4 border-t border-kosmo-white-border-faint p-4;
+  }
+
   .integration-copy {
     @apply min-w-0 text-kosmo-muted leading-relaxed;
   }
 
   .integration-copy h2 {
-    @apply mt-8 mb-3 text-[clamp(1.45rem,2vw,1.9rem)] font-extrabold leading-tight tracking-normal text-kosmo-text;
-  }
-
-  .integration-copy h2:first-child {
-    @apply mt-0;
+    @apply mt-0 mb-3 text-[clamp(1.45rem,2vw,1.95rem)] font-extrabold leading-tight tracking-normal text-kosmo-text;
   }
 
   .integration-copy h3 {
@@ -155,7 +427,6 @@
 
   .integration-copy pre code,
   .integration-copy .code-frame code,
-  .integration-copy .command-cell code,
   .integration-copy .raw-docs code {
     @apply rounded-none bg-transparent p-0 text-inherit;
   }

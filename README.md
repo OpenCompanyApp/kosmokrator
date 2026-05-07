@@ -398,6 +398,7 @@ Type these at the prompt during a session.
 | `/compact` | Force context compaction now |
 | `/memories` | List stored memories |
 | `/forget <id>` | Delete a memory by ID |
+| `/goal [objective\|pause\|resume\|clear]` | Set, view, pause, resume, or clear the active session goal |
 
 **Utilities**
 

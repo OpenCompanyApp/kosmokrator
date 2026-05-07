@@ -1,0 +1,11 @@
+---
+import {
+  analyticsEventsSnippet,
+  plausibleSnippet,
+  posthogSnippet,
+} from '../lib/analytics-snippets.mjs';
+---
+
+<script is:inline set:html={plausibleSnippet}></script>
+<script is:inline set:html={posthogSnippet}></script>
+<script is:inline set:html={analyticsEventsSnippet}></script>

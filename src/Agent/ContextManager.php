@@ -11,6 +11,7 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
+use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -31,6 +32,10 @@ final class ContextManager
     /** @var string|null Frozen memory block captured on first buildSystemPrompt() call for prompt cache stability */
     private ?string $frozenMemoryBlock = null;
 
+    private readonly WorkingStateCollector $workingStateCollector;
+
+    private readonly WorkingStateRenderer $workingStateRenderer;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly RendererInterface $ui,
@@ -45,7 +50,10 @@ final class ContextManager
         private readonly ?ProtectedContextBuilder $protectedContextBuilder = null,
         private readonly int $memoryInjectLimit = 6,
         private readonly int $sessionRecallLimit = 3,
-    ) {}
+    ) {
+        $this->workingStateCollector = new WorkingStateCollector;
+        $this->workingStateRenderer = new WorkingStateRenderer;
+    }
 
     /**
      * Check context pressure before an LLM call and intervene if needed.
@@ -169,6 +177,7 @@ final class ContextManager
             $protectedMessages = $this->protectedContextBuilder?->build($mode, $agentContext) ?? [];
             $cancellation = $agentContext?->cancellation;
             $plan = $this->compactor->buildPlan($history, $protectedMessages, cancellation: $cancellation);
+            $plan = $this->withWorkingState($plan, $history, $agentContext);
             $tokensIn = $plan->tokensIn;
             $tokensOut = $plan->tokensOut;
 
@@ -333,6 +342,46 @@ final class ContextManager
         }
 
         return $prompt;
+    }
+
+    private function withWorkingState(CompactionPlan $plan, ConversationHistory $history, ?AgentContext $agentContext): CompactionPlan
+    {
+        if ($plan->isEmpty()) {
+            return $plan;
+        }
+
+        $workingState = $this->workingStateRenderer->render(
+            $this->workingStateCollector->collect($history, $this->taskStore, $agentContext),
+        );
+        if ($workingState === '') {
+            return $plan;
+        }
+
+        $replacement = [];
+        $inserted = false;
+        foreach ($plan->replacementMessages as $message) {
+            $replacement[] = $message;
+            if (! $inserted && $message instanceof SystemMessage && CompactionSummaryFormatter::isWrapped($message->content)) {
+                $replacement[] = new SystemMessage($workingState);
+                $inserted = true;
+            }
+        }
+
+        if (! $inserted) {
+            array_splice($replacement, count($plan->protectedMessages), 0, [new SystemMessage($workingState)]);
+        }
+
+        return new CompactionPlan(
+            keepFromMessageIndex: $plan->keepFromMessageIndex,
+            compactedMessageCount: $plan->compactedMessageCount,
+            summary: $plan->summary,
+            replacementMessages: $replacement,
+            protectedMessages: $plan->protectedMessages,
+            extractedMemories: $plan->extractedMemories,
+            tokensIn: $plan->tokensIn,
+            tokensOut: $plan->tokensOut,
+            stats: [...$plan->stats, 'working_state_restored' => true],
+        );
     }
 
     /**

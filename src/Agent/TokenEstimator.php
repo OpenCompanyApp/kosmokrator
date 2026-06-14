@@ -71,12 +71,14 @@ class TokenEstimator
      */
     public static function estimateMessages(array $messages): int
     {
-        $total = 0;
-        foreach ($messages as $message) {
-            $total += self::estimateMessage($message);
-        }
+        return self::counter()->countMessages($messages);
+    }
 
-        return $total;
+    public static function counter(): TokenCounterInterface
+    {
+        static $counter = null;
+
+        return $counter ??= new ApproximateTokenCounter;
     }
 
     /**

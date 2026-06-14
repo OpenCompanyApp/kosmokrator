@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\Agent;
 
+use Kosmokrator\Agent\CompactionSummaryFormatter;
 use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\LLM\LlmClientInterface;
@@ -107,7 +108,8 @@ class ContextCompactorTest extends TestCase
 
         $result = $compactor->compact($history, 2);
 
-        $this->assertSame('Mocked summary', $result['summary']);
+        $this->assertStringContainsString(CompactionSummaryFormatter::START_MARKER, $result['summary']);
+        $this->assertStringContainsString('Mocked summary', $result['summary']);
         $this->assertSame(100, $result['tokens_in']);
         $this->assertSame(50, $result['tokens_out']);
     }
@@ -180,7 +182,8 @@ class ContextCompactorTest extends TestCase
 
         $plan = $compactor->buildPlan($history, keepRecent: 1);
 
-        $this->assertSame("## Goal\nKeep context", $plan->summary);
+        $this->assertStringContainsString(CompactionSummaryFormatter::START_MARKER, $plan->summary);
+        $this->assertStringContainsString("## Goal\nKeep context", $plan->summary);
         $this->assertCount(3, $plan->extractedMemories);
         $this->assertSame('project', $plan->extractedMemories[0]['type']);
         $this->assertSame('priority', $plan->extractedMemories[1]['memory_class']);
@@ -201,7 +204,8 @@ class ContextCompactorTest extends TestCase
 
         $plan = $compactor->buildPlan($history, keepRecent: 1);
 
-        $this->assertSame('not valid json', $plan->summary);
+        $this->assertStringContainsString(CompactionSummaryFormatter::START_MARKER, $plan->summary);
+        $this->assertStringContainsString('not valid json', $plan->summary);
         $this->assertSame([], $plan->extractedMemories);
     }
 
@@ -254,5 +258,38 @@ class ContextCompactorTest extends TestCase
         $this->assertStringContainsString('Use SQLite', $plan->summary);
         $this->assertStringNotContainsString('{"memories"', $plan->summary);
         $this->assertCount(3, $plan->extractedMemories);
+    }
+
+    public function test_compaction_input_slims_large_base64_payloads(): void
+    {
+        $largePayload = str_repeat('A', 1600);
+        $llm = $this->createMock(LlmClientInterface::class);
+        $llm->expects($this->once())
+            ->method('chat')
+            ->with($this->callback(function (array $messages) use ($largePayload) {
+                $content = $messages[1]->content;
+                $this->assertStringNotContainsString($largePayload, $content);
+                $this->assertStringContainsString('large base64-like payload omitted', $content);
+
+                return true;
+            }))
+            ->willReturn(new LlmResponse(
+                text: 'Summary',
+                finishReason: FinishReason::Stop,
+                toolCalls: [],
+                promptTokens: 100,
+                completionTokens: 50,
+            ));
+
+        $models = new ModelCatalog(['models' => [], 'default' => ['context' => 128_000, 'input_price' => 3.0, 'output_price' => 15.0]]);
+        $compactor = new ContextCompactor($llm, $models, new NullLogger);
+
+        $history = new ConversationHistory;
+        $history->addUser('payload '.$largePayload);
+        $history->addAssistant('ok');
+        $history->addUser('Recent');
+        $history->addAssistant('Recent answer');
+
+        $compactor->compact($history, 1);
     }
 }

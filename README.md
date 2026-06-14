@@ -396,6 +396,7 @@ Type these at the prompt during a session.
 | Command | Description |
 |---------|-------------|
 | `/compact` | Force context compaction now |
+| `/context` | Show context budget, cache, largest-output, and suggestion diagnostics |
 | `/memories` | List stored memories |
 | `/forget <id>` | Delete a memory by ID |
 | `/goal [objective\|pause\|resume\|clear]` | Set, view, pause, resume, or clear the active session goal |
@@ -550,9 +551,11 @@ See [AGENTS.md](AGENTS.md) for full documentation.
 Long conversations are managed automatically through a multi-stage pipeline:
 
 1. **Deduplication** — detects and removes redundant tool outputs (e.g., reading the same file twice)
-2. **Pruning** — removes superseded tool results (e.g., an old file_read replaced by a file_edit of the same file). Protects recent results (configurable `prune_protect` threshold).
-3. **Compaction** — LLM-based summarization of older messages into a concise working memory. Extracts durable memories during compaction. Auto-triggers when context usage crosses the `auto_compact_buffer_tokens` threshold.
+2. **Pruning** — clears old high-bloat tool output first, especially stale shell output, while protecting recent and referenced results.
+3. **Compaction** — LLM-based summarization of older messages into a guarded historical summary plus bounded working state. Extracts durable memories during compaction. Auto-triggers when context usage crosses the `auto_compact_buffer_tokens` threshold.
 4. **Trimming** — emergency fallback that drops the oldest messages when context still overflows after compaction
+
+Use `/context` to inspect the live budget breakdown, largest messages/tool outputs, cache read/write stats, file/web cache stats, and suggestions such as narrowing a large bash result or compacting before the blocking threshold.
 
 ### Token Budgets
 

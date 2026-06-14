@@ -72,7 +72,7 @@ class BashTool extends AbstractTool
     }
 
     /**
-     * @param  array{command: string, timeout?: int}  $args  Command and optional timeout override
+     * @param  array{command: string, timeout?: int, background?: bool, wait_ms?: int}  $args  Command and optional execution controls
      * @return ToolResult Combined stdout+stderr output with exit code, or error on timeout/failure
      */
     protected function handle(array $args): ToolResult

@@ -20,6 +20,20 @@ class SubagentStats
 
     public int $tokensOut = 0;
 
+    public int $contextTokens = 0;
+
+    public float $contextPercentUsed = 0.0;
+
+    public int $cacheReadTokens = 0;
+
+    public int $cacheWriteTokens = 0;
+
+    public int $pruneCount = 0;
+
+    public int $compactionCount = 0;
+
+    public ?string $largestContextBucket = null;
+
     public float $startTime = 0.0;
 
     public float $endTime = 0.0;
@@ -154,6 +168,29 @@ class SubagentStats
     {
         $this->tokensIn += $in;
         $this->tokensOut += $out;
+    }
+
+    public function markContext(int $tokens, int $window, ?string $largestBucket = null): void
+    {
+        $this->contextTokens = $tokens;
+        $this->contextPercentUsed = $window > 0 ? round(($tokens / $window) * 100, 1) : 0.0;
+        $this->largestContextBucket = $largestBucket;
+    }
+
+    public function addCacheTokens(int $read, int $write): void
+    {
+        $this->cacheReadTokens += $read;
+        $this->cacheWriteTokens += $write;
+    }
+
+    public function incrementPruneCount(): void
+    {
+        $this->pruneCount++;
+    }
+
+    public function incrementCompactionCount(): void
+    {
+        $this->compactionCount++;
     }
 
     public function markModel(string $provider, string $model): void

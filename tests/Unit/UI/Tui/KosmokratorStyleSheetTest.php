@@ -133,10 +133,10 @@ final class KosmokratorStyleSheetTest extends TestCase
         $this->assertTrue($style->getBold());
         $this->assertSame('big', $style->getFont());
         $this->assertNotNull($style->getColor());
-        $this->assertSame(1, $style->getPadding()->getTop());
-        $this->assertSame(2, $style->getPadding()->getRight());
-        $this->assertSame(0, $style->getPadding()->getBottom());
-        $this->assertSame(2, $style->getPadding()->getLeft());
+        $this->assertSame(1, $style->getPadding()->top);
+        $this->assertSame(2, $style->getPadding()->right);
+        $this->assertSame(0, $style->getPadding()->bottom);
+        $this->assertSame(2, $style->getPadding()->left);
     }
 
     public function test_subtitle_is_italic_centered(): void
@@ -197,7 +197,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.task-call'];
 
-        $this->assertSame(0, $style->getPadding()->getTop());
+        $this->assertSame(0, $style->getPadding()->top);
         $this->assertNotNull($style->getColor());
     }
 
@@ -344,7 +344,7 @@ final class KosmokratorStyleSheetTest extends TestCase
         $rules = KosmokratorStyleSheet::create()->getRules();
         $style = $rules['.subagent-loader'];
 
-        $this->assertSame(0, $style->getPadding()->getTop());
+        $this->assertSame(0, $style->getPadding()->top);
     }
 
     public function test_markdown_uses_wider_max_columns_on_large_terminals(): void
@@ -358,7 +358,7 @@ final class KosmokratorStyleSheetTest extends TestCase
     {
         $style = KosmokratorStyleSheet::create()->resolve(new SettingsListWidget([]), 120);
 
-        $this->assertSame(2, $style->getPadding()->getRight());
-        $this->assertSame(2, $style->getPadding()->getLeft());
+        $this->assertSame(2, $style->getPadding()->right);
+        $this->assertSame(2, $style->getPadding()->left);
     }
 }

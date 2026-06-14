@@ -8,7 +8,6 @@ use Amp\Cancellation;
 use Amp\Http\Client\HttpException;
 use Amp\Http\Client\SocketException;
 use Amp\Http\Client\TimeoutException;
-use Amp\Http\Client\TlsException;
 use OpenCompany\PrismRelay\Errors\ProviderError;
 use Prism\Prism\Contracts\Message;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
@@ -199,7 +198,7 @@ class RetryableLlmClient implements LlmClientInterface
 
         if ($e instanceof HttpException) {
             return $e instanceof TimeoutException
-                || ($e instanceof SocketException && ! $e instanceof TlsException);
+                || $e instanceof SocketException;
         }
 
         // Legacy: AsyncLlmClient HTTP errors with retryable status codes

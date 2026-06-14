@@ -94,6 +94,18 @@ final class PromptFrameBuilderTest extends TestCase
         $this->assertSame("## Parent Brief\nAudit this subsystem.", $result[1]->content);
     }
 
+    public function test_operational_mode_marker_splits_before_mode_suffix(): void
+    {
+        $stable = 'You are a helpful assistant.';
+        $prompt = $stable."\n\n# Operational Mode: Edit\nUse tools.";
+
+        $result = PromptFrameBuilder::splitSystemPrompt($prompt);
+
+        $this->assertCount(2, $result);
+        $this->assertSame($stable, $result[0]->content);
+        $this->assertSame("# Operational Mode: Edit\nUse tools.", $result[1]->content);
+    }
+
     public function test_gateway_session_context_marker_splits_before_gateway_context(): void
     {
         $stable = 'You are a helpful assistant.';

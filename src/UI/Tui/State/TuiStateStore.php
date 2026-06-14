@@ -288,11 +288,10 @@ final class TuiStateStore
         $this->isBrowsingHistory = new Computed(fn (): bool => $this->scrollOffset->get() > 0);
 
         $this->statusBarMessage = new Computed(function (): string {
-            $r = "\033[0m";
-            $sep = "\033[2m·{$r}";
+            $sep = '·';
 
-            return "{$this->modeColor->get()}{$this->modeLabel->get()}{$r} {$sep} "
-                ."{$this->permissionColor->get()}{$this->permissionLabel->get()}{$r} {$sep} "
+            return "{$this->modeLabel->get()} {$sep} "
+                ."{$this->permissionLabel->get()} {$sep} "
                 .$this->statusDetail->get();
         });
     }

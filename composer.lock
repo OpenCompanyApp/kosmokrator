@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "68fa957d131b836112f26556de9348af",
+    "content-hash": "2f454647f46f5d184e5225ca916f8fa5",
     "packages": [
         {
             "name": "amphp/amp",
@@ -7307,36 +7307,81 @@
         },
         {
             "name": "symfony/tui",
-            "version": "dev-tui",
+            "version": "v8.1.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/fabpot/symfony.git",
-                "reference": "07fa8230295091e5d1e56883b0d73a0649cb316d"
+                "url": "https://github.com/symfony/tui.git",
+                "reference": "962a6ec7b07691ee4027305269a5883f449b973c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/fabpot/symfony/zipball/07fa8230295091e5d1e56883b0d73a0649cb316d",
-                "reference": "07fa8230295091e5d1e56883b0d73a0649cb316d"
+                "url": "https://api.github.com/repos/symfony/tui/zipball/962a6ec7b07691ee4027305269a5883f449b973c",
+                "reference": "962a6ec7b07691ee4027305269a5883f449b973c",
+                "shasum": ""
             },
             "require": {
-                "php": ">=8.4",
+                "php": ">=8.4.1",
                 "revolt/event-loop": "^1.0",
                 "symfony/event-dispatcher": "^8.0",
                 "symfony/string": "^8.0"
             },
+            "require-dev": {
+                "league/commonmark": "^2.9",
+                "tempest/highlight": "^2.16"
+            },
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "Symfony\\Component\\Tui\\": "src/Symfony/Component/Tui/"
+                    "Symfony\\Component\\Tui\\": ""
                 },
                 "exclude-from-classmap": [
                     "/Tests/"
                 ]
             },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
-            "description": "Provides a terminal UI framework for building rich, interactive CLI applications in PHP"
+            "authors": [
+                {
+                    "name": "Fabien Potencier",
+                    "email": "fabien@symfony.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Provides a terminal UI framework for building rich, interactive CLI applications in PHP",
+            "homepage": "https://symfony.com",
+            "keywords": [
+                "cli",
+                "console",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "source": "https://github.com/symfony/tui/tree/v8.1.0"
+            },
+            "funding": [
+                {
+                    "url": "https://symfony.com/sponsor",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/fabpot",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2026-05-29T05:06:50+00:00"
         },
         {
             "name": "symfony/uid",
@@ -10084,8 +10129,7 @@
         "opencompanyapp/integration-instantly": 20,
         "opencompanyapp/integration-plane": 20,
         "opencompanyapp/integration-plausible": 20,
-        "opencompanyapp/prism-relay": 20,
-        "symfony/tui": 20
+        "opencompanyapp/prism-relay": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

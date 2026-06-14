@@ -10,6 +10,7 @@ use Athanor\Computed;
 use Athanor\Effect;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 
 final class TuiStateStoreTest extends TestCase
 {
@@ -512,6 +513,18 @@ final class TuiStateStoreTest extends TestCase
         $updated = $store->getStatusBarMessage();
         $this->assertStringContainsString('Plan', $updated);
         $this->assertStringContainsString('Processing...', $updated);
+    }
+
+    public function test_status_bar_message_is_plain_text(): void
+    {
+        $store = new TuiStateStore;
+        $store->setPermissionLabel('Prometheus ⚡');
+        $store->setStatusDetail('Ready');
+
+        $message = $store->getStatusBarMessage();
+
+        $this->assertSame($message, AnsiUtils::stripAnsiCodes($message));
+        $this->assertStringNotContainsString("\033", $message);
     }
 
     // ── Computed reactivity with Effects ────────────────────────────────

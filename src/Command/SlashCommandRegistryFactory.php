@@ -22,6 +22,7 @@ final class SlashCommandRegistryFactory
         $registry->register(new Slash\SeedCommand);
         $registry->register(new Slash\TheogonyCommand);
         $registry->register(new Slash\CompactCommand);
+        $registry->register(new Slash\ContextCommand);
         $registry->register(new Slash\ModelsCommand($container));
         $registry->register(new Slash\TasksClearCommand);
         $registry->register(new Slash\MemoriesCommand);

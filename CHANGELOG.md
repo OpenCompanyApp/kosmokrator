@@ -11,13 +11,21 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 - Footer contact link to the RuttyBuilds X profile for public site inquiries.
 - Session-scoped `/goal` support with persisted goal state, model goal tools, usage accounting, and active-goal continuation.
 - Background bash execution for long tests, builds, installs, dev servers, and watchers, with completion results injected into the next agent turn and progress events for stream-json clients.
+- `/context` slash command for live context-budget, largest-output, cache, and suggestion diagnostics.
+- Context telemetry for prompt-cache drops, file-read cache usage, web transient cache usage, and subagent context pressure.
 
 ### Changed
+- Switched the TUI dependency from the pinned development fork to the official Symfony TUI package.
 - Updated Composer and website npm dependencies to current compatible releases, including PHPUnit 13, Symfony 8.1, Astro 6.4, Starlight 0.40, and Wrangler 4.100.
 - Pruned generated website integration SEO pages to canonical overview, CLI, MCP, and Lua pages, folding framework/client and automation variants into anchored sections with cleaner layouts and redirects.
+- Context pruning now clears high-bloat stale tool output first while preserving recent and referenced results.
+- Compaction summaries are wrapped as historical reference only and paired with bounded working-state restoration.
 
 ### Fixed
+- Fixed the official Symfony TUI status bar integration so ANSI color codes are not exposed as visible text or allowed to overflow narrow terminals.
+- Fixed official Symfony TUI loader integration so thinking and compacting messages no longer expose sanitized ANSI fragments.
 - Closed stdin for one-shot BashTool commands so test runners and other stdin-aware commands do not hang waiting for input.
+- Prevented large base64-like payloads and data URLs from being sent raw into compaction prompts.
 
 ## [0.7.2] - 2026-05-04
 

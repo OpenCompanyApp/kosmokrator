@@ -109,6 +109,12 @@ class AgentsCommand implements SlashCommand
         $byType = [];
         $active = [];
         $failures = [];
+        $totalContextTokens = 0;
+        $maxContextPercent = 0.0;
+        $totalCacheRead = 0;
+        $totalCacheWrite = 0;
+        $totalPrunes = 0;
+        $totalCompactions = 0;
 
         foreach ($stats as $s) {
             match ($s->status) {
@@ -125,6 +131,12 @@ class AgentsCommand implements SlashCommand
             $totalOut += $s->tokensOut;
             $totalTools += $s->toolCalls;
             $totalRetries += $s->retries;
+            $totalContextTokens += $s->contextTokens;
+            $maxContextPercent = max($maxContextPercent, $s->contextPercentUsed);
+            $totalCacheRead += $s->cacheReadTokens;
+            $totalCacheWrite += $s->cacheWriteTokens;
+            $totalPrunes += $s->pruneCount;
+            $totalCompactions += $s->compactionCount;
 
             if ($s->retries > 0 && $s->status === 'done') {
                 $retriedAndRecovered++;
@@ -185,6 +197,12 @@ class AgentsCommand implements SlashCommand
             'totalRetries' => $totalRetries,
             'tokensIn' => $totalIn,
             'tokensOut' => $totalOut,
+            'contextTokens' => $totalContextTokens,
+            'maxContextPercent' => $maxContextPercent,
+            'cacheReadTokens' => $totalCacheRead,
+            'cacheWriteTokens' => $totalCacheWrite,
+            'pruneCount' => $totalPrunes,
+            'compactionCount' => $totalCompactions,
             'totalTools' => $totalTools,
             'cost' => $cost,
             'avgCost' => $avgCost,

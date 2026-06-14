@@ -20,6 +20,7 @@ final class PromptFrameBuilder
     /** Section headers that mark the start of per-turn (volatile) content. */
     private const VOLATILE_SECTION_MARKERS = [
         "\n\n## Gateway Session Context\n",
+        "\n\n# Operational Mode:",
         "\n\n## Parent Brief\n",
         "\n\n## Protected Context\n",
         "\n\n## Current Tasks\n",

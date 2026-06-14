@@ -17,6 +17,11 @@ class ContextPrunerTest extends TestCase
         return new ToolResult(toolCallId: $id, toolName: 'bash', args: [], result: $content);
     }
 
+    private function makeNamedResult(string $tool, string $content, string $id, array $args = []): ToolResult
+    {
+        return new ToolResult(toolCallId: $id, toolName: $tool, args: $args, result: $content);
+    }
+
     private function bashPlaceholder(): string
     {
         return '[Old shell output cleared; inspect truncation storage or rerun targeted commands if needed]';
@@ -193,5 +198,30 @@ class ContextPrunerTest extends TestCase
         // It encounters ToolResultMessage at 3, then continues to 2 (assistant), 1 (user),
         // 0 (SystemMessage) → stops. So index 3 IS pruned.
         $this->assertGreaterThan(0, $saved);
+    }
+
+    public function test_prune_prioritizes_old_shell_output_before_referenced_file_reads(): void
+    {
+        $history = new ConversationHistory;
+
+        $history->addUser('old shell');
+        $history->addAssistant('');
+        $history->addToolResults([$this->makeNamedResult('bash', str_repeat('b', 40_000), 'bash1')]);
+
+        $history->addUser('old read');
+        $history->addAssistant('The issue is in Service.php based on the file read.');
+        $history->addToolResults([$this->makeNamedResult('file_read', str_repeat('f', 40_000), 'read1', ['path' => 'Service.php'])]);
+
+        $history->addUser('recent 1');
+        $history->addAssistant('ok');
+        $history->addUser('recent 2');
+        $history->addAssistant('ok');
+
+        $pruner = new ContextPruner(protectTokens: 0, minSavings: 1000);
+        $saved = $pruner->prune($history);
+
+        $this->assertGreaterThan(0, $saved);
+        $this->assertSame($this->bashPlaceholder(), $history->messages()[2]->toolResults[0]->result);
+        $this->assertSame(str_repeat('f', 40_000), $history->messages()[5]->toolResults[0]->result);
     }
 }

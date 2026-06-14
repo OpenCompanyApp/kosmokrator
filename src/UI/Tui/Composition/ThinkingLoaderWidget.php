@@ -203,13 +203,11 @@ final class ThinkingLoaderWidget extends ReactiveWidget implements ParentInterfa
             return;
         }
 
-        $r = "\033[0m";
-        $message = "{$color}{$phrase}{$r}";
+        $message = $phrase;
 
         if ($showElapsed) {
-            $dim = "\033[38;5;245m";
             $formatted = sprintf('%d:%02d', intdiv($elapsed, 60), $elapsed % 60);
-            $message .= "{$dim} · {$formatted}{$r}";
+            $message .= " · {$formatted}";
         }
 
         $this->loader->setMessage($message);

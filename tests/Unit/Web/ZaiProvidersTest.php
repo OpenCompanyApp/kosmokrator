@@ -48,10 +48,17 @@ final class ZaiProvidersTest extends TestCase
                 }
             },
             $auth,
+            httpClient: new HttpClient(new class implements DelegateHttpClient
+            {
+                public function request(Request $request, Cancellation $cancellation): Response
+                {
+                    throw new \RuntimeException('Chat fallback should not be invoked when remote MCP returns results.');
+                }
+            }, []),
         );
 
         $response = $provider->search(new WebSearchRequest(
-            query: 'example',
+            query: 'example search topic',
             maxResults: 5,
             blockedDomains: ['blocked.example'],
         ));

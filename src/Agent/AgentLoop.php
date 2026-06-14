@@ -21,6 +21,7 @@ use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\AgentTreeBuilder;
@@ -84,6 +85,14 @@ class AgentLoop
     /** @var array{cache_read: int, prompt_tokens: int, round: int}|null */
     private ?array $lastCacheObservation = null;
 
+    private readonly ContextAnalyzer $contextAnalyzer;
+
+    private readonly ContextSuggestionService $contextSuggestionService;
+
+    private readonly PromptCacheTracker $promptCacheTracker;
+
+    private bool $historyRewrittenSinceLastLlm = false;
+
     private ?string $goalAccountingGoalId = null;
 
     private int $goalAccountingTokenBaseline = 0;
@@ -128,6 +137,9 @@ class AgentLoop
             $compactor, $pruner, $models, $sessionManager, $taskStore,
             $budget, $protectedContextBuilder,
         );
+        $this->contextAnalyzer = new ContextAnalyzer(TokenEstimator::counter());
+        $this->contextSuggestionService = new ContextSuggestionService;
+        $this->promptCacheTracker = new PromptCacheTracker;
     }
 
     /**
@@ -286,6 +298,8 @@ class AgentLoop
                 [$compactIn, $compactOut] = $this->contextManager->preFlightCheck($this->history, $this->mode, $this->agentContext);
                 $this->tokens->accumulate($compactIn, $compactOut);
                 if ($compactIn > 0 || $compactOut > 0) {
+                    $this->historyRewrittenSinceLastLlm = true;
+                    $this->stats?->incrementCompactionCount();
                     $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
                 }
                 $this->injectPendingBackgroundResults();
@@ -417,6 +431,7 @@ class AgentLoop
                     if ($this->deduplicator !== null) {
                         $deduped = $this->deduplicator->deduplicate($this->history);
                         if ($deduped > 0) {
+                            $this->historyRewrittenSinceLastLlm = true;
                             $this->log->debug('Deduplicated tool results', ['superseded' => $deduped]);
                         }
                     }
@@ -425,6 +440,8 @@ class AgentLoop
                     if ($this->pruner !== null) {
                         $saved = $this->pruner->prune($this->history);
                         if ($saved > 0) {
+                            $this->historyRewrittenSinceLastLlm = true;
+                            $this->stats?->incrementPruneCount();
                             $this->log->debug('Pruned old tool results', ['tokens_saved' => $saved]);
                         }
                     }
@@ -531,6 +548,8 @@ class AgentLoop
                 [$compactIn, $compactOut] = $this->contextManager->headlessPreFlightCheck($this->history, $this->mode, $this->agentContext);
                 $this->tokens->accumulate($compactIn, $compactOut);
                 if ($compactIn > 0 || $compactOut > 0) {
+                    $this->historyRewrittenSinceLastLlm = true;
+                    $this->stats?->incrementCompactionCount();
                     $this->events?->dispatch(new ContextCompacted(0, $compactIn, $compactOut));
                 }
                 $this->injectPendingBackgroundResults();
@@ -627,10 +646,15 @@ class AgentLoop
                     $this->injectPendingBackgroundResults();
 
                     if ($this->deduplicator !== null) {
-                        $this->deduplicator->deduplicate($this->history);
+                        if ($this->deduplicator->deduplicate($this->history) > 0) {
+                            $this->historyRewrittenSinceLastLlm = true;
+                        }
                     }
                     if ($this->pruner !== null) {
-                        $this->pruner->prune($this->history);
+                        if ($this->pruner->prune($this->history) > 0) {
+                            $this->historyRewrittenSinceLastLlm = true;
+                            $this->stats?->incrementPruneCount();
+                        }
                     }
 
                     // Stuck detection: check for repetitive tool call patterns
@@ -772,11 +796,36 @@ class AgentLoop
 
     private function recordCacheObservation(int $promptTokens, int $cacheReadTokens, int $cacheWriteTokens, int $round): void
     {
+        $prompt = $this->contextManager->buildSystemPrompt($this->mode, $this->history, $this->agentContext, false);
+        $observation = $this->promptCacheTracker->observe(
+            round: $round,
+            provider: $this->llm->getProvider(),
+            model: $this->contextManager->getModelName(),
+            systemPrompt: $prompt,
+            messages: $this->history->messages(),
+            tools: $this->tools,
+            promptTokens: $promptTokens,
+            cacheReadTokens: $cacheReadTokens,
+            cacheWriteTokens: $cacheWriteTokens,
+            historyRewritten: $this->historyRewrittenSinceLastLlm,
+        );
+        if ($this->stats !== null) {
+            $this->stats->addCacheTokens($cacheReadTokens, $cacheWriteTokens);
+            $snapshot = $this->contextManager->getLastBudgetSnapshot();
+            $estimated = (int) ($snapshot['estimated_tokens'] ?? $promptTokens);
+            $window = (int) ($snapshot['effective_window'] ?? $this->contextManager->getContextWindow());
+            $largest = $this->contextBreakdown()->topBuckets(1)[0]->name ?? null;
+            $this->stats->markContext($estimated, $window, $largest);
+        }
+        $this->historyRewrittenSinceLastLlm = false;
+
         $previous = $this->lastCacheObservation;
         $this->lastCacheObservation = [
             'cache_read' => $cacheReadTokens,
             'prompt_tokens' => $promptTokens,
             'round' => $round,
+            'cache_write' => $cacheWriteTokens,
+            'drop_cause' => $observation->dropCause ?? '',
         ];
 
         if ($previous === null || $previous['cache_read'] < 1000) {
@@ -800,12 +849,54 @@ class AgentLoop
             'previous_cache_read_tokens' => $previous['cache_read'],
             'cache_write_tokens' => $cacheWriteTokens,
             'model' => $this->contextManager->getModelName(),
-            'likely_causes' => [
-                'provider evicted cache entry',
-                'stable system prompt or tool schema changed',
-                'provider cache TTL expired',
-            ],
+            'likely_cause' => $observation->dropCause ?? 'provider cache TTL expired or provider evicted the entry',
         ]);
+    }
+
+    public function contextBreakdown(): ContextBreakdown
+    {
+        $prompt = $this->contextManager->buildSystemPrompt($this->mode, $this->history, $this->agentContext, false);
+        $snapshot = $this->contextManager->getLastBudgetSnapshot();
+        if ($snapshot === []) {
+            $estimated = TokenEstimator::estimate($prompt) + TokenEstimator::estimateMessages($this->history->messages());
+            $snapshot = $this->budget?->snapshot($estimated, $this->contextManager->getModelName()) ?? [
+                'estimated_tokens' => $estimated,
+                'context_window' => $this->contextManager->getContextWindow(),
+                'effective_window' => $this->contextManager->getContextWindow(),
+                'warning_threshold' => 0,
+                'auto_compact_threshold' => 0,
+                'blocking_threshold' => 0,
+                'percent_left' => 0,
+                'is_above_warning' => false,
+                'is_above_auto_compact' => false,
+                'is_at_blocking_limit' => false,
+            ];
+        }
+
+        $cache = $this->promptCacheTracker->last()?->toArray() ?? [];
+        $cache['file_read'] = FileReadTool::cacheStats()->toArray();
+        if ($this->webCache !== null) {
+            $cache['web'] = $this->webCache->stats()->toArray();
+        }
+        $cache['session_cache_read_tokens'] = $this->tokens->cacheReadInputTokens;
+        $cache['session_cache_write_tokens'] = $this->tokens->cacheWriteInputTokens;
+
+        return $this->contextAnalyzer->analyze(
+            $this->contextManager->getModelName(),
+            $prompt,
+            $this->history->messages(),
+            $this->tools,
+            $snapshot,
+            $cache,
+        );
+    }
+
+    /**
+     * @return ContextSuggestion[]
+     */
+    public function contextSuggestions(): array
+    {
+        return $this->contextSuggestionService->suggest($this->contextBreakdown());
     }
 
     public function getPruner(): ?ContextPruner
@@ -825,6 +916,7 @@ class AgentLoop
     {
         $this->tokens->reset();
         $this->lastCacheObservation = null;
+        $this->historyRewrittenSinceLastLlm = false;
     }
 
     /**
@@ -952,6 +1044,8 @@ class AgentLoop
             [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
             $this->tokens->accumulate($cIn, $cOut);
             if ($cIn > 0 || $cOut > 0) {
+                $this->historyRewrittenSinceLastLlm = true;
+                $this->stats?->incrementCompactionCount();
                 $this->resetToolCachesAfterCompaction();
                 $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
             }
@@ -1017,6 +1111,8 @@ class AgentLoop
             [$cIn, $cOut] = $this->contextManager->performCompaction($this->history, $this->mode, $this->agentContext);
             $this->tokens->accumulate($cIn, $cOut);
             if ($cIn > 0 || $cOut > 0) {
+                $this->historyRewrittenSinceLastLlm = true;
+                $this->stats?->incrementCompactionCount();
                 $this->resetToolCachesAfterCompaction();
                 $this->events?->dispatch(new ContextCompacted(0, $cIn, $cOut));
             }
@@ -1590,6 +1686,9 @@ PROMPT;
         [$tokensIn, $tokensOut] = $this->contextManager->performCompaction($this->history);
         $this->tokens->accumulate($tokensIn, $tokensOut);
         if ($tokensIn > 0 || $tokensOut > 0) {
+            $this->historyRewrittenSinceLastLlm = true;
+            $this->stats?->incrementCompactionCount();
+            $this->resetToolCachesAfterCompaction();
             $this->events?->dispatch(new ContextCompacted(0, $tokensIn, $tokensOut));
         }
     }

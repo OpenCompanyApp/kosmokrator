@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\LLM;
 use Amp\Cancellation;
 use Amp\CancelledException;
 use Amp\DeferredCancellation;
+use Amp\Http\Client\TlsException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\RetryableHttpException;
@@ -256,6 +257,29 @@ class RetryableLlmClientTest extends TestCase
 
                 if ($call === 1) {
                     throw new RetryableHttpException(503, 'API error (503): overloaded');
+                }
+
+                return $response;
+            });
+
+        $client = $this->makeClient($inner, maxAttempts: 2);
+
+        $this->assertSame($response, $client->chat([]));
+    }
+
+    public function test_retries_on_tls_connection_reset(): void
+    {
+        $response = $this->makeResponse();
+
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function () use ($response): LlmResponse {
+                static $call = 0;
+                $call++;
+
+                if ($call === 1) {
+                    throw new TlsException("Connection to 'api.z.ai:443' closed during TLS handshake: TLS negotiation failed: Connection reset by peer");
                 }
 
                 return $response;

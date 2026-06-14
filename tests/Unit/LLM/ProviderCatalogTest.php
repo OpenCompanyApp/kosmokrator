@@ -33,6 +33,7 @@ final class ProviderCatalogTest extends TestCase
                 'default_model' => 'glm-5.1',
                 'url' => 'https://api.z.ai/api/coding/paas/v4',
                 'models' => [
+                    'glm-5.2' => ['display_name' => 'GLM 5.2', 'context' => 1_000_000, 'max_output' => 131072, 'thinking' => true],
                     'glm-5.1' => ['display_name' => 'GLM 5.1', 'context' => 204800, 'max_output' => 131072, 'thinking' => true],
                     'glm-5-turbo' => ['display_name' => 'GLM 5 Turbo', 'context' => 204800, 'max_output' => 16384],
                 ],
@@ -72,7 +73,8 @@ final class ProviderCatalogTest extends TestCase
         ]), $config, $settings, $tokens);
 
         $this->assertSame(['gpt-5.3-codex', 'gpt-5-codex-mini'], $catalog->modelIds('codex'));
-        $this->assertSame(['glm-5.1', 'glm-5-turbo'], $catalog->modelIds('z'));
+        $this->assertSame(['glm-5.2', 'glm-5.1', 'glm-5-turbo'], $catalog->modelIds('z'));
+        $this->assertTrue($catalog->supportsModel('z', 'glm-5.2'));
         $this->assertSame('Authenticated · dev@example.com', $catalog->authStatus('codex'));
         $this->assertSame('Configured · zai-secr...1234', $catalog->authStatus('z'));
         $this->assertSame('No authentication required', $catalog->authStatus('ollama'));

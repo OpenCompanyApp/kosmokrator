@@ -207,15 +207,25 @@ class ModelDefinitionSource
         }
 
         foreach ($localModels as $name => $spec) {
-            $key = strtolower($name);
+            $provider = (string) ($spec['provider'] ?? '');
+            $modelId = (string) ($spec['id'] ?? $this->modelIdFromConfigKey((string) $name));
+            $spec['id'] = $modelId;
 
-            if (! isset($models[$key])) {
-                $models[$key] = $spec;
+            $key = strtolower($modelId);
+            $providerKey = $provider !== '' ? strtolower($provider.'/'.$modelId) : null;
+
+            if ($providerKey !== null) {
+                $models[$providerKey] = array_merge($models[$providerKey] ?? [], $spec);
+            }
+
+            if (! isset($models[$key]) || (string) ($models[$key]['provider'] ?? '') === $provider) {
+                $models[$key] = array_merge($models[$key] ?? [], $spec);
 
                 continue;
             }
 
-            // Local config can only override streaming flags on built-in models
+            // Preserve the existing global lookup when two providers share an id, while
+            // still allowing provider-specific resolution through provider/model.
             foreach (['streaming', 'tool_streaming'] as $overrideKey) {
                 if (array_key_exists($overrideKey, $spec)) {
                     $models[$key][$overrideKey] = $spec[$overrideKey];
@@ -224,5 +234,12 @@ class ModelDefinitionSource
         }
 
         return $models;
+    }
+
+    private function modelIdFromConfigKey(string $key): string
+    {
+        $parts = explode('/', $key);
+
+        return (string) end($parts);
     }
 }

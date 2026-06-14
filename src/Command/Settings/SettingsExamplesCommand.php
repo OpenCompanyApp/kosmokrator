@@ -25,10 +25,10 @@ final class SettingsExamplesCommand extends Command
     {
         $examples = [
             ['description' => 'List all settings', 'command' => 'kosmo settings:list --json'],
-            ['description' => 'Set default model globally with provider context', 'command' => 'kosmo settings:set agent.default_model gpt-5.4-mini --provider openai --global --json'],
-            ['description' => 'Batch apply provider and model together', 'command' => 'jq -n \'{scope:"global",settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.4-mini"}}\' | kosmo settings:apply --stdin-json --json'],
-            ['description' => 'Configure provider with API key from stdin', 'command' => 'printf %s "$OPENAI_API_KEY" | kosmo providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json'],
-            ['description' => 'Configure provider with API key from env', 'command' => 'kosmo providers:configure openai --model gpt-5.4-mini --api-key-env OPENAI_API_KEY --global --json'],
+            ['description' => 'Set default model globally with provider context', 'command' => 'kosmo settings:set agent.default_model gpt-5.5 --provider openai --global --json'],
+            ['description' => 'Batch apply provider and model together', 'command' => 'jq -n \'{scope:"global",settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.5"}}\' | kosmo settings:apply --stdin-json --json'],
+            ['description' => 'Configure provider with API key from stdin', 'command' => 'printf %s "$OPENAI_API_KEY" | kosmo providers:configure openai --model gpt-5.5 --api-key-stdin --global --json'],
+            ['description' => 'Configure provider with API key from env', 'command' => 'kosmo providers:configure openai --model gpt-5.5 --api-key-env OPENAI_API_KEY --global --json'],
             ['description' => 'Set a secret via stdin', 'command' => 'printf %s "$OPENAI_API_KEY" | kosmo secrets:set provider.openai.api_key --stdin --json'],
         ];
 

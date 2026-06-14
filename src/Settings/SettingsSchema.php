@@ -163,6 +163,7 @@ final class SettingsSchema
             'allowed_paths' => 'tools.allowed_paths',
             'guardian_safe_commands' => 'tools.guardian_safe_commands',
             'bash_timeout' => 'tools.bash.timeout',
+            'bash_background_wait_ms' => 'tools.bash.background_wait_ms',
             'bash_blocked_commands' => 'tools.bash.blocked_commands',
             'shell_wait_ms' => 'tools.shell.wait_ms',
             'shell_idle_ttl' => 'tools.shell.idle_ttl',
@@ -252,7 +253,7 @@ final class SettingsSchema
                 category: 'models',
                 type: 'dynamic_choice',
                 effect: 'next_session',
-                default: 'glm-5.1',
+                default: 'glm-5.2',
             ),
             new SettingDefinition(
                 id: 'agent.subagent_provider',
@@ -405,6 +406,16 @@ final class SettingsSchema
                 type: 'number',
                 effect: 'next_session',
                 default: 120,
+            ),
+            new SettingDefinition(
+                id: 'tools.bash.background_wait_ms',
+                path: 'kosmo.tools.bash.background_wait_ms',
+                label: 'Background bash wait milliseconds',
+                description: 'Default initial-output wait time for background bash commands.',
+                category: 'advanced',
+                type: 'number',
+                effect: 'next_session',
+                default: 250,
             ),
             new SettingDefinition(
                 id: 'tools.bash.blocked_commands',

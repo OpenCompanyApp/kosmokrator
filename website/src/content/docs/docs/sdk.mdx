@@ -120,7 +120,7 @@ use Kosmokrator\Sdk\Config\IntegrationConfigurator;
 use Kosmokrator\Sdk\Config\McpConfigurator;
 
 ProviderConfigurator::forProject($repo)
-    ->configure('openai', apiKey: getenv('OPENAI_API_KEY') ?: null, model: 'gpt-5.4-mini');
+    ->configure('openai', apiKey: getenv('OPENAI_API_KEY') ?: null, model: 'gpt-5.5');
 
 IntegrationConfigurator::forProject($repo)
     ->configure('plane', account: 'work', credentials: [

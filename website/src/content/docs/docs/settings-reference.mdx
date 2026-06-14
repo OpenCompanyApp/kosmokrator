@@ -128,6 +128,7 @@ See [Permissions](/docs/permissions) for the evaluation chain and examples.
 | Setting | Type | Default | Effect | Description |
 | --- | --- | --- | --- | --- |
 | `tools.bash.timeout` | number | `120` | next session | Default bash timeout in seconds. |
+| `tools.bash.background_wait_ms` | number | `250` | next session | Initial output wait in milliseconds for background bash calls. |
 | `tools.bash.blocked_commands` | string list | bundled list | next session | Shell command patterns always denied. |
 | `tools.shell.wait_ms` | number | `100` | next session | Poll interval for persistent shell sessions. |
 | `tools.shell.idle_ttl` | number | `300` | next session | Seconds before idle shell sessions are cleaned up. |

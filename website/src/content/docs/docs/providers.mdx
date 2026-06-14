@@ -14,24 +14,24 @@ Every built-in provider is ready to use after entering credentials. The live cat
 
 | Provider ID | Label | Auth Mode | Notes |
 | --- | --- | --- | --- |
-| `anthropic` | Anthropic | API Key | Claude family — Opus 4.5, Sonnet 4.5, Haiku 4.5 |
-| `openai` | OpenAI | API Key | GPT-4o, GPT-4.1 family, o-series reasoning models |
-| `codex` | Codex (ChatGPT) | OAuth | Browser/device login flow, uses your ChatGPT subscription |
-| `gemini` | Google Gemini | API Key | Gemini 2.5 Pro and Flash |
-| `deepseek` | DeepSeek | API Key | DeepSeek V3 (chat), R1 (reasoning) |
-| `groq` | Groq | API Key | Ultra-fast inference on dedicated hardware |
-| `mistral` | Mistral | API Key | Mistral Large, Codestral |
-| `xai` | xAI | API Key | Grok 3, with reasoning support |
+| `anthropic` | Anthropic | API Key | Claude family — Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5 |
+| `openai` | OpenAI | API Key | GPT-5.5, GPT-5.4 family, GPT-4.1 family, o-series reasoning models |
+| `codex` | Codex (ChatGPT) | OAuth | Browser/device login flow, uses your ChatGPT subscription with GPT-5.5 and GPT-5.4 models |
+| `gemini` | Google Gemini | API Key | Gemini 3.1 Pro Preview, Gemini 2.5 Pro and Flash |
+| `deepseek` | DeepSeek | API Key | DeepSeek V4 Pro/Flash plus legacy chat and reasoner aliases |
+| `groq` | Groq | API Key | Ultra-fast inference on dedicated hardware, including GPT-OSS |
+| `mistral` | Mistral | API Key | Mistral Large 3, Devstral 2, Codestral |
+| `xai` | xAI | API Key | Grok 4.3 and Grok 3, with reasoning support |
 | `openrouter` | OpenRouter | API Key | Meta-router for 100+ models from multiple providers |
 | `perplexity` | Perplexity | API Key | Online search-augmented models |
 | `ollama` | Ollama | None | Local models, no remote credentials required |
-| `kimi` | Kimi (Moonshot) | API Key | Long-context Chinese/English models |
-| `kimi-coding` | Kimi Coding | API Key | Code-optimized Moonshot endpoint |
+| `kimi` | Kimi (Moonshot) | API Key | Kimi K2.7 Code, K2.6, K2.5, and Moonshot V1 |
+| `kimi-coding` | Kimi Coding | API Key | Code-optimized Moonshot endpoint with Kimi K2.7 Code |
 | `mimo` | Xiaomi MiMo Token Plan | API Key | MiMo models via token-plan key (free tier available) |
 | `mimo-api` | Xiaomi MiMo API | API Key | MiMo pay-as-you-go API |
-| `minimax` | MiniMax | API Key | MiniMax models |
+| `minimax` | MiniMax | API Key | MiniMax M3 and M-series agent models |
 | `minimax-cn` | MiniMax CN | API Key | MiniMax China-region endpoint |
-| `z` | Z.AI | API Key | Z.AI coding endpoint |
+| `z` | Z.AI | API Key | Z.AI coding endpoint, including GLM-5.2 |
 | `z-api` | Z.AI API | API Key | Z.AI standard API endpoint |
 | `stepfun` | StepFun | API Key | Step models |
 | `stepfun-plan` | StepFun Plan | API Key | Step Plan subscription endpoint with reasoning support |
@@ -51,12 +51,12 @@ The same setup can run headlessly. Use this form for containers, CI, and remote 
 ```bash
 # Configure an API-key provider and default model without exposing the key in argv
 printf %s "$OPENAI_API_KEY" | \
-  kosmo setup --provider openai --model gpt-5.4-mini \
+  kosmo setup --provider openai --model gpt-5.5 \
   --api-key-stdin --global --json
 
 # Equivalent provider-specific command
 printf %s "$OPENAI_API_KEY" | \
-  kosmo providers:configure openai --model gpt-5.4-mini \
+  kosmo providers:configure openai --model gpt-5.5 \
   --api-key-stdin --global --json
 
 # OAuth providers can use device login when available
@@ -82,7 +82,7 @@ kosmo providers:models openai --live --json
 kosmo providers:refresh-models openai --json
 
 # Diagnose auth, endpoint, catalog freshness, and a specific model ID
-kosmo providers:doctor openai --model gpt-5.4-mini --json
+kosmo providers:doctor openai --model gpt-5.5 --json
 
 # Clear a stored API key
 kosmo providers:logout openai --json
@@ -95,6 +95,8 @@ Provider commands reject unknown provider IDs with `success: false` and a non-ze
 The normal provider catalog is available offline from the bundled Prism Relay registry. When you want the newest provider model list, run a live refresh. KosmoKrator stores the result in SQLite and overlays it on top of bundled metadata, preserving known context windows and pricing where provider APIs only return model IDs.
 
 Live refresh is explicit so ordinary `kosmo` startup does not block on provider APIs. JSON output includes `model_source`, `model_fetched_at`, `model_inventory_fresh`, and any `model_inventory_error`.
+
+The bundled catalog includes current top entries such as OpenAI `gpt-5.5`, Anthropic `claude-opus-4-8`, Gemini `gemini-3.1-pro-preview`, Kimi `kimi-k2.7-code`, MiniMax `MiniMax-M3`, and Z.AI `glm-5.2`. Select `glm-5.2` with provider `z` for the Z.AI coding endpoint.
 
 If a provider launched a model before the catalog knows about it, headless setup can still pin it intentionally:
 

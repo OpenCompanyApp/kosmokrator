@@ -438,13 +438,12 @@ class AgentCommand extends Command
                 break;
             }
 
-            // Background swarms detach from the prompt loop. Their results are
-            // injected on the next agent turn, and /agents remains available for
-            // live inspection while they run.
+            // Background work detaches from the prompt loop. Results are
+            // injected on the next agent turn.
             if ($session->agentLoop->hasActiveBackgroundAgents()) {
-                $session->ui->showNotice('Background agents are still running. Use /agents to inspect progress; results will be injected on the next turn.');
+                $session->ui->showNotice('Background work is still running. Use /agents for swarms or shell_read for commands; results will be injected on the next turn.');
             } elseif ($session->agentLoop->hasPendingBackgroundResults()) {
-                $session->ui->showNotice('Background agent results are ready and will be injected on the next turn.');
+                $session->ui->showNotice('Background results are ready and will be injected on the next turn.');
             }
 
             // Completion sound: compose and play a musical piece reflecting what happened

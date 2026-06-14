@@ -21,6 +21,7 @@ use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\ToolCallMapper;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
@@ -116,6 +117,7 @@ class AgentLoop
         private readonly ?Dispatcher $events = null,
         private readonly AgentTreeBuilder $treeBuilder = new AgentTreeBuilder,
         private readonly ?WebTransientCache $webCache = null,
+        private readonly ?ShellSessionManager $shellSessions = null,
     ) {
         $this->history = new ConversationHistory;
         $this->tokens = new SessionTokenTracker;
@@ -163,29 +165,35 @@ class AgentLoop
     }
 
     /**
-     * Whether background subagents are queued, waiting, retrying, or running.
-     * Used by the REPL to keep watching long-running swarms until terminal.
+     * Whether background work is queued, waiting, retrying, or running.
+     * Used by the REPL to keep watching long-running work until terminal.
      */
     public function hasActiveBackgroundAgents(): bool
     {
+        $hasActiveCommands = $this->shellSessions?->hasActiveBackgroundCommands() ?? false;
+
         if ($this->agentContext === null) {
-            return false;
+            return $hasActiveCommands;
         }
 
-        return $this->agentContext->orchestrator->hasActiveBackgroundAgents($this->agentContext->id);
+        return $hasActiveCommands
+            || $this->agentContext->orchestrator->hasActiveBackgroundAgents($this->agentContext->id);
     }
 
     /**
-     * Whether completed background agents have uncollected results.
-     * Used by the REPL to decide whether to auto-continue after all agents finish.
+     * Whether completed background work has uncollected results.
+     * Used by the REPL to decide whether to auto-continue after work finishes.
      */
     public function hasPendingBackgroundResults(): bool
     {
+        $hasPendingCommands = $this->shellSessions?->hasPendingBackgroundResults() ?? false;
+
         if ($this->agentContext === null) {
-            return false;
+            return $hasPendingCommands;
         }
 
-        return $this->agentContext->orchestrator->hasPendingResults($this->agentContext->id);
+        return $hasPendingCommands
+            || $this->agentContext->orchestrator->hasPendingResults($this->agentContext->id);
     }
 
     /** Attach a stats collector for headless subagent token tracking. */
@@ -1051,35 +1059,42 @@ class AgentLoop
     }
 
     /**
-     * Inject completed background subagent results into conversation history.
+     * Inject completed background subagent and bash results into conversation history.
      */
     private function injectPendingBackgroundResults(): int
     {
-        if ($this->agentContext === null) {
-            return 0;
+        $agentResults = [];
+        if ($this->agentContext !== null) {
+            // Always prune completed agents at the start of each round so
+            // await-mode agent stats don't accumulate and inflate the live tree.
+            $this->agentContext->orchestrator->pruneCompleted();
+            $agentResults = $this->agentContext->orchestrator->collectPendingResults($this->agentContext->id);
         }
 
-        // Always prune completed agents at the start of each round so
-        // await-mode agent stats don't accumulate and inflate the live tree.
-        $this->agentContext->orchestrator->pruneCompleted();
-
-        $results = $this->agentContext->orchestrator->collectPendingResults($this->agentContext->id);
-        if (empty($results)) {
+        $commandResults = $this->shellSessions?->collectPendingBackgroundResults() ?? [];
+        if (empty($agentResults) && empty($commandResults)) {
             return 0;
         }
 
         $parts = [];
-        foreach ($results as $id => $result) {
-            $stats = $this->agentContext->orchestrator->getStats($id);
+        foreach ($agentResults as $id => $result) {
+            $stats = $this->agentContext?->orchestrator->getStats($id);
             $type = $stats->agentType ?? 'agent';
             $tools = $stats->toolCalls ?? 0;
             $parts[] = "[Background {$type} agent '{$id}' completed ({$tools} tool calls)]:\n{$result}";
         }
+        foreach ($commandResults as $id => $result) {
+            $status = $result['success'] ? 'succeeded' : 'failed';
+            $exit = $result['exit_code'] !== null ? "exit {$result['exit_code']}" : 'no exit code';
+            $duration = $this->formatBackgroundDuration((float) $result['duration']);
+            $parts[] = "[Background bash command '{$id}' {$status} ({$exit}, {$duration})]\nCommand: {$result['command']}\n\n{$result['output']}";
+            SafeDisplay::call(fn () => $this->ui->showNotice("Background command {$id} {$status} ({$exit})."), $this->log);
+        }
 
         // Show completed background agents using the subagent batch display
         $batchEntries = [];
-        foreach ($results as $id => $result) {
-            $stats = $this->agentContext->orchestrator->getStats($id);
+        foreach ($agentResults as $id => $result) {
+            $stats = $this->agentContext?->orchestrator->getStats($id);
             $batchEntries[] = [
                 'kind' => 'completion',
                 'args' => [
@@ -1093,13 +1108,31 @@ class AgentLoop
                 'stats' => $stats,
             ];
         }
-        $this->ui->showSubagentBatch($batchEntries);
+        if ($batchEntries !== []) {
+            $this->ui->showSubagentBatch($batchEntries);
+        }
 
         $this->history->addUser(implode("\n\n---\n\n", $parts));
         $this->persistMessage($this->history->messages()[array_key_last($this->history->messages())]);
-        $this->log->debug('Injected background results', ['count' => count($results)]);
+        $count = count($agentResults) + count($commandResults);
+        $this->log->debug('Injected background results', [
+            'count' => $count,
+            'agents' => count($agentResults),
+            'commands' => count($commandResults),
+        ]);
 
-        return count($results);
+        return $count;
+    }
+
+    private function formatBackgroundDuration(float $seconds): string
+    {
+        $seconds = max(0, (int) round($seconds));
+
+        if ($seconds < 60) {
+            return "{$seconds}s";
+        }
+
+        return intdiv($seconds, 60).'m '.($seconds % 60).'s';
     }
 
     /**

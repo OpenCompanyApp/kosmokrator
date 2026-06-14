@@ -14,31 +14,36 @@ final class ModelCatalogTest extends TestCase
     {
         $catalog = new ModelCatalog([
             'models' => [
+                'glm-5.2' => ['provider' => 'z', 'context' => 1_000_000, 'input_price' => 0.0, 'output_price' => 0.0, 'thinking' => true],
                 'glm-5.1' => ['provider' => 'z', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
                 'glm-5-turbo' => ['provider' => 'z', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
                 'kimi-k2.5' => ['provider' => 'kimi', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
             ],
         ]);
 
-        $this->assertSame(['glm-5.1', 'glm-5-turbo'], $catalog->modelsForProvider('z'));
+        $this->assertSame(['glm-5.2', 'glm-5.1', 'glm-5-turbo'], $catalog->modelsForProvider('z'));
+        $this->assertSame(1_000_000, $catalog->contextWindow('glm-5.2'));
+        $this->assertTrue($catalog->supportsThinking('glm-5.2'));
     }
 
     public function test_models_for_alias_provider_uses_canonical_provider(): void
     {
         $catalog = new ModelCatalog([
             'models' => [
+                'glm-5.2' => ['provider' => 'z', 'context' => 1_000_000, 'input_price' => 0.0, 'output_price' => 0.0],
                 'glm-5.1' => ['provider' => 'z', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
                 'glm-5-turbo' => ['provider' => 'z', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
             ],
         ]);
 
-        $this->assertSame(['glm-5.1', 'glm-5-turbo'], $catalog->modelsForProvider('z-api'));
+        $this->assertSame(['glm-5.2', 'glm-5.1', 'glm-5-turbo'], $catalog->modelsForProvider('z-api'));
     }
 
     public function test_models_by_provider_includes_alias_entries(): void
     {
         $catalog = new ModelCatalog([
             'models' => [
+                'glm-5.2' => ['provider' => 'z', 'context' => 1_000_000, 'input_price' => 0.0, 'output_price' => 0.0],
                 'glm-5.1' => ['provider' => 'z', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
                 'kimi-k2.5' => ['provider' => 'kimi', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
                 'minimax-m1' => ['provider' => 'minimax', 'context' => 1, 'input_price' => 0.0, 'output_price' => 0.0],
@@ -47,7 +52,7 @@ final class ModelCatalogTest extends TestCase
 
         $byProvider = $catalog->modelsByProvider();
 
-        $this->assertSame(['glm-5.1'], $byProvider['z-api']);
+        $this->assertSame(['glm-5.2', 'glm-5.1'], $byProvider['z-api']);
         $this->assertSame(['kimi-k2.5'], $byProvider['kimi-coding']);
         $this->assertSame(['minimax-m1'], $byProvider['minimax-cn']);
     }

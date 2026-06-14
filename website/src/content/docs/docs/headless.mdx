@@ -115,7 +115,7 @@ You can bootstrap KosmoKrator itself without opening the setup wizard or setting
 ```bash
 # Configure an LLM provider and credentials
 printf %s "$OPENAI_API_KEY" | \
-  kosmo providers:configure openai --model gpt-5.4-mini \
+  kosmo providers:configure openai --model gpt-5.5 \
   --api-key-stdin --global --json
 
 # Discover and set normal settings
@@ -215,6 +215,7 @@ $ kosmo -p -o stream-json "analyze the codebase"
 {"type":"text_delta","delta":"I'll start by ","timestamp":1712570005000}
 {"type":"text_delta","delta":"examining the directory structure.","timestamp":1712570005100}
 {"type":"tool_call","name":"bash","args":{"command":"find src/ -type f | head -30"},"timestamp":1712570006000}
+{"type":"tool_progress","output":"src/Agent/AgentLoop.php\n...","timestamp":1712570006500}
 {"type":"tool_result","name":"bash","output":"src/Agent/AgentLoop.php\n...","success":true,"timestamp":1712570007000}
 {"type":"result","text":"The codebase follows...","duration_ms":8000,"turns":3,"usage":{"tokens_in":2345,"tokens_out":890},"timestamp":1712570010000}
 ```
@@ -228,6 +229,7 @@ Event types:
 | `text_delta` | Incremental text from the LLM response |
 | `reasoning` | Extended thinking content (if supported by model) |
 | `tool_call` | A tool is being invoked with name and arguments |
+| `tool_progress` | Incremental tool output preview, currently emitted for streaming bash output |
 | `tool_result` | Tool execution result with success status |
 | `subagent_spawn` | A child agent was spawned |
 | `subagent_batch` | Child agent(s) completed |

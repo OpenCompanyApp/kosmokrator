@@ -175,7 +175,21 @@ class HeadlessRenderer implements RendererInterface
 
     public function showToolExecuting(string $name): void {}
 
-    public function updateToolExecuting(string $output): void {}
+    public function updateToolExecuting(string $output): void
+    {
+        if ($this->format !== OutputFormat::StreamJson) {
+            return;
+        }
+
+        $trimmed = trim($output);
+        if ($trimmed === '') {
+            return;
+        }
+
+        $this->emitEvent('tool_progress', [
+            'output' => mb_strlen($trimmed) > 1000 ? mb_substr($trimmed, 0, 1000) : $trimmed,
+        ]);
+    }
 
     public function clearToolExecuting(): void {}
 

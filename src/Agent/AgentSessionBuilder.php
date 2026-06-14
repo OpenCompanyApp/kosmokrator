@@ -13,6 +13,8 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\AskChoiceTool;
 use Kosmokrator\Tool\AskUserTool;
+use Kosmokrator\Tool\Coding\BashTool;
+use Kosmokrator\Tool\Coding\ShellSessionManager;
 use Kosmokrator\Tool\Coding\SubagentTool;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionMode;
@@ -151,6 +153,12 @@ final class AgentSessionBuilder
         }
 
         $toolRegistry = $this->container->make(ToolRegistry::class);
+        $bashTool = $toolRegistry->get('bash');
+        if ($bashTool instanceof BashTool) {
+            $bashTool->progressCallback = static function (string $output) use ($ui): void {
+                $ui->updateToolExecuting($output);
+            };
+        }
         $toolRegistry->register(new AskUserTool($ui));
         $toolRegistry->register(new AskChoiceTool($ui));
         $permissions = $this->container->make(PermissionEvaluator::class);
@@ -199,6 +207,7 @@ final class AgentSessionBuilder
             (int) $config->get('kosmo.context.memory_warning_mb', 50) * 1024 * 1024,
             $events,
             webCache: $this->container->make(WebTransientCache::class),
+            shellSessions: $this->container->make(ShellSessionManager::class),
         );
 
         $this->applyRuntimeOptions($agentLoop, $options);

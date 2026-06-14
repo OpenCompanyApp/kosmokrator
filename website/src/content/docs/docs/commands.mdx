@@ -160,7 +160,7 @@ kosmo config show
 kosmo config show --json
 kosmo config paths --json
 kosmo config get agent.default_model --json
-kosmo config set agent.default_model glm-5.1 --provider z --global --json
+kosmo config set agent.default_model glm-5.2 --provider z --global --json
 kosmo config edit --project
 ```
 
@@ -175,7 +175,7 @@ kosmo settings:get tools.default_permission_mode --json
 kosmo settings:options agent.default_model --provider openai --json
 kosmo settings:set agent.mode plan --global --json
 kosmo settings:set tools.safe_tools "file_read,glob,grep" --project --json
-jq -n '{settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.4-mini"}}' | \
+jq -n '{settings:{"agent.default_provider":"openai","agent.default_model":"gpt-5.5"}}' | \
   kosmo settings:apply --stdin-json --global --json
 kosmo settings:unset agent.mode --project --json
 kosmo settings:doctor --json
@@ -191,10 +191,10 @@ kosmo providers:list --json
 kosmo providers:models openai --json
 kosmo providers:models openai --live --json
 kosmo providers:refresh-models openai --json
-kosmo providers:doctor openai --model gpt-5.4-mini --json
+kosmo providers:doctor openai --model gpt-5.5 --json
 kosmo providers:status openai --json
 printf %s "$OPENAI_API_KEY" | \
-  kosmo providers:configure openai --model gpt-5.4-mini --api-key-stdin --global --json
+  kosmo providers:configure openai --model gpt-5.5 --api-key-stdin --global --json
 kosmo providers:configure openai --model future-model-id --allow-unlisted-model --global --json
 kosmo providers:configure codex --device --global --json
 kosmo providers:logout openai --json
@@ -290,7 +290,7 @@ Start the Agent Client Protocol stdio server for editors and IDEs. ACP mode uses
 ```bash
 kosmo acp
 kosmo acp --cwd /path/to/project --mode edit --permission-mode guardian
-kosmo acp --model gpt-5.4-mini
+kosmo acp --model gpt-5.5
 kosmo acp --yolo
 ```
 

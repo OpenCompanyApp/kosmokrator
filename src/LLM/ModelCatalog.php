@@ -157,11 +157,11 @@ class ModelCatalog
 
         foreach ($this->source->definitions() as $name => $spec) {
             if (($spec['provider'] ?? null) === $provider) {
-                $models[] = $name;
+                $models[] = (string) ($spec['id'] ?? $this->modelIdFromDefinitionKey($name));
             }
         }
 
-        return $models;
+        return array_values(array_unique($models));
     }
 
     /**
@@ -181,7 +181,7 @@ class ModelCatalog
 
             foreach ($this->source->providersForCanonical($canonical) as $provider) {
                 $providers[$provider] ??= [];
-                $providers[$provider][] = $name;
+                $providers[$provider][] = (string) ($spec['id'] ?? $this->modelIdFromDefinitionKey($name));
             }
         }
 
@@ -190,5 +190,12 @@ class ModelCatalog
         }
 
         return $providers;
+    }
+
+    private function modelIdFromDefinitionKey(string $key): string
+    {
+        $parts = explode('/', $key);
+
+        return (string) end($parts);
     }
 }

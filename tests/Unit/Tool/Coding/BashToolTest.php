@@ -177,6 +177,27 @@ class BashToolTest extends TestCase
         $this->assertSame('integer', $params['timeout']['type']);
     }
 
+    public function test_background_parameters_in_definition(): void
+    {
+        $params = $this->tool->parameters();
+
+        $this->assertArrayHasKey('background', $params);
+        $this->assertArrayHasKey('wait_ms', $params);
+        $this->assertSame('boolean', $params['background']['type']);
+        $this->assertSame('integer', $params['wait_ms']['type']);
+    }
+
+    public function test_background_requires_session_manager(): void
+    {
+        $result = $this->tool->execute([
+            'command' => 'echo hello',
+            'background' => true,
+        ]);
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('shell session manager is not configured', $result->output);
+    }
+
     public function test_large_stdout_is_spooled_and_preview_is_bounded(): void
     {
         $tmpDir = sys_get_temp_dir().'/kosmokrator_bash_spool_test_'.uniqid();

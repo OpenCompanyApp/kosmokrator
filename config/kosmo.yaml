@@ -1,6 +1,6 @@
 agent:
   default_provider: z
-  default_model: glm-5.1
+  default_model: glm-5.2
   temperature: 0.0
   max_retries: 0              # 0 = unlimited (retry forever), positive int = cap
   subagent_max_depth: 3
@@ -285,6 +285,7 @@ tools:
     - execute_lua
   bash:
     timeout: 120
+    background_wait_ms: 250
     blocked_commands:
       - "rm -rf *"
       - "rm -fr *"

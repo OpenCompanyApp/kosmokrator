@@ -18,6 +18,7 @@ use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ModelSwitcherHistory;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\ProviderDefinition;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
@@ -26,7 +27,6 @@ use Kosmokrator\Web\Provider\WebFetchProviderManager;
 use Kosmokrator\Web\Provider\WebSearchProviderManager;
 use OpenCompany\IntegrationCore\Contracts\ConfigurableIntegration;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 /**
  * Opens the interactive settings workspace to configure providers, models, permissions,
@@ -72,7 +72,7 @@ final class SettingsCommand implements SlashCommand
     public function openWorkspace(SlashCommandContext $ctx, array $viewOverrides = []): bool
     {
         $catalog = $ctx->providers ?? $this->container->make(ProviderCatalog::class);
-        $registry = $this->container->make(RelayRegistry::class);
+        $registry = $this->container->make(RelayProviderRegistry::class);
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot($ctx->sessionManager->getProject() ?? getcwd());
 
@@ -94,7 +94,7 @@ final class SettingsCommand implements SlashCommand
     private function applyWorkspaceResult(
         SlashCommandContext $ctx,
         ProviderCatalog $catalog,
-        RelayRegistry $registry,
+        RelayProviderRegistry $registry,
         SettingsManager $settings,
         array $result,
     ): void {
@@ -399,7 +399,7 @@ final class SettingsCommand implements SlashCommand
                         'effect' => 'next_session',
                         'type' => 'choice',
                         'options' => ['openai-compatible', 'openai', 'anthropic-compatible', 'deepseek', 'groq', 'mistral', 'ollama'],
-                        'description' => 'Transport adapter used to register the provider with Prism.',
+                        'description' => 'Transport adapter used by the native provider registry.',
                     ],
                     [
                         'id' => 'custom_provider.url',
@@ -605,7 +605,7 @@ final class SettingsCommand implements SlashCommand
     private function applyProvider(
         SlashCommandContext $ctx,
         ProviderCatalog $catalog,
-        RelayRegistry $registry,
+        RelayProviderRegistry $registry,
         SettingsManager $settings,
         string $provider,
         string $scope,
@@ -644,7 +644,7 @@ final class SettingsCommand implements SlashCommand
         $settings->set('agent.default_model', $model, $scope);
         $settings->setProviderLastModel($provider, $model, $scope);
 
-        if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayRegistry::class), $provider)) {
+        if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayProviderRegistry::class), $provider)) {
             $ctx->llm->setModel($model);
         }
     }
@@ -667,7 +667,7 @@ final class SettingsCommand implements SlashCommand
         $ctx->settings->set('global', "provider.{$provider}.api_key", $value);
         $inner = self::innerClient($ctx->llm);
 
-        if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayRegistry::class), $provider) && method_exists($inner, 'setApiKey')) {
+        if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayProviderRegistry::class), $provider) && method_exists($inner, 'setApiKey')) {
             $inner->setApiKey($value);
         }
     }
@@ -737,7 +737,7 @@ final class SettingsCommand implements SlashCommand
             if ($action === 'clear_key') {
                 $ctx->settings->delete('global', "provider.{$provider}.api_key");
                 $inner = self::innerClient($ctx->llm);
-                if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayRegistry::class), $provider) && method_exists($inner, 'setApiKey')) {
+                if (! $this->requiresRestart($ctx->llm, $this->container->make(RelayProviderRegistry::class), $provider) && method_exists($inner, 'setApiKey')) {
                     $inner->setApiKey('');
                 }
                 $ctx->ui->showNotice("Cleared API key for {$provider}.");
@@ -783,7 +783,7 @@ final class SettingsCommand implements SlashCommand
         }
     }
 
-    private function requiresRestart(LlmClientInterface $llm, RelayRegistry $registry, string $provider): bool
+    private function requiresRestart(LlmClientInterface $llm, RelayProviderRegistry $registry, string $provider): bool
     {
         // Restart is needed when the client uses async streaming but the provider doesn't support it
 

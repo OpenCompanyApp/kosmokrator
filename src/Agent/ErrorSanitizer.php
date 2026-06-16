@@ -41,9 +41,6 @@ final class ErrorSanitizer
         // Strip internal class references like Kosmokrator\Something\ClassName
         $message = preg_replace('/\\\\?Kosmokrator\\\\[\w\\\\]+/m', '[internal]', $message);
 
-        // Strip Prism namespace references
-        $message = preg_replace('/\\\\?Prism\\\\[\w\\\\]+/m', '[internal]', $message);
-
         // Trim whitespace artifacts
         $message = trim($message);
 

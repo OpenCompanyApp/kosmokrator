@@ -3,9 +3,9 @@
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Enums\FinishReason;
+use Kosmokrator\LLM\Tool;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
 
 class AsyncLlmClientMessageMappingTest extends TestCase
 {

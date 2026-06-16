@@ -9,9 +9,14 @@ use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Goal\GoalRepository;
 use Kosmokrator\Goal\GoalStatus;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\LlmStreamingEvent;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\MemoryRepository;
 use Kosmokrator\Session\MessageRepository;
@@ -28,11 +33,6 @@ use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
 
 #[AllowMockObjectsWithoutExpectations]

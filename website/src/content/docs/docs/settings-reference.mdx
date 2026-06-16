@@ -90,7 +90,7 @@ kosmo settings:options agent.default_model --provider anthropic --json
 | Setting | Type | Default | Effect | Description |
 | --- | --- | --- | --- | --- |
 | `agent.mode` | choice: `edit`, `plan`, `ask` | `edit` | applies now | Starting operational mode. |
-| `agent.reasoning_effort` | choice: `off`, `low`, `medium`, `high` | `high` | applies now | Extended reasoning effort for providers that support it. |
+| `agent.reasoning_effort` | choice: `off`, `low`, `medium`, `high`, `max` | `max` | applies now | Extended reasoning effort for providers that support it. |
 | `agent.temperature` | number | `0` | applies now | Sampling temperature. |
 | `agent.max_tokens` | number | unset | applies now | Override output token limit. |
 | `agent.max_retries` | number | `0` | applies now | Retry limit for transient provider failures. `0` means unlimited. |

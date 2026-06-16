@@ -10,9 +10,9 @@ use Kosmokrator\Agent\ToolResultDeduplicator;
 use Kosmokrator\Goal\Goal;
 use Kosmokrator\Goal\GoalRepository;
 use Kosmokrator\Goal\GoalStatus;
+use Kosmokrator\LLM\Contracts\Message;
 use Kosmokrator\LLM\MessageSerializer;
 use Kosmokrator\Settings\SettingsManager;
-use Prism\Prism\Contracts\Message;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -201,7 +201,7 @@ class SessionManager
      *
      * Automatically sets the session title from the first user message.
      *
-     * @param  Message  $message  Prism message to persist
+     * @param  Message  $message  native message to persist
      * @param  int  $tokensIn  Input tokens consumed by this message
      * @param  int  $tokensOut  Output tokens generated for this message
      */

@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\Contracts\Message;
 use Kosmokrator\LLM\ToolCallMapper;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 
 /**
  * Fast cached token estimator for pre-flight decisions and diagnostics.
@@ -75,10 +74,6 @@ final class ApproximateTokenCounter implements TokenCounterInterface
     {
         $total = 0;
         foreach ($tools as $tool) {
-            if (! $tool instanceof Tool) {
-                continue;
-            }
-
             $payload = [
                 'name' => $tool->name(),
                 'description' => $tool->description(),

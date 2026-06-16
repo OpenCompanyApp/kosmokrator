@@ -6,11 +6,11 @@ namespace Kosmokrator\Tests\Integration\Fake;
 
 use Amp\Cancellation;
 use Generator;
+use Kosmokrator\LLM\Contracts\Message;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\LlmStreamingEvent;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Tool;
+use Kosmokrator\LLM\Tool;
 
 /**
  * Fake LLM client that returns pre-queued responses and records all interactions.

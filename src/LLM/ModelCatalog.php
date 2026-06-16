@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-
 /**
  * Central registry of model specifications — context windows, pricing, and capabilities.
  *

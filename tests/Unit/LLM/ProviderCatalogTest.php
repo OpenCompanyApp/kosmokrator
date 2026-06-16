@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\Codex\CodexToken;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelDiscovery\DiscoveredModel;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class ProviderCatalogTest extends TestCase
@@ -66,7 +66,7 @@ final class ProviderCatalogTest extends TestCase
             email: 'dev@example.com',
         ));
 
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'codex' => ['url' => 'https://chatgpt.com/backend-api/codex', 'auth' => 'oauth'],
             'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4', 'auth' => 'api_key', 'driver' => 'glm-coding'],
             'ollama' => ['url' => 'http://localhost:11434/v1', 'auth' => 'none', 'driver' => 'ollama'],
@@ -122,7 +122,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'mimo' => [
                 'source' => 'custom',
                 'label' => 'Xiaomi MiMo',
@@ -206,7 +206,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4', 'auth' => 'api_key', 'driver' => 'glm-coding'],
             'mimo' => ['url' => 'https://token-plan-sgp.xiaomimimo.com/v1', 'auth' => 'api_key', 'driver' => 'openai-compatible'],
         ]), $config, $settings, new SettingsCodexTokenStore($settings));
@@ -265,7 +265,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'z-api' => [
                 'url' => 'https://open.bigmodel.cn/api/paas/v4',
                 'auth' => 'api_key',
@@ -315,7 +315,7 @@ final class ProviderCatalogTest extends TestCase
             new DiscoveredModel(id: 'gpt-new', displayName: 'GPT New', contextWindow: 400000, maxOutput: 128000),
         ], 'provider_live', 3600);
 
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'openai' => ['url' => 'https://api.openai.com/v1', 'auth' => 'api_key', 'driver' => 'openai'],
         ]), $config, $settings, new SettingsCodexTokenStore($settings), $cache);
 
@@ -351,7 +351,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
         $settings = new SettingsRepository(new Database(':memory:'));
 
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'local-ai' => [
                 'url' => 'http://127.0.0.1:11434/v1',
                 'auth' => 'none',

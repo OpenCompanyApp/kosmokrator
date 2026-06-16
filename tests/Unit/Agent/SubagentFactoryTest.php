@@ -11,9 +11,9 @@ use Kosmokrator\Agent\ProtectedContextBuilder;
 use Kosmokrator\Agent\SubagentFactory;
 use Kosmokrator\Agent\SubagentModelConfig;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\Relay;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
-use OpenCompany\PrismRelay\Relay;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 

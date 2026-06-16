@@ -8,6 +8,8 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\Relay;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
@@ -24,8 +26,6 @@ use Kosmokrator\UI\OutputFormat;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\UIManager;
 use Kosmokrator\Web\Cache\WebTransientCache;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -215,7 +215,7 @@ final class AgentSessionBuilder
         $subagentPipeline = (new SubagentPipelineFactory(
             $sessionManager,
             $this->container->make(ProviderCatalog::class),
-            $this->container->make(RelayRegistry::class),
+            $this->container->make(RelayProviderRegistry::class),
             $models,
             $this->container->make(Relay::class),
             $log,
@@ -227,7 +227,7 @@ final class AgentSessionBuilder
             fn (AgentContext $ctx, string $task) => $subagentPipeline->factory->createAndRunAgent($ctx, $task),
         ));
         $agentLoop->setAgentContext($subagentPipeline->rootContext);
-        $agentLoop->setTools($toolRegistry->toPrismTools());
+        $agentLoop->setTools($toolRegistry->toLlmTools());
 
         return new AgentSession($ui, $agentLoop, $llm, $permissions, $sessionManager, $subagentPipeline->orchestrator);
     }

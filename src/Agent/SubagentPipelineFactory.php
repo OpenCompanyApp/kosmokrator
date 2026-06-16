@@ -7,12 +7,12 @@ namespace Kosmokrator\Agent;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\Relay;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\RendererInterface;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -24,7 +24,7 @@ final class SubagentPipelineFactory
     public function __construct(
         private readonly SessionManager $sessionManager,
         private readonly ProviderCatalog $providers,
-        private readonly RelayRegistry $registry,
+        private readonly RelayProviderRegistry $registry,
         private readonly ModelCatalog $models,
         private readonly Relay $relay,
         private readonly LoggerInterface $log,
@@ -76,8 +76,7 @@ final class SubagentPipelineFactory
         $rootContext = new AgentContext(AgentType::General, 0, $maxDepth, $orchestrator, 'root', '');
 
         // Model config
-        $useAsync = $rendererType === 'tui' && $this->registry->supportsAsync($provider);
-        $llmClientClass = $useAsync ? 'async' : 'prism';
+        $llmClientClass = 'async';
         $modelConfig = $this->buildModelConfig($llm, $provider);
 
         // Factory

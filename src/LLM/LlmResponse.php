@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\ValueObjects\ToolCall;
+use Kosmokrator\LLM\Enums\FinishReason;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 
 /**
  * Immutable value object carrying the result of a single LLM chat-completion call.
  *
- * Created by AsyncLlmClient and PrismService after parsing the raw provider response.
+ * Created by AsyncLlmClient and AsyncLlmClient after parsing the raw provider response.
  * Consumed by the agent loop, cost tracking (ModelCatalog), and TUI display.
  */
 readonly class LlmResponse

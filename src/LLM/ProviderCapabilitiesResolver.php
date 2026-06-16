@@ -8,7 +8,7 @@ namespace Kosmokrator\LLM;
  * Thin adapter that queries RelayProviderRegistry for per-provider capability flags.
  *
  * Provides boolean checks for temperature, top_p, max_tokens, and streaming support.
- * Used by PrismService and AsyncLlmClient to conditionally include parameters that
+ * Used by AsyncLlmClient and AsyncLlmClient to conditionally include parameters that
  * some providers (e.g. Ollama) do not support.
  */
 final class ProviderCapabilitiesResolver

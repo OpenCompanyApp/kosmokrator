@@ -60,9 +60,17 @@ class ConfigLoader
     {
         $files = [];
 
-        foreach (glob($path.'/*.yaml') as $file) {
-            $key = pathinfo($file, PATHINFO_FILENAME);
-            $files[$key] = $file;
+        if (! is_dir($path)) {
+            return $files;
+        }
+
+        foreach (new \DirectoryIterator($path) as $file) {
+            if (! $file->isFile() || $file->getExtension() !== 'yaml') {
+                continue;
+            }
+
+            $key = pathinfo($file->getFilename(), PATHINFO_FILENAME);
+            $files[$key] = $file->getPathname();
         }
 
         return $files;

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Tool;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\Tool;
 
 interface TokenCounterInterface
 {

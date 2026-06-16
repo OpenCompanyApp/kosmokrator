@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\PromptFrameBuilder;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 final class PromptFrameBuilderTest extends TestCase
 {

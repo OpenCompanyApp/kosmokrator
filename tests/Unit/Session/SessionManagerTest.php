@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\Session;
 
 use Kosmokrator\Agent\CompactionPlan;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\MemoryRepository;
 use Kosmokrator\Session\MessageRepository;
@@ -12,7 +13,6 @@ use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SessionRepository;
 use Kosmokrator\Session\SettingsRepository;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Psr\Log\NullLogger;
 
 class SessionManagerTest extends TestCase

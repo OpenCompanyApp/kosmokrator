@@ -13,17 +13,20 @@
         "php": "^8.4",
         "amphp/amp": "^3.1",
         "amphp/http-client": "^5.3",
+        "illuminate/config": "^13.0",
+        "illuminate/container": "^13.0",
+        "illuminate/events": "^13.0",
+        "illuminate/filesystem": "^13.0",
+        "illuminate/http": "^13.0",
         "league/commonmark": "^2.9",
         "league/html-to-markdown": "^5.1",
-        "opencompany/prism-codex": "dev-main",
+        "monolog/monolog": "^3.0",
         "opencompanyapp/integration-clickup": "@dev",
         "opencompanyapp/integration-coingecko": "@dev",
         "opencompanyapp/integration-core": "@dev",
         "opencompanyapp/integration-instantly": "@dev",
         "opencompanyapp/integration-plane": "@dev",
         "opencompanyapp/integration-plausible": "@dev",
-        "opencompanyapp/prism-relay": "dev-main",
-        "prism-php/prism": "^0.100",
         "revolt/event-loop": "^1.0",
         "sebastian/diff": "^9.0",
         "symfony/console": "^7.4|^8.0",
@@ -33,7 +36,8 @@
         "symfony/tui": "^8.1",
         "symfony/yaml": "^7.4|^8.0",
         "tempest/highlight": "^2.16",
-        "twig/twig": "^3.0|^4.0"
+        "twig/twig": "^3.0|^4.0",
+        "vlucas/phpdotenv": "^5.6"
     },
     "require-dev": {
         "laravel/pint": "^1.25",
@@ -57,14 +61,6 @@
             "options": {
                 "symlink": false
             }
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/OpenCompanyApp/prism-codex.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/OpenCompanyApp/prism-relay.git"
         }
     ],
     "autoload": {

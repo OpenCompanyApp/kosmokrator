@@ -6,9 +6,6 @@ namespace Kosmokrator\LLM\Codex;
 
 use Illuminate\Config\Repository;
 use Kosmokrator\Exception\AuthenticationException;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 
 /**
  * Handles OpenAI Codex OAuth authentication flows (browser-based and device-code).
@@ -16,7 +13,7 @@ use OpenCompany\PrismCodex\ValueObjects\CodexToken;
  * Orchestrates the PKCE-based OAuth dance for ChatGPT subscription access via the Codex API.
  * Supports two flows: browser login (opens a local callback server) and device login
  * (shows a code for the user to enter at auth.openai.com). Persists tokens via
- * SettingsCodexTokenStore. Used by the settings UI and Codex provider in RelayProviderRegistrar.
+ * SettingsCodexTokenStore. Used by the settings UI and native Codex transport.
  */
 final class CodexAuthFlow
 {

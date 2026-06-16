@@ -6,12 +6,12 @@ namespace Kosmokrator\Tests\Integration\AgentLoop;
 
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\SubagentStats;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\Tests\Integration\IntegrationTestCase;
 use Kosmokrator\UI\NullRenderer;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
 
 /**

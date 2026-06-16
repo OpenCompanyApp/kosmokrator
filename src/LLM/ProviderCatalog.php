@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\ModelDiscovery\DiscoveredModel;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 final class ProviderCatalog
 {
     /** @var list<string> */
     private const HIDDEN_PROVIDER_IDS = [
         'zhipuai',
+        'zai',
         'opencode-zen',
     ];
 
@@ -79,7 +78,7 @@ final class ProviderCatalog
 
     public function __construct(
         private readonly ProviderMeta $meta,
-        private readonly RelayRegistry $registry,
+        private readonly RelayProviderRegistry $registry,
         private readonly Repository $config,
         private readonly SettingsRepositoryInterface $settings,
         private readonly CodexTokenStore $codexTokens,

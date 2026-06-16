@@ -126,7 +126,7 @@ Controls the core agent behavior: operating mode, sampling parameters, and retry
 | `agent.temperature` | number (0–2) | `0.0` | Sampling temperature for the LLM. Lower values produce more deterministic output; higher values increase creativity and variation. | applies now |
 | `agent.max_tokens` | number | _(model default)_ | Override the maximum number of output tokens per LLM response. Leave unset to use the model's built-in limit. | applies now |
 | `agent.max_retries` | number | `0` | Retry limit for transient provider failures (HTTP 429, 500, 503, network timeouts). Set `0` for unlimited retries with exponential backoff. | applies now |
-| `agent.reasoning_effort` | choice: `off`, `low`, `medium`, `high` | `high` | Controls extended thinking / chain-of-thought reasoning for models that support it (e.g., Claude with extended thinking, OpenAI o-series). `off` disables reasoning parameters entirely. | applies now |
+| `agent.reasoning_effort` | choice: `off`, `low`, `medium`, `high`, `max` | `max` | Controls extended thinking / chain-of-thought reasoning for models that support it. GLM supports `high` and `max`; `off` disables GLM thinking explicitly. | applies now |
 
 ### Subagents
 
@@ -434,7 +434,7 @@ kosmo:
     default_provider: anthropic
     default_model: claude-sonnet-4-20250514
     temperature: 0.0
-    reasoning_effort: high
+    reasoning_effort: max
 
     # Depth-1 subagents: fast Anthropic model
     subagent_provider: anthropic
@@ -503,7 +503,7 @@ kosmo:
     temperature: 0.0            # Sampling temperature
     max_retries: 0              # 0 = unlimited
     mode: edit                  # edit | plan | ask
-    reasoning_effort: high      # off | low | medium | high
+    reasoning_effort: max       # off | low | medium | high | max
     subagent_provider: ...      # Depth-1 subagent provider
     subagent_model: ...         # Depth-1 subagent model
     subagent_depth2_provider: ... # Depth-2+ provider

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Audio;
 
 use Kosmokrator\LLM\LlmClientInterface;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 use Psr\Log\LoggerInterface;
 
 /**

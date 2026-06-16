@@ -7,12 +7,12 @@ namespace Kosmokrator\Tests\Unit\Agent;
 use Kosmokrator\Agent\CompactionSummaryFormatter;
 use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
 use Psr\Log\NullLogger;
 
 #[AllowMockObjectsWithoutExpectations]

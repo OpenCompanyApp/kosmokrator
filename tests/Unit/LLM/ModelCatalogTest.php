@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\ModelCatalog;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
+use Kosmokrator\LLM\ProviderMeta;
 use PHPUnit\Framework\TestCase;
 
 final class ModelCatalogTest extends TestCase
@@ -23,6 +23,7 @@ final class ModelCatalogTest extends TestCase
 
         $this->assertSame(['glm-5.2', 'glm-5.1', 'glm-5-turbo'], $catalog->modelsForProvider('z'));
         $this->assertSame(1_000_000, $catalog->contextWindow('glm-5.2'));
+        $this->assertSame(1_000_000, $catalog->contextWindow('glm-5.2[1m]'));
         $this->assertTrue($catalog->supportsThinking('glm-5.2'));
     }
 

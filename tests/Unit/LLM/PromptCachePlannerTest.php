@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\LLM;
 
-use OpenCompany\PrismRelay\Caching\PromptCachePlanner;
+use Kosmokrator\LLM\PromptCachePlanner;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 final class PromptCachePlannerTest extends TestCase
 {

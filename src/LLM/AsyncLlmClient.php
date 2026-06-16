@@ -9,21 +9,21 @@ use Amp\Http\Client\HttpClient;
 use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
-use OpenCompany\PrismRelay\Caching\PromptCachePlan;
-use OpenCompany\PrismRelay\Capabilities\ProviderCapabilities;
-use OpenCompany\PrismRelay\Reasoning\ReasoningStrategy;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Relay;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\ToolCall;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\Enums\FinishReason;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
  * Non-blocking HTTP client for OpenAI-compatible LLM providers using Amp's async runtime.
  *
  * Implements LlmClientInterface by sending raw HTTP requests via Amp\Http\Client,
- * bypassing the Prism SDK. Used by RetryableLlmClient for providers that support
+ * bypassing the native HTTP. Used by RetryableLlmClient for providers that support
  * the OpenAI chat/completions format directly.
  */
 class AsyncLlmClient implements LlmClientInterface
@@ -52,6 +52,15 @@ class AsyncLlmClient implements LlmClientInterface
         'stepfun-plan',
     ];
 
+    /** @var list<string> */
+    private const NATIVE_PROVIDERS = [
+        'anthropic',
+        'gemini',
+        'minimax',
+        'minimax-cn',
+        'codex',
+    ];
+
     /**
      * @param  string  $apiKey  Provider API key
      * @param  string  $baseUrl  Base URL for the provider's chat completions endpoint
@@ -67,8 +76,9 @@ class AsyncLlmClient implements LlmClientInterface
         private int|float|null $temperature = null,
         private string $provider = 'z',
         ?Relay $relay = null,
-        private readonly ?RelayRegistry $registry = null,
-        private string $reasoningEffort = 'off',
+        private readonly ?RelayProviderRegistry $registry = null,
+        private readonly ?CodexOAuthService $codexOAuth = null,
+        private string $reasoningEffort = 'max',
     ) {
         $this->httpClient = HttpClientBuilder::buildDefault();
         $this->relay = $relay ?? new Relay;
@@ -81,7 +91,8 @@ class AsyncLlmClient implements LlmClientInterface
      */
     public static function supportsProvider(string $provider): bool
     {
-        return in_array($provider, self::OPENAI_COMPATIBLE_PROVIDERS, true);
+        return in_array($provider, self::OPENAI_COMPATIBLE_PROVIDERS, true)
+            || in_array($provider, self::NATIVE_PROVIDERS, true);
     }
 
     public function supportsStreaming(): bool
@@ -101,7 +112,7 @@ class AsyncLlmClient implements LlmClientInterface
     /**
      * Send a chat-completions request and return the parsed response.
      *
-     * @param  Message[]  $messages  Conversation history as Prism Message objects
+     * @param  Message[]  $messages  Conversation history as native Message objects
      * @param  Tool[]  $tools  Available tools for function calling
      * @param  Cancellation  $cancellation  Optional Amp cancellation token for aborting the request
      * @return LlmResponse Parsed response including text, tool calls, and token usage
@@ -111,14 +122,57 @@ class AsyncLlmClient implements LlmClientInterface
      */
     public function chat(array $messages, array $tools = [], ?Cancellation $cancellation = null): LlmResponse
     {
+        if ($this->wireProtocol() === 'codex') {
+            return $this->collectStreamingResponse($messages, $tools, $cancellation);
+        }
+
         $payload = $this->buildPayload($messages, $tools, streaming: false);
-        $request = $this->buildRequest($payload);
+        $request = $this->buildRequest($payload, streaming: false);
 
         // This suspends the fiber — Revolt event loop ticks freely
         $this->relay->beforeRequest($this->provider, $this->model);
         $response = $this->httpClient->request($request, $cancellation);
 
         return $this->parseResponse($response, $cancellation);
+    }
+
+    /** @param Message[] $messages @param Tool[] $tools */
+    private function collectStreamingResponse(array $messages, array $tools, ?Cancellation $cancellation): LlmResponse
+    {
+        $text = '';
+        $reasoning = '';
+        $toolCalls = [];
+        $usage = [];
+        $finishReason = FinishReason::Stop;
+
+        foreach ($this->stream($messages, $tools, $cancellation) as $event) {
+            if ($event->type === 'text_delta') {
+                $text .= $event->delta;
+            } elseif ($event->type === 'thinking_delta') {
+                $reasoning .= $event->delta;
+            } elseif ($event->type === 'tool_call') {
+                $toolCalls[] = new ToolCall(
+                    id: (string) ($event->toolCall['id'] ?? ''),
+                    name: (string) ($event->toolCall['name'] ?? ''),
+                    arguments: (string) ($event->toolCall['arguments'] ?? '{}'),
+                );
+            } elseif ($event->type === 'stream_end') {
+                $usage = $event->usage;
+                $finishReason = $event->finishReason ?? $finishReason;
+            }
+        }
+
+        return new LlmResponse(
+            text: $text,
+            finishReason: $toolCalls !== [] ? FinishReason::ToolCalls : $finishReason,
+            toolCalls: $toolCalls,
+            promptTokens: (int) ($usage['prompt_tokens'] ?? 0),
+            completionTokens: (int) ($usage['completion_tokens'] ?? 0),
+            cacheWriteInputTokens: (int) ($usage['cache_write_input_tokens'] ?? 0),
+            cacheReadInputTokens: (int) ($usage['cache_read_input_tokens'] ?? 0),
+            thoughtTokens: (int) ($usage['thought_tokens'] ?? 0),
+            reasoningContent: $reasoning,
+        );
     }
 
     /**
@@ -133,8 +187,26 @@ class AsyncLlmClient implements LlmClientInterface
      */
     public function stream(array $messages, array $tools = [], ?Cancellation $cancellation = null): \Generator
     {
+        if ($this->wireProtocol() === 'anthropic') {
+            yield from $this->streamAnthropic($messages, $tools, $cancellation);
+
+            return;
+        }
+
+        if ($this->wireProtocol() === 'gemini') {
+            yield from $this->streamGemini($messages, $tools, $cancellation);
+
+            return;
+        }
+
+        if ($this->wireProtocol() === 'codex') {
+            yield from $this->streamCodex($messages, $tools, $cancellation);
+
+            return;
+        }
+
         $payload = $this->buildPayload($messages, $tools, streaming: true);
-        $request = $this->buildRequest($payload);
+        $request = $this->buildRequest($payload, streaming: true);
 
         $this->relay->beforeRequest($this->provider, $this->model);
         $response = $this->httpClient->request($request, $cancellation);
@@ -370,6 +442,201 @@ class AsyncLlmClient implements LlmClientInterface
         );
     }
 
+    /** @param Message[] $messages @param Tool[] $tools */
+    private function streamAnthropic(array $messages, array $tools, ?Cancellation $cancellation): \Generator
+    {
+        $response = $this->httpClient->request($this->buildRequest(
+            $this->buildPayload($messages, $tools, streaming: true),
+            streaming: true,
+        ), $cancellation);
+        $this->guardResponseStatus($response, $cancellation);
+
+        $toolBuffers = [];
+        $currentIndex = null;
+        $promptTokens = 0;
+        $completionTokens = 0;
+        $cacheWrite = 0;
+        $cacheRead = 0;
+        $finishReason = FinishReason::Stop;
+
+        foreach ($this->sseJsonEvents($response, $cancellation) as $event) {
+            $type = (string) ($event['type'] ?? '');
+            if ($type === 'message_start') {
+                $usage = $event['message']['usage'] ?? [];
+                $promptTokens = (int) ($usage['input_tokens'] ?? $promptTokens);
+                $cacheWrite = (int) ($usage['cache_creation_input_tokens'] ?? $cacheWrite);
+                $cacheRead = (int) ($usage['cache_read_input_tokens'] ?? $cacheRead);
+            } elseif ($type === 'content_block_start') {
+                $currentIndex = (int) ($event['index'] ?? 0);
+                $block = $event['content_block'] ?? [];
+                if (($block['type'] ?? '') === 'tool_use') {
+                    $toolBuffers[$currentIndex] = [
+                        'id' => (string) ($block['id'] ?? ''),
+                        'name' => (string) ($block['name'] ?? ''),
+                        'arguments' => '',
+                    ];
+                }
+            } elseif ($type === 'content_block_delta') {
+                $delta = $event['delta'] ?? [];
+                if (($delta['type'] ?? '') === 'text_delta' && isset($delta['text'])) {
+                    yield LlmStreamingEvent::textDelta((string) $delta['text']);
+                } elseif (in_array($delta['type'] ?? '', ['thinking_delta', 'signature_delta'], true) && isset($delta['thinking'])) {
+                    yield LlmStreamingEvent::thinkingDelta((string) $delta['thinking']);
+                } elseif (($delta['type'] ?? '') === 'input_json_delta') {
+                    $index = (int) ($event['index'] ?? $currentIndex ?? 0);
+                    $toolBuffers[$index] ??= ['id' => '', 'name' => '', 'arguments' => ''];
+                    $toolBuffers[$index]['arguments'] .= (string) ($delta['partial_json'] ?? '');
+                }
+            } elseif ($type === 'message_delta') {
+                $usage = $event['usage'] ?? [];
+                $completionTokens = (int) ($usage['output_tokens'] ?? $completionTokens);
+                $finishReason = $this->mapFinishReason((string) ($event['delta']['stop_reason'] ?? ''));
+            } elseif ($type === 'message_stop') {
+                foreach ($toolBuffers as $tool) {
+                    yield LlmStreamingEvent::toolCall($tool['id'], $tool['name'], self::sanitizeJson($tool['arguments'] ?: '{}'));
+                }
+                yield LlmStreamingEvent::streamEnd($promptTokens, $completionTokens, $cacheWrite, $cacheRead, finishReason: $finishReason);
+
+                return;
+            }
+        }
+
+        foreach ($toolBuffers as $tool) {
+            yield LlmStreamingEvent::toolCall($tool['id'], $tool['name'], self::sanitizeJson($tool['arguments'] ?: '{}'));
+        }
+        yield LlmStreamingEvent::streamEnd($promptTokens, $completionTokens, $cacheWrite, $cacheRead, finishReason: $finishReason);
+    }
+
+    /** @param Message[] $messages @param Tool[] $tools */
+    private function streamGemini(array $messages, array $tools, ?Cancellation $cancellation): \Generator
+    {
+        $response = $this->httpClient->request($this->buildRequest(
+            $this->buildPayload($messages, $tools, streaming: true),
+            streaming: true,
+        ), $cancellation);
+        $this->guardResponseStatus($response, $cancellation);
+
+        $promptTokens = 0;
+        $completionTokens = 0;
+        $cacheRead = 0;
+        $thoughtTokens = 0;
+        $toolCalls = [];
+        $finishReason = FinishReason::Stop;
+
+        foreach ($this->sseJsonEvents($response, $cancellation) as $event) {
+            foreach (($event['candidates'] ?? []) as $candidate) {
+                foreach (($candidate['content']['parts'] ?? []) as $index => $part) {
+                    if (isset($part['text'])) {
+                        yield LlmStreamingEvent::textDelta((string) $part['text']);
+                    }
+                    if (isset($part['functionCall']) && is_array($part['functionCall'])) {
+                        $call = $part['functionCall'];
+                        $toolCalls[] = [
+                            'id' => 'gemini_call_'.$index,
+                            'name' => (string) ($call['name'] ?? ''),
+                            'arguments' => json_encode($call['args'] ?? [], JSON_THROW_ON_ERROR),
+                        ];
+                    }
+                }
+                if (isset($candidate['finishReason'])) {
+                    $finishReason = $this->mapFinishReason((string) $candidate['finishReason']);
+                }
+            }
+            if (isset($event['usageMetadata'])) {
+                $usage = $event['usageMetadata'];
+                $promptTokens = (int) ($usage['promptTokenCount'] ?? $promptTokens);
+                $completionTokens = (int) ($usage['candidatesTokenCount'] ?? $completionTokens);
+                $cacheRead = (int) ($usage['cachedContentTokenCount'] ?? $cacheRead);
+                $thoughtTokens = (int) ($usage['thoughtsTokenCount'] ?? $thoughtTokens);
+            }
+        }
+
+        foreach ($toolCalls as $tool) {
+            yield LlmStreamingEvent::toolCall($tool['id'], $tool['name'], $tool['arguments']);
+        }
+        yield LlmStreamingEvent::streamEnd($promptTokens, $completionTokens, cacheRead: $cacheRead, thoughtTokens: $thoughtTokens, finishReason: $finishReason);
+    }
+
+    /** @param Message[] $messages @param Tool[] $tools */
+    private function streamCodex(array $messages, array $tools, ?Cancellation $cancellation): \Generator
+    {
+        $response = $this->httpClient->request($this->buildRequest(
+            $this->buildPayload($messages, $tools, streaming: true),
+            streaming: true,
+        ), $cancellation);
+        $this->guardResponseStatus($response, $cancellation);
+
+        $promptTokens = 0;
+        $completionTokens = 0;
+        $cacheRead = 0;
+        $thoughtTokens = 0;
+        $toolCalls = [];
+
+        foreach ($this->sseJsonEvents($response, $cancellation) as $event) {
+            $type = (string) ($event['type'] ?? '');
+            if (in_array($type, ['response.output_text.delta', 'response.output_text.annotation.added'], true) && isset($event['delta'])) {
+                yield LlmStreamingEvent::textDelta((string) $event['delta']);
+            } elseif (str_contains($type, 'reasoning') && isset($event['delta'])) {
+                yield LlmStreamingEvent::thinkingDelta((string) $event['delta']);
+            } elseif ($type === 'response.output_item.done' && isset($event['item']) && is_array($event['item'])) {
+                $item = $event['item'];
+                if (in_array($item['type'] ?? '', ['function_call', 'tool_call'], true)) {
+                    $toolCalls[] = [
+                        'id' => (string) ($item['call_id'] ?? $item['id'] ?? 'codex_call_'.count($toolCalls)),
+                        'name' => (string) ($item['name'] ?? ''),
+                        'arguments' => self::sanitizeJson((string) ($item['arguments'] ?? '{}')),
+                    ];
+                }
+            } elseif ($type === 'response.completed') {
+                $responseData = $event['response'] ?? [];
+                $usage = $responseData['usage'] ?? [];
+                $promptTokens = (int) ($usage['input_tokens'] ?? $usage['prompt_tokens'] ?? $promptTokens);
+                $completionTokens = (int) ($usage['output_tokens'] ?? $usage['completion_tokens'] ?? $completionTokens);
+                $cacheRead = (int) ($usage['input_tokens_details']['cached_tokens'] ?? $cacheRead);
+                $thoughtTokens = (int) ($usage['output_tokens_details']['reasoning_tokens'] ?? $thoughtTokens);
+            }
+        }
+
+        foreach ($toolCalls as $tool) {
+            yield LlmStreamingEvent::toolCall($tool['id'], $tool['name'], $tool['arguments']);
+        }
+        yield LlmStreamingEvent::streamEnd(
+            $promptTokens,
+            $completionTokens,
+            cacheRead: $cacheRead,
+            thoughtTokens: $thoughtTokens,
+            finishReason: $toolCalls !== [] ? FinishReason::ToolCalls : FinishReason::Stop,
+        );
+    }
+
+    /** @return \Generator<int, array<string, mixed>> */
+    private function sseJsonEvents(Response $response, ?Cancellation $cancellation): \Generator
+    {
+        $buffer = '';
+        while (true) {
+            $chunk = $response->getBody()->read($cancellation);
+            if ($chunk === null) {
+                break;
+            }
+            $buffer .= $chunk;
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line = rtrim(substr($buffer, 0, $pos), "\r");
+                $buffer = substr($buffer, $pos + 1);
+                if (! str_starts_with($line, 'data:')) {
+                    continue;
+                }
+                $data = trim(substr($line, 5));
+                if ($data === '' || $data === '[DONE]') {
+                    continue;
+                }
+                $json = json_decode($data, true);
+                if (is_array($json)) {
+                    yield $json;
+                }
+            }
+        }
+    }
+
     public function getProvider(): string
     {
         return $this->provider;
@@ -469,12 +736,27 @@ class AsyncLlmClient implements LlmClientInterface
      */
     private function buildPayload(array $messages, array $tools, bool $streaming): array
     {
+        return match ($this->wireProtocol()) {
+            'anthropic' => $this->buildAnthropicPayload($messages, $tools, $streaming),
+            'gemini' => $this->buildGeminiPayload($messages, $tools, $streaming),
+            'codex' => $this->buildCodexPayload($messages, $tools, $streaming),
+            default => $this->buildOpenAiCompatiblePayload($messages, $tools, $streaming),
+        };
+    }
+
+    /**
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return array<string, mixed>
+     */
+    private function buildOpenAiCompatiblePayload(array $messages, array $tools, bool $streaming): array
+    {
         $mappedTools = $tools !== [] ? $this->mapTools($tools) : [];
         $cachePlan = $this->buildPromptCachePlan($messages, $mappedTools);
         $allMessages = [...$cachePlan->systemPrompts, ...$cachePlan->messages];
 
         $payload = [
-            'model' => $this->model,
+            'model' => $this->requestModel(),
             'messages' => $this->relay->mapOpenAiCompatibleMessages($this->provider, $allMessages),
         ];
 
@@ -504,11 +786,116 @@ class AsyncLlmClient implements LlmClientInterface
             $payload['temperature'] = $this->temperature;
         }
 
-        if ($this->reasoningEffort !== 'off') {
-            $reasoningParams = ReasoningStrategy::requestParams($this->provider, $this->reasoningEffort);
-            if ($reasoningParams !== []) {
-                $payload = array_merge($payload, $reasoningParams);
-            }
+        $reasoningParams = ReasoningStrategy::requestParams($this->provider, $this->reasoningEffort);
+        if ($reasoningParams !== []) {
+            $payload = array_merge($payload, $reasoningParams);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return array<string, mixed>
+     */
+    private function buildAnthropicPayload(array $messages, array $tools, bool $streaming): array
+    {
+        $cachePlan = $this->buildPromptCachePlan($messages, $tools);
+        $payload = [
+            'model' => $this->requestModel(),
+            'system' => $this->mapAnthropicSystem($cachePlan->systemPrompts),
+            'messages' => $this->mapAnthropicMessages($cachePlan->messages),
+            'max_tokens' => $this->maxTokens ?? 8192,
+        ];
+
+        if ($streaming) {
+            $payload['stream'] = true;
+        }
+
+        if ($cachePlan->tools !== []) {
+            $payload['tools'] = array_map(fn (Tool $tool): array => $this->mapAnthropicTool($tool), $cachePlan->tools);
+            $payload['tool_choice'] = ['type' => 'auto'];
+        }
+
+        if ($this->temperature !== null && $this->supportsTemperature()) {
+            $payload['temperature'] = $this->temperature;
+        }
+
+        return array_filter($payload, static fn (mixed $value): bool => $value !== null && $value !== []);
+    }
+
+    /**
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return array<string, mixed>
+     */
+    private function buildGeminiPayload(array $messages, array $tools, bool $streaming): array
+    {
+        $cachePlan = $this->buildPromptCachePlan($messages, $tools);
+        $payload = $this->mapGeminiMessages($cachePlan->messages, $cachePlan->systemPrompts);
+
+        $generationConfig = [];
+        if ($this->maxTokens !== null) {
+            $generationConfig['maxOutputTokens'] = $this->maxTokens;
+        }
+        if ($this->temperature !== null && $this->supportsTemperature()) {
+            $generationConfig['temperature'] = $this->temperature;
+        }
+        if ($generationConfig !== []) {
+            $payload['generationConfig'] = $generationConfig;
+        }
+
+        if ($cachePlan->tools !== []) {
+            $payload['tools'] = [[
+                'functionDeclarations' => array_map(fn (Tool $tool): array => [
+                    'name' => $tool->name(),
+                    'description' => $tool->description(),
+                    'parameters' => [
+                        'type' => 'OBJECT',
+                        'properties' => (object) $this->mapGeminiSchemaProperties($tool->parametersAsArray()),
+                        'required' => $tool->requiredParameters(),
+                    ],
+                ], $cachePlan->tools),
+            ]];
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  Message[]  $messages
+     * @param  Tool[]  $tools
+     * @return array<string, mixed>
+     */
+    private function buildCodexPayload(array $messages, array $tools, bool $streaming): array
+    {
+        $mappedTools = $tools !== [] ? $this->mapTools($tools) : [];
+        $cachePlan = $this->buildPromptCachePlan($messages, $mappedTools);
+        $input = array_values(array_filter(
+            $this->relay->mapOpenAiCompatibleMessages($this->provider, $cachePlan->messages),
+            static fn (array $message): bool => ($message['role'] ?? null) !== 'system',
+        ));
+        $instructions = implode("\n\n", array_map(
+            static fn (SystemMessage $message): string => $message->content,
+            $cachePlan->systemPrompts,
+        ));
+
+        $payload = [
+            'model' => $this->requestModel(),
+            'instructions' => $instructions !== '' ? $instructions : 'You are a helpful assistant.',
+            'input' => $input,
+            'stream' => true,
+            'store' => false,
+        ];
+
+        if ($this->maxTokens !== null) {
+            $payload['max_output_tokens'] = $this->maxTokens;
+        }
+
+        if ($cachePlan->tools !== []) {
+            $payload['tools'] = $this->sanitizeCodexTools($cachePlan->tools);
+            $payload['tool_choice'] = 'auto';
         }
 
         return $payload;
@@ -519,16 +906,239 @@ class AsyncLlmClient implements LlmClientInterface
      *
      * @param  array<string, mixed>  $payload  JSON-serializable request body
      */
-    private function buildRequest(array $payload): Request
+    private function buildRequest(array $payload, bool $streaming): Request
     {
-        $request = new Request($this->baseUrl.'/chat/completions', 'POST');
-        $request->setHeader('Authorization', 'Bearer '.$this->apiKey);
+        $request = new Request($this->endpointUrl($streaming), 'POST');
+        if ($this->wireProtocol() === 'codex') {
+            $token = $this->codexOAuth?->getAccessToken();
+            if ($token === null || $token === '') {
+                throw new \RuntimeException('Codex not authenticated. Run `kosmo codex:login`.');
+            }
+
+            $request->setHeader('Authorization', 'Bearer '.$token);
+            $accountId = $this->codexOAuth->getAccountId();
+            if ($accountId !== null && $accountId !== '') {
+                $request->setHeader('ChatGPT-Account-Id', $accountId);
+            }
+            $request->setHeader('originator', 'kosmokrator');
+            $request->setHeader('User-Agent', 'kosmokrator');
+        } elseif ($this->wireProtocol() === 'gemini') {
+            // Gemini uses the API key query parameter.
+        } elseif ($this->wireProtocol() === 'anthropic') {
+            $request->setHeader('anthropic-version', '2023-06-01');
+            $request->setHeader('anthropic-beta', 'prompt-caching-2024-07-31');
+            $request->setHeader('x-api-key', $this->apiKey);
+        } else {
+            $request->setHeader('Authorization', 'Bearer '.$this->apiKey);
+        }
+
         $request->setHeader('Content-Type', 'application/json');
         $request->setBody(json_encode($payload, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
         $request->setTransferTimeout(600);
         $request->setInactivityTimeout(300);
 
         return $request;
+    }
+
+    private function endpointUrl(bool $streaming): string
+    {
+        $base = rtrim($this->baseUrl, '/');
+
+        return match ($this->wireProtocol()) {
+            'anthropic' => $base.'/messages',
+            'gemini' => sprintf(
+                '%s/models/%s:%s?%s',
+                $base,
+                rawurlencode($this->model),
+                $streaming ? 'streamGenerateContent' : 'generateContent',
+                http_build_query(array_filter(['key' => $this->apiKey, 'alt' => $streaming ? 'sse' : null])),
+            ),
+            'codex' => $base.'/responses',
+            default => $base.'/chat/completions',
+        };
+    }
+
+    private function requestModel(): string
+    {
+        return $this->model;
+    }
+
+    private function wireProtocol(): string
+    {
+        $driver = $this->registry?->driver($this->provider) ?? $this->provider;
+
+        return match ($driver) {
+            'anthropic', 'anthropic-compatible', 'minimax', 'minimax-cn' => 'anthropic',
+            'gemini' => 'gemini',
+            'codex' => 'codex',
+            default => 'openai',
+        };
+    }
+
+    /** @param list<SystemMessage> $systemPrompts */
+    private function mapAnthropicSystem(array $systemPrompts): array
+    {
+        return array_map(static fn (SystemMessage $message): array => array_filter([
+            'type' => 'text',
+            'text' => $message->content,
+            'cache_control' => $message->providerOptions('cacheType') !== null
+                ? ['type' => $message->providerOptions('cacheType')]
+                : null,
+        ]), $systemPrompts);
+    }
+
+    /** @param list<Message> $messages */
+    private function mapAnthropicMessages(array $messages): array
+    {
+        $mapped = [];
+        foreach ($messages as $message) {
+            if ($message instanceof SystemMessage) {
+                continue;
+            }
+
+            if ($message instanceof UserMessage) {
+                $mapped[] = [
+                    'role' => 'user',
+                    'content' => [array_filter([
+                        'type' => 'text',
+                        'text' => $message->text(),
+                        'cache_control' => $message->providerOptions('cacheType') !== null
+                            ? ['type' => $message->providerOptions('cacheType')]
+                            : null,
+                    ])],
+                ];
+            } elseif ($message instanceof AssistantMessage) {
+                $content = [];
+                if ($message->content !== '') {
+                    $content[] = array_filter([
+                        'type' => 'text',
+                        'text' => $message->content,
+                        'cache_control' => $message->providerOptions('cacheType') !== null
+                            ? ['type' => $message->providerOptions('cacheType')]
+                            : null,
+                    ]);
+                }
+                foreach ($message->toolCalls as $toolCall) {
+                    $content[] = [
+                        'type' => 'tool_use',
+                        'id' => $toolCall->id,
+                        'name' => $toolCall->name,
+                        'input' => $toolCall->arguments(),
+                    ];
+                }
+                $mapped[] = ['role' => 'assistant', 'content' => $content];
+            } elseif ($message instanceof ToolResultMessage) {
+                $total = count($message->toolResults);
+                $mapped[] = [
+                    'role' => 'user',
+                    'content' => array_map(function (ToolResult $result, int $index) use ($message, $total): array {
+                        return array_filter([
+                            'type' => 'tool_result',
+                            'tool_use_id' => $result->toolCallId,
+                            'content' => is_string($result->result) ? $result->result : json_encode($result->result, JSON_THROW_ON_ERROR),
+                            'cache_control' => $index === $total - 1 && $message->providerOptions('cacheType') !== null
+                                ? ['type' => $message->providerOptions('cacheType')]
+                                : null,
+                        ]);
+                    }, $message->toolResults, array_keys($message->toolResults)),
+                ];
+            }
+        }
+
+        return $mapped;
+    }
+
+    private function mapAnthropicTool(Tool $tool): array
+    {
+        return array_filter([
+            'name' => $tool->name(),
+            'description' => $tool->description(),
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => (object) $tool->parametersAsArray(),
+                'required' => $tool->requiredParameters(),
+            ],
+            'cache_control' => $tool->providerOptions('cacheType') !== null
+                ? ['type' => $tool->providerOptions('cacheType')]
+                : null,
+        ]);
+    }
+
+    /**
+     * @param  list<Message>  $messages
+     * @param  list<SystemMessage>  $systemPrompts
+     * @return array<string, mixed>
+     */
+    private function mapGeminiMessages(array $messages, array $systemPrompts): array
+    {
+        $payload = ['contents' => []];
+        foreach ($systemPrompts as $systemPrompt) {
+            if (! isset($payload['systemInstruction'])) {
+                $payload['systemInstruction'] = ['parts' => [['text' => $systemPrompt->content]]];
+            }
+        }
+
+        foreach ($messages as $message) {
+            if ($message instanceof SystemMessage) {
+                $payload['systemInstruction'] ??= ['parts' => [['text' => $message->content]]];
+            } elseif ($message instanceof UserMessage) {
+                $payload['contents'][] = ['role' => 'user', 'parts' => [['text' => $message->text()]]];
+            } elseif ($message instanceof AssistantMessage) {
+                $parts = [];
+                if ($message->content !== '') {
+                    $parts[] = ['text' => $message->content];
+                }
+                foreach ($message->toolCalls as $toolCall) {
+                    $parts[] = ['functionCall' => ['name' => $toolCall->name, 'args' => $toolCall->arguments()]];
+                }
+                $payload['contents'][] = ['role' => 'model', 'parts' => $parts];
+            } elseif ($message instanceof ToolResultMessage) {
+                $parts = [];
+                foreach ($message->toolResults as $result) {
+                    $parts[] = [
+                        'functionResponse' => [
+                            'name' => $result->toolName,
+                            'response' => [
+                                'name' => $result->toolName,
+                                'content' => is_string($result->result) ? $result->result : json_encode($result->result, JSON_THROW_ON_ERROR),
+                            ],
+                        ],
+                    ];
+                }
+                $payload['contents'][] = ['role' => 'user', 'parts' => $parts];
+            }
+        }
+
+        return $payload;
+    }
+
+    /** @param array<string, array<string, mixed>> $properties */
+    private function mapGeminiSchemaProperties(array $properties): array
+    {
+        return array_map(function (array $schema): array {
+            $mapped = $schema;
+            if (isset($mapped['type']) && is_string($mapped['type'])) {
+                $mapped['type'] = strtoupper($mapped['type']);
+                if ($mapped['type'] === 'OBJECT' && isset($mapped['properties']) && is_array($mapped['properties'])) {
+                    $mapped['properties'] = $this->mapGeminiSchemaProperties($mapped['properties']);
+                }
+            }
+
+            return $mapped;
+        }, $properties);
+    }
+
+    /** @param list<array<string, mixed>> $tools */
+    private function sanitizeCodexTools(array $tools): array
+    {
+        return array_map(static function (array $tool): array {
+            unset($tool['cache_control']);
+            if (isset($tool['function']) && is_array($tool['function'])) {
+                unset($tool['function']['strict']);
+            }
+
+            return $tool;
+        }, $tools);
     }
 
     /**
@@ -611,6 +1221,17 @@ class AsyncLlmClient implements LlmClientInterface
         $body = mb_convert_encoding($body, 'UTF-8', 'UTF-8');
         $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
 
+        return match ($this->wireProtocol()) {
+            'anthropic' => $this->parseAnthropicResponse($data),
+            'gemini' => $this->parseGeminiResponse($data),
+            'codex' => $this->parseCodexResponse($data),
+            default => $this->parseOpenAiResponse($data),
+        };
+    }
+
+    /** @param array<string, mixed> $data */
+    private function parseOpenAiResponse(array $data): LlmResponse
+    {
         $choice = $data['choices'][0] ?? [];
         $msg = $choice['message'] ?? [];
         $usage = $data['usage'] ?? [];
@@ -640,6 +1261,106 @@ class AsyncLlmClient implements LlmClientInterface
                 ?? ($usage['output_tokens_details']['reasoning_tokens'] ?? null)
                 ?? 0),
             reasoningContent: $reasoningContent,
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    private function parseAnthropicResponse(array $data): LlmResponse
+    {
+        $text = '';
+        $reasoningContent = '';
+        $toolCalls = [];
+        foreach (($data['content'] ?? []) as $part) {
+            if (($part['type'] ?? '') === 'text') {
+                $text .= (string) ($part['text'] ?? '');
+            } elseif (in_array($part['type'] ?? '', ['thinking', 'redacted_thinking'], true)) {
+                $reasoningContent .= (string) ($part['thinking'] ?? $part['data'] ?? '');
+            } elseif (($part['type'] ?? '') === 'tool_use') {
+                $toolCalls[] = new ToolCall(
+                    id: (string) ($part['id'] ?? ''),
+                    name: (string) ($part['name'] ?? ''),
+                    arguments: json_encode($part['input'] ?? [], JSON_THROW_ON_ERROR),
+                );
+            }
+        }
+
+        $usage = $data['usage'] ?? [];
+
+        return new LlmResponse(
+            text: $text,
+            finishReason: $this->mapFinishReason((string) ($data['stop_reason'] ?? '')),
+            toolCalls: $toolCalls,
+            promptTokens: (int) ($usage['input_tokens'] ?? 0),
+            completionTokens: (int) ($usage['output_tokens'] ?? 0),
+            cacheWriteInputTokens: (int) (($usage['cache_creation_input_tokens'] ?? null) ?? 0),
+            cacheReadInputTokens: (int) (($usage['cache_read_input_tokens'] ?? null) ?? 0),
+            reasoningContent: $reasoningContent,
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    private function parseGeminiResponse(array $data): LlmResponse
+    {
+        $candidate = $data['candidates'][0] ?? [];
+        $parts = $candidate['content']['parts'] ?? [];
+        $text = '';
+        $toolCalls = [];
+        foreach ($parts as $index => $part) {
+            if (isset($part['text'])) {
+                $text .= (string) $part['text'];
+            }
+            if (isset($part['functionCall']) && is_array($part['functionCall'])) {
+                $call = $part['functionCall'];
+                $toolCalls[] = new ToolCall(
+                    id: 'gemini_call_'.$index,
+                    name: (string) ($call['name'] ?? ''),
+                    arguments: json_encode($call['args'] ?? [], JSON_THROW_ON_ERROR),
+                );
+            }
+        }
+        $usage = $data['usageMetadata'] ?? [];
+
+        return new LlmResponse(
+            text: $text,
+            finishReason: $this->mapFinishReason((string) ($candidate['finishReason'] ?? '')),
+            toolCalls: $toolCalls,
+            promptTokens: (int) ($usage['promptTokenCount'] ?? 0),
+            completionTokens: (int) ($usage['candidatesTokenCount'] ?? 0),
+            cacheReadInputTokens: (int) ($usage['cachedContentTokenCount'] ?? 0),
+            thoughtTokens: (int) ($usage['thoughtsTokenCount'] ?? 0),
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    private function parseCodexResponse(array $data): LlmResponse
+    {
+        $text = '';
+        $toolCalls = [];
+        foreach (($data['output'] ?? []) as $index => $item) {
+            if (($item['type'] ?? '') === 'message') {
+                foreach (($item['content'] ?? []) as $part) {
+                    if (in_array($part['type'] ?? '', ['output_text', 'text'], true)) {
+                        $text .= (string) ($part['text'] ?? '');
+                    }
+                }
+            } elseif (in_array($item['type'] ?? '', ['function_call', 'tool_call'], true)) {
+                $toolCalls[] = new ToolCall(
+                    id: (string) ($item['call_id'] ?? $item['id'] ?? 'codex_call_'.$index),
+                    name: (string) ($item['name'] ?? ''),
+                    arguments: self::sanitizeJson((string) ($item['arguments'] ?? '{}')),
+                );
+            }
+        }
+        $usage = $data['usage'] ?? [];
+
+        return new LlmResponse(
+            text: $text,
+            finishReason: $toolCalls !== [] ? FinishReason::ToolCalls : FinishReason::Stop,
+            toolCalls: $toolCalls,
+            promptTokens: (int) ($usage['input_tokens'] ?? $usage['prompt_tokens'] ?? 0),
+            completionTokens: (int) ($usage['output_tokens'] ?? $usage['completion_tokens'] ?? 0),
+            cacheReadInputTokens: (int) ($usage['input_tokens_details']['cached_tokens'] ?? 0),
+            thoughtTokens: (int) ($usage['output_tokens_details']['reasoning_tokens'] ?? 0),
         );
     }
 
@@ -692,14 +1413,14 @@ class AsyncLlmClient implements LlmClientInterface
     }
 
     /**
-     * Convert Prism Tool objects into the OpenAI function-calling wire format.
+     * Convert LLM Tool objects into the OpenAI function-calling wire format.
      *
      * @param  Tool[]  $tools
      * @return array<int, array<string, mixed>>
      */
     private function mapTools(array $tools): array
     {
-        return array_map(fn (Tool $tool): array => [
+        return array_map(fn (Tool $tool): array => array_filter([
             'type' => 'function',
             'function' => [
                 'name' => $tool->name(),
@@ -710,7 +1431,10 @@ class AsyncLlmClient implements LlmClientInterface
                     'required' => $tool->requiredParameters(),
                 ],
             ],
-        ], $tools);
+            'cache_control' => $tool->providerOptions('cacheType') !== null
+                ? ['type' => $tool->providerOptions('cacheType')]
+                : null,
+        ]), $tools);
     }
 
     /**

@@ -8,11 +8,14 @@ use Illuminate\Container\Container;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Kosmokrator\LLM\Codex\CodexTokenStore as CodexTokenStoreContract;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryService;
 use Kosmokrator\LLM\ProviderAuthService;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\ProviderConfigurator;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SecretStore;
 use Kosmokrator\Settings\SettingsCatalog;
@@ -23,10 +26,6 @@ use Kosmokrator\Setup\SetupFlowInterface;
 use Kosmokrator\Setup\SetupSettingsFlow;
 use Kosmokrator\UI\AgentDisplayFormatter;
 use Kosmokrator\UI\AgentTreeBuilder;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Registry\RelayRegistryBuilder;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -44,7 +43,7 @@ class CoreServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        // App instance bindings that Prism/Laravel expects
+        // App instance bindings used by Illuminate components
         $this->container->instance('path.base', $this->basePath);
         $this->container->instance('path.config', $this->basePath.'/config');
 
@@ -55,7 +54,7 @@ class CoreServiceProvider extends ServiceProvider
         // Filesystem
         $this->container->singleton('files', fn () => new Filesystem);
 
-        // HTTP client factory (used by Prism via Http facade)
+        // HTTP client factory used by OAuth/device auth flows
         $this->container->singleton('http', fn () => new HttpFactory);
         $this->container->singleton(SettingsSchema::class, fn () => new SettingsSchema);
         $this->container->singleton(YamlConfigStore::class, fn () => new YamlConfigStore(
@@ -75,30 +74,22 @@ class CoreServiceProvider extends ServiceProvider
         $this->container->singleton(SecretStore::class, fn () => new SecretStore(
             $this->container->make(SettingsRepositoryInterface::class),
         ));
-        $this->container->singleton(RelayRegistryBuilder::class, fn () => new RelayRegistryBuilder(
-            configDir: $this->basePath.'/vendor/opencompanyapp/prism-relay/config',
+        $this->container->singleton(RelayProviderRegistry::class, fn () => new RelayProviderRegistry(
+            $this->container->make('config'),
         ));
-        $this->container->singleton(RelayRegistry::class, function () {
-            $config = $this->container->make('config');
-            $relayOverrides = is_array($config->get('relay.providers', []))
-                ? $config->get('relay.providers', [])
-                : [];
-
-            return $this->container->make(RelayRegistryBuilder::class)->buildBundled($relayOverrides);
-        });
         $this->container->singleton(ProviderMeta::class, fn () => new ProviderMeta(
-            $this->container->make(RelayRegistry::class),
+            $this->container->make(RelayProviderRegistry::class),
         ));
         $this->container->singleton(ProviderCatalog::class, fn () => new ProviderCatalog(
             $this->container->make(ProviderMeta::class),
-            $this->container->make(RelayRegistry::class),
+            $this->container->make(RelayProviderRegistry::class),
             $this->container->make('config'),
             $this->container->make(SettingsRepositoryInterface::class),
             $this->container->make(CodexTokenStoreContract::class),
             $this->container->make(ModelDiscoveryCacheRepository::class),
         ));
         $this->container->singleton(ModelDiscoveryService::class, fn () => new ModelDiscoveryService(
-            $this->container->make(RelayRegistry::class),
+            $this->container->make(RelayProviderRegistry::class),
             $this->container->make('config'),
             $this->container->make(SettingsRepositoryInterface::class),
             $this->container->make(ModelDiscoveryCacheRepository::class),

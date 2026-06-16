@@ -2,10 +2,10 @@
 
 namespace Kosmokrator\Tests\Unit\LLM;
 
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\ValueObjects\ToolCall;
 
 class LlmResponseTest extends TestCase
 {

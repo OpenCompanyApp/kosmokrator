@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\Agent;
 
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\ToolResult;
 
 class ConversationHistoryPruneTest extends TestCase
 {

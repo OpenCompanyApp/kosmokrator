@@ -166,7 +166,7 @@ final class SettingsManager
     {
         $this->setRaw("relay.providers.{$providerId}", $definition, $scope);
 
-        // Mirror the URL into the Prism provider config so the HTTP client picks it up.
+        // Mirror the URL into provider config so the HTTP client picks it up.
         if (isset($definition['url'])) {
             $this->setRaw("prism.providers.{$providerId}.url", (string) $definition['url'], $scope);
         }

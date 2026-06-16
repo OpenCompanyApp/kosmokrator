@@ -8,14 +8,14 @@ use Illuminate\Config\Repository;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Kosmokrator\Agent\InstructionLoader;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\Codex\CodexTokenStore as CodexTokenStoreContract;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsPaths;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore as CodexTokenStoreContract;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -49,7 +49,7 @@ class DatabaseServiceProvider extends ServiceProvider
         ));
 
         // Inject SQLite-stored settings during registration so they're available
-        // before RelayRegistry and LLM clients are constructed
+        // before RelayProviderRegistry and LLM clients are constructed
         $this->injectSqliteSettings();
     }
 

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\Contracts\Message;
 use Kosmokrator\LLM\PromptFrameBuilder;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 
 final class PromptCacheTracker
 {
@@ -115,9 +115,6 @@ final class PromptCacheTracker
     {
         $payload = [];
         foreach ($tools as $tool) {
-            if (! $tool instanceof Tool) {
-                continue;
-            }
             $payload[] = [
                 'name' => $tool->name(),
                 'description' => $tool->description(),

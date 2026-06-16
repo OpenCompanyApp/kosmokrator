@@ -205,6 +205,90 @@ class KosmokratorStyleSheet
                 maxColumns: 100,
             ),
 
+            KosmokratorMarkdownWidget::class.'::heading' => new Style(
+                color: Color::hex('#ffc850'),
+                bold: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::heading-1' => new Style(
+                color: Color::hex('#ffc850'),
+                bold: true,
+                underline: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::heading-2' => new Style(
+                color: Color::hex('#ff3c28'),
+                bold: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::heading-3' => new Style(
+                color: Color::hex('#70a0d0'),
+                bold: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::heading-4' => new Style(
+                color: Color::hex('#dcdcdc'),
+                bold: true,
+                italic: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::heading-5' => new Style(
+                color: Color::hex('#a0a0a0'),
+                italic: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::heading-6' => new Style(
+                color: Color::hex('#808080'),
+                dim: true,
+                italic: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::code' => new Style(
+                color: Color::hex('#ffc850'),
+            ),
+
+            KosmokratorMarkdownWidget::class.'::code-block-border' => new Style(
+                color: Color::hex('#404040'),
+            ),
+
+            KosmokratorMarkdownWidget::class.'::quote' => new Style(
+                color: Color::hex('#dcdcdc'),
+                italic: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::quote-border' => new Style(
+                color: Color::hex('#70a0d0'),
+            ),
+
+            KosmokratorMarkdownWidget::class.'::hr' => new Style(
+                color: Color::hex('#404040'),
+            ),
+
+            KosmokratorMarkdownWidget::class.'::list-bullet' => new Style(
+                color: Color::hex('#ffc850'),
+            ),
+
+            KosmokratorMarkdownWidget::class.'::link' => new Style(
+                color: Color::hex('#70a0d0'),
+                underline: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::link-url' => new Style(
+                color: Color::hex('#808080'),
+            ),
+
+            KosmokratorMarkdownWidget::class.'::bold' => new Style(
+                bold: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::italic' => new Style(
+                italic: true,
+            ),
+
+            KosmokratorMarkdownWidget::class.'::strikethrough' => new Style(
+                strikethrough: true,
+            ),
+
             // Permission prompt (tool approval)
             '.permission-prompt' => new Style(
                 border: Border::all(1, BorderPattern::rounded(), Color::hex('#ffc850')),

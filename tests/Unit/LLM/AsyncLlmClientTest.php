@@ -3,8 +3,8 @@
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Tool;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Tool;
 
 class AsyncLlmClientTest extends TestCase
 {
@@ -15,10 +15,10 @@ class AsyncLlmClientTest extends TestCase
         $this->assertTrue(AsyncLlmClient::supportsProvider('mimo'));
         $this->assertTrue(AsyncLlmClient::supportsProvider('mimo-api'));
         $this->assertTrue(AsyncLlmClient::supportsProvider('perplexity'));
-        $this->assertFalse(AsyncLlmClient::supportsProvider('codex'));
-        $this->assertFalse(AsyncLlmClient::supportsProvider('anthropic'));
-        $this->assertFalse(AsyncLlmClient::supportsProvider('gemini'));
-        $this->assertFalse(AsyncLlmClient::supportsProvider('minimax'));
+        $this->assertTrue(AsyncLlmClient::supportsProvider('codex'));
+        $this->assertTrue(AsyncLlmClient::supportsProvider('anthropic'));
+        $this->assertTrue(AsyncLlmClient::supportsProvider('gemini'));
+        $this->assertTrue(AsyncLlmClient::supportsProvider('minimax'));
     }
 
     public function test_provider_switch_updates_temperature_support(): void
@@ -56,6 +56,95 @@ class AsyncLlmClientTest extends TestCase
 
         $this->assertSame('auto', $payload['tool_choice']);
         $this->assertSame(['type' => 'ephemeral'], $payload['tools'][0]['cache_control']);
+    }
+
+    public function test_glm_high_reasoning_uses_thinking_payload_and_plain_wire_model(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'glm-5.2',
+            systemPrompt: 'prompt',
+            provider: 'z',
+            reasoningEffort: 'high',
+        );
+
+        $payload = (new \ReflectionMethod($client, 'buildPayload'))->invoke($client, [], [], false);
+
+        $this->assertSame('glm-5.2', $payload['model']);
+        $this->assertSame([
+            'type' => 'enabled',
+            'reasoning_effort' => 'high',
+        ], $payload['thinking']);
+    }
+
+    public function test_glm_max_reasoning_uses_max_thinking_payload(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'glm-5.2',
+            systemPrompt: 'prompt',
+            provider: 'z',
+            reasoningEffort: 'max',
+        );
+
+        $payload = (new \ReflectionMethod($client, 'buildPayload'))->invoke($client, [], [], false);
+
+        $this->assertSame([
+            'type' => 'enabled',
+            'reasoning_effort' => 'max',
+        ], $payload['thinking']);
+    }
+
+    public function test_glm_reasoning_defaults_to_max(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'glm-5.2',
+            systemPrompt: 'prompt',
+            provider: 'z',
+        );
+
+        $payload = (new \ReflectionMethod($client, 'buildPayload'))->invoke($client, [], [], false);
+
+        $this->assertSame([
+            'type' => 'enabled',
+            'reasoning_effort' => 'max',
+        ], $payload['thinking']);
+    }
+
+    public function test_glm_off_reasoning_disables_thinking_explicitly(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'glm-5.2',
+            systemPrompt: 'prompt',
+            provider: 'z',
+            reasoningEffort: 'off',
+        );
+
+        $payload = (new \ReflectionMethod($client, 'buildPayload'))->invoke($client, [], [], false);
+
+        $this->assertSame(['type' => 'disabled'], $payload['thinking']);
+    }
+
+    public function test_standard_z_api_keeps_plain_glm_model_identifier(): void
+    {
+        $client = new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: 'glm-5.2',
+            systemPrompt: 'prompt',
+            provider: 'z-api',
+            reasoningEffort: 'high',
+        );
+
+        $payload = (new \ReflectionMethod($client, 'buildPayload'))->invoke($client, [], [], false);
+
+        $this->assertSame('glm-5.2', $payload['model']);
     }
 
     public function test_error_message_uses_provider_json_message_when_available(): void

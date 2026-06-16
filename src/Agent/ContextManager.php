@@ -7,11 +7,11 @@ namespace Kosmokrator\Agent;
 use Kosmokrator\Exception\KosmokratorException;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Psr\Log\LoggerInterface;
 
 /**

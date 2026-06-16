@@ -7,10 +7,11 @@ namespace Kosmokrator\Tests\Unit\Sdk;
 use Amp\Cancellation;
 use Kosmokrator\Kernel;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\LlmStreamingEvent;
-use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\Sdk\AgentBuilder;
 use Kosmokrator\Sdk\Event\RunCompleted;
 use Kosmokrator\Sdk\Event\TextDelta;
@@ -19,8 +20,6 @@ use Kosmokrator\Sdk\Event\ToolCallStarted;
 use Kosmokrator\Sdk\Renderer\CollectingRenderer;
 use Kosmokrator\Tests\Integration\Fake\RecordingLlmClient;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\ValueObjects\ToolCall;
 
 final class AgentBuilderTest extends TestCase
 {
@@ -335,7 +334,6 @@ final class AgentBuilderTest extends TestCase
         $container->make('config')->set('kosmo.agent.default_provider', 'ollama');
         $container->make('config')->set('kosmo.agent.default_model', 'test-model');
         $container->instance(AsyncLlmClient::class, $llm);
-        $container->instance(PrismService::class, $llm);
 
         return $kernel;
     }

@@ -6,7 +6,10 @@ namespace Kosmokrator\Agent;
 
 use Amp\Cancellation;
 use Amp\CancelledException;
+use Kosmokrator\LLM\Tool;
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
@@ -14,9 +17,6 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
 use function Amp\async;
@@ -395,7 +395,7 @@ final class ToolExecutor
         } catch (\RuntimeException $e) {
             $this->log->error('Tool execution failed', ['tool' => $toolCall->name, 'error' => $e->getMessage()]);
 
-            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $args, 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $args, 'Error during tool execution: '.ErrorSanitizer::sanitize($e->getMessage()));
         } catch (\Throwable $e) {
             $this->log->error('Tool execution failed with unexpected exception', [
                 'tool' => $toolCall->name,
@@ -403,7 +403,7 @@ final class ToolExecutor
                 'error' => $e->getMessage(),
             ]);
 
-            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $args, 'Error: '.ErrorSanitizer::sanitize($e->getMessage()));
+            return ToolCallMapper::toErrorResult($toolCall->id, $toolCall->name, $args, 'Error during tool execution: '.ErrorSanitizer::sanitize($e->getMessage()));
         }
     }
 

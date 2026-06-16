@@ -42,6 +42,7 @@ use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Ansi\TextWrapper;
 use Symfony\Component\Tui\Exception\LogicException;
 use Symfony\Component\Tui\Render\RenderContext;
+use Symfony\Component\Tui\Style\Style;
 use Symfony\Component\Tui\Widget\AbstractWidget;
 use Symfony\Component\Tui\Widget\Markdown\DarkTerminalTheme;
 use Symfony\Component\Tui\Widget\Util\StringUtils;
@@ -223,7 +224,7 @@ class KosmokratorMarkdownWidget extends AbstractWidget
         foreach ($document->children() as $child) {
             // Add spacing between blocks
             if (! $isFirst && ! $child instanceof TableRow) {
-                $lines[] = '';
+                $this->appendBlockSeparator($lines);
             }
             $isFirst = false;
 
@@ -261,9 +262,43 @@ class KosmokratorMarkdownWidget extends AbstractWidget
         $text = $this->renderInlineNodes($heading);
         $prefix = str_repeat('#', $level).' ';
 
-        $styledText = $this->resolveElement('heading')->apply($prefix.$text);
+        $styledText = $this->resolveHeadingStyle($level)->apply($prefix.$text);
 
         return TextWrapper::wrapTextWithAnsi($styledText, $columns);
+    }
+
+    /**
+     * @param  string[]  $lines
+     */
+    private function appendBlockSeparator(array &$lines): void
+    {
+        if ($lines !== [] && end($lines) === '') {
+            return;
+        }
+
+        $lines[] = '';
+    }
+
+    private function resolveHeadingStyle(int $level): Style
+    {
+        $style = $this->resolveElement('heading-'.$level);
+
+        if ($this->hasTextStyle($style)) {
+            return $style;
+        }
+
+        return $this->resolveElement('heading');
+    }
+
+    private function hasTextStyle(Style $style): bool
+    {
+        return $style->getColor() !== null
+            || $style->getBold() !== null
+            || $style->getDim() !== null
+            || $style->getItalic() !== null
+            || $style->getStrikethrough() !== null
+            || $style->getUnderline() !== null
+            || $style->getReverse() !== null;
     }
 
     /**

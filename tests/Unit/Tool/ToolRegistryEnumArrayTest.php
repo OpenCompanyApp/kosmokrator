@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 class ToolRegistryEnumArrayTest extends TestCase
 {
-    public function test_enum_parameter_maps_to_prism_enum(): void
+    public function test_enum_parameter_maps_to_llm_enum(): void
     {
         $registry = new ToolRegistry;
         $registry->register(new class implements ToolInterface
@@ -46,14 +46,14 @@ class ToolRegistryEnumArrayTest extends TestCase
             }
         });
 
-        $prismTools = $registry->toPrismTools();
-        $this->assertCount(1, $prismTools);
+        $llmTools = $registry->toLlmTools();
+        $this->assertCount(1, $llmTools);
 
         // Verify the tool was created without error and has the name
-        $this->assertSame('test_enum', $prismTools[0]->name());
+        $this->assertSame('test_enum', $llmTools[0]->name());
     }
 
-    public function test_array_parameter_maps_to_prism_array(): void
+    public function test_array_parameter_maps_to_llm_array(): void
     {
         $registry = new ToolRegistry;
         $registry->register(new class implements ToolInterface
@@ -90,9 +90,9 @@ class ToolRegistryEnumArrayTest extends TestCase
             }
         });
 
-        $prismTools = $registry->toPrismTools();
-        $this->assertCount(1, $prismTools);
-        $this->assertSame('test_array', $prismTools[0]->name());
+        $llmTools = $registry->toLlmTools();
+        $this->assertCount(1, $llmTools);
+        $this->assertSame('test_array', $llmTools[0]->name());
     }
 
     public function test_unknown_type_falls_back_to_string(): void
@@ -128,8 +128,8 @@ class ToolRegistryEnumArrayTest extends TestCase
             }
         });
 
-        $prismTools = $registry->toPrismTools();
-        $this->assertCount(1, $prismTools);
-        $this->assertSame('test_unknown', $prismTools[0]->name());
+        $llmTools = $registry->toLlmTools();
+        $this->assertCount(1, $llmTools);
+        $this->assertSame('test_unknown', $llmTools[0]->name());
     }
 }

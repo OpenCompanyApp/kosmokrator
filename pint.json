@@ -2,6 +2,7 @@
     "preset": "laravel",
     "exclude": [
         "integrations",
+        "tmp",
         "vendor-src",
         "website"
     ]

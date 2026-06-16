@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\Session\SettingsRepositoryInterface;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
 
 /**
  * Provider authentication concerns — API key storage, OAuth status, credential masking.

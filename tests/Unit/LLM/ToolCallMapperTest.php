@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolError;
+use Kosmokrator\LLM\ValueObjects\ToolOutput;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolError;
-use Prism\Prism\ValueObjects\ToolOutput;
-use Prism\Prism\ValueObjects\ToolResult;
 
 class ToolCallMapperTest extends TestCase
 {

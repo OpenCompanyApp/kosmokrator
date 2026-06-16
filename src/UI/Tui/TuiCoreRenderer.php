@@ -247,6 +247,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->input->setKeybindings(new Keybindings([
             'copy' => [],
             'new_line' => ['shift+enter', 'alt+enter'],
+            'select_cancel' => [Key::ESCAPE, 'ctrl+c'],
             'cycle_mode' => ['shift+tab'],
             'history_up' => [Key::PAGE_UP],
             'history_down' => [Key::PAGE_DOWN],

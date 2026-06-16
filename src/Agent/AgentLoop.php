@@ -14,11 +14,18 @@ use Kosmokrator\Agent\Exception\MaxTurnsExceededException;
 use Kosmokrator\Agent\Exception\TimeoutExceededException;
 use Kosmokrator\Goal\Goal;
 use Kosmokrator\Goal\GoalStatus;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\MessageMapper;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\PromptFrameBuilder;
 use Kosmokrator\LLM\RetryableHttpException;
+use Kosmokrator\LLM\Tool;
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Coding\FileReadTool;
@@ -28,12 +35,6 @@ use Kosmokrator\UI\AgentTreeBuilder;
 use Kosmokrator\UI\RendererInterface;
 use Kosmokrator\UI\SafeDisplay;
 use Kosmokrator\Web\Cache\WebTransientCache;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -987,11 +988,8 @@ class AgentLoop
     /** Invalidate tool caches after compaction rewrites history (tools may hold stale references). */
     private function resetToolCachesAfterCompaction(): void
     {
-        foreach ($this->allTools as $tool) {
-            if (method_exists($tool, 'resetCache')) {
-                $tool->resetCache();
-            }
-        }
+        FileReadTool::resetGlobalCache();
+        PromptFrameBuilder::resetCache();
     }
 
     /**

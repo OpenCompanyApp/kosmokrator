@@ -6,7 +6,6 @@ namespace Kosmokrator;
 
 use Dotenv\Dotenv;
 use Illuminate\Container\Container;
-use Illuminate\Foundation\Application as LaravelApp;
 use Illuminate\Support\Facades\Facade;
 use Kosmokrator\Provider\AgentServiceProvider;
 use Kosmokrator\Provider\ConfigServiceProvider;
@@ -28,7 +27,7 @@ use Symfony\Component\Console\Application;
 
 /**
  * Application kernel — wires the Laravel DI container and orchestrates the full
- * boot sequence: env, config, database, LLM/Prism, tool registry, and console.
+ * boot sequence: env, config, database, native LLM stack, tool registry, and console.
  * This is the single entry point invoked by the bin/kosmo script.
  */
 class Kernel
@@ -47,7 +46,8 @@ class Kernel
      */
     public function boot(): void
     {
-        $this->container = new LaravelApp($this->basePath);
+        $this->container = new Container;
+        $this->container->instance('app', $this->container);
         Container::setInstance($this->container);
 
         try {

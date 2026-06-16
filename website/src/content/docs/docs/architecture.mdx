@@ -57,7 +57,7 @@ The source code is organized into focused namespaces under `src/`. Each director
 | Directory | Responsibility |
 | --- | --- |
 | `src/Agent/` | Agent core: `AgentLoop`, `ToolExecutor`, `ContextManager`, `StuckDetector`, `ContextCompactor`, `ContextPruner`, subagent orchestration, session builder |
-| `src/LLM/` | LLM clients: `AsyncLlmClient`, `PrismService`, `RetryableLlmClient`, provider catalog, model definitions, pricing service |
+| `src/LLM/` | Native LLM stack: `AsyncLlmClient`, `RetryableLlmClient`, provider registry, Codex OAuth, provider catalog, model definitions, pricing service |
 | `src/UI/` | Terminal rendering: `TuiRenderer` (Symfony TUI + Revolt event loop), `AnsiRenderer` (pure ANSI + readline), `HeadlessRenderer` for non-interactive output, `NullRenderer` for subagents, `Theme` for colors, diff rendering, conversation display |
 | `src/Tool/` | Tool implementations under `Coding/` (file ops, search, bash, subagent, memory), permission system under `Permission/` |
 | `src/Command/` | Console commands: `AgentCommand`, `SetupCommand`, `ConfigCommand`, `AuthCommand`, update/gateway/integration commands, slash commands in `Slash/`, power commands in `Power/` |

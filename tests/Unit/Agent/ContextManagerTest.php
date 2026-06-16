@@ -10,15 +10,15 @@ use Kosmokrator\Agent\ContextCompactor;
 use Kosmokrator\Agent\ContextManager;
 use Kosmokrator\Agent\ContextPruner;
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\UI\NullRenderer;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\ValueObjects\ToolResult;
 use Psr\Log\NullLogger;
 
 #[AllowMockObjectsWithoutExpectations]

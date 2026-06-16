@@ -974,9 +974,9 @@ final class SettingsSchema
                 description: 'Controls extended thinking/reasoning for supported models. Off disables reasoning params entirely.',
                 category: 'agent',
                 type: 'choice',
-                options: ['off', 'low', 'medium', 'high'],
+                options: ['off', 'low', 'medium', 'high', 'max'],
                 effect: 'applies_now',
-                default: 'high',
+                default: 'max',
             ),
             new SettingDefinition(
                 id: 'agent.system_prompt',

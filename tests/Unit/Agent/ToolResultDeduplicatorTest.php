@@ -7,10 +7,10 @@ namespace Kosmokrator\Tests\Unit\Agent;
 use Kosmokrator\Agent\ContextPruner;
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\ToolResultDeduplicator;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Prism\Prism\ValueObjects\ToolResult;
 
 class ToolResultDeduplicatorTest extends TestCase
 {

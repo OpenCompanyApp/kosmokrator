@@ -6,11 +6,11 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Kosmokrator\Agent\ContextAnalyzer;
 use Kosmokrator\Agent\ContextSuggestionService;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Prism\Prism\ValueObjects\ToolResult;
 
 final class ContextAnalyzerTest extends TestCase
 {

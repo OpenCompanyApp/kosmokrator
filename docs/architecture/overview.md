@@ -20,7 +20,7 @@ bin/kosmo
 
 Key responsibilities:
 
-- `Kernel` boots the Illuminate container, YAML config, logging, Prism provider wiring, SQLite persistence, tools, and commands.
+- `Kernel` boots the Illuminate container, YAML config, logging, native provider wiring, SQLite persistence, tools, and commands.
 - `AgentSessionBuilder` assembles UI, LLM client, permission evaluator, tool registry, session manager, context management helpers, and subagent infrastructure for an interactive session.
 - `AgentLoop` runs the prompt → LLM → tools → LLM loop and handles persistence, mode filtering, context health, and status reporting.
 
@@ -149,7 +149,7 @@ KosmoKrator ships an Agent Client Protocol stdio server:
 | Directory | Purpose |
 |-----------|---------|
 | `src/Agent/` | Agent core: AgentLoop, ToolExecutor, ContextManager, StuckDetector, subagent system, events |
-| `src/LLM/` | LLM clients: AsyncLlmClient, PrismService, RetryableLlmClient, model catalog, pricing |
+| `src/LLM/` | Native LLM stack: AsyncLlmClient, RetryableLlmClient, provider registry, Codex OAuth, model catalog, pricing |
 | `src/UI/` | Rendering: TuiRenderer, AnsiRenderer, HeadlessRenderer, NullRenderer, diff rendering, theming |
 | `src/Tool/` | Tool implementations and permission system |
 | `src/Command/` | AgentCommand, SetupCommand, ConfigCommand, AuthCommand, UpdateCommand, gateway commands, integration commands, slash commands, power commands |

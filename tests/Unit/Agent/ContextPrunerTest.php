@@ -6,9 +6,9 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Kosmokrator\Agent\ContextPruner;
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\ToolResult;
 
 class ContextPrunerTest extends TestCase
 {

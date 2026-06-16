@@ -13,10 +13,13 @@ use Kosmokrator\Command\Slash\SettingsCommand;
 use Kosmokrator\Command\SlashCommandContext;
 use Kosmokrator\Integration\IntegrationManager;
 use Kosmokrator\Integration\YamlCredentialResolver;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
@@ -30,9 +33,6 @@ use Kosmokrator\UI\UIManager;
 use OpenCompany\IntegrationCore\Contracts\Tool;
 use OpenCompany\IntegrationCore\Contracts\ToolProvider;
 use OpenCompany\IntegrationCore\Support\ToolProviderRegistry;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class SettingsCommandTest extends TestCase
@@ -75,7 +75,7 @@ final class SettingsCommandTest extends TestCase
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
 
-        $registry = new RelayRegistry([
+        $registry = new RelayProviderRegistry([
             'z' => [
                 'label' => 'Z.AI',
                 'auth' => 'api_key',
@@ -126,7 +126,7 @@ final class SettingsCommandTest extends TestCase
         $container = new Container;
         $container->instance(SettingsSchema::class, $schema);
         $container->instance(SettingsManager::class, $settingsManager);
-        $container->instance(RelayRegistry::class, $registry);
+        $container->instance(RelayProviderRegistry::class, $registry);
 
         $modelCatalog = $this->createMock(ModelCatalog::class);
         $modelCatalog->method('contextWindow')
@@ -470,7 +470,7 @@ final class SettingsCommandTest extends TestCase
 
     private function providerCatalog(Repository $config, SettingsRepositoryInterface $settingsRepository): ProviderCatalog
     {
-        $registry = new RelayRegistry([
+        $registry = new RelayProviderRegistry([
             'z' => [
                 'label' => 'Z.AI',
                 'auth' => 'api_key',
@@ -515,7 +515,7 @@ final class SettingsCommandTest extends TestCase
             settings: $settingsManager,
             credentials: new YamlCredentialResolver($settingsRepository),
         ));
-        $container->instance(RelayRegistry::class, new RelayRegistry([
+        $container->instance(RelayProviderRegistry::class, new RelayProviderRegistry([
             'z' => [
                 'label' => 'Z.AI',
                 'auth' => 'api_key',

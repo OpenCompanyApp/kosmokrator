@@ -6,13 +6,12 @@ namespace Kosmokrator\LLM;
 
 use Amp\Cancellation;
 use Generator;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Tool;
+use Kosmokrator\LLM\Contracts\Message;
 
 /**
  * Contract for LLM chat clients in the KosmoKrator LLM layer.
  *
- * Implemented by PrismService (via Prism SDK) and AsyncLlmClient (raw HTTP).
+ * Implemented by AsyncLlmClient (via native HTTP) and AsyncLlmClient (raw HTTP).
  * Decorated by RetryableLlmClient for automatic retry on transient failures.
  */
 interface LlmClientInterface
@@ -20,7 +19,7 @@ interface LlmClientInterface
     /**
      * Send a chat-completion request to the LLM provider.
      *
-     * @param  Message[]  $messages  Conversation history as Prism Message objects
+     * @param  Message[]  $messages  Conversation history as native Message objects
      * @param  Tool[]  $tools  Available tools for function calling
      * @param  Cancellation  $cancellation  Optional Amp cancellation token
      * @return LlmResponse Parsed response with text, tool calls, and usage data
@@ -34,7 +33,7 @@ interface LlmClientInterface
      * from the provider. The final event is always a 'stream_end' with usage data.
      * Callers that don't need streaming should use chat() instead.
      *
-     * @param  Message[]  $messages  Conversation history as Prism Message objects
+     * @param  Message[]  $messages  Conversation history as native Message objects
      * @param  Tool[]  $tools  Available tools for function calling
      * @param  Cancellation  $cancellation  Optional Amp cancellation token
      * @return Generator<LlmStreamingEvent>

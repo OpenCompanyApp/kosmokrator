@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-
 /**
  * Builds the merged model definition map from ProviderMeta (built-in) and local config overrides.
  *
@@ -81,6 +79,13 @@ class ModelDefinitionSource
         // Exact match
         if (isset($this->models[$key])) {
             return $this->models[$key];
+        }
+
+        if (str_ends_with($key, '[1m]')) {
+            $baseKey = substr($key, 0, -4);
+            if (isset($this->models[$baseKey])) {
+                return array_merge($this->models[$baseKey], ['context' => max(1_000_000, (int) ($this->models[$baseKey]['context'] ?? 0))]);
+            }
         }
 
         // Suffix match: the stored key must be a suffix of the input model key.

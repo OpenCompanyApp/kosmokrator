@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
 use Kosmokrator\Task\TaskStore;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
 
 final class WorkingStateCollector
 {

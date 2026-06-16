@@ -11,10 +11,10 @@ use Kosmokrator\Agent\SessionSettingsApplier;
 use Kosmokrator\Agent\SubagentPipelineFactory;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\Relay;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Task\TaskStore;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -49,7 +49,7 @@ class AgentServiceProvider extends ServiceProvider
             return new SubagentPipelineFactory(
                 sessionManager: $this->container->make(SessionManager::class),
                 providers: $this->container->make(ProviderCatalog::class),
-                registry: $this->container->make(RelayRegistry::class),
+                registry: $this->container->make(RelayProviderRegistry::class),
                 models: $this->container->make(ModelCatalog::class),
                 relay: $this->container->make(Relay::class),
                 log: $this->container->make(LoggerInterface::class),

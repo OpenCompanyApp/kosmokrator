@@ -82,6 +82,24 @@ final class KosmokratorStyleSheetTest extends TestCase
             '.subagent-loader',
             // Markdown
             KosmokratorMarkdownWidget::class,
+            KosmokratorMarkdownWidget::class.'::heading',
+            KosmokratorMarkdownWidget::class.'::heading-1',
+            KosmokratorMarkdownWidget::class.'::heading-2',
+            KosmokratorMarkdownWidget::class.'::heading-3',
+            KosmokratorMarkdownWidget::class.'::heading-4',
+            KosmokratorMarkdownWidget::class.'::heading-5',
+            KosmokratorMarkdownWidget::class.'::heading-6',
+            KosmokratorMarkdownWidget::class.'::code',
+            KosmokratorMarkdownWidget::class.'::code-block-border',
+            KosmokratorMarkdownWidget::class.'::quote',
+            KosmokratorMarkdownWidget::class.'::quote-border',
+            KosmokratorMarkdownWidget::class.'::hr',
+            KosmokratorMarkdownWidget::class.'::list-bullet',
+            KosmokratorMarkdownWidget::class.'::link',
+            KosmokratorMarkdownWidget::class.'::link-url',
+            KosmokratorMarkdownWidget::class.'::bold',
+            KosmokratorMarkdownWidget::class.'::italic',
+            KosmokratorMarkdownWidget::class.'::strikethrough',
             // Permission prompt
             '.permission-prompt',
             // Slash completion
@@ -104,7 +122,7 @@ final class KosmokratorStyleSheetTest extends TestCase
     {
         $rules = KosmokratorStyleSheet::create()->getRules();
 
-        $this->assertCount(40, $rules);
+        $this->assertCount(58, $rules);
     }
 
     public function test_all_rules_are_style_objects(): void
@@ -293,6 +311,36 @@ final class KosmokratorStyleSheetTest extends TestCase
         $style = $rules[KosmokratorMarkdownWidget::class];
 
         $this->assertSame(100, $style->getMaxColumns());
+    }
+
+    public function test_markdown_heading_styles_are_distinct(): void
+    {
+        $rules = KosmokratorStyleSheet::create()->getRules();
+
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-1']->getBold());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-1']->getUnderline());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-2']->getBold());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-3']->getBold());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-4']->getItalic());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-5']->getItalic());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::heading-6']->getDim());
+    }
+
+    public function test_markdown_inline_and_block_elements_have_styles(): void
+    {
+        $rules = KosmokratorStyleSheet::create()->getRules();
+
+        $this->assertNotNull($rules[KosmokratorMarkdownWidget::class.'::code']->getColor());
+        $this->assertNotNull($rules[KosmokratorMarkdownWidget::class.'::code-block-border']->getColor());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::quote']->getItalic());
+        $this->assertNotNull($rules[KosmokratorMarkdownWidget::class.'::quote-border']->getColor());
+        $this->assertNotNull($rules[KosmokratorMarkdownWidget::class.'::hr']->getColor());
+        $this->assertNotNull($rules[KosmokratorMarkdownWidget::class.'::list-bullet']->getColor());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::link']->getUnderline());
+        $this->assertNotNull($rules[KosmokratorMarkdownWidget::class.'::link-url']->getColor());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::bold']->getBold());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::italic']->getItalic());
+        $this->assertTrue($rules[KosmokratorMarkdownWidget::class.'::strikethrough']->getStrikethrough());
     }
 
     public function test_permission_prompt_has_border(): void

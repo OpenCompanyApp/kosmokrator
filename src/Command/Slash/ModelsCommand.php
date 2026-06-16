@@ -13,9 +13,9 @@ use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ModelSwitcherHistory;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Settings\SettingsManager;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 /**
  * Curated provider/model switcher for day-to-day use.
@@ -61,7 +61,7 @@ final class ModelsCommand implements SlashCommand
     {
         $catalog = $ctx->providers ?? $this->container->make(ProviderCatalog::class);
         $models = $ctx->models ?? $this->container->make(ModelCatalog::class);
-        $registry = $this->container->make(RelayRegistry::class);
+        $registry = $this->container->make(RelayProviderRegistry::class);
         $settings = $this->container->make(SettingsManager::class);
         $settings->setProjectRoot($ctx->sessionManager->getProject() ?? getcwd());
         $history = new ModelSwitcherHistory($ctx->settings, $settings);
@@ -293,7 +293,7 @@ final class ModelsCommand implements SlashCommand
         ModelSwitcherHistory $history,
         ProviderCatalog $catalog,
         ModelCatalog $models,
-        RelayRegistry $registry,
+        RelayProviderRegistry $registry,
         string $provider,
         string $model,
     ): void {
@@ -365,7 +365,7 @@ final class ModelsCommand implements SlashCommand
         ];
     }
 
-    private function requiresRestart(LlmClientInterface $llm, RelayRegistry $registry, string $provider): bool
+    private function requiresRestart(LlmClientInterface $llm, RelayProviderRegistry $registry, string $provider): bool
     {
         $inner = self::innerClient($llm);
 

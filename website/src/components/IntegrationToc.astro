@@ -1,0 +1,27 @@
+---
+type TocItem = {
+  id: string;
+  label: string;
+  depth?: 2 | 3;
+};
+
+type Props = {
+  items: TocItem[];
+  title?: string;
+};
+
+const { items, title = 'On This Page' } = Astro.props as Props;
+---
+
+{items.length > 0 && (
+  <nav class="integration-toc" aria-label={title}>
+    <p>{title}</p>
+    <ol>
+      {items.map((item) => (
+        <li class:list={[item.depth === 3 && 'nested']}>
+          <a href={`#${item.id}`}>{item.label}</a>
+        </li>
+      ))}
+    </ol>
+  </nav>
+)}

@@ -12,6 +12,33 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 
 ### Fixed
 
+## [0.8.0] - 2026-06-16
+
+### Added
+- Refreshed bundled model catalog entries across providers, including OpenAI GPT-5.5/GPT-5.4 mini and nano, Anthropic Claude Fable 5/Opus 4.8, Gemini 3.1 Pro Preview, DeepSeek V4, Kimi K2.7 Code, MiniMax M3, xAI Grok 4.3, and GLM-5.2.
+- Footer contact link to the RuttyBuilds X profile for public site inquiries.
+- Session-scoped `/goal` support with persisted goal state, model goal tools, usage accounting, and active-goal continuation.
+- Background bash execution for long tests, builds, installs, dev servers, and watchers, with completion results injected into the next agent turn and progress events for stream-json clients.
+- `/context` slash command for live context-budget, largest-output, cache, and suggestion diagnostics.
+- Context telemetry for prompt-cache drops, file-read cache usage, web transient cache usage, and subagent context pressure.
+
+### Changed
+- Added native GLM thinking-mode support: `agent.reasoning_effort=max` is now the default and maps to GLM `max`, lower enabled efforts map to GLM `high`, and `off` sends GLM `thinking.disabled`; `glm-5.2` is treated as the 1M-context Z.AI model without rewriting the chat-completions request model id.
+- Replaced Prism, prism-relay, and prism-codex runtime dependencies with KosmoKrator-owned LLM value objects, provider registry, Codex OAuth handling, and native Amp HTTP provider transports.
+- Switched the TUI dependency from the pinned development fork to the official Symfony TUI package.
+- Updated Composer and website npm dependencies to current compatible releases, including PHPUnit 13, Symfony 8.1, Astro 6.4, Starlight 0.40, and Wrangler 4.100.
+- Pruned generated website integration SEO pages to canonical overview, CLI, MCP, and Lua pages, folding framework/client and automation variants into anchored sections with cleaner layouts and redirects.
+- Context pruning now clears high-bloat stale tool output first while preserving recent and referenced results.
+- Compaction summaries are wrapped as historical reference only and paired with bounded working-state restoration.
+
+### Fixed
+- Improved TUI markdown hierarchy so headings, inline code, quotes, links, lists, and rules use Kosmo-specific styles instead of blending into body text.
+- Restored Ctrl+C handling in TUI mode by binding the raw Ctrl+C byte to the prompt cancel path again.
+- Fixed the official Symfony TUI status bar integration so ANSI color codes are not exposed as visible text or allowed to overflow narrow terminals.
+- Fixed official Symfony TUI loader integration so thinking and compacting messages no longer expose sanitized ANSI fragments.
+- Closed stdin for one-shot BashTool commands so test runners and other stdin-aware commands do not hang waiting for input.
+- Prevented large base64-like payloads and data URLs from being sent raw into compaction prompts.
+
 ## [0.7.2] - 2026-05-04
 
 ### Added

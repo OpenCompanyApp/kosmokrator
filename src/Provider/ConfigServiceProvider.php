@@ -32,7 +32,7 @@ class ConfigServiceProvider extends ServiceProvider
         $this->container->instance('config', $config);
         $this->container->alias('config', Repository::class);
 
-        // Map prism.yaml keys to where Prism expects them
+        // Keep provider config available under the legacy prism key for compatibility
         $config->set('prism', $config->get('prism', []));
         $config->set('codex', [
             'url' => $codexUrl,

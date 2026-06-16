@@ -1,6 +1,5 @@
 import { getIntegrations, integrationUrl, type Integration } from './integrations-catalog';
 import {
-  cliEnvironments,
   comparisonPages,
   matrixClients,
   useCasePages,
@@ -58,6 +57,7 @@ const corePages: FooterLink[] = [
   { label: 'Integration Catalog', href: '/integrations' },
   { label: 'Local MCP Gateway', href: '/use-cases/local-mcp-gateway' },
   { label: 'Website Map', href: '/site-map' },
+  { label: 'Contact on X', href: 'https://x.com/RuttyBuilds' },
   { label: 'GitHub', href: 'https://github.com/OpenCompanyApp/kosmokrator' },
 ];
 
@@ -73,22 +73,11 @@ const runtimePages: FooterLink[] = [
 ];
 
 function integrationPages(integration: Integration): FooterLink[] {
-  const base = integrationUrl(integration);
-
   return [
-    { label: `${integration.name} overview`, href: base },
-    { label: `${integration.name} CLI`, href: `${base}/cli` },
-    { label: `${integration.name} MCP`, href: `${base}/mcp` },
-    { label: `${integration.name} Lua`, href: `${base}/lua` },
-    { label: `${integration.name} CLI shortcut`, href: `/cli/${integration.route_slug}` },
-    ...matrixClients.map((client) => ({
-      label: `${integration.name} for ${client.label}`,
-      href: `${base}/framework/${client.slug}`,
-    })),
-    ...cliEnvironments.map((environment) => ({
-      label: `${integration.name} CLI for ${environment.titleSuffix}`,
-      href: `${base}/cli/${environment.slug}`,
-    })),
+    { label: `${integration.name} overview`, href: integrationUrl(integration) },
+    { label: `${integration.name} CLI`, href: integrationUrl(integration, 'cli') },
+    { label: `${integration.name} MCP`, href: integrationUrl(integration, 'mcp') },
+    { label: `${integration.name} Lua`, href: integrationUrl(integration, 'lua') },
   ];
 }
 
@@ -136,7 +125,7 @@ export function getMegaFooterSections(): FooterSection[] {
     .slice(0, 10);
 
   return [
-    { title: 'KosmoKrator', links: corePages.slice(0, 6) },
+    { title: 'KosmoKrator', links: corePages.slice(0, 7) },
     { title: 'Run Modes', links: runtimePages },
     {
       title: 'Docs',
@@ -158,8 +147,7 @@ export function getMegaFooterSections(): FooterSection[] {
       links: [
         { label: 'Integration Catalog', href: '/integrations' },
         { label: 'All Categories', href: '/site-map#integration-categories' },
-        { label: 'Integration Matrix', href: '/site-map#integration-matrix' },
-        { label: 'CLI Shortcuts', href: '/site-map#cli-shortcuts' },
+        { label: 'Canonical Integration Pages', href: '/site-map#integration-reference' },
         { label: 'Local Integration Runtime', href: '/use-cases/local-integration-runtime' },
       ],
     },
@@ -177,7 +165,7 @@ export function getMegaFooterSections(): FooterSection[] {
       title: 'Popular CLI',
       links: priorityIntegrations.slice(0, 12).map((integration) => ({
         label: `${integration.name} CLI`,
-        href: `/cli/${integration.route_slug}`,
+        href: integrationUrl(integration, 'cli'),
       })),
     },
     {
@@ -194,7 +182,8 @@ export function getMegaFooterSections(): FooterSection[] {
         { label: 'All Use Cases', href: '/site-map#use-cases' },
         { label: 'All MCP Client Pages', href: '/site-map#mcp-clients' },
         { label: 'All Comparisons', href: '/site-map#comparisons' },
-        { label: 'All Generated Pages', href: '/site-map#integration-matrix' },
+        { label: 'Integration Reference', href: '/site-map#integration-reference' },
+        { label: 'Contact on X', href: 'https://x.com/RuttyBuilds' },
         { label: 'GitHub', href: 'https://github.com/OpenCompanyApp/kosmokrator' },
       ],
     },
@@ -248,16 +237,16 @@ export function getSiteMapSections(): SiteMapSection[] {
       })),
     },
     {
-      title: 'CLI Shortcuts',
-      intro: 'Exact-match command-line pages such as ClickUp CLI and Slack CLI.',
+      title: 'Integrations',
+      intro: 'Canonical integration overview pages.',
       links: integrations.map((integration) => ({
-        label: `${integration.name} CLI`,
-        href: `/cli/${integration.route_slug}`,
+        label: integration.name,
+        href: integrationUrl(integration),
       })),
     },
     {
-      title: 'Integration Matrix',
-      intro: 'Every generated integration overview, CLI, MCP, Lua, framework, and automation page.',
+      title: 'Integration Reference',
+      intro: 'Canonical generated integration pages: overview, CLI, MCP, and Lua.',
       links: integrations.flatMap(integrationPages),
     },
   ];

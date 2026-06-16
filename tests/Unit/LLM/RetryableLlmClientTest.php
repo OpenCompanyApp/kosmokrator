@@ -7,16 +7,14 @@ namespace Kosmokrator\Tests\Unit\LLM;
 use Amp\Cancellation;
 use Amp\CancelledException;
 use Amp\DeferredCancellation;
+use Amp\Http\Client\TlsException;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\ProviderError;
 use Kosmokrator\LLM\RetryableHttpException;
 use Kosmokrator\LLM\RetryableLlmClient;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Exceptions\PrismProviderOverloadedException;
-use Prism\Prism\Exceptions\PrismRateLimitedException;
-use Prism\Prism\Exceptions\PrismRequestTooLargeException;
-use Prism\Prism\Exceptions\PrismServerException;
 use Psr\Log\LoggerInterface;
 
 class RetryableLlmClientTest extends TestCase
@@ -65,7 +63,7 @@ class RetryableLlmClientTest extends TestCase
                 $call++;
 
                 if ($call === 1) {
-                    throw PrismRateLimitedException::make([], 5);
+                    throw new RetryableHttpException(429, 'API error (429): rate limited', 5.0);
                 }
 
                 return $response;
@@ -88,7 +86,7 @@ class RetryableLlmClientTest extends TestCase
                 $call++;
 
                 if ($call === 1) {
-                    throw new PrismServerException('Server error');
+                    throw new RetryableHttpException(500, 'API error (500): server error');
                 }
 
                 return $response;
@@ -111,7 +109,7 @@ class RetryableLlmClientTest extends TestCase
                 $call++;
 
                 if ($call === 1) {
-                    throw new PrismProviderOverloadedException('test-provider');
+                    throw new ProviderError('provider overloaded', 'test-provider', 'test-model', retryable: true);
                 }
 
                 return $response;
@@ -173,11 +171,11 @@ class RetryableLlmClientTest extends TestCase
         $inner = $this->createMock(LlmClientInterface::class);
         $inner->expects($this->exactly(2))
             ->method('chat')
-            ->willThrowException(new PrismServerException('Server error'));
+            ->willThrowException(new RetryableHttpException(500, 'API error (500): server error'));
 
         $client = $this->makeClient($inner, maxAttempts: 2);
 
-        $this->expectException(PrismServerException::class);
+        $this->expectException(RetryableHttpException::class);
         $client->chat([]);
     }
 
@@ -186,11 +184,11 @@ class RetryableLlmClientTest extends TestCase
         $inner = $this->createMock(LlmClientInterface::class);
         $inner->expects($this->once())
             ->method('chat')
-            ->willThrowException(new PrismRequestTooLargeException('test-provider'));
+            ->willThrowException(new ProviderError('request too large', 'test-provider', 'test-model', retryable: false));
 
         $client = $this->makeClient($inner);
 
-        $this->expectException(PrismRequestTooLargeException::class);
+        $this->expectException(ProviderError::class);
         $client->chat([]);
     }
 
@@ -266,6 +264,29 @@ class RetryableLlmClientTest extends TestCase
         $this->assertSame($response, $client->chat([]));
     }
 
+    public function test_retries_on_tls_connection_reset(): void
+    {
+        $response = $this->makeResponse();
+
+        $inner = $this->createMock(LlmClientInterface::class);
+        $inner->expects($this->exactly(2))
+            ->method('chat')
+            ->willReturnCallback(function () use ($response): LlmResponse {
+                static $call = 0;
+                $call++;
+
+                if ($call === 1) {
+                    throw new TlsException("Connection to 'api.z.ai:443' closed during TLS handshake: TLS negotiation failed: Connection reset by peer");
+                }
+
+                return $response;
+            });
+
+        $client = $this->makeClient($inner, maxAttempts: 2);
+
+        $this->assertSame($response, $client->chat([]));
+    }
+
     public function test_on_retry_callback_is_called(): void
     {
         $response = $this->makeResponse();
@@ -309,7 +330,7 @@ class RetryableLlmClientTest extends TestCase
                 $call++;
 
                 if ($call === 1) {
-                    throw new PrismServerException('Server error');
+                    throw new RetryableHttpException(500, 'API error (500): server error');
                 }
 
                 return $response;
@@ -329,7 +350,7 @@ class RetryableLlmClientTest extends TestCase
         $inner = $this->createMock(LlmClientInterface::class);
         $inner->expects($this->once())
             ->method('chat')
-            ->willThrowException(new PrismServerException('Server error'));
+            ->willThrowException(new RetryableHttpException(500, 'API error (500): server error'));
 
         $log = $this->createStub(LoggerInterface::class);
         $client = new RetryableLlmClient($inner, $log, maxAttempts: 3, sleepFunction: function (float $delay, ?Cancellation $cancellation) {

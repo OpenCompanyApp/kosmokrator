@@ -17,7 +17,7 @@ bin/kosmo → Kernel → AgentCommand → AgentSessionBuilder → AgentLoop (REP
                                             ├── ToolExecutor → tools + PermissionEvaluator
                                             ├── ContextManager → compaction, pruning, system prompt
                                             ├── StuckDetector → headless loop convergence
-                                            ├── LLM client (AsyncLlmClient or PrismService)
+                                            ├── LLM client (AsyncLlmClient + RetryableLlmClient)
                                             ├── UIManager → TuiRenderer | AnsiRenderer
                                             ├── ToolRegistry → coding, shell, task, memory, session, Lua, and subagent tools
                                             └── SubagentOrchestrator → parallel child agents
@@ -26,8 +26,7 @@ bin/kosmo → Kernel → AgentCommand → AgentSessionBuilder → AgentLoop (REP
 ### Key directories
 
 - `src/Agent/` — Agent core: AgentLoop (REPL orchestrator), ToolExecutor, ContextManager, StuckDetector, subagent system
-- `src/LLM/` — LLM clients: AsyncLlmClient (Amp HTTP, async), PrismService (Prism PHP, sync), RetryableLlmClient (decorator)
-  - **prism-relay boundary**: Provider-specific logic (SSE parsing quirks, `stream_options` support, usage extraction formats, `finish_reason` mapping, error normalization, prompt caching strategies) belongs in the `opencompany/prism-relay` package, NOT here. KosmoKrator's LLM layer should only contain agent-level orchestration: retry policy, streaming-to-UI bridging, cancellation handling.
+- `src/LLM/` — Native LLM stack: AsyncLlmClient (Amp HTTP, streaming), RetryableLlmClient (decorator), provider registry, model catalog, Codex OAuth, prompt caching, and provider-specific request/response mappers.
 - `src/UI/` — Rendering layer with split interface hierarchy
   - `UI/Tui/` — Symfony TUI renderer: TuiRenderer, TuiModalManager (dialogs), TuiAnimationManager (breathing/spinners), SubagentDisplayManager, widgets
   - `UI/Ansi/` — Pure ANSI fallback: AnsiRenderer, MarkdownToAnsi (with Handler/ for table/list extraction), AnsiTableRenderer

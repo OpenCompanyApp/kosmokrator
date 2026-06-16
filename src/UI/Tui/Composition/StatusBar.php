@@ -86,13 +86,8 @@ final class StatusBar
     {
         $inLabel = Theme::formatTokenCount($tokensIn);
         $maxLabel = Theme::formatTokenCount($maxContext);
-        $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-        $r = Theme::reset();
-        $sep = Theme::dim().'·'.$r;
-        $dimWhite = Theme::dimWhite();
-        $ctxColor = Theme::contextColor($ratio);
 
-        $detail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$model}{$r}";
+        $detail = "{$inLabel}/{$maxLabel} · {$model}";
         $state->setStatusDetail($detail);
 
         return $detail;
@@ -104,18 +99,13 @@ final class StatusBar
     public static function formatRuntimeDetail(TuiStateStore $state, string $provider, string $model, int $tokensIn, int $maxContext): string
     {
         $label = $provider.'/'.$model;
-        $r = Theme::reset();
-        $dimWhite = Theme::dimWhite();
 
         if ($state->getMaxContext() === null) {
-            $detail = "{$dimWhite}{$label}{$r}";
+            $detail = $label;
         } else {
             $inLabel = Theme::formatTokenCount($tokensIn);
             $maxLabel = Theme::formatTokenCount($maxContext);
-            $ratio = min(1.0, $tokensIn / max(1, $maxContext));
-            $sep = Theme::dim().'·'.$r;
-            $ctxColor = Theme::contextColor($ratio);
-            $detail = "{$ctxColor}{$inLabel}/{$maxLabel}{$r} {$sep} {$dimWhite}{$label}{$r}";
+            $detail = "{$inLabel}/{$maxLabel} · {$label}";
         }
 
         $state->setStatusDetail($detail);

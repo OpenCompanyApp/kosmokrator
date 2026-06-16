@@ -84,7 +84,7 @@ kosmo -p "Summarize progress" --continue --output-format stream-json
 
 ```bash
 kosmo setup
-kosmo setup --provider openai --model gpt-5.4-mini --api-key-env OPENAI_API_KEY --global --json
+kosmo setup --provider openai --model gpt-5.5 --api-key-env OPENAI_API_KEY --global --json
 printf %s "$ANTHROPIC_API_KEY" | kosmo setup --provider anthropic --api-key-stdin --json
 kosmo setup --provider codex --device --json
 ```
@@ -111,7 +111,7 @@ kosmo config show
 kosmo config show --json
 kosmo config paths --json
 kosmo config get agent.default_model --json
-kosmo config set agent.default_model gpt-5.4-mini --provider openai --global --json
+kosmo config set agent.default_model gpt-5.5 --provider openai --global --json
 kosmo config unset agent.mode --project --json
 kosmo config edit --project
 ```
@@ -145,7 +145,7 @@ kosmo settings:unset agent.mode --project --json
 jq -n '{
   settings: {
     "agent.default_provider": "openai",
-    "agent.default_model": "gpt-5.4-mini",
+    "agent.default_model": "gpt-5.5",
     "tools.default_permission_mode": "guardian"
   }
 }' | kosmo settings:apply --stdin-json --global --json
@@ -171,7 +171,7 @@ kosmo providers:list --json
 kosmo providers:models anthropic --json
 kosmo providers:status openai --json
 printf %s "$OPENAI_API_KEY" | \
-  kosmo providers:configure openai --api-key-stdin --model gpt-5.4-mini --global --json
+  kosmo providers:configure openai --api-key-stdin --model gpt-5.5 --global --json
 kosmo providers:configure codex --device --global --json
 kosmo providers:logout openai --json
 ```

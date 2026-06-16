@@ -8,21 +8,15 @@ use Amp\Cancellation;
 use Amp\Http\Client\HttpException;
 use Amp\Http\Client\SocketException;
 use Amp\Http\Client\TimeoutException;
-use Amp\Http\Client\TlsException;
-use OpenCompany\PrismRelay\Errors\ProviderError;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\Exceptions\PrismProviderOverloadedException;
-use Prism\Prism\Exceptions\PrismRateLimitedException;
-use Prism\Prism\Exceptions\PrismServerException;
-use Prism\Prism\Tool;
+use Kosmokrator\LLM\Contracts\Message;
 use Psr\Log\LoggerInterface;
 
 /**
  * Retrying decorator around LlmClientInterface with exponential backoff and jitter.
  *
- * Wraps any LlmClientInterface (AsyncLlmClient, PrismService) and automatically
+ * Wraps any LlmClientInterface and automatically
  * retries on rate-limit (429), server errors (5xx), and network failures.
- * Honors Retry-After headers from providers and PrismRateLimitedException hints.
+ * Honors Retry-After headers from providers.
  */
 class RetryableLlmClient implements LlmClientInterface
 {
@@ -178,17 +172,11 @@ class RetryableLlmClient implements LlmClientInterface
     /**
      * Determine if an exception represents a transient failure worth retrying.
      *
-     * Recognizes Prism rate-limit/server exceptions, RetryableHttpException, ProviderError,
+     * Recognizes RetryableHttpException, ProviderError,
      * Amp HttpException (network-level), and legacy RuntimeException with retryable status codes.
      */
     private function isRetryable(\Throwable $e): bool
     {
-        if ($e instanceof PrismRateLimitedException
-            || $e instanceof PrismProviderOverloadedException
-            || $e instanceof PrismServerException) {
-            return true;
-        }
-
         if ($e instanceof RetryableHttpException) {
             return true;
         }
@@ -199,7 +187,7 @@ class RetryableLlmClient implements LlmClientInterface
 
         if ($e instanceof HttpException) {
             return $e instanceof TimeoutException
-                || ($e instanceof SocketException && ! $e instanceof TlsException);
+                || $e instanceof SocketException;
         }
 
         // Legacy: AsyncLlmClient HTTP errors with retryable status codes
@@ -213,13 +201,14 @@ class RetryableLlmClient implements LlmClientInterface
     /** Classify the error into a short human-readable category for log messages. */
     private function classifyError(\Throwable $e): string
     {
-        if ($e instanceof PrismRateLimitedException || ($e instanceof RetryableHttpException && $e->httpStatus === 429)) {
+        if (($e instanceof RetryableHttpException && $e->httpStatus === 429)
+            || ($e instanceof ProviderError && $e->retryable && str_contains(strtolower($e->getMessage()), 'rate'))) {
             return 'rate-limited';
         }
-        if ($e instanceof PrismProviderOverloadedException) {
+        if ($e instanceof ProviderError && str_contains(strtolower($e->getMessage()), 'overload')) {
             return 'provider overloaded';
         }
-        if ($e instanceof PrismServerException || ($e instanceof RetryableHttpException && $e->httpStatus >= 500)) {
+        if ($e instanceof RetryableHttpException && $e->httpStatus >= 500) {
             return 'server error';
         }
         if ($e instanceof HttpException) {
@@ -240,11 +229,6 @@ class RetryableLlmClient implements LlmClientInterface
      */
     private function calculateDelay(\Throwable $e, int $attempt): float
     {
-        // Honor rate limit hint from Prism
-        if ($e instanceof PrismRateLimitedException && $e->retryAfter !== null) {
-            return min((float) $e->retryAfter, 60.0);
-        }
-
         // Honor retry-after from HTTP response headers
         if ($e instanceof RetryableHttpException && $e->retryAfterSeconds !== null) {
             return min($e->retryAfterSeconds, 60.0);

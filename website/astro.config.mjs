@@ -1,10 +1,11 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import tailwindcss from '@tailwindcss/vite';
+import { analyticsHeadEntries } from './src/lib/analytics-snippets.mjs';
 
 export default defineConfig({
   site: 'https://kosmokrator.dev',
-  trailingSlash: 'never',
+  trailingSlash: 'always',
   build: {
     concurrency: 1,
   },
@@ -81,19 +82,7 @@ export default defineConfig({
             content: 'https://kosmokrator.dev/og/default.svg',
           },
         },
-        {
-          tag: 'script',
-          attrs: {
-            async: true,
-            src: 'https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js',
-          },
-        },
-        {
-          tag: 'script',
-          attrs: { 'is:inline': true },
-          content:
-            'window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()',
-        },
+        ...analyticsHeadEntries,
       ],
       sidebar: [
         {

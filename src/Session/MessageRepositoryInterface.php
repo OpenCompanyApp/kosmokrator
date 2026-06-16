@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Session;
 
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
  * Contract for conversation message persistence operations.
@@ -39,7 +39,7 @@ interface MessageRepositoryInterface
     ): int;
 
     /**
-     * Load all non-compacted messages for a session, deserialized into Prism value objects.
+     * Load all non-compacted messages for a session, deserialized into native value objects.
      *
      * @param  string  $sessionId  Session to load messages for
      * @return Message[] Ordered list of deserialized messages

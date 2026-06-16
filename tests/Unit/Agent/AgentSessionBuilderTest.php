@@ -11,10 +11,14 @@ use Kosmokrator\Agent\AgentSession;
 use Kosmokrator\Agent\AgentSessionBuilder;
 use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
-use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\Relay;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
@@ -28,11 +32,6 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\Tool\Permission\SessionGrants;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\UIManager;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Relay;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -93,8 +92,8 @@ class AgentSessionBuilderTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Codex is not authenticated');
 
-        // RelayRegistry must include 'codex' so ProviderCatalog resolves its auth mode as 'oauth'
-        $relayRegistry = new RelayRegistry([
+        // RelayProviderRegistry must include 'codex' so ProviderCatalog resolves its auth mode as 'oauth'
+        $relayRegistry = new RelayProviderRegistry([
             'codex' => [
                 'url' => 'https://chatgpt.com/backend-api/codex',
                 'models' => [
@@ -275,7 +274,7 @@ class AgentSessionBuilderTest extends TestCase
         $builder = new AgentSessionBuilder($container);
         $session = $builder->build('ansi', false);
 
-        // ANSI renderer → should use PrismService (sync), not AsyncLlmClient
+        // ANSI renderer → should use AsyncLlmClient (sync), not AsyncLlmClient
         $this->assertSame($syncLlm, $session->llm);
     }
 
@@ -294,7 +293,7 @@ class AgentSessionBuilderTest extends TestCase
         bool $codexConfigured = true,
         ?PermissionEvaluator $permissions = null,
         array $globalSettings = [],
-        ?RelayRegistry $relayRegistry = null,
+        ?RelayProviderRegistry $relayRegistry = null,
     ): Container {
         $container = new Container;
 
@@ -336,9 +335,9 @@ class AgentSessionBuilderTest extends TestCase
         ]);
         $container->instance('config', $config);
 
-        // RelayRegistry
-        $relayRegistry ??= new RelayRegistry([]);
-        $container->instance(RelayRegistry::class, $relayRegistry);
+        // RelayProviderRegistry
+        $relayRegistry ??= new RelayProviderRegistry([]);
+        $container->instance(RelayProviderRegistry::class, $relayRegistry);
 
         // ProviderCatalog (final class — must construct a real instance)
         $providerMeta = new ProviderMeta($relayRegistry);
@@ -361,8 +360,7 @@ class AgentSessionBuilderTest extends TestCase
 
         // LLM clients
         $llm ??= $this->makeLlmStub();
-        $container->instance(PrismService::class, $llm);
-        $container->instance(AsyncLlmClient::class, $asyncLlm ?? $llm);
+        $container->instance(AsyncLlmClient::class, $llm);
 
         // Logger
         $container->instance(LoggerInterface::class, new NullLogger);

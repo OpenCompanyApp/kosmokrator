@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM\Codex;
 
 use Kosmokrator\Session\SettingsRepositoryInterface;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 
 /**
  * Persists Codex OAuth tokens via the KosmoKrator SettingsRepository.
  *
- * Implements the CodexTokenStore contract from prism-codex by mapping token fields
+ * Implements the CodexTokenStore contract by mapping token fields
  * to individual settings keys under the "provider.codex." namespace. This avoids
  * file-based token storage and keeps credentials in the same encrypted settings
  * backend used for all other provider secrets.

@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace Kosmokrator\Provider;
 
 use Kosmokrator\Audio\CompletionSound;
-use Kosmokrator\LLM\PrismService;
+use Kosmokrator\Goal\GoalRepository;
+use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\Relay;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database as SessionDatabase;
 use Kosmokrator\Session\MemoryRepository;
 use Kosmokrator\Session\MemoryRepositoryInterface;
@@ -18,8 +23,6 @@ use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Session\SubagentOutputStore;
 use Kosmokrator\Session\SwarmMetadataStore;
 use Kosmokrator\Settings\SettingsManager;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
-use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -46,6 +49,9 @@ class SessionServiceProvider extends ServiceProvider
             $this->container->make(SessionDatabase::class),
         ));
         $this->container->singleton(SubagentOutputStore::class, fn () => new SubagentOutputStore);
+        $this->container->singleton(GoalRepository::class, fn () => new GoalRepository(
+            $this->container->make(SessionDatabase::class),
+        ));
         $this->container->singleton(SessionManager::class, fn () => new SessionManager(
             sessions: $this->container->make(SessionRepositoryInterface::class),
             messages: $this->container->make(MessageRepositoryInterface::class),
@@ -55,6 +61,7 @@ class SessionServiceProvider extends ServiceProvider
             configSettings: $this->container->make(SettingsManager::class),
             swarmMetadata: $this->container->make(SwarmMetadataStore::class),
             subagentOutputs: $this->container->make(SubagentOutputStore::class),
+            goals: $this->container->make(GoalRepository::class),
         ));
 
         // Completion sound — compose music via LLM after each agent response
@@ -67,13 +74,20 @@ class SessionServiceProvider extends ServiceProvider
             $audioModel = $config->get('kosmo.agent.audio_model');
             $defaultProvider = $config->get('kosmo.agent.default_provider', 'z');
             $defaultModel = $config->get('kosmo.agent.default_model', 'claude-sonnet-4-20250514');
+            $provider = ($audioProvider !== null && $audioProvider !== '') ? $audioProvider : $defaultProvider;
+            $model = ($audioModel !== null && $audioModel !== '') ? $audioModel : $defaultModel;
+            $providers = $this->container->make(ProviderCatalog::class);
+            $registry = $this->container->make(RelayProviderRegistry::class);
 
-            $llm = new PrismService(
-                provider: ($audioProvider !== null && $audioProvider !== '') ? $audioProvider : $defaultProvider,
-                model: ($audioModel !== null && $audioModel !== '') ? $audioModel : $defaultModel,
+            $llm = new AsyncLlmClient(
+                apiKey: $providers->apiKey($provider),
+                baseUrl: rtrim($registry->url($provider), '/'),
+                model: $model,
                 systemPrompt: $config->get('kosmo.agent.system_prompt', 'You are a helpful coding assistant.'),
+                provider: $provider,
                 relay: $this->container->make(Relay::class),
-                registry: $this->container->make(RelayRegistry::class),
+                registry: $registry,
+                codexOAuth: $this->container->make(CodexOAuthService::class),
             );
 
             return new CompletionSound(

@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolError;
-use Prism\Prism\ValueObjects\ToolOutput;
-use Prism\Prism\ValueObjects\ToolResult;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolError;
+use Kosmokrator\LLM\ValueObjects\ToolOutput;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
- * Anti-corruption layer for Prism PHP tool call/result value objects.
+ * Anti-corruption layer for native tool call/result value objects.
  *
  * Centralizes all construction and field extraction for ToolCall, ToolResult,
  * ToolOutput, and ToolError so the rest of the codebase is insulated from
- * Prism SDK signature changes.
+ * native HTTP signature changes.
  */
 final class ToolCallMapper
 {
     /**
-     * Unique prefix used to mark error results inside Prism's ToolResult.
+     * Unique prefix used to mark error results inside native ToolResult.
      * The \x01 byte cannot appear in normal tool output, preventing false positives.
      */
     public const ERROR_PREFIX = "\x01ERROR:";
@@ -128,7 +128,7 @@ final class ToolCallMapper
     }
 
     /**
-     * Extract the tool name and decoded arguments from a Prism ToolCall.
+     * Extract the tool name and decoded arguments from a LLM ToolCall.
      *
      * @return array{name: string, args: array<string, mixed>, id: string}
      */
@@ -146,7 +146,7 @@ final class ToolCallMapper
     /**
      * Normalize raw tool handler output into a string.
      *
-     * Handles the various return types a Prism tool handler may produce:
+     * Handles the various return types a LLM tool handler may produce:
      * string, ToolOutput, ToolError, or other scalars.
      *
      * @param  mixed  $output  Raw return value from Tool::handle()

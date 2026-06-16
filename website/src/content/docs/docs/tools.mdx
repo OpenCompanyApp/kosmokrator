@@ -191,11 +191,19 @@ Execute a shell command in the project directory. Output (combined stdout and st
 | --- | --- | --- | --- |
 | `command` | string | Yes | The shell command to execute. |
 | `timeout` | int | No | Maximum execution time in seconds. Default: 120. Maximum: 7200 (2 hours). |
+| `background` | bool | No | Start the command in the background and return immediately with a shell session ID. Completion output is injected into the next agent turn. |
+| `wait_ms` | int | No | For background commands, milliseconds to wait for initial output before returning. Default: 250. Maximum: 5000. |
 
 **Example:** Run the test suite with a generous timeout:
 
 ```bash
 bash command="php vendor/bin/phpunit --testdox" timeout=300
+```
+
+Use `background=true` for long test suites, builds, installs, dev servers, and watchers when the agent can keep working while the command runs:
+
+```bash
+bash command="php vendor/bin/phpunit" timeout=900 background=true
 ```
 
 ### Shell Sessions

@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
- * Anti-corruption layer for Prism PHP message serialization/deserialization.
+ * Anti-corruption layer for native message serialization/deserialization.
  *
- * Centralizes the conversion between Prism Message objects and the plain-array
- * storage format used by MessageRepository. If Prism changes its message
+ * Centralizes the conversion between native Message objects and the plain-array
+ * storage format used by MessageRepository. If native value objects change its message
  * structure, only this class needs updating.
  */
 final class MessageSerializer
 {
     /**
-     * Decompose a Prism Message into a storable tuple.
+     * Decompose a native Message into a storable tuple.
      *
      * @return array{role: string, content: ?string, toolCalls: ?ToolCall[], toolResults: ?ToolResult[]}
      */
@@ -94,7 +94,7 @@ final class MessageSerializer
     }
 
     /**
-     * Reconstruct a Prism Message from a database row.
+     * Reconstruct a native Message from a database row.
      *
      * @param  array<string, mixed>  $row  Database row with role, content, tool_calls, tool_results columns
      */

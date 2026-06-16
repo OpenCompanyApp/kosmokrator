@@ -1,5 +1,7 @@
 ---
 import '../../styles/tailwind.css';
+import AnalyticsContext from '../../components/AnalyticsContext.astro';
+import AnalyticsScripts from '../../components/AnalyticsScripts.astro';
 import MegaFooter from '../../components/MegaFooter.astro';
 import { getIntegrations, integrationUrl } from '../../lib/integrations-catalog';
 import {
@@ -82,6 +84,8 @@ const schemas = [
     <link rel="canonical" href={siteUrl(pagePath)} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     {schemas.map((schema) => <script type="application/ld+json" set:html={jsonLd(schema)} />)}
+    <AnalyticsContext context={{ surface: 'mcp_client', client: client.slug, client_label: client.label, featured_integration_count: featured.length }} />
+    <AnalyticsScripts />
   </head>
   <body class="min-h-screen m-0 text-kosmo-text font-sans bg-[radial-gradient(circle_at_12%_0%,rgba(220,20,60,0.14),transparent_28rem),linear-gradient(180deg,#07070d_0%,#0d0d15_56%,#07070d_100%)]">
     <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-[1.1rem] max-[640px]:flex-col max-[640px]:items-start">
@@ -125,10 +129,10 @@ const schemas = [
             <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
               {featured.map((integration) => (
                 <article class="grid gap-3 p-[1.1rem] border border-kosmo-white-border rounded-lg bg-kosmo-surface">
-                  <h3 class="m-0 text-xl"><a class="text-kosmo-text no-underline" href={`${integrationUrl(integration)}/framework/${client.slug}`}>{integration.name} MCP for {client.shortLabel}</a></h3>
+                  <h3 class="m-0 text-xl"><a class="text-kosmo-text no-underline" href={`${integrationUrl(integration, 'mcp')}#${client.slug}`}>{integration.name} MCP for {client.shortLabel}</a></h3>
                   <p class="m-0 text-kosmo-muted leading-[1.55]">{integration.description}</p>
                   <nav class="flex flex-wrap gap-[0.55rem]" aria-label={`${integration.name} links`}>
-                    <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={`${integrationUrl(integration)}/framework/${client.slug}`}>Setup</a>
+                    <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={`${integrationUrl(integration, 'mcp')}#${client.slug}`}>Setup</a>
                     <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'cli')}>{integration.name} CLI</a>
                     <a class="py-[0.48rem] px-[0.68rem] rounded-[7px] bg-white/[0.06] text-kosmo-muted no-underline hover:bg-kosmo-crimson hover:text-white" href={integrationUrl(integration, 'mcp')}>MCP reference</a>
                   </nav>

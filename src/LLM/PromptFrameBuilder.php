@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 
 /**
  * Splits a monolithic system prompt into stable and volatile sections for prompt caching.
  *
  * Providers like Anthropic and OpenAI offer discounted pricing for cached prompt prefixes.
  * By separating the static system instructions from the per-turn task list, the stable
- * prefix can be reused across requests. Used by PrismService and AsyncLlmClient via Relay.
+ * prefix can be reused across requests. Used by AsyncLlmClient and AsyncLlmClient via Relay.
  */
 final class PromptFrameBuilder
 {
@@ -20,6 +20,7 @@ final class PromptFrameBuilder
     /** Section headers that mark the start of per-turn (volatile) content. */
     private const VOLATILE_SECTION_MARKERS = [
         "\n\n## Gateway Session Context\n",
+        "\n\n# Operational Mode:",
         "\n\n## Parent Brief\n",
         "\n\n## Protected Context\n",
         "\n\n## Current Tasks\n",

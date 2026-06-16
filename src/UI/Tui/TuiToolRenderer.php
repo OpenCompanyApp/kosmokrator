@@ -295,7 +295,6 @@ final class TuiToolRenderer implements ToolRendererInterface
     public function showToolExecuting(string $name): void
     {
         if ($this->isTaskTool($name)
-            || $name === 'bash'
             || $this->isOmensTool($name, [])
             || in_array($name, ['ask_user', 'ask_choice', 'subagent'], true)) {
             return;

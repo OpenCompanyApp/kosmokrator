@@ -6,9 +6,9 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Kosmokrator\Agent\CompactionPlan;
 use Kosmokrator\Agent\ConversationHistory;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 
 class ConversationHistoryCompactTest extends TestCase
 {

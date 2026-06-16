@@ -8,19 +8,16 @@ use Illuminate\Container\Container;
 use Kosmokrator\Exception\AuthenticationException;
 use Kosmokrator\Exception\ConfigurationException;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
 use Kosmokrator\LLM\LlmClientInterface;
-use Kosmokrator\LLM\PrismService;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\UI\RendererInterface;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 /**
  * Creates and configures the LLM client for an agent session.
  *
- * Validates API key / OAuth credentials, selects sync (PrismService) vs
- * async (AsyncLlmClient) based on renderer type, and wires retry notifications.
+ * Validates API key / OAuth credentials, returns the native client, and wires retry notifications.
  */
 final class LlmClientFactory
 {
@@ -43,18 +40,8 @@ final class LlmClientFactory
         $provider = $config->get('kosmo.agent.default_provider', 'z');
         $this->validateAuth($provider);
 
-        $registry = $this->container->make(RelayRegistry::class);
-        $useAsync = $rendererType === 'tui'
-            && ($registry->supportsAsync($provider) || AsyncLlmClient::supportsProvider($provider));
-
         /** @var LlmClientInterface $llm */
-        $llm = $useAsync
-            ? $this->container->make(AsyncLlmClient::class)
-            : $this->container->make(PrismService::class);
-
-        if ($rendererType === 'tui' && ! $useAsync) {
-            $ui->showNotice("Provider '{$provider}' uses the synchronous Prism transport; live input and animations may pause during model calls.");
-        }
+        $llm = $this->container->make(AsyncLlmClient::class);
 
         if ($llm instanceof RetryableLlmClient) {
             $llm->setOnRetry(function (int $attempt, float $delay, string $reason) use ($ui) {

@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui\Composition;
 use Kosmokrator\UI\Tui\Composition\CompactingLoaderWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 
 final class CompactingLoaderWidgetTest extends TestCase
@@ -26,12 +27,14 @@ final class CompactingLoaderWidgetTest extends TestCase
         $first = implode("\n", $widget->render(new RenderContext(120, 2)));
         $this->assertStringContainsString($phrase, $first);
         $this->assertStringContainsString('(00:00)', $first);
+        $this->assertStringNotContainsString('[38;2;', AnsiUtils::stripAnsiCodes($first));
 
         $state->setCompactingBreathTick(6);
 
         $this->assertTrue($widget->syncFromSignals());
         $second = implode("\n", $widget->render(new RenderContext(120, 2)));
 
-        $this->assertNotSame($first, $second);
+        $this->assertStringContainsString($phrase, $second);
+        $this->assertStringNotContainsString('[38;2;', AnsiUtils::stripAnsiCodes($second));
     }
 }

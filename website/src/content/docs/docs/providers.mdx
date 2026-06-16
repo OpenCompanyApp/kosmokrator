@@ -4,7 +4,7 @@ description: "Configure LLM providers and model behavior."
 sidebar:
   order: 7
 ---
-KosmoKrator supports a large LLM provider catalog through Prism, direct provider clients, and OpenAI-compatible custom providers. Providers are configured once and then reused by terminal sessions, headless runs, SDK runs, ACP clients, Telegram gateway sessions, and subagents.
+KosmoKrator supports a large LLM provider catalog through native provider transports and OpenAI-compatible custom providers. Providers are configured once and then reused by terminal sessions, headless runs, SDK runs, ACP clients, Telegram gateway sessions, and subagents.
 
 Provider configuration can be performed interactively, through `setup`, through `providers:*`, or through the SDK config helpers. The full shell command reference is in [CLI Reference](/docs/cli-reference).
 
@@ -14,24 +14,24 @@ Every built-in provider is ready to use after entering credentials. The live cat
 
 | Provider ID | Label | Auth Mode | Notes |
 | --- | --- | --- | --- |
-| `anthropic` | Anthropic | API Key | Claude family — Opus 4.5, Sonnet 4.5, Haiku 4.5 |
-| `openai` | OpenAI | API Key | GPT-4o, GPT-4.1 family, o-series reasoning models |
-| `codex` | Codex (ChatGPT) | OAuth | Browser/device login flow, uses your ChatGPT subscription |
-| `gemini` | Google Gemini | API Key | Gemini 2.5 Pro and Flash |
-| `deepseek` | DeepSeek | API Key | DeepSeek V3 (chat), R1 (reasoning) |
-| `groq` | Groq | API Key | Ultra-fast inference on dedicated hardware |
-| `mistral` | Mistral | API Key | Mistral Large, Codestral |
-| `xai` | xAI | API Key | Grok 3, with reasoning support |
+| `anthropic` | Anthropic | API Key | Claude family — Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5 |
+| `openai` | OpenAI | API Key | GPT-5.5, GPT-5.4 family, GPT-4.1 family, o-series reasoning models |
+| `codex` | Codex (ChatGPT) | OAuth | Browser/device login flow, uses your ChatGPT subscription with GPT-5.5 and GPT-5.4 models |
+| `gemini` | Google Gemini | API Key | Gemini 3.1 Pro Preview, Gemini 2.5 Pro and Flash |
+| `deepseek` | DeepSeek | API Key | DeepSeek V4 Pro/Flash plus legacy chat and reasoner aliases |
+| `groq` | Groq | API Key | Ultra-fast inference on dedicated hardware, including GPT-OSS |
+| `mistral` | Mistral | API Key | Mistral Large 3, Devstral 2, Codestral |
+| `xai` | xAI | API Key | Grok 4.3 and Grok 3, with reasoning support |
 | `openrouter` | OpenRouter | API Key | Meta-router for 100+ models from multiple providers |
 | `perplexity` | Perplexity | API Key | Online search-augmented models |
 | `ollama` | Ollama | None | Local models, no remote credentials required |
-| `kimi` | Kimi (Moonshot) | API Key | Long-context Chinese/English models |
-| `kimi-coding` | Kimi Coding | API Key | Code-optimized Moonshot endpoint |
+| `kimi` | Kimi (Moonshot) | API Key | Kimi K2.7 Code, K2.6, K2.5, and Moonshot V1 |
+| `kimi-coding` | Kimi Coding | API Key | Code-optimized Moonshot endpoint with Kimi K2.7 Code |
 | `mimo` | Xiaomi MiMo Token Plan | API Key | MiMo models via token-plan key (free tier available) |
 | `mimo-api` | Xiaomi MiMo API | API Key | MiMo pay-as-you-go API |
-| `minimax` | MiniMax | API Key | MiniMax models |
+| `minimax` | MiniMax | API Key | MiniMax M3 and M-series agent models |
 | `minimax-cn` | MiniMax CN | API Key | MiniMax China-region endpoint |
-| `z` | Z.AI | API Key | Z.AI coding endpoint |
+| `z` | Z.AI | API Key | Z.AI coding endpoint, including GLM-5.2 |
 | `z-api` | Z.AI API | API Key | Z.AI standard API endpoint |
 | `stepfun` | StepFun | API Key | Step models |
 | `stepfun-plan` | StepFun Plan | API Key | Step Plan subscription endpoint with reasoning support |
@@ -51,12 +51,12 @@ The same setup can run headlessly. Use this form for containers, CI, and remote 
 ```bash
 # Configure an API-key provider and default model without exposing the key in argv
 printf %s "$OPENAI_API_KEY" | \
-  kosmo setup --provider openai --model gpt-5.4-mini \
+  kosmo setup --provider openai --model gpt-5.5 \
   --api-key-stdin --global --json
 
 # Equivalent provider-specific command
 printf %s "$OPENAI_API_KEY" | \
-  kosmo providers:configure openai --model gpt-5.4-mini \
+  kosmo providers:configure openai --model gpt-5.5 \
   --api-key-stdin --global --json
 
 # OAuth providers can use device login when available
@@ -82,7 +82,7 @@ kosmo providers:models openai --live --json
 kosmo providers:refresh-models openai --json
 
 # Diagnose auth, endpoint, catalog freshness, and a specific model ID
-kosmo providers:doctor openai --model gpt-5.4-mini --json
+kosmo providers:doctor openai --model gpt-5.5 --json
 
 # Clear a stored API key
 kosmo providers:logout openai --json
@@ -92,9 +92,11 @@ Provider commands reject unknown provider IDs with `success: false` and a non-ze
 
 ### Live model inventory
 
-The normal provider catalog is available offline from the bundled Prism Relay registry. When you want the newest provider model list, run a live refresh. KosmoKrator stores the result in SQLite and overlays it on top of bundled metadata, preserving known context windows and pricing where provider APIs only return model IDs.
+The normal provider catalog is available offline from the bundled native registry. When you want the newest provider model list, run a live refresh. KosmoKrator stores the result in SQLite and overlays it on top of bundled metadata, preserving known context windows and pricing where provider APIs only return model IDs.
 
 Live refresh is explicit so ordinary `kosmo` startup does not block on provider APIs. JSON output includes `model_source`, `model_fetched_at`, `model_inventory_fresh`, and any `model_inventory_error`.
+
+The bundled catalog includes current top entries such as OpenAI `gpt-5.5`, Anthropic `claude-opus-4-8`, Gemini `gemini-3.1-pro-preview`, Kimi `kimi-k2.7-code`, MiniMax `MiniMax-M3`, and Z.AI `glm-5.2`. Select `glm-5.2` with provider `z` for the Z.AI coding endpoint; KosmoKrator keeps that exact model id on chat-completions requests and treats it as a 1M-context model locally.
 
 If a provider launched a model before the catalog knows about it, headless setup can still pin it intentionally:
 
@@ -129,7 +131,7 @@ kosmo secrets:unset provider.openai.api_key --json
 
 ### Environment variables
 
-Alternatively, you can set provider API keys via environment variables. These are read from your Prism PHP configuration and take effect if no key is stored in the database. Common variables:
+Alternatively, you can set provider API keys via environment variables. These are read from provider configuration and take effect if no key is stored in the database. Common variables:
 
 -   `ANTHROPIC_API_KEY` — Anthropic
 -   `OPENAI_API_KEY` — OpenAI
@@ -254,40 +256,33 @@ Some providers support extended thinking / reasoning modes, where the model perf
 | `mistral` | Always-on reasoning | Not configurable |
 | `perplexity` | Always-on reasoning | Not configurable |
 | `openrouter` | Always-on reasoning | Not configurable |
-| `z`, `z-api` | Always-on reasoning | Not configurable |
+| `z`, `z-api` | Controllable via GLM `thinking` payload. `low` / `medium` / `high` map to GLM `high`; `max` maps to GLM `max`; `off` disables thinking explicitly. | `high` / `max` |
 | `minimax`, `minimax-cn` | Always-on reasoning | Not configurable |
 | `mimo`, `mimo-api` | Always-on reasoning | Not configurable |
 | All others | No reasoning support | Setting is safely ignored |
 
-**Anthropic** supports extended thinking (chain-of-thought) via Prism's native driver, but this is not controlled through the `reasoning_effort` parameter. It is handled internally by the driver when supported models are used.
+**Anthropic** supports extended thinking on supported models, but this is not controlled through the `reasoning_effort` parameter. It is handled by the native Anthropic transport.
 
-The available effort levels are `off`, `low`, `medium`, and `high`. Setting the value to `off` disables reasoning parameters entirely, even for providers that support it.
+The available effort levels are `off`, `low`, `medium`, `high`, and `max`. Setting the value to `off` disables reasoning parameters entirely for most providers and sends `thinking.disabled` for GLM, whose API otherwise enables thinking by default.
 
-Reasoning models tend to produce longer, more thorough responses but use significantly more tokens. Use `low` or `medium` for routine tasks and reserve `high` for complex multi-step problems.
+Reasoning models tend to produce longer, more thorough responses but use significantly more tokens. KosmoKrator defaults to `max` for GLM coding sessions; lower it for routine tasks if token usage matters more than depth.
 
 ## LLM Clients
 
-Under the hood, KosmoKrator uses two client implementations to communicate with LLM providers. The correct client is selected automatically based on the provider.
+Under the hood, KosmoKrator uses one native Amp HTTP client with provider-specific request, response, and streaming mappers. The client selects the correct wire format automatically based on the provider.
 
 ### AsyncLlmClient
 
-The primary client for most providers. Built on **Amp HTTP**, it sends raw HTTP requests to OpenAI-compatible chat completions endpoints with full async streaming support. Used for:
+The native client for all providers. Built on **Amp HTTP**, it sends raw HTTP requests with full async streaming support. Used for:
 
 -   OpenAI, DeepSeek, Groq, Mistral, xAI, OpenRouter, Perplexity
 -   Ollama, Kimi, Kimi Coding, MiMo, MiMo API, Z.AI, Z.AI API, StepFun, StepFun Plan
+-   Anthropic, Gemini, MiniMax, MiniMax CN, and Codex through native provider mappers
 -   All custom providers (OpenAI-compatible endpoints)
-
-### PrismService
-
-A synchronous client backed by the **Prism PHP SDK**. Used for providers that have native Prism drivers with specialized request/response handling:
-
--   Anthropic (Claude) — uses Prism's native Anthropic driver with prompt caching
--   Google Gemini — uses Prism's native Gemini driver
--   MiniMax, MiniMax CN — uses Prism's Anthropic-compatible driver (Anthropic-format endpoints)
 
 ### RetryableLlmClient
 
-A decorator that wraps either client, adding automatic retry logic with exponential backoff and jitter. Retries are triggered on:
+A decorator that wraps the native client, adding automatic retry logic with exponential backoff and jitter. Retries are triggered on:
 
 -   **Rate limits** (HTTP 429) — honors `Retry-After` headers from the provider
 -   **Server errors** (HTTP 5xx) — transient provider outages

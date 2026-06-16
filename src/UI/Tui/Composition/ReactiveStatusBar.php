@@ -6,6 +6,7 @@ namespace Kosmokrator\UI\Tui\Composition;
 
 use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 use Symfony\Component\Tui\Widget\ProgressBarWidget;
 
@@ -75,6 +76,32 @@ final class ReactiveStatusBar extends ReactiveWidget
 
     public function render(RenderContext $context): array
     {
+        $message = $this->messageForColumns($this->lastMessage, $context->getColumns());
+        if ($this->bar->getMessage() !== $message) {
+            $this->bar->setMessage($message);
+        }
+
         return $this->bar->render($context);
+    }
+
+    private function messageForColumns(string $message, int $columns): string
+    {
+        $message = AnsiUtils::stripAnsiCodes($message);
+        $maxMessageWidth = max(0, $columns - 3);
+
+        if (AnsiUtils::visibleWidth($message) <= $maxMessageWidth) {
+            return $message;
+        }
+
+        return $this->truncatePlainMessage($message, $maxMessageWidth);
+    }
+
+    private function truncatePlainMessage(string $message, int $maxWidth): string
+    {
+        if ($maxWidth <= 0) {
+            return '';
+        }
+
+        return mb_strimwidth($message, 0, $maxWidth, '...', 'UTF-8');
     }
 }

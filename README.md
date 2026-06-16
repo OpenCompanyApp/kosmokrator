@@ -31,7 +31,7 @@ KosmoKrator is a mythology-themed AI coding agent with one reusable runtime and 
 
 The agent can read, write, and edit files, search your codebase, execute shell commands, run Lua workflows, call OpenCompany integrations, call MCP servers, and spawn parallel subagents. Permission modes, blocked paths, trust checks, sessions, settings, and credentials are shared across the terminal, headless CLI, SDK, and ACP surfaces.
 
-Built with **PHP 8.4+**, **Symfony Console**, **Symfony TUI**, and async streaming via **Amp/Revolt**. The offline provider catalog exposes 90+ provider configurations and 3,500+ catalogued models through Prism, provider-native clients, OpenAI-compatible APIs, OAuth, and custom providers; live provider refresh can cache newer model inventories when credentials are available.
+Built with **PHP 8.4+**, **Symfony Console**, **Symfony TUI**, and async streaming via **Amp/Revolt**. The offline provider catalog exposes 90+ provider configurations and 3,500+ catalogued models through native provider transports, OpenAI-compatible APIs, OAuth, and custom providers; live provider refresh can cache newer model inventories when credentials are available.
 
 ## Table of Contents
 
@@ -396,8 +396,10 @@ Type these at the prompt during a session.
 | Command | Description |
 |---------|-------------|
 | `/compact` | Force context compaction now |
+| `/context` | Show context budget, cache, largest-output, and suggestion diagnostics |
 | `/memories` | List stored memories |
 | `/forget <id>` | Delete a memory by ID |
+| `/goal [objective\|pause\|resume\|clear]` | Set, view, pause, resume, or clear the active session goal |
 
 **Utilities**
 
@@ -549,9 +551,11 @@ See [AGENTS.md](AGENTS.md) for full documentation.
 Long conversations are managed automatically through a multi-stage pipeline:
 
 1. **Deduplication** — detects and removes redundant tool outputs (e.g., reading the same file twice)
-2. **Pruning** — removes superseded tool results (e.g., an old file_read replaced by a file_edit of the same file). Protects recent results (configurable `prune_protect` threshold).
-3. **Compaction** — LLM-based summarization of older messages into a concise working memory. Extracts durable memories during compaction. Auto-triggers when context usage crosses the `auto_compact_buffer_tokens` threshold.
+2. **Pruning** — clears old high-bloat tool output first, especially stale shell output, while protecting recent and referenced results.
+3. **Compaction** — LLM-based summarization of older messages into a guarded historical summary plus bounded working state. Extracts durable memories during compaction. Auto-triggers when context usage crosses the `auto_compact_buffer_tokens` threshold.
 4. **Trimming** — emergency fallback that drops the oldest messages when context still overflows after compaction
+
+Use `/context` to inspect the live budget breakdown, largest messages/tool outputs, cache read/write stats, file/web cache stats, and suggestions such as narrowing a large bash result or compacting before the blocking threshold.
 
 ### Token Budgets
 
@@ -587,7 +591,7 @@ Built-in provider configurations are defined in `config/prism.yaml`. KosmoKrator
 | StepFun | `stepfun`, `stepfun-plan` | API key |
 | Ollama | `ollama` | None (local) |
 
-Model inventories come from the bundled `prism-relay` registry plus optional cached live discovery. Use `kosmo providers:models <provider> --live --json` or `kosmo providers:refresh-models <provider> --json` to query provider model endpoints and cache the result in SQLite. `providers:list` and `providers:models` report the active inventory source (`bundled`, `provider_live`, etc.). For newly launched models that have not appeared in metadata yet, headless setup supports `--allow-unlisted-model`.
+Model inventories come from the repo-owned provider registry plus optional cached live discovery. Use `kosmo providers:models <provider> --live --json` or `kosmo providers:refresh-models <provider> --json` to query provider model endpoints and cache the result in SQLite. `providers:list` and `providers:models` report the active inventory source (`bundled`, `provider_live`, etc.). For newly launched models that have not appeared in metadata yet, headless setup supports `--allow-unlisted-model`.
 
 ### Custom Providers
 
@@ -676,8 +680,9 @@ Other runtime state is stored separately:
 kosmo:
   agent:
     default_provider: z
-    default_model: glm-5.1
+    default_model: glm-5.2
     temperature: 0.0
+    reasoning_effort: max
     max_retries: 0
     subagent_max_depth: 3
     subagent_concurrency: 10
@@ -785,7 +790,7 @@ bin/kosmo
       ├── ToolExecutor → tools + PermissionEvaluator
       ├── ContextManager → compaction, pruning, system prompt
       ├── StuckDetector → headless loop convergence
-      ├── LLM client → AsyncLlmClient | PrismService | RetryableLlmClient
+      ├── LLM client → AsyncLlmClient | RetryableLlmClient
       ├── Renderer → TuiRenderer | AnsiRenderer | HeadlessRenderer | ACP/SDK renderers
       ├── ToolRegistry → coding + shell + web + Lua + coordination tools
       ├── IntegrationRuntime → OpenCompany integrations + app.integrations.*
@@ -798,7 +803,7 @@ bin/kosmo
 | Directory | Purpose |
 |-----------|---------|
 | `src/Agent/` | Agent core — AgentLoop (REPL), ToolExecutor, ContextManager, StuckDetector, SubagentOrchestrator, SubagentFactory |
-| `src/LLM/` | LLM clients — AsyncLlmClient (Amp HTTP, async streaming), PrismService (Prism PHP, sync), RetryableLlmClient (decorator), ModelCatalog, ProviderCatalog |
+| `src/LLM/` | Native LLM stack — AsyncLlmClient (Amp HTTP streaming), RetryableLlmClient (decorator), provider registry, Codex OAuth, ModelCatalog, ProviderCatalog |
 | `src/UI/Tui/` | Symfony TUI renderer — TuiRenderer, TuiModalManager, TuiAnimationManager, SubagentDisplayManager, widgets |
 | `src/UI/Ansi/` | ANSI fallback renderer — AnsiRenderer, MarkdownToAnsi, AnsiTableRenderer |
 | `src/UI/HeadlessRenderer.php` | Non-interactive renderer for `-p`, JSON, and stream-json output |
@@ -819,12 +824,10 @@ bin/kosmo
 
 ### LLM Clients
 
-KosmoKrator uses two LLM client implementations:
+KosmoKrator uses a native HTTP LLM stack:
 
-- **AsyncLlmClient** — non-blocking HTTP via Amp. Used for async-capable runtime paths, including TUI and headless surfaces that need OpenAI-compatible streaming behavior. Supports streaming, prompt caching, and tool calling.
-- **PrismService** — synchronous client via Prism PHP SDK. Used for ANSI mode or providers with native Prism drivers when that path is selected.
-
-Both are wrapped in `RetryableLlmClient` for automatic retry with exponential backoff on transient errors (429, 5xx).
+- **AsyncLlmClient** — non-blocking HTTP via Amp. Handles OpenAI-compatible providers plus native Anthropic/MiniMax, Gemini, and Codex request, response, and streaming formats. Supports streaming, prompt caching, reasoning metadata, and tool calling.
+- **RetryableLlmClient** — wraps the native client for automatic retry with exponential backoff on transient errors (429, 5xx, network failures).
 
 ## Development
 

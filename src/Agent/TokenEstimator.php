@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
+use Kosmokrator\LLM\Contracts\Message;
 use Kosmokrator\LLM\ToolCallMapper;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
  * Rough character-based token counter for estimating context usage.
@@ -44,9 +44,9 @@ class TokenEstimator
     }
 
     /**
-     * Estimate tokens consumed by a single Prism message.
+     * Estimate tokens consumed by a single native message.
      *
-     * @param  Message  $message  Any supported Prism message type
+     * @param  Message  $message  Any supported native message type
      * @return int Estimated token count for this message
      */
     public static function estimateMessage(Message $message): int
@@ -71,12 +71,14 @@ class TokenEstimator
      */
     public static function estimateMessages(array $messages): int
     {
-        $total = 0;
-        foreach ($messages as $message) {
-            $total += self::estimateMessage($message);
-        }
+        return self::counter()->countMessages($messages);
+    }
 
-        return $total;
+    public static function counter(): TokenCounterInterface
+    {
+        static $counter = null;
+
+        return $counter ??= new ApproximateTokenCounter;
     }
 
     /**

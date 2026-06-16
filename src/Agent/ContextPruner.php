@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 
 /**
  * Fast, non-LLM context pruning: replaces old tool result content with lightweight placeholders
  * to reclaim tokens without the cost of a full LLM compaction.
  *
- * Protects the last 2 user turns and their surrounding context. Ranks candidates by an
- * importance score (tool type weight + whether the result is referenced by subsequent assistant messages).
+ * Protects the last 2 user turns and their surrounding context. Ranks candidates by a
+ * prune priority: higher priority means the result should be cleared earlier.
  * Used by ContextManager as a first-pass before LLM-based compaction.
  */
 class ContextPruner
@@ -26,17 +26,17 @@ class ContextPruner
 
     public const PLACEHOLDER = '[Old tool result content cleared]';
 
-    /** Tool types weighted by typical output size — higher weight = less important to keep. */
-    private const TOOL_WEIGHTS = [
+    /** Tool types weighted by typical bloat/staleness — higher priority is pruned first. */
+    private const TOOL_PRUNE_PRIORITIES = [
         'bash' => 70,
         'shell_read' => 65,
-        'file_read' => 30,
-        'grep' => 50,
-        'glob' => 10,
         'web_fetch' => 55,
+        'grep' => 50,
         'web_search' => 40,
-        'file_edit' => 20,
-        'file_write' => 20,
+        'file_read' => 30,
+        'glob' => 20,
+        'file_edit' => 10,
+        'file_write' => 10,
     ];
 
     public function __construct(
@@ -65,7 +65,7 @@ class ContextPruner
     }
 
     /**
-     * Scan old tool results, score them by importance, and replace the least important
+     * Scan old tool results, score them by prune priority, and replace the highest-priority
      * with placeholders. Only prunes if estimated savings exceed minSavings.
      *
      * @param  ConversationHistory  $history  The conversation to prune (mutated in place)
@@ -123,13 +123,13 @@ class ContextPruner
                         'resultIdx' => $rIdx,
                         'tokens' => $tokens,
                         'placeholder' => $this->placeholderFor($result->toolName, $result->args),
-                        'score' => $this->importanceScore($messages, $i, $protectFrom, $result->toolName, $result->args, $result->result),
+                        'score' => $this->prunePriority($messages, $i, $protectFrom, $result->toolName, $result->args, $result->result),
                     ];
                 }
             }
         }
 
-        usort($candidates, fn (array $a, array $b): int => $a['score'] <=> $b['score']);
+        usort($candidates, fn (array $a, array $b): int => $b['score'] <=> $a['score']);
 
         $totalSavings = array_sum(array_column($candidates, 'tokens'));
 
@@ -137,12 +137,22 @@ class ContextPruner
             return 0;
         }
 
+        $selected = [];
+        $selectedSavings = 0;
+        foreach ($candidates as $candidate) {
+            $selected[] = $candidate;
+            $selectedSavings += $candidate['tokens'];
+            if ($this->minSavings > 0 && $selectedSavings >= $this->minSavings) {
+                break;
+            }
+        }
+
         $history->pruneToolResultsWithPlaceholders(array_map(
             fn (array $candidate): array => [$candidate['msgIdx'], $candidate['resultIdx'], $candidate['placeholder']],
-            $candidates,
+            $selected,
         ));
 
-        return $totalSavings;
+        return $selectedSavings;
     }
 
     /**
@@ -168,15 +178,14 @@ class ContextPruner
     }
 
     /**
-     * Score a tool result's importance: higher = less likely to be pruned.
-     * Considers tool type weight, whether the result is referenced in later assistant messages,
-     * and content overlap with reasoning patterns.
+     * Score a tool result's prune priority: higher = more likely to be pruned.
+     * References in later assistant messages lower the priority so useful context survives longer.
      *
      * @param  array<int, Message>  $messages
      */
-    private function importanceScore(array $messages, int $messageIndex, int $protectFrom, string $toolName, array $args, string $result): int
+    private function prunePriority(array $messages, int $messageIndex, int $protectFrom, string $toolName, array $args, string $result): int
     {
-        $score = self::TOOL_WEIGHTS[$toolName] ?? 25;
+        $score = self::TOOL_PRUNE_PRIORITIES[$toolName] ?? 25;
         $path = (string) ($args['path'] ?? '');
         $basename = $path !== '' ? basename($path) : '';
 
@@ -189,18 +198,18 @@ class ContextPruner
             if ($message instanceof AssistantMessage) {
                 $content = mb_strtolower($message->content);
                 if ($basename !== '' && str_contains($content, mb_strtolower($basename))) {
-                    $score += 15;
+                    $score -= 20;
                 }
                 if (str_contains($content, 'based on') || str_contains($content, "i'll use") || str_contains($content, 'the issue is')) {
-                    $score += 10;
+                    $score -= 10;
                 }
                 if ($result !== '' && mb_strlen($result) > 20 && str_contains($content, mb_strtolower(mb_substr($result, 0, 20)))) {
-                    $score += 15;
+                    $score -= 20;
                 }
             }
         }
 
-        return $score;
+        return max(0, $score);
     }
 
     /**

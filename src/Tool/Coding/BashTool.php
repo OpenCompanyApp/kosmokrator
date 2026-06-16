@@ -35,6 +35,8 @@ class BashTool extends AbstractTool
         int $timeout = 120,
         ?LoggerInterface $log = null,
         private ?string $storagePath = null,
+        private readonly ?ShellSessionManager $sessions = null,
+        private readonly int $backgroundWaitMs = 250,
     ) {
         $this->timeout = $timeout;
         $this->log = $log ?? new NullLogger;
@@ -51,7 +53,7 @@ class BashTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Execute a shell command and return its output. Use for running tests, installing packages, git operations, etc.';
+        return 'Execute a shell command and return its output. Use for short terminal operations. For long tests, builds, installs, dev servers, watchers, or commands where the result is not needed immediately, set background=true and wait for the completion notification instead of polling.';
     }
 
     public function parameters(): array
@@ -59,6 +61,8 @@ class BashTool extends AbstractTool
         return [
             'command' => ['type' => 'string', 'description' => 'The shell command to execute'],
             'timeout' => ['type' => 'integer', 'description' => 'Timeout in seconds for the command. Default 120. Use higher values for long-running commands (e.g. 3600 for test suites).'],
+            'background' => ['type' => 'boolean', 'description' => 'Run the command in the background and return a shell session id immediately. Use for long tests, builds, installs, dev servers, and commands whose output can arrive later.'],
+            'wait_ms' => ['type' => 'integer', 'description' => 'For background commands, how long to wait for initial output before returning. Default 250ms, max 5000ms.'],
         ];
     }
 
@@ -68,7 +72,7 @@ class BashTool extends AbstractTool
     }
 
     /**
-     * @param  array{command: string, timeout?: int}  $args  Command and optional timeout override
+     * @param  array{command: string, timeout?: int, background?: bool, wait_ms?: int}  $args  Command and optional execution controls
      * @return ToolResult Combined stdout+stderr output with exit code, or error on timeout/failure
      */
     protected function handle(array $args): ToolResult
@@ -81,15 +85,21 @@ class BashTool extends AbstractTool
 
         $timeout = (int) ($args['timeout'] ?? $this->timeout);
         $timeout = max(1, min($timeout, 7200));
+        $background = (bool) ($args['background'] ?? false);
 
         if ($timeout !== $this->timeout) {
             $this->log->debug('Bash using custom timeout', ['timeout' => $timeout, 'default' => $this->timeout]);
+        }
+
+        if ($background) {
+            return $this->startBackground($command, $timeout, $args);
         }
 
         $startTime = microtime(true);
         try {
             // Amp Process — fiber-aware, yields to event loop during execution
             $process = Process::start(['sh', '-c', $command]);
+            $process->getStdin()->close();
 
             // Timeout watchdog — kills the process if it exceeds the limit
             $timedOut = false;
@@ -110,6 +120,7 @@ class BashTool extends AbstractTool
             $stderrFuture = \Amp\async(fn (): array => $this->readBoundedStream(
                 $process->getStderr(),
                 'stderr',
+                $progressCb,
             ));
             $exitCode = $process->join();
             $stdout = $stdoutFuture->await();
@@ -177,6 +188,44 @@ class BashTool extends AbstractTool
             'stderr_bytes' => $stderr['bytes'],
             'stdout_path' => $stdout['path'],
             'stderr_path' => $stderr['path'],
+        ]);
+    }
+
+    /**
+     * @param  array{wait_ms?: int}  $args
+     */
+    private function startBackground(string $command, int $timeout, array $args): ToolResult
+    {
+        if ($this->sessions === null) {
+            return ToolResult::error('Background bash execution is unavailable: shell session manager is not configured.');
+        }
+
+        $waitMs = isset($args['wait_ms'])
+            ? max(0, min((int) $args['wait_ms'], 5000))
+            : max(0, min($this->backgroundWaitMs, 5000));
+
+        $result = $this->sessions->start(
+            command: $command,
+            timeoutSeconds: $timeout,
+            waitMs: $waitMs,
+            background: true,
+            closeStdin: true,
+        );
+
+        $lines = [
+            "Background command started as session {$result['id']}.",
+            'Results will be injected when the command finishes. Use shell_read to inspect progress or shell_kill to stop it.',
+        ];
+
+        $output = trim($result['output']);
+        if ($output !== '' && ! str_contains($output, '(no new output yet)')) {
+            $lines[] = '';
+            $lines[] = $output;
+        }
+
+        return new ToolResult(implode("\n", $lines), true, [
+            'session_id' => $result['id'],
+            'background' => true,
         ]);
     }
 

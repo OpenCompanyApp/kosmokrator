@@ -151,6 +151,9 @@ class SessionRepository implements SessionRepositoryInterface
         $pdo->beginTransaction();
 
         try {
+            $stmt = $pdo->prepare('DELETE FROM session_goals WHERE session_id = :id');
+            $stmt->execute(['id' => $id]);
+
             $stmt = $pdo->prepare('DELETE FROM messages WHERE session_id = :id');
             $stmt->execute(['id' => $id]);
 
@@ -207,6 +210,9 @@ class SessionRepository implements SessionRepositoryInterface
 
             if ($ids !== []) {
                 $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $stmt = $pdo->prepare("DELETE FROM session_goals WHERE session_id IN ({$placeholders})");
+                $stmt->execute($ids);
+
                 $stmt = $pdo->prepare("DELETE FROM messages WHERE session_id IN ({$placeholders})");
                 $stmt->execute($ids);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tool\Coding;
 
+use Kosmokrator\Agent\CacheStats;
 use Kosmokrator\Tool\AbstractTool;
 use Kosmokrator\Tool\ToolResult;
 use Throwable;
@@ -24,6 +25,8 @@ class FileReadTool extends AbstractTool
 
     /** @var list<string> */
     private static array $cacheOrder = [];
+
+    private static ?CacheStats $stats = null;
 
     /**
      * @param  string|null  $projectRoot  Absolute path to project root for boundary enforcement
@@ -136,6 +139,16 @@ class FileReadTool extends AbstractTool
     {
         self::$cache = [];
         self::$cacheOrder = [];
+        self::stats()->resets++;
+        self::stats()->entries = 0;
+    }
+
+    public static function cacheStats(): CacheStats
+    {
+        $stats = clone self::stats();
+        $stats->entries = count(self::$cache);
+
+        return $stats;
     }
 
     /**
@@ -197,9 +210,12 @@ class FileReadTool extends AbstractTool
     private static function readCache(string $key): ?string
     {
         if (! isset(self::$cache[$key])) {
+            self::stats()->misses++;
+
             return null;
         }
 
+        self::stats()->hits++;
         self::touchCacheKey($key);
 
         return self::$cache[$key];
@@ -218,10 +234,17 @@ class FileReadTool extends AbstractTool
             $oldest = array_shift(self::$cacheOrder);
             if ($oldest !== null) {
                 unset(self::$cache[$oldest]);
+                self::stats()->evictions++;
             }
         }
+        self::stats()->entries = count(self::$cache);
 
         return $result;
+    }
+
+    private static function stats(): CacheStats
+    {
+        return self::$stats ??= new CacheStats;
     }
 
     private static function touchCacheKey(string $key): void

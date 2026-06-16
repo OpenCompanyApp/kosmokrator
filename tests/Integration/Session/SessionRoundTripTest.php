@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Integration\Session;
 
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 use Kosmokrator\Tests\Integration\IntegrationTestCase;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 
 /**
  * Integration tests for session persistence with real SQLite.

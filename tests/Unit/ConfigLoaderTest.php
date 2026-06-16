@@ -321,6 +321,33 @@ YAML);
         $this->assertIsArray($config->get('empty'));
     }
 
+    public function test_loads_yaml_files_from_phar_config_path(): void
+    {
+        if (! class_exists(\Phar::class) || (bool) ini_get('phar.readonly')) {
+            $this->markTestSkipped('PHAR creation is disabled.');
+        }
+
+        $fakeHome = $this->tempDir.'/empty_home_phar';
+        mkdir($fakeHome, 0755, true);
+        putenv("HOME={$fakeHome}");
+        $_ENV['HOME'] = $fakeHome;
+        chdir($this->tempDir);
+
+        $pharPath = $this->tempDir.'/config-fixture.phar';
+        $phar = new \Phar($pharPath);
+        $phar->startBuffering();
+        $phar->addFromString('config/app.yaml', "name: KosmoKrator\nversion: phar-test\n");
+        $phar->addFromString('config/models.yaml', "models:\n  sample-model:\n    provider: openai\n");
+        $phar->stopBuffering();
+
+        $loader = new ConfigLoader("phar://{$pharPath}/config");
+        $config = $loader->load();
+
+        $this->assertSame('KosmoKrator', $config->get('app.name'));
+        $this->assertSame('phar-test', $config->get('app.version'));
+        $this->assertSame('openai', $config->get('models.models.sample-model.provider'));
+    }
+
     private function removeDir(string $dir): void
     {
         if (! is_dir($dir)) {

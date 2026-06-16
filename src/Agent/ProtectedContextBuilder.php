@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 
 /**
  * Builds the protected (non-overridable) portion of the system prompt.

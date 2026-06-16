@@ -15,8 +15,8 @@ require_once $rootDir.'/vendor/autoload.php';
 use Kosmokrator\Kernel;
 use Kosmokrator\LLM\AsyncLlmClient;
 use Kosmokrator\LLM\LlmClientInterface;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 
 try {
     $payload = json_decode(base64_decode($argv[1], true), true, 512, JSON_THROW_ON_ERROR);
@@ -29,7 +29,7 @@ try {
     $kernel->boot();
 
     // Use AsyncLlmClient (raw HTTP) — it works for all OpenAI-compatible providers
-    // including z/GLM. LlmClientInterface resolves to PrismService which 404s on GLM.
+    // including z/GLM. LlmClientInterface resolves to AsyncLlmClient which 404s on GLM.
     /** @var LlmClientInterface $llm */
     $llm = $kernel->getContainer()->make(AsyncLlmClient::class);
     $response = $llm->chat([

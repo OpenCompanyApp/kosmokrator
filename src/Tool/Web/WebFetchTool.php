@@ -167,29 +167,27 @@ DESC;
      */
     private function selectSection(WebFetchResponse $response, WebFetchRequest $request): array
     {
-        if ($request->sectionId !== null && isset($response->sections[$request->sectionId])) {
-            return ['content' => $response->sections[$request->sectionId], 'source' => 'section:'.$request->sectionId];
-        }
+        $sections = $response->sections;
 
-        if ($request->sectionId !== null) {
+        if ($request->sectionId !== null && $sections !== []) {
             $normalizedRequestedId = $this->slugify($request->sectionId);
 
-            foreach (array_keys($response->sections) as $sectionId) {
-                if ($this->slugify($sectionId) === $normalizedRequestedId) {
-                    return ['content' => $response->sections[$sectionId], 'source' => 'section:'.$sectionId];
+            foreach (array_keys($sections) as $sectionId) {
+                if ($sectionId === $request->sectionId || $this->slugify($sectionId) === $normalizedRequestedId) {
+                    return ['content' => $sections[$sectionId], 'source' => 'section:'.$sectionId];
                 }
             }
         }
 
         if ($request->heading !== null) {
             foreach ($response->outline as $entry) {
-                if (strcasecmp($entry['title'], $request->heading) === 0 && isset($response->sections[$entry['id']])) {
-                    return ['content' => $response->sections[$entry['id']], 'source' => 'section:'.$entry['id']];
+                if (strcasecmp($entry['title'], $request->heading) === 0 && array_key_exists($entry['id'], $sections)) {
+                    return ['content' => $sections[$entry['id']], 'source' => 'section:'.$entry['id']];
                 }
             }
         }
 
-        $availableIds = array_keys($response->sections);
+        $availableIds = array_keys($sections);
         $suffix = $availableIds === [] ? '' : ' Available section ids: '.implode(', ', array_slice($availableIds, 0, 12));
 
         throw new WebFetchPermanentException('Requested section was not found. Use outline mode first to inspect available section ids and headings.'.$suffix);

@@ -10,10 +10,13 @@ use Illuminate\Container\Container;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Command\Slash\ModelsCommand;
 use Kosmokrator\Command\SlashCommandContext;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\SessionManager;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Settings\SettingsManager;
@@ -22,9 +25,6 @@ use Kosmokrator\Settings\YamlConfigStore;
 use Kosmokrator\Task\TaskStore;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\UI\NullRenderer;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class ModelsCommandTest extends TestCase
@@ -181,7 +181,7 @@ final class ModelsCommandTest extends TestCase
             store: new YamlConfigStore,
             baseConfigPath: dirname(__DIR__, 4).'/config',
         );
-        $registry = new RelayRegistry([
+        $registry = new RelayProviderRegistry([
             'z' => [
                 'label' => 'Z.AI',
                 'auth' => 'api_key',
@@ -238,7 +238,7 @@ final class ModelsCommandTest extends TestCase
 
         $container = new Container;
         $container->instance(SettingsManager::class, $settingsManager);
-        $container->instance(RelayRegistry::class, $registry);
+        $container->instance(RelayProviderRegistry::class, $registry);
 
         return [$container, $providerCatalog, $settingsManager, $settingsRepo];
     }

@@ -1,0 +1,92 @@
+---
+import { Code } from 'astro:components';
+
+type Props = {
+  code: string;
+  label?: string;
+  lang?: string;
+  compact?: boolean;
+  analyticsEvent?: string;
+  analyticsProps?: Record<string, string | number | boolean | null | undefined>;
+};
+
+const {
+  code,
+  label = 'Command',
+  lang = 'bash',
+  compact = false,
+  analyticsEvent,
+  analyticsProps = {},
+} = Astro.props as Props;
+
+function defaultAnalyticsEvent(label: string, lang: string): string {
+  const lower = label.toLowerCase();
+
+  if (lower.includes('schema')) return 'cli_schema_command_copied';
+  if (lower.includes('mcp configuration')) return 'mcp_config_copied';
+  if (lower.includes('lua') || lower.includes('workflow')) return 'lua_example_copied';
+  if (lower.includes('install')) return 'install_command_copied';
+  if (lang === 'json' && lower.includes('mcp')) return 'mcp_config_copied';
+
+  return 'cli_command_copied';
+}
+
+const cleanAnalyticsProps = Object.fromEntries(
+  Object.entries(analyticsProps).filter(([, value]) => value !== undefined && value !== null && value !== '')
+);
+const analyticsPropsJson = Object.keys(cleanAnalyticsProps).length > 0
+  ? JSON.stringify(cleanAnalyticsProps).replace(/</g, '\\u003c')
+  : undefined;
+const resolvedAnalyticsEvent = analyticsEvent || defaultAnalyticsEvent(label, lang);
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function highlightShellLine(line: string): string {
+  if (line.trim().startsWith('#')) {
+    return `<span class="sh-comment">${escapeHtml(line)}</span>`;
+  }
+
+  const escaped = escapeHtml(line);
+
+  return escaped
+    .replace(/^(\s*)([A-Za-z0-9_./:-]+)/, '$1<span class="sh-bin">$2</span>')
+    .replace(/(\s)([A-Za-z0-9_.-]+:[A-Za-z0-9_.:-]+)/g, '$1<span class="sh-subcommand">$2</span>')
+    .replace(/(\s)([A-Za-z0-9_.-]+\.[A-Za-z0-9_.:-]+)/g, '$1<span class="sh-function">$2</span>')
+    .replace(/(&#39;\{.*?\}&#39;|&quot;\{.*?\}&quot;)/g, '<span class="sh-json">$1</span>')
+    .replace(/(\$[A-Z0-9_]+)/g, '<span class="sh-env">$1</span>')
+    .replace(/(\s)(--[A-Za-z0-9:_-]+)(?=\s|$)/g, '$1<span class="sh-flag">$2</span>');
+}
+
+const highlightedShell = lang === 'bash'
+  ? code.split('\n').map(highlightShellLine).join('\n')
+  : '';
+---
+
+<div class:list={['command-block code-frame', compact && 'command-block-compact']}>
+  <div class="command-block-bar">
+    <span>{label}</span>
+    <button
+      class="copy-btn"
+      type="button"
+      data-copy-code={code}
+      data-analytics-event={resolvedAnalyticsEvent}
+      data-analytics-props={analyticsPropsJson}
+      data-command-label={label}
+      aria-label={`Copy ${label}`}
+    >copy</button>
+  </div>
+  <div class="command-block-code">
+    {lang === 'bash' ? (
+      <pre class="shell-highlight"><code set:html={highlightedShell} /></pre>
+    ) : (
+      <Code code={code} lang={lang} />
+    )}
+  </div>
+</div>

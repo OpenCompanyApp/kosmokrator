@@ -6,14 +6,14 @@ use Amp\CancelledException;
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\Exception\HeadlessRunFailedException;
 use Kosmokrator\Agent\SubagentStats;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\UI\NullRenderer;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
 
 class AgentLoopHeadlessTest extends TestCase

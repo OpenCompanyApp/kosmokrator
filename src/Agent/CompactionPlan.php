@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Prism\Prism\Contracts\Message;
+use Kosmokrator\LLM\Contracts\Message;
 
 /**
  * Immutable result of a context-compaction operation.

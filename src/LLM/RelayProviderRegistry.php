@@ -7,12 +7,10 @@ namespace Kosmokrator\LLM;
 use Illuminate\Config\Repository;
 
 /**
- * Merged registry of built-in and custom LLM provider definitions from PrismRelay config.
+ * Merged registry of built-in and custom LLM provider definitions.
  *
- * Loads provider specs (driver, URL, auth mode, capabilities, modalities) from the relay.php
- * config file and merges any user-defined custom providers on top. Queried by
- * RelayProviderRegistrar (driver selection), ProviderCatalog (UI metadata), and
- * ProviderCapabilitiesResolver (feature flags). Source of truth for provider wiring.
+ * Builds provider specs from repo-owned config and merges user-defined custom providers on top.
+ * Source of truth for repo-owned provider wiring.
  */
 final class RelayProviderRegistry
 {
@@ -22,13 +20,19 @@ final class RelayProviderRegistry
     /** @var array<string, string> Maps provider ID to "built_in" or "custom" source */
     private array $sources = [];
 
+    private readonly Repository $config;
+
     /**
-     * @param  Repository  $config  Illuminate config repository for reading relay.providers overrides
+     * @param  Repository|array<string, mixed>|null  $config  Config repository or provider map for tests/custom callers
      */
     public function __construct(
-        private readonly Repository $config,
+        Repository|array|null $config = null,
     ) {
-        $builtIn = require dirname(__DIR__, 2).'/vendor/opencompanyapp/prism-relay/config/relay.php';
+        $this->config = $config instanceof Repository
+            ? $config
+            : new Repository($this->normalizeConfigArray($config ?? []));
+
+        $builtIn = $this->builtInProviders();
         $custom = $this->config->get('relay.providers', []);
 
         $this->providers = $builtIn;
@@ -44,6 +48,19 @@ final class RelayProviderRegistry
             $this->providers[$provider] = $this->mergeProvider($this->providers[$provider] ?? [], $definition);
             $this->sources[$provider] = 'custom';
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function normalizeConfigArray(array $config): array
+    {
+        if (isset($config['prism']) || isset($config['models']) || isset($config['relay'])) {
+            return $config;
+        }
+
+        return ['relay' => ['providers' => $config]];
     }
 
     /**
@@ -64,7 +81,12 @@ final class RelayProviderRegistry
 
     public function has(string $provider): bool
     {
-        return isset($this->providers[$provider]);
+        return $this->canonicalProvider($provider) !== null;
+    }
+
+    public function hasProvider(string $provider): bool
+    {
+        return $this->has($provider);
     }
 
     /**
@@ -72,7 +94,9 @@ final class RelayProviderRegistry
      */
     public function provider(string $provider): ?array
     {
-        return $this->providers[$provider] ?? null;
+        $canonical = $this->canonicalProvider($provider);
+
+        return $canonical !== null ? ($this->providers[$canonical] ?? null) : null;
     }
 
     public function source(string $provider): string
@@ -82,7 +106,7 @@ final class RelayProviderRegistry
 
     public function driver(string $provider): string
     {
-        $definition = $this->providers[$provider] ?? [];
+        $definition = $this->provider($provider) ?? [];
 
         return (string) ($definition['driver'] ?? $this->inferDriver($provider));
     }
@@ -94,12 +118,12 @@ final class RelayProviderRegistry
             return $configured;
         }
 
-        return (string) (($this->providers[$provider]['url'] ?? ''));
+        return (string) (($this->provider($provider)['url'] ?? ''));
     }
 
     public function authMode(string $provider): string
     {
-        return (string) (($this->providers[$provider]['auth'] ?? ($provider === 'codex' ? 'oauth' : 'api_key')));
+        return (string) (($this->provider($provider)['auth'] ?? ($provider === 'codex' ? 'oauth' : 'api_key')));
     }
 
     /**
@@ -107,13 +131,14 @@ final class RelayProviderRegistry
      */
     public function capabilities(string $provider): array
     {
-        $capabilities = $this->providers[$provider]['capabilities'] ?? [];
+        $capabilities = $this->provider($provider)['capabilities'] ?? [];
 
         return [
             'temperature' => (bool) ($capabilities['temperature'] ?? true),
             'top_p' => (bool) ($capabilities['top_p'] ?? true),
             'max_tokens' => (bool) ($capabilities['max_tokens'] ?? true),
             'streaming' => (bool) ($capabilities['streaming'] ?? true),
+            'stream_usage' => (bool) ($capabilities['stream_usage'] ?? ($provider !== 'ollama')),
         ];
     }
 
@@ -122,7 +147,7 @@ final class RelayProviderRegistry
      */
     public function providerModalities(string $provider): array
     {
-        $modalities = $this->providers[$provider]['modalities'] ?? [];
+        $modalities = $this->provider($provider)['modalities'] ?? [];
 
         return [
             'input' => $this->stringList($modalities['input'] ?? ['text']),
@@ -135,7 +160,7 @@ final class RelayProviderRegistry
      */
     public function modelModalities(string $provider, string $model): array
     {
-        $models = $this->providers[$provider]['models'] ?? [];
+        $models = $this->provider($provider)['models'] ?? [];
         $modelModalities = is_array($models[$model]['modalities'] ?? null)
             ? $models[$model]['modalities']
             : [];
@@ -171,6 +196,26 @@ final class RelayProviderRegistry
         ], true);
     }
 
+    public function canonicalProvider(string $provider): ?string
+    {
+        $provider = strtolower(trim($provider));
+        if (isset($this->providers[$provider])) {
+            return $provider;
+        }
+
+        return match ($provider) {
+            'zhipuai', 'glm', 'glm-coding' => isset($this->providers['z-api']) ? 'z-api' : null,
+            'kimi-for-coding' => isset($this->providers['kimi-coding']) ? 'kimi-coding' : null,
+            default => null,
+        };
+    }
+
+    /** @return list<string> */
+    public function registrationNames(): array
+    {
+        return $this->allProviders();
+    }
+
     /**
      * Deep-merge two provider definition arrays, with $override taking precedence.
      *
@@ -194,6 +239,105 @@ final class RelayProviderRegistry
     }
 
     /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function builtInProviders(): array
+    {
+        $configuredProviders = $this->config->get('prism.providers', []);
+        $models = $this->config->get('models.models', []);
+        $providers = [];
+
+        foreach ($configuredProviders as $provider => $definition) {
+            if (! is_string($provider) || ! is_array($definition)) {
+                continue;
+            }
+
+            $providers[$provider] = [
+                'label' => $this->humanize($provider),
+                'description' => $this->humanize($provider).' provider',
+                'driver' => $this->inferDriver($provider),
+                'auth' => $provider === 'ollama' ? 'none' : ($provider === 'codex' ? 'oauth' : 'api_key'),
+                'url' => (string) ($definition['url'] ?? ''),
+                'capabilities' => array_merge([
+                    'temperature' => ! in_array($provider, ['codex'], true),
+                    'top_p' => true,
+                    'max_tokens' => true,
+                    'streaming' => true,
+                    'stream_usage' => $provider !== 'ollama',
+                ], ProviderCapabilities::defaults()[$provider] ?? []),
+                'modalities' => ['input' => ['text'], 'output' => ['text']],
+                'models' => [],
+            ];
+        }
+
+        foreach ($models as $key => $spec) {
+            if (! is_string($key) || ! is_array($spec)) {
+                continue;
+            }
+
+            $provider = (string) ($spec['provider'] ?? '');
+            if ($provider === '') {
+                continue;
+            }
+
+            foreach ($this->providerAliasesForModelProvider($provider) as $providerId) {
+                $providers[$providerId] ??= [
+                    'label' => $this->humanize($providerId),
+                    'description' => $this->humanize($providerId).' provider',
+                    'driver' => $this->inferDriver($providerId),
+                    'auth' => $providerId === 'codex' ? 'oauth' : 'api_key',
+                    'url' => '',
+                    'capabilities' => ['temperature' => true, 'top_p' => true, 'max_tokens' => true, 'streaming' => true, 'stream_usage' => true],
+                    'modalities' => ['input' => ['text'], 'output' => ['text']],
+                    'models' => [],
+                ];
+
+                $modelId = (string) ($spec['id'] ?? $this->modelIdFromConfigKey($key));
+                $providers[$providerId]['models'][$modelId] = [
+                    'display_name' => isset($spec['display_name']) ? (string) $spec['display_name'] : $this->humanize($modelId),
+                    'context' => (int) ($spec['context'] ?? 0),
+                    'max_output' => (int) ($spec['max_output'] ?? 0),
+                    'input' => isset($spec['input_price']) ? (float) $spec['input_price'] : null,
+                    'output' => isset($spec['output_price']) ? (float) $spec['output_price'] : null,
+                    'cached_input' => isset($spec['cached_input_price']) ? (float) $spec['cached_input_price'] : null,
+                    'cached_write' => isset($spec['cached_write_price']) ? (float) $spec['cached_write_price'] : null,
+                    'thinking' => (bool) ($spec['thinking'] ?? false),
+                    'pricing_kind' => (string) ($spec['pricing_kind'] ?? 'paid'),
+                    'reference_input_price' => isset($spec['reference_input_price']) ? (float) $spec['reference_input_price'] : null,
+                    'reference_output_price' => isset($spec['reference_output_price']) ? (float) $spec['reference_output_price'] : null,
+                    'status' => isset($spec['status']) ? (string) $spec['status'] : null,
+                ];
+            }
+        }
+
+        foreach ($providers as $provider => $definition) {
+            if ($definition['models'] !== []) {
+                $providers[$provider]['default_model'] = array_key_first($definition['models']);
+            }
+        }
+
+        return $providers;
+    }
+
+    /** @return list<string> */
+    private function providerAliasesForModelProvider(string $provider): array
+    {
+        return match ($provider) {
+            'z' => ['z', 'z-api'],
+            'kimi' => ['kimi', 'kimi-coding'],
+            'minimax' => ['minimax', 'minimax-cn'],
+            default => [$provider],
+        };
+    }
+
+    private function modelIdFromConfigKey(string $key): string
+    {
+        $parts = explode('/', $key);
+
+        return (string) end($parts);
+    }
+
+    /**
      * Coerce a value into a clean list of non-empty strings, defaulting to ["text"].
      *
      * @return list<string>
@@ -207,7 +351,7 @@ final class RelayProviderRegistry
         return array_values(array_map('strval', array_filter($value, static fn (mixed $item): bool => is_string($item) && $item !== '')));
     }
 
-    /** Guess the Prism driver name from a provider identifier when no explicit driver is configured. */
+    /** Guess the native driver name from a provider identifier when no explicit driver is configured. */
     private function inferDriver(string $provider): string
     {
         return match ($provider) {
@@ -232,5 +376,10 @@ final class RelayProviderRegistry
             'perplexity' => 'perplexity',
             default => 'openai-compatible',
         };
+    }
+
+    private function humanize(string $value): string
+    {
+        return ucwords(str_replace(['-', '_', '/'], ' ', $value));
     }
 }

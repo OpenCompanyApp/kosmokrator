@@ -1,4 +1,6 @@
 ---
+import AnalyticsContext from '../components/AnalyticsContext.astro';
+import AnalyticsScripts from '../components/AnalyticsScripts.astro';
 import MegaFooter from '../components/MegaFooter.astro';
 import { DEFAULT_OG_IMAGE, siteUrl } from '../lib/seo';
 
@@ -21,6 +23,8 @@ const targetUrl = siteUrl(target);
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
     <link rel="canonical" href={targetUrl} />
+    <AnalyticsContext context={{ surface: 'changelog', redirect_target: target }} />
+    <AnalyticsScripts />
   </head>
   <body>
     <a href={target}>Redirecting to the KosmoKrator changelog.</a>

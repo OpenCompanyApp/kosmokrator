@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\ToolResult;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
  * Replaces superseded tool results in ConversationHistory with compact placeholders,

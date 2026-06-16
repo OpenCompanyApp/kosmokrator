@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM\ModelDiscovery;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\SettingsRepositoryInterface;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 final class ModelDiscoveryService
 {
     private const LIVE_TTL_SECONDS = 86_400;
 
     public function __construct(
-        private readonly RelayRegistry $registry,
+        private readonly RelayProviderRegistry $registry,
         private readonly Repository $config,
         private readonly SettingsRepositoryInterface $settings,
         private readonly ModelDiscoveryCacheRepository $cache,

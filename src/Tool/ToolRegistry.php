@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Tool;
 
 use Kosmokrator\Agent\AgentContext;
+use Kosmokrator\LLM\Schema\StringSchema;
+use Kosmokrator\LLM\Tool as LlmTool;
 use Kosmokrator\LLM\ToolCallMapper;
-use Prism\Prism\Schema\StringSchema;
-use Prism\Prism\Tool as PrismTool;
 
 /**
  * Central registry of all available ToolInterface implementations.
  *
- * Supports lookup, scoped filtering by agent type, and conversion to Prism Tool
+ * Supports lookup, scoped filtering by agent type, and conversion to LLM Tool
  * instances for the LLM provider layer.
  */
 class ToolRegistry
@@ -63,22 +63,22 @@ class ToolRegistry
     }
 
     /**
-     * Convert all registered tools to Prism Tool instances.
+     * Convert all registered tools to LLM Tool instances.
      *
-     * @return PrismTool[]
+     * @return LlmTool[]
      */
-    public function toPrismTools(): array
+    public function toLlmTools(): array
     {
-        return array_map(fn (ToolInterface $tool) => $this->toPrismTool($tool), array_values($this->tools));
+        return array_map(fn (ToolInterface $tool) => $this->toLlmTool($tool), array_values($this->tools));
     }
 
     /**
-     * Convert a single ToolInterface into a Prism Tool instance with mapped parameters.
+     * Convert a single ToolInterface into a LLM Tool instance with mapped parameters.
      */
-    private function toPrismTool(ToolInterface $tool): PrismTool
+    private function toLlmTool(ToolInterface $tool): LlmTool
     {
-        // Prism calls tool handlers with named arguments matching the parameter names
-        $prismTool = (new PrismTool)
+        // LLM transport calls tool handlers with named arguments matching the parameter names
+        $llmTool = (new LlmTool)
             ->as($tool->name())
             ->for($tool->description())
             ->using(function (...$args) use ($tool) {
@@ -93,15 +93,15 @@ class ToolRegistry
             $description = $schema['description'] ?? '';
 
             match ($type) {
-                'string' => $prismTool->withStringParameter($name, $description, $required),
-                'number', 'integer' => $prismTool->withNumberParameter($name, $description, $required),
-                'boolean' => $prismTool->withBooleanParameter($name, $description, $required),
-                'enum' => $prismTool->withEnumParameter($name, $description, $schema['options'] ?? [], $required),
-                'array' => $prismTool->withArrayParameter($name, $description, new StringSchema('item', 'Array item'), $required),
-                default => $prismTool->withStringParameter($name, $description, $required),
+                'string' => $llmTool->withStringParameter($name, $description, $required),
+                'number', 'integer' => $llmTool->withNumberParameter($name, $description, $required),
+                'boolean' => $llmTool->withBooleanParameter($name, $description, $required),
+                'enum' => $llmTool->withEnumParameter($name, $description, $schema['options'] ?? [], $required),
+                'array' => $llmTool->withArrayParameter($name, $description, new StringSchema('item', 'Array item'), $required),
+                default => $llmTool->withStringParameter($name, $description, $required),
             };
         }
 
-        return $prismTool;
+        return $llmTool;
     }
 }

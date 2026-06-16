@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Amp\Cancellation;
+use Kosmokrator\LLM\Contracts\Message;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ToolCallMapper;
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -78,13 +78,18 @@ Rules:
 </conversation>
 PROMPT;
 
+    private readonly CompactionInputSlimmer $inputSlimmer;
+
     public function __construct(
         private readonly LlmClientInterface $llm,
         private readonly ModelCatalog $models,
         private readonly LoggerInterface $log,
         private int $compactThresholdPercent = self::DEFAULT_COMPACT_THRESHOLD_PERCENT,
         private readonly ?ContextBudget $budget = null,
-    ) {}
+        ?CompactionInputSlimmer $inputSlimmer = null,
+    ) {
+        $this->inputSlimmer = $inputSlimmer ?? new CompactionInputSlimmer;
+    }
 
     /**
      * Check whether the current prompt size exceeds the compaction threshold for the given model.
@@ -183,7 +188,7 @@ PROMPT;
         ], cancellation: $cancellation);
 
         $parsed = $this->parseCompactionResponse($response->text);
-        $summary = $parsed['summary'];
+        $summary = CompactionSummaryFormatter::wrap($parsed['summary']);
         $recent = array_slice($messages, $keepFrom);
         // Rebuild message list: protected → summary → recent
         $replacement = [...$protectedMessages];
@@ -261,7 +266,7 @@ PROMPT;
         $newLines = [];
 
         if ($message instanceof UserMessage) {
-            $newLines[] = '[user]: '.$this->truncate($message->content, 2000);
+            $newLines[] = '[user]: '.$this->truncate($this->inputSlimmer->slim($message->content), 2000);
         } elseif ($message instanceof AssistantMessage) {
             if ($message->toolCalls !== []) {
                 foreach ($message->toolCalls as $tc) {
@@ -271,15 +276,15 @@ PROMPT;
                 }
             }
             if ($message->content !== '') {
-                $newLines[] = '[assistant]: '.$this->truncate($message->content, 2000);
+                $newLines[] = '[assistant]: '.$this->truncate($this->inputSlimmer->slim($message->content), 2000);
             }
         } elseif ($message instanceof ToolResultMessage) {
             foreach ($message->toolResults as $tr) {
                 $result = is_string($tr->result) ? $tr->result : json_encode($tr->result, JSON_INVALID_UTF8_SUBSTITUTE);
-                $newLines[] = '[tool_result]: '.$this->truncate($result, 1000);
+                $newLines[] = '[tool_result]: '.$this->truncate($this->inputSlimmer->slim((string) $result), 1000);
             }
         } elseif ($message instanceof SystemMessage) {
-            $newLines[] = '[system]: '.$this->truncate($message->content, 500);
+            $newLines[] = '[system]: '.$this->truncate(CompactionSummaryFormatter::normalize($this->inputSlimmer->slim($message->content)), 500);
         }
 
         return $newLines;
@@ -294,6 +299,7 @@ PROMPT;
         foreach ($args as $key => $value) {
             if (in_array($key, ['content', 'old_string', 'new_string'], true)) {
                 $display = is_string($value) ? $value : json_encode($value, JSON_INVALID_UTF8_SUBSTITUTE);
+                $display = $this->inputSlimmer->slim((string) $display);
                 $parts[] = "{$key}: ".$this->truncate((string) $display, $key === 'content' ? 2000 : 1000);
 
                 continue;

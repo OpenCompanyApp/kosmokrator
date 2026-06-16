@@ -11,6 +11,7 @@ use Kosmokrator\Audio\CompletionSound;
 use Kosmokrator\Bootstrap\BootstrapSignalGuard;
 use Kosmokrator\LLM\ModelCatalog;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
 use Kosmokrator\Sdk\AgentBuilder as SdkAgentBuilder;
 use Kosmokrator\Session\SettingsRepositoryInterface;
 use Kosmokrator\Setup\SetupFlowInterface;
@@ -23,7 +24,6 @@ use Kosmokrator\Tool\Permission\PermissionMode;
 use Kosmokrator\UI\HeadlessRenderer;
 use Kosmokrator\UI\OutputFormat;
 use Kosmokrator\Update\UpdateChecker;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -438,13 +438,12 @@ class AgentCommand extends Command
                 break;
             }
 
-            // Background swarms detach from the prompt loop. Their results are
-            // injected on the next agent turn, and /agents remains available for
-            // live inspection while they run.
+            // Background work detaches from the prompt loop. Results are
+            // injected on the next agent turn.
             if ($session->agentLoop->hasActiveBackgroundAgents()) {
-                $session->ui->showNotice('Background agents are still running. Use /agents to inspect progress; results will be injected on the next turn.');
+                $session->ui->showNotice('Background work is still running. Use /agents for swarms or shell_read for commands; results will be injected on the next turn.');
             } elseif ($session->agentLoop->hasPendingBackgroundResults()) {
-                $session->ui->showNotice('Background agent results are ready and will be injected on the next turn.');
+                $session->ui->showNotice('Background results are ready and will be injected on the next turn.');
             }
 
             // Completion sound: compose and play a musical piece reflecting what happened

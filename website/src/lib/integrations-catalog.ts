@@ -216,7 +216,7 @@ export function getIntegrations(): Integration[] {
 }
 
 export function integrationUrl(integration: Integration, section?: 'lua' | 'cli' | 'mcp'): string {
-  return `/integrations/${integration.route_slug}${section ? `/${section}` : ''}`;
+  return `/integrations/${integration.route_slug}${section ? `/${section}` : ''}/`;
 }
 
 export function toolFullName(integration: Integration, tool: IntegrationTool): string {

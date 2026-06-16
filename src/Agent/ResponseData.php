@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Agent;
 
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\ValueObjects\ToolCall;
+use Kosmokrator\LLM\Enums\FinishReason;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 
 /**
  * Immutable value object carrying the normalized result of an LLM call,

@@ -7,16 +7,16 @@ namespace Kosmokrator\Agent;
 use Amp\Cancellation;
 use Illuminate\Container\Container;
 use Kosmokrator\LLM\AsyncLlmClient;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
 use Kosmokrator\LLM\LlmClientInterface;
 use Kosmokrator\LLM\ModelCatalog;
-use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\Relay;
 use Kosmokrator\LLM\RetryableLlmClient;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Tool\Coding\SubagentTool;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\UI\NullRenderer;
-use OpenCompany\PrismRelay\Relay;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -35,13 +35,13 @@ class SubagentFactory
      * @param  OutputTruncator|null  $truncator  Truncates oversized tool output
      * @param  PermissionEvaluator|null  $permissions  Permission policy evaluator
      * @param  \Closure|Cancellation|null  $rootCancellation  Cancellation token from the root session
-     * @param  string  $llmClientClass  'async' or 'prism' — determines client type
+     * @param  string  $llmClientClass  Native client selector kept for persisted factory compatibility
      * @param  SubagentModelConfig  $modelConfig  Per-depth model/provider configuration
      * @param  int|null  $maxTokens  Maximum response tokens
      * @param  int|float|null  $temperature  LLM sampling temperature
      * @param  ContextBudget|null  $budget  Token budget for context compaction
      * @param  ProtectedContextBuilder|null  $protectedContextBuilder  Builds immutable context sections
-     * @param  Relay|null  $relay  Prism relay for LLM communication
+     * @param  Relay|null  $relay  Native relay helpers for LLM communication
      */
     public function __construct(
         private readonly ToolRegistry $rootRegistry,
@@ -108,7 +108,7 @@ class SubagentFactory
             protectedContextBuilder: $this->protectedContextBuilder !== null ? clone $this->protectedContextBuilder : null,
         );
         $loop->setMode($mode);
-        $loop->setTools($scopedRegistry->toPrismTools());
+        $loop->setTools($scopedRegistry->toLlmTools());
         $loop->setAgentContext($context);
 
         $stats = $context->orchestrator->getStats($context->id);
@@ -129,29 +129,32 @@ class SubagentFactory
         $apiKey = $this->modelConfig->resolveApiKey($context->depth);
         $baseUrl = $this->modelConfig->resolveBaseUrl($context->depth);
 
-        if ($this->llmClientClass === 'async') {
-            $inner = new AsyncLlmClient(
-                apiKey: $apiKey,
-                baseUrl: $baseUrl,
-                model: $model,
-                systemPrompt: '',
-                maxTokens: $this->maxTokens,
-                temperature: $this->temperature,
-                provider: $provider,
-                relay: $this->relay,
-            );
-        } else {
-            $inner = new PrismService(
-                provider: $provider,
-                model: $model,
-                systemPrompt: '',
-                maxTokens: $this->maxTokens,
-                temperature: $this->temperature,
-                relay: $this->relay,
-            );
-        }
+        $inner = new AsyncLlmClient(
+            apiKey: $apiKey,
+            baseUrl: $baseUrl,
+            model: $model,
+            systemPrompt: '',
+            maxTokens: $this->maxTokens,
+            temperature: $this->temperature,
+            provider: $provider,
+            relay: $this->relay,
+            codexOAuth: $this->resolveCodexOAuth(),
+        );
 
         return new RetryableLlmClient($inner, $this->log);
+    }
+
+    private function resolveCodexOAuth(): ?CodexOAuthService
+    {
+        try {
+            $container = Container::getInstance();
+
+            return $container->bound(CodexOAuthService::class)
+                ? $container->make(CodexOAuthService::class)
+                : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

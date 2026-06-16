@@ -6,8 +6,8 @@ namespace Kosmokrator\Tests\Unit\Command;
 
 use Illuminate\Container\Container;
 use Kosmokrator\Command\CodexLogoutCommand;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
+use Kosmokrator\LLM\Codex\CodexToken;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;

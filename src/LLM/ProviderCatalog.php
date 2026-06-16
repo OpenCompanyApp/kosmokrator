@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace Kosmokrator\LLM;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\ModelDiscovery\DiscoveredModel;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 
 final class ProviderCatalog
 {
     /** @var list<string> */
     private const HIDDEN_PROVIDER_IDS = [
         'zhipuai',
+        'zai',
         'opencode-zen',
     ];
 
@@ -79,7 +78,7 @@ final class ProviderCatalog
 
     public function __construct(
         private readonly ProviderMeta $meta,
-        private readonly RelayRegistry $registry,
+        private readonly RelayProviderRegistry $registry,
         private readonly Repository $config,
         private readonly SettingsRepositoryInterface $settings,
         private readonly CodexTokenStore $codexTokens,
@@ -148,6 +147,10 @@ final class ProviderCatalog
                 outputModalities: $modalities['output'],
                 source: $this->providerSource($provider) === 'custom' ? 'custom' : 'bundled',
             );
+        }
+
+        foreach ($this->localModelDefinitions($provider) as $model) {
+            $models[strtolower($model->id)] = $model;
         }
 
         $inventory = $this->modelCache?->get($provider);
@@ -388,6 +391,74 @@ final class ProviderCatalog
         $configured = $this->config->get("prism.providers.{$provider}.url");
 
         return is_string($configured) && $configured !== '' ? $configured : $this->registry->url($provider);
+    }
+
+    /**
+     * @return list<ModelDefinition>
+     */
+    private function localModelDefinitions(string $provider): array
+    {
+        $configured = $this->config->get('models.models', []);
+        if (! is_array($configured)) {
+            return [];
+        }
+
+        $models = [];
+        foreach ($configured as $id => $spec) {
+            if (! is_string($id) || ! is_array($spec) || ! $this->localModelBelongsToProvider($spec, $provider)) {
+                continue;
+            }
+
+            $modelId = (string) ($spec['id'] ?? $this->modelIdFromConfigKey($id));
+
+            $models[] = new ModelDefinition(
+                id: $modelId,
+                displayName: isset($spec['display_name']) ? (string) $spec['display_name'] : $this->humanize($id),
+                contextWindow: (int) ($spec['context'] ?? 0),
+                maxOutput: (int) ($spec['max_output'] ?? 0),
+                thinking: (bool) ($spec['thinking'] ?? false),
+                inputPricePerMillion: isset($spec['input_price']) ? (float) $spec['input_price'] : null,
+                outputPricePerMillion: isset($spec['output_price']) ? (float) $spec['output_price'] : null,
+                pricingKind: (string) ($spec['pricing_kind'] ?? 'paid'),
+                referenceInputPricePerMillion: isset($spec['reference_input_price']) ? (float) $spec['reference_input_price'] : null,
+                referenceOutputPricePerMillion: isset($spec['reference_output_price']) ? (float) $spec['reference_output_price'] : null,
+                status: isset($spec['status']) ? (string) $spec['status'] : null,
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+                source: 'bundled',
+            );
+        }
+
+        return $models;
+    }
+
+    private function modelIdFromConfigKey(string $key): string
+    {
+        $parts = explode('/', $key);
+
+        return (string) end($parts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $spec
+     */
+    private function localModelBelongsToProvider(array $spec, string $provider): bool
+    {
+        $modelProvider = (string) ($spec['provider'] ?? '');
+        if ($modelProvider === '') {
+            return false;
+        }
+
+        if ($modelProvider === $provider) {
+            return true;
+        }
+
+        return match ($modelProvider) {
+            'z' => $provider === 'z-api',
+            'kimi' => $provider === 'kimi-coding',
+            'minimax' => $provider === 'minimax-cn',
+            default => false,
+        };
     }
 
     private function mergeDiscoveredModel(

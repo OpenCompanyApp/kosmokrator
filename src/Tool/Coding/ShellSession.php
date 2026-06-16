@@ -17,8 +17,11 @@ final class ShellSession
 {
     private const MAX_BUFFER_BYTES = 1_048_576;
 
-    /** Accumulated stdout+stderr output. */
+    /** Accumulated unread stdout+stderr output. */
     private string $buffer = '';
+
+    /** Bounded transcript retained for completion notifications. */
+    private string $transcript = '';
 
     /** Byte offset into $buffer up to which has already been consumed by readUnread(). */
     private int $readOffset = 0;
@@ -43,6 +46,7 @@ final class ShellSession
         public readonly bool $readOnly,
         public readonly float $startedAt,
         public readonly int $timeoutSeconds,
+        public readonly bool $background = false,
     ) {
         $this->lastActiveAt = $startedAt;
     }
@@ -55,7 +59,9 @@ final class ShellSession
         }
 
         $this->buffer .= $chunk;
+        $this->transcript .= $chunk;
         $this->capBuffer();
+        $this->capTranscript();
         $this->touch();
     }
 
@@ -65,7 +71,9 @@ final class ShellSession
         // Ensure a leading newline if the buffer doesn't already end with one
         $prefix = ($this->buffer !== '' && ! str_ends_with($this->buffer, "\n")) ? "\n" : '';
         $this->buffer .= $prefix.$line."\n";
+        $this->transcript .= $prefix.$line."\n";
         $this->capBuffer();
+        $this->capTranscript();
         $this->touch();
     }
 
@@ -129,6 +137,21 @@ final class ShellSession
         $drop = $length - self::MAX_BUFFER_BYTES;
         $this->buffer = substr($this->buffer, $drop);
         $this->readOffset = max(0, $this->readOffset - $drop);
+    }
+
+    public function snapshotTranscript(): string
+    {
+        return $this->transcript;
+    }
+
+    private function capTranscript(): void
+    {
+        $length = strlen($this->transcript);
+        if ($length <= self::MAX_BUFFER_BYTES) {
+            return;
+        }
+
+        $this->transcript = substr($this->transcript, $length - self::MAX_BUFFER_BYTES);
     }
 
     /** Mark this session as having been explicitly killed. */

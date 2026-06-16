@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Kosmokrator\Command;
 
 use Illuminate\Container\Container;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;

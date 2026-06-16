@@ -50,8 +50,6 @@ parameters:
         - '#PHPDoc type for property.*LlmStreamingEvent.*finishReason#'
         - '#Parameter \$finishReason of method.*LlmStreamingEvent.*invalid type#'
         - '#Property.*LlmStreamingEvent.*finishReason.*unknown class#'
-        # PrismService toolCall argument type (Prism API returns array, we need string)
-        - '#Parameter.*\$arguments of static method.*LlmStreamingEvent::toolCall\(\)#'
         # ExecuteLuaTool empty() on known-defined variable
         - '#Variable \$lines in empty\(\) always exists#'
     reportUnmatchedIgnoredErrors: true

@@ -247,6 +247,7 @@ final class TuiCoreRenderer implements CoreRendererInterface
         $this->input->setKeybindings(new Keybindings([
             'copy' => [],
             'new_line' => ['shift+enter', 'alt+enter'],
+            'select_cancel' => [Key::ESCAPE, 'ctrl+c'],
             'cycle_mode' => ['shift+tab'],
             'history_up' => [Key::PAGE_UP],
             'history_down' => [Key::PAGE_DOWN],
@@ -376,7 +377,7 @@ ART;
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 {$green}/edit{$dim}  {$purple}/plan{$dim}  {$orange}/ask{$r}               {$dim}Agent mode (write / read-only / Q&A){$r}
 {$silver}/guardian{$dim}  {$steel}/argus{$dim}  {$gold}/prometheus{$r}    {$dim}Permission mode (smart / strict / auto){$r}
-{$cyan}/compact{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$dim}  {$cyan}/tasks clear{$r}  {$dim}Context and session management{$r}
+{$cyan}/compact{$dim}  {$cyan}/goal{$dim}  {$cyan}/new{$dim}  {$cyan}/resume{$dim}  {$cyan}/tasks clear{$r}  {$dim}Context, goals, and sessions{$r}
 {$muted}/settings{$dim}  {$muted}/memories{$dim}  {$muted}/sessions{$dim}  {$muted}/agents{$r}  {$dim}Configuration and monitoring{$r}
 {$border}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{$r}
 HELP;

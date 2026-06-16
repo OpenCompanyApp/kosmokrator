@@ -13,6 +13,8 @@ use Kosmokrator\Agent\OutputTruncator;
 use Kosmokrator\Agent\SubagentOrchestrator;
 use Kosmokrator\Agent\SubagentStats;
 use Kosmokrator\Agent\ToolExecutor;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionResult;
@@ -20,8 +22,6 @@ use Kosmokrator\UI\RendererInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -45,7 +45,7 @@ class ToolExecutorTest extends TestCase
     }
 
     /**
-     * Create a Prism Tool that returns the given string when handle() is called.
+     * Create a LLM Tool that returns the given string when handle() is called.
      * Uses a variadic closure so it accepts any named arguments the ToolCall passes.
      */
     private function makeTool(string $name, string $returnOutput): Tool
@@ -58,7 +58,7 @@ class ToolExecutorTest extends TestCase
             });
     }
 
-    /** Create a Prism Tool whose handle() invokes the callback with any args. */
+    /** Create a LLM Tool whose handle() invokes the callback with any args. */
     private function makeToolWithCallback(string $name, callable $callback): Tool
     {
         return (new Tool)

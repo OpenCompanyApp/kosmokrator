@@ -7,7 +7,7 @@ namespace Kosmokrator\LLM;
 /**
  * A single event yielded by the streaming LLM client.
  *
- * Abstracts over provider-specific streaming events (SSE chunks, Prism StreamEvents)
+ * Abstracts over provider-specific streaming events (SSE chunks, provider stream events)
  * into a uniform shape consumed by AgentLoop for incremental rendering.
  */
 final class LlmStreamingEvent
@@ -24,7 +24,7 @@ final class LlmStreamingEvent
         public readonly string $delta = '',
         public readonly array $toolCall = [],
         public readonly array $usage = [],
-        public readonly ?\Prism\Prism\Enums\FinishReason $finishReason = null,
+        public readonly ?Enums\FinishReason $finishReason = null,
     ) {}
 
     public static function textDelta(string $text): self
@@ -42,7 +42,7 @@ final class LlmStreamingEvent
         return new self('tool_call', toolCall: ['id' => $id, 'name' => $name, 'arguments' => $arguments]);
     }
 
-    public static function streamEnd(int $promptTokens, int $completionTokens, int $cacheWrite = 0, int $cacheRead = 0, int $thoughtTokens = 0, ?\Prism\Prism\Enums\FinishReason $finishReason = null): self
+    public static function streamEnd(int $promptTokens, int $completionTokens, int $cacheWrite = 0, int $cacheRead = 0, int $thoughtTokens = 0, ?Enums\FinishReason $finishReason = null): self
     {
         return new self(
             'stream_end',

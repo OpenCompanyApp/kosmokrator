@@ -6,7 +6,10 @@ namespace Kosmokrator\Tests\Integration\AgentLoop;
 
 use Kosmokrator\Agent\AgentLoop;
 use Kosmokrator\Agent\AgentMode;
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\Tests\Integration\IntegrationTestCase;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Permission\GuardianEvaluator;
@@ -14,9 +17,6 @@ use Kosmokrator\Tool\Permission\PermissionAction;
 use Kosmokrator\Tool\Permission\PermissionEvaluator;
 use Kosmokrator\Tool\Permission\PermissionRule;
 use Kosmokrator\Tool\Permission\SessionGrants;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\ToolCall;
 use Psr\Log\NullLogger;
 
 /**

@@ -56,6 +56,7 @@ final class SettingsSchemaTest extends TestCase
         $this->assertSame('context.auto_compact', $this->schema->canonicalId('auto_compact'));
         $this->assertSame('agent.temperature', $this->schema->canonicalId('temperature'));
         $this->assertSame('agent.max_tokens', $this->schema->canonicalId('max_tokens'));
+        $this->assertSame('tools.bash.background_wait_ms', $this->schema->canonicalId('bash_background_wait_ms'));
     }
 
     public function test_canonical_id_passes_through_unknown_ids_unchanged(): void

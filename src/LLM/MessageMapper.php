@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Kosmokrator\LLM;
 
-use Prism\Prism\Contracts\Message;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
-use Prism\Prism\ValueObjects\ToolCall;
-use Prism\Prism\ValueObjects\ToolResult;
+use Kosmokrator\LLM\Contracts\Message;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\ToolResult;
 
 /**
- * Anti-corruption layer for Prism PHP message construction.
+ * Anti-corruption layer for native message construction.
  *
- * Provides factory methods for creating Prism Message objects so the domain
- * layer does not directly depend on Prism constructors. If the Prism SDK
+ * Provides factory methods for creating native Message objects so the domain
+ * layer does not directly depend on message constructors. If the native HTTP
  * changes constructor signatures, only this class needs updating.
  */
 final class MessageMapper
@@ -48,7 +48,7 @@ final class MessageMapper
     }
 
     /**
-     * Determine the role string for a given Prism Message.
+     * Determine the role string for a given native Message.
      */
     public static function roleOf(Message $message): string
     {

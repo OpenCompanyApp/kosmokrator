@@ -6,9 +6,9 @@ namespace Kosmokrator\Tests\Unit\LLM\Codex;
 
 use Illuminate\Config\Repository;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\Codex\CodexToken;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;

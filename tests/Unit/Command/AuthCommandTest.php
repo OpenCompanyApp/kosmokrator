@@ -8,15 +8,15 @@ use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Kosmokrator\Command\AuthCommand;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\Codex\CodexToken;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -61,7 +61,7 @@ class AuthCommandTest extends TestCase
             ],
         ]);
 
-        $registry = new RelayRegistry;
+        $registry = new RelayProviderRegistry;
         $this->catalog = new ProviderCatalog($meta, $registry, $config, $this->settings, $tokenStore);
 
         // CodexAuthFlow — use an uninitialized CodexOAuthService

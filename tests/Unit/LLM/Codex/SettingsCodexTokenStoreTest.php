@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Unit\LLM\Codex;
 
+use Kosmokrator\LLM\Codex\CodexToken;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
 use PHPUnit\Framework\TestCase;
 
 final class SettingsCodexTokenStoreTest extends TestCase

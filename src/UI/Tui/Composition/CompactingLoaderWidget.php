@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI\Tui\Composition;
 
-use Kosmokrator\UI\Theme;
 use Kosmokrator\UI\Tui\Primitive\ReactiveWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use Symfony\Component\Tui\Render\RenderContext;
@@ -143,17 +142,9 @@ final class CompactingLoaderWidget extends ReactiveWidget implements ParentInter
             return;
         }
 
-        $r = "\033[0m";
-        $dim = "\033[38;5;245m";
-        $t = sin($tick * 0.07);
-        $cr = (int) (208 + 40 * $t);
-        $cg = (int) (48 + 16 * $t);
-        $cb = (int) (48 + 16 * $t);
-        $color = Theme::rgb($cr, $cg, $cb);
-
         $formatted = sprintf('%02d:%02d', intdiv($elapsed, 60), $elapsed % 60);
 
-        $this->loader->setMessage("{$color}{$phrase}{$r} {$dim}({$formatted}){$r}");
+        $this->loader->setMessage("{$phrase} ({$formatted})");
     }
 
     /**

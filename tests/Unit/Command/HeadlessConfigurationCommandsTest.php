@@ -17,8 +17,13 @@ use Kosmokrator\Command\Settings\SettingsListCommand;
 use Kosmokrator\Command\Settings\SettingsOptionsCommand;
 use Kosmokrator\Command\Settings\SettingsSetCommand;
 use Kosmokrator\LLM\Codex\CodexAuthFlow;
+use Kosmokrator\LLM\Codex\CodexOAuthService;
+use Kosmokrator\LLM\Codex\CodexToken;
+use Kosmokrator\LLM\Codex\CodexTokenStore;
 use Kosmokrator\LLM\ProviderCatalog;
 use Kosmokrator\LLM\ProviderConfigurator;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
 use Kosmokrator\Session\SettingsRepositoryInterface;
@@ -27,11 +32,6 @@ use Kosmokrator\Settings\SettingsCatalog;
 use Kosmokrator\Settings\SettingsManager;
 use Kosmokrator\Settings\SettingsSchema;
 use Kosmokrator\Settings\YamlConfigStore;
-use OpenCompany\PrismCodex\CodexOAuthService;
-use OpenCompany\PrismCodex\Contracts\CodexTokenStore;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Yaml\Yaml;
@@ -72,7 +72,7 @@ final class HeadlessConfigurationCommandsTest extends TestCase
                 ],
             ],
         ]);
-        $registry = new RelayRegistry([
+        $registry = new RelayProviderRegistry([
             'openai' => [
                 'url' => 'https://api.openai.com/v1',
                 'auth' => 'api_key',

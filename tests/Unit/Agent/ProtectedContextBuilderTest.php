@@ -9,9 +9,9 @@ use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\AgentType;
 use Kosmokrator\Agent\ProtectedContextBuilder;
 use Kosmokrator\Agent\SubagentOrchestrator;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 use Kosmokrator\Task\TaskStore;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
 use Psr\Log\NullLogger;
 
 class ProtectedContextBuilderTest extends TestCase

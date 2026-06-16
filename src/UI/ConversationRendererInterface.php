@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kosmokrator\UI;
 
-use Prism\Prism\Contracts\Message;
+use Kosmokrator\LLM\Contracts\Message;
 
 /**
  * Conversation history display and management.

@@ -37,4 +37,12 @@ final class KosmokratorEditorWidgetTest extends TestCase
         $this->assertGreaterThanOrEqual(4, \count($lines));
         $this->assertStringContainsString('─', AnsiUtils::stripAnsiCodes($lines[0]));
     }
+
+    public function test_ctrl_c_is_bound_to_cancel_not_copy(): void
+    {
+        $bindings = (new KosmokratorEditorWidget)->getKeybindings();
+
+        $this->assertTrue($bindings->matches("\x03", 'select_cancel'));
+        $this->assertFalse($bindings->matches("\x03", 'copy'));
+    }
 }

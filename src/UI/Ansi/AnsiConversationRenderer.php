@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Kosmokrator\UI\Ansi;
 
 use Kosmokrator\LLM\ToolCallMapper;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\Messages\UserMessage;
 use Kosmokrator\UI\ConversationRendererInterface;
 use Kosmokrator\UI\Theme;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\Messages\UserMessage;
 
 /**
  * ANSI fallback implementation of conversation history display.

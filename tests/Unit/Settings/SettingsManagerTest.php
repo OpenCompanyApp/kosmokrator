@@ -215,15 +215,22 @@ final class SettingsManagerTest extends TestCase
     public function test_set_rejects_invalid_choice_value(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Invalid value for [agent.reasoning_effort]: expected one of 'off', 'low', 'medium', 'high'.");
+        $this->expectExceptionMessage("Invalid value for [agent.reasoning_effort]: expected one of 'off', 'low', 'medium', 'high', 'max'.");
 
         $this->manager->set('agent.reasoning_effort', 'turbo', 'global');
+    }
+
+    public function test_set_accepts_max_reasoning_effort(): void
+    {
+        $this->manager->set('agent.reasoning_effort', 'max', 'global');
+
+        $this->assertSame('max', $this->manager->get('agent.reasoning_effort'));
     }
 
     public function test_set_raw_validates_known_schema_path(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Invalid value for [agent.reasoning_effort]: expected one of 'off', 'low', 'medium', 'high'.");
+        $this->expectExceptionMessage("Invalid value for [agent.reasoning_effort]: expected one of 'off', 'low', 'medium', 'high', 'max'.");
 
         $this->manager->setRaw('kosmo.agent.reasoning_effort', 'turbo', 'global');
     }

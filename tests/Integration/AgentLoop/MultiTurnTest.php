@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Kosmokrator\Tests\Integration\AgentLoop;
 
+use Kosmokrator\LLM\Enums\FinishReason;
 use Kosmokrator\LLM\LlmResponse;
+use Kosmokrator\LLM\Tool;
+use Kosmokrator\LLM\ValueObjects\Messages\ToolResultMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use Kosmokrator\Tests\Integration\IntegrationTestCase;
 use Kosmokrator\Tool\Coding\FileReadTool;
 use Kosmokrator\Tool\Coding\FileWriteTool;
-use Prism\Prism\Enums\FinishReason;
-use Prism\Prism\Tool;
-use Prism\Prism\ValueObjects\Messages\ToolResultMessage;
-use Prism\Prism\ValueObjects\ToolCall;
 
 /**
  * Integration tests for multi-turn AgentLoop scenarios with the fake LLM.

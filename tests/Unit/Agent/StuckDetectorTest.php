@@ -6,8 +6,8 @@ namespace Kosmokrator\Tests\Unit\Agent;
 
 use Kosmokrator\Agent\ConversationHistory;
 use Kosmokrator\Agent\StuckDetector;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\ToolCall;
 
 class StuckDetectorTest extends TestCase
 {

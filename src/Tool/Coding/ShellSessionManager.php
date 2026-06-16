@@ -21,6 +21,12 @@ final class ShellSessionManager
     /** @var array<string, ShellSession> Active sessions keyed by ID. */
     private array $sessions = [];
 
+    /** @var array<string, array{id: string, command: string, output: string, success: bool, exit_code: ?int, timed_out: bool, duration: float}> */
+    private array $pendingBackgroundResults = [];
+
+    /** @var array<string, true> Background sessions whose completion has already been queued. */
+    private array $queuedBackgroundResults = [];
+
     /** @var array<string, Future> Background stdout/stderr/exit reader futures keyed by session and stream. */
     private array $readerFutures = [];
 
@@ -50,6 +56,8 @@ final class ShellSessionManager
         bool $readOnly = false,
         ?int $timeoutSeconds = null,
         ?int $waitMs = null,
+        bool $background = false,
+        bool $closeStdin = false,
     ): array {
         $this->cleanupIdleSessions();
 
@@ -58,6 +66,10 @@ final class ShellSessionManager
         $waitMs ??= $this->defaultWaitMs;
 
         $process = Process::start(['sh', '-c', $command], $cwd);
+        if ($closeStdin) {
+            $process->getStdin()->close();
+        }
+
         $id = 'sh_'.$this->nextId++;
         $session = new ShellSession(
             id: $id,
@@ -67,6 +79,7 @@ final class ShellSessionManager
             readOnly: $readOnly,
             startedAt: microtime(true),
             timeoutSeconds: $timeoutSeconds,
+            background: $background,
         );
 
         $this->sessions[$id] = $session;
@@ -80,6 +93,43 @@ final class ShellSessionManager
             'id' => $id,
             'output' => $initial !== '' ? "{$header}\n\n{$initial}" : "{$header}\n\n(no new output yet)",
         ];
+    }
+
+    public function hasActiveBackgroundCommands(): bool
+    {
+        $this->cleanupIdleSessions();
+
+        foreach ($this->sessions as $session) {
+            if ($session->background && $session->isRunning()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasPendingBackgroundResults(): bool
+    {
+        return $this->pendingBackgroundResults !== [];
+    }
+
+    /**
+     * @return array<string, array{id: string, command: string, output: string, success: bool, exit_code: ?int, timed_out: bool, duration: float}>
+     */
+    public function collectPendingBackgroundResults(): array
+    {
+        $this->cleanupIdleSessions();
+
+        $results = $this->pendingBackgroundResults;
+        $this->pendingBackgroundResults = [];
+
+        foreach (array_keys($results) as $id) {
+            if (isset($this->sessions[$id])) {
+                $this->forgetIfDrained($this->sessions[$id]);
+            }
+        }
+
+        return $results;
     }
 
     /**
@@ -220,6 +270,10 @@ final class ShellSessionManager
 
             $session->markExited($exitCode);
             $session->appendSystemLine("Exit code: {$exitCode}");
+            if ($session->background) {
+                \Amp\delay(0.05);
+                $this->queueBackgroundResult($session);
+            }
         });
     }
 
@@ -273,6 +327,9 @@ final class ShellSessionManager
                 $session->markKilled();
                 $session->appendSystemLine("Session {$id} expired after {$this->idleTtlSeconds}s idle.");
                 $session->process->kill();
+                if ($session->background) {
+                    $this->queueBackgroundResult($session, timedOut: true);
+                }
             }
 
             $this->forgetIfDrained($session);
@@ -330,5 +387,29 @@ final class ShellSessionManager
         $this->forgetIfDrained($session);
 
         return rtrim($chunk, "\n");
+    }
+
+    private function queueBackgroundResult(ShellSession $session, bool $timedOut = false): void
+    {
+        if (isset($this->queuedBackgroundResults[$session->id])) {
+            return;
+        }
+
+        $this->queuedBackgroundResults[$session->id] = true;
+        $exitCode = $session->exitCode();
+        $output = trim($session->snapshotTranscript());
+        if ($output === '') {
+            $output = '(no output)';
+        }
+
+        $this->pendingBackgroundResults[$session->id] = [
+            'id' => $session->id,
+            'command' => $session->command,
+            'output' => $output,
+            'success' => $exitCode === 0 && ! $session->wasKilled() && ! $timedOut,
+            'exit_code' => $exitCode,
+            'timed_out' => $timedOut || $session->wasKilled(),
+            'duration' => microtime(true) - $session->startedAt,
+        ];
     }
 }

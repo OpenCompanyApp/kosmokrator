@@ -7,6 +7,7 @@ namespace Kosmokrator\Tests\Unit\UI\Tui\Composition;
 use Kosmokrator\UI\Tui\Composition\ThinkingLoaderWidget;
 use Kosmokrator\UI\Tui\State\TuiStateStore;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Tui\Ansi\AnsiUtils;
 use Symfony\Component\Tui\Render\RenderContext;
 
 final class ThinkingLoaderWidgetTest extends TestCase
@@ -28,6 +29,7 @@ final class ThinkingLoaderWidgetTest extends TestCase
         $withElapsed = implode("\n", $widget->render(new RenderContext(120, 2)));
         $this->assertStringContainsString($phrase, $withElapsed);
         $this->assertStringContainsString('0:09', $withElapsed);
+        $this->assertStringNotContainsString('[38;2;', AnsiUtils::stripAnsiCodes($withElapsed));
 
         $state->setHasSubagentActivity(true);
 
@@ -35,9 +37,10 @@ final class ThinkingLoaderWidgetTest extends TestCase
         $withoutElapsed = implode("\n", $widget->render(new RenderContext(120, 2)));
         $this->assertStringContainsString($phrase, $withoutElapsed);
         $this->assertStringNotContainsString('0:09', $withoutElapsed);
+        $this->assertStringNotContainsString('[38;2;', AnsiUtils::stripAnsiCodes($withoutElapsed));
     }
 
-    public function test_sync_from_signals_updates_rendered_message_when_breath_color_changes(): void
+    public function test_sync_from_signals_accepts_breath_color_changes_without_ansi_leaks(): void
     {
         $state = new TuiStateStore;
         $state->setHasThinkingLoader(true);
@@ -49,12 +52,12 @@ final class ThinkingLoaderWidgetTest extends TestCase
 
         $context = new RenderContext(120, 2);
         $first = implode("\n", $widget->render($context));
+        $this->assertStringNotContainsString('[38;2;', AnsiUtils::stripAnsiCodes($first));
 
         $state->setBreathColor("\033[38;2;152;200;248m");
 
         $this->assertTrue($widget->syncFromSignals());
         $second = implode("\n", $widget->render($context));
-
-        $this->assertNotSame($first, $second);
+        $this->assertStringNotContainsString('[38;2;', AnsiUtils::stripAnsiCodes($second));
     }
 }

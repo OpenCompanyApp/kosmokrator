@@ -6,6 +6,9 @@ namespace Kosmokrator\Provider;
 
 use Kosmokrator\Agent\AgentMode;
 use Kosmokrator\Agent\InstructionLoader;
+use Kosmokrator\Goal\Tool\CreateGoalTool;
+use Kosmokrator\Goal\Tool\GetGoalTool;
+use Kosmokrator\Goal\Tool\UpdateGoalTool;
 use Kosmokrator\Integration\Runtime\IntegrationRuntime;
 use Kosmokrator\Lua\LuaDocService;
 use Kosmokrator\Lua\NativeToolBridge;
@@ -69,6 +72,7 @@ class ToolServiceProvider extends ServiceProvider
         $config = $this->container->make('config');
 
         $bashTimeout = $config->get('kosmo.tools.bash.timeout', 120);
+        $bashBackgroundWaitMs = (int) $config->get('kosmo.tools.bash.background_wait_ms', 250);
         $shellWaitMs = (int) $config->get('kosmo.tools.shell.wait_ms', 100);
         $shellIdleTtl = (int) $config->get('kosmo.tools.shell.idle_ttl', 300);
         $projectRoot = InstructionLoader::gitRoot() ?? getcwd();
@@ -118,7 +122,7 @@ class ToolServiceProvider extends ServiceProvider
             return $evaluator;
         });
 
-        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $projectRoot, $allowedPaths) {
+        $this->container->singleton(ToolRegistry::class, function () use ($bashTimeout, $bashBackgroundWaitMs, $projectRoot, $allowedPaths) {
             $registry = new ToolRegistry;
             $registry->register(new FileReadTool($projectRoot, $allowedPaths));
             $registry->register(new FileWriteTool($projectRoot, $allowedPaths));
@@ -137,7 +141,11 @@ class ToolServiceProvider extends ServiceProvider
                 $this->container->make(WebFetchProviderManager::class),
                 $this->container->make(SettingsManager::class),
             ));
-            $registry->register(new BashTool($bashTimeout));
+            $registry->register(new BashTool(
+                timeout: $bashTimeout,
+                sessions: $this->container->make(ShellSessionManager::class),
+                backgroundWaitMs: $bashBackgroundWaitMs,
+            ));
             $registry->register(new ShellStartTool(
                 $this->container->make(ShellSessionManager::class),
             ));
@@ -159,6 +167,9 @@ class ToolServiceProvider extends ServiceProvider
             $registry->register(new TaskGetTool($taskStore));
 
             $sessionManager = $this->container->make(SessionManager::class);
+            $registry->register(new GetGoalTool($sessionManager));
+            $registry->register(new CreateGoalTool($sessionManager));
+            $registry->register(new UpdateGoalTool($sessionManager));
             $registry->register(new MemorySaveTool($sessionManager));
             $registry->register(new MemorySearchTool($sessionManager));
             $registry->register(new SessionSearchTool($sessionManager));

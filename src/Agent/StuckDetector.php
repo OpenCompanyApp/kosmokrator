@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Agent;
 
 use Kosmokrator\LLM\ToolCallMapper;
-use Prism\Prism\ValueObjects\Messages\AssistantMessage;
-use Prism\Prism\ValueObjects\ToolCall;
+use Kosmokrator\LLM\ValueObjects\Messages\AssistantMessage;
+use Kosmokrator\LLM\ValueObjects\ToolCall;
 
 /**
  * Detects repetitive tool call patterns in headless agent loops.

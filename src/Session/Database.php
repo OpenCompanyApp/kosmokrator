@@ -19,7 +19,7 @@ class Database
 
     private bool $isMemory = false;
 
-    private const SCHEMA_VERSION = 13;
+    private const SCHEMA_VERSION = 14;
 
     /**
      * @param  string|null  $path  Absolute path to the SQLite database file, or ':memory:' for an ephemeral db.
@@ -285,6 +285,7 @@ class Database
 
         $this->createSwarmMetadataSchema();
         $this->createProviderModelCacheSchema();
+        $this->createSessionGoalsSchema();
     }
 
     /** Runs incremental schema migrations starting from the given version. */
@@ -422,6 +423,10 @@ class Database
 
         if ($from < 13) {
             $this->createProviderModelCacheSchema();
+        }
+
+        if ($from < 14) {
+            $this->createSessionGoalsSchema();
         }
     }
 
@@ -617,6 +622,26 @@ class Database
         );
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_agent ON swarm_events(root_session_id, agent_id, id)');
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_swarm_events_session_type ON swarm_events(root_session_id, event_type, id)');
+    }
+
+    private function createSessionGoalsSchema(): void
+    {
+        $this->pdo->exec(
+            <<<'SQL'
+            CREATE TABLE IF NOT EXISTS session_goals (
+                session_id          TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                goal_id             TEXT NOT NULL,
+                objective           TEXT NOT NULL,
+                status              TEXT NOT NULL CHECK(status IN ('active', 'paused', 'budget_limited', 'complete')),
+                token_budget        INTEGER,
+                tokens_used         INTEGER NOT NULL DEFAULT 0,
+                time_used_seconds   INTEGER NOT NULL DEFAULT 0,
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL
+            )
+            SQL
+        );
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_session_goals_status ON session_goals(status, updated_at DESC)');
     }
 
     private function createProviderModelCacheSchema(): void

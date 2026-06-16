@@ -1,57 +1,59 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kosmokrator\Tests\Unit\LLM;
 
-use Kosmokrator\LLM\PrismService;
+use Kosmokrator\LLM\AsyncLlmClient;
 use PHPUnit\Framework\TestCase;
 
-class PrismServiceTest extends TestCase
+final class AsyncLlmClientConfigurationTest extends TestCase
 {
     public function test_get_provider(): void
     {
-        $service = new PrismService('anthropic', 'claude-4', 'prompt');
+        $service = $this->client(provider: 'anthropic', model: 'claude-4');
 
         $this->assertSame('anthropic', $service->getProvider());
     }
 
     public function test_get_model(): void
     {
-        $service = new PrismService('anthropic', 'claude-4-sonnet', 'prompt');
+        $service = $this->client(provider: 'anthropic', model: 'claude-4-sonnet');
 
         $this->assertSame('claude-4-sonnet', $service->getModel());
     }
 
-    public function test_supports_streaming_for_z_provider(): void
+    public function test_supports_streaming_for_z_provider_uses_native_capabilities(): void
     {
-        $service = new PrismService('z', 'GLM-5.1', 'prompt');
+        $service = $this->client(provider: 'z', model: 'GLM-5.1');
 
         $this->assertFalse($service->supportsStreaming());
     }
 
     public function test_supports_streaming_for_anthropic(): void
     {
-        $service = new PrismService('anthropic', 'claude-4', 'prompt');
+        $service = $this->client(provider: 'anthropic', model: 'claude-4');
 
         $this->assertTrue($service->supportsStreaming());
     }
 
     public function test_supports_streaming_for_openai(): void
     {
-        $service = new PrismService('openai', 'gpt-4', 'prompt');
+        $service = $this->client(provider: 'openai', model: 'gpt-4');
 
         $this->assertTrue($service->supportsStreaming());
     }
 
     public function test_supports_streaming_for_arbitrary_provider(): void
     {
-        $service = new PrismService('custom_provider', 'model', 'prompt');
+        $service = $this->client(provider: 'custom_provider', model: 'model');
 
         $this->assertTrue($service->supportsStreaming());
     }
 
     public function test_provider_switch_updates_temperature_support(): void
     {
-        $service = new PrismService('z', 'glm-5.1', 'prompt', temperature: 0.7);
+        $service = $this->client(provider: 'z', model: 'glm-5.1', temperature: 0.7);
         $supportsTemperature = new \ReflectionMethod($service, 'supportsTemperature');
 
         $this->assertFalse($supportsTemperature->invoke($service));
@@ -59,5 +61,17 @@ class PrismServiceTest extends TestCase
         $service->setProvider('openai');
 
         $this->assertTrue($supportsTemperature->invoke($service));
+    }
+
+    private function client(string $provider, string $model, int|float|null $temperature = null): AsyncLlmClient
+    {
+        return new AsyncLlmClient(
+            apiKey: 'test-key',
+            baseUrl: 'https://example.test',
+            model: $model,
+            systemPrompt: 'prompt',
+            temperature: $temperature,
+            provider: $provider,
+        );
     }
 }

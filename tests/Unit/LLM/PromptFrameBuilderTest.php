@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Kosmokrator\LLM\PromptFrameBuilder;
+use Kosmokrator\LLM\ValueObjects\Messages\SystemMessage;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\ValueObjects\Messages\SystemMessage;
 
 final class PromptFrameBuilderTest extends TestCase
 {
@@ -92,6 +92,18 @@ final class PromptFrameBuilderTest extends TestCase
         $this->assertCount(2, $result);
         $this->assertSame($stable, $result[0]->content);
         $this->assertSame("## Parent Brief\nAudit this subsystem.", $result[1]->content);
+    }
+
+    public function test_operational_mode_marker_splits_before_mode_suffix(): void
+    {
+        $stable = 'You are a helpful assistant.';
+        $prompt = $stable."\n\n# Operational Mode: Edit\nUse tools.";
+
+        $result = PromptFrameBuilder::splitSystemPrompt($prompt);
+
+        $this->assertCount(2, $result);
+        $this->assertSame($stable, $result[0]->content);
+        $this->assertSame("# Operational Mode: Edit\nUse tools.", $result[1]->content);
     }
 
     public function test_gateway_session_context_marker_splits_before_gateway_context(): void

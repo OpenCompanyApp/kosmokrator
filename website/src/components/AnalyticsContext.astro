@@ -1,0 +1,10 @@
+---
+type Props = {
+  context: Record<string, unknown>;
+};
+
+const { context } = Astro.props as Props;
+const contextJson = JSON.stringify(context).replace(/</g, '\\u003c');
+---
+
+<script is:inline set:html={`window.__kosmo_analytics_context=${contextJson};`}></script>

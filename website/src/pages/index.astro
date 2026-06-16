@@ -1,5 +1,7 @@
 ---
 import '../styles/tailwind.css';
+import AnalyticsContext from '../components/AnalyticsContext.astro';
+import AnalyticsScripts from '../components/AnalyticsScripts.astro';
 import MegaFooter from '../components/MegaFooter.astro';
 import {
   DEFAULT_OG_IMAGE,
@@ -74,12 +76,8 @@ const homepageOgImage = DEFAULT_OG_IMAGE;
     <link rel="canonical" href={siteUrl('/')} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <script type="application/ld+json" set:html={jsonLd(softwareJsonLd())} />
-    <!-- Privacy-friendly analytics by Plausible -->
-    <script async src="https://plausible.gingermedia.biz/js/pa-8vpUDam-s3dygrgBnXxTP.js"></script>
-    <script is:inline>
-      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
-      plausible.init()
-    </script>
+    <AnalyticsContext context={{ surface: 'home' }} />
+    <AnalyticsScripts />
   </head>
   <body class="min-h-screen overflow-x-hidden text-kosmo-text font-sans bg-[radial-gradient(circle_at_8%_10%,rgba(220,20,60,0.18),transparent_28rem),radial-gradient(circle_at_92%_20%,rgba(255,92,117,0.12),transparent_26rem),linear-gradient(180deg,#07070d_0%,#0c0c14_58%,#07070d_100%)]">
     <header class="w-[min(1180px,calc(100%_-_2.5rem))] mx-auto flex items-center justify-between gap-4 py-4 max-[920px]:flex-col max-[920px]:items-start">
@@ -120,8 +118,8 @@ const homepageOgImage = DEFAULT_OG_IMAGE;
             </span>
           </div>
           <div class="flex flex-wrap gap-3 mt-8 max-[560px]:items-stretch">
-            <a class="inline-flex w-[190px] max-[560px]:w-full items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href="/docs/installation">Install KosmoKrator</a>
-            <a class="inline-flex w-[190px] max-[560px]:w-full items-center justify-center min-h-[44px] px-4 py-3 border border-kosmo-border rounded-md text-kosmo-text font-bold no-underline bg-white/[0.05]" href="/docs/getting-started">Read the docs</a>
+            <a class="inline-flex w-[190px] max-[560px]:w-full items-center justify-center min-h-[44px] px-4 py-3 border rounded-md text-kosmo-text font-bold no-underline bg-kosmo-crimson border-kosmo-crimson" href="/docs/installation" data-analytics-event="cta_clicked" data-analytics-props='{"cta":"install_kosmokrator","location":"homepage_hero"}'>Install KosmoKrator</a>
+            <a class="inline-flex w-[190px] max-[560px]:w-full items-center justify-center min-h-[44px] px-4 py-3 border border-kosmo-border rounded-md text-kosmo-text font-bold no-underline bg-white/[0.05]" href="/docs/getting-started" data-analytics-event="cta_clicked" data-analytics-props='{"cta":"read_docs","location":"homepage_hero"}'>Read the docs</a>
             <span class="self-center inline-flex items-center justify-center min-h-[32px]">
               <a
                 class="github-button"
@@ -129,6 +127,8 @@ const homepageOgImage = DEFAULT_OG_IMAGE;
                 data-icon="octicon-star"
                 data-size="large"
                 data-show-count="true"
+                data-analytics-event="cta_clicked"
+                data-analytics-props='{"cta":"github_star","location":"homepage_hero"}'
                 aria-label="Star OpenCompanyApp/kosmokrator on GitHub"
               >Star</a>
             </span>
@@ -145,6 +145,8 @@ const homepageOgImage = DEFAULT_OG_IMAGE;
                   index === 0 ? 'bg-kosmo-crimson/15 text-kosmo-text' : 'bg-white/[0.03] text-kosmo-muted',
                 ]}
                 data-surface-tab={key}
+                data-analytics-event="cta_clicked"
+                data-analytics-props={JSON.stringify({ cta: 'surface_tab', location: 'homepage_runtime_tabs', surface_tab: key })}
                 role="tab"
                 aria-selected={index === 0 ? 'true' : 'false'}
                 aria-controls={`surface-${key}`}
@@ -179,10 +181,10 @@ const homepageOgImage = DEFAULT_OG_IMAGE;
         </div>
         <div class="overflow-hidden border border-white/10 rounded-lg bg-white/[0.04]" aria-label="Install methods">
           <div class="grid grid-cols-4 border-b border-white/10 max-[560px]:grid-cols-2" role="tablist" aria-label="Install methods">
-            <button type="button" role="tab" aria-selected="true" aria-controls="install-static" id="install-tab-static" data-install-tab="static" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-kosmo-crimson/15 text-kosmo-text cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Static binary</button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="install-phar" id="install-tab-phar" data-install-tab="phar" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">PHAR</button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="install-source" id="install-tab-source" data-install-tab="source" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Source checkout</button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="install-termux" id="install-tab-termux" data-install-tab="termux" class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Termux</button>
+            <button type="button" role="tab" aria-selected="true" aria-controls="install-static" id="install-tab-static" data-install-tab="static" data-analytics-event="cta_clicked" data-analytics-props='{"cta":"install_tab","location":"homepage_install","install_target":"static"}' class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-kosmo-crimson/15 text-kosmo-text cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Static binary</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-phar" id="install-tab-phar" data-install-tab="phar" data-analytics-event="cta_clicked" data-analytics-props='{"cta":"install_tab","location":"homepage_install","install_target":"phar"}' class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">PHAR</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-source" id="install-tab-source" data-install-tab="source" data-analytics-event="cta_clicked" data-analytics-props='{"cta":"install_tab","location":"homepage_install","install_target":"source"}' class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Source checkout</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="install-termux" id="install-tab-termux" data-install-tab="termux" data-analytics-event="cta_clicked" data-analytics-props='{"cta":"install_tab","location":"homepage_install","install_target":"termux"}' class="min-h-[48px] p-3 border-0 border-r border-white/[0.08] bg-white/[0.03] text-kosmo-muted cursor-pointer last:border-r-0 font-extrabold text-xs font-mono">Termux</button>
           </div>
           <section id="install-static" class="p-5 block" role="tabpanel" aria-labelledby="install-tab-static" data-install-panel="static">
             <h3 class="m-0 mb-2 text-kosmo-text text-base">Static binary</h3>

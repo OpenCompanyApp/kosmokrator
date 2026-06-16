@@ -2,11 +2,11 @@
 
 namespace Kosmokrator\Tests\Unit\Tool;
 
+use Kosmokrator\LLM\Tool as LlmTool;
 use Kosmokrator\Tool\ToolInterface;
 use Kosmokrator\Tool\ToolRegistry;
 use Kosmokrator\Tool\ToolResult;
 use PHPUnit\Framework\TestCase;
-use Prism\Prism\Tool as PrismTool;
 
 class ToolRegistryTest extends TestCase
 {
@@ -56,100 +56,100 @@ class ToolRegistryTest extends TestCase
         $this->assertSame($tool2, $this->registry->get('dup'));
     }
 
-    public function test_to_prism_tools_returns_prism_tool_array(): void
+    public function test_to_llm_tools_returns_llm_tool_array(): void
     {
         $this->registry->register($this->makeTool('a'));
         $this->registry->register($this->makeTool('b'));
 
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $this->assertCount(2, $prismTools);
-        $this->assertInstanceOf(PrismTool::class, $prismTools[0]);
-        $this->assertInstanceOf(PrismTool::class, $prismTools[1]);
+        $this->assertCount(2, $llmTools);
+        $this->assertInstanceOf(LlmTool::class, $llmTools[0]);
+        $this->assertInstanceOf(LlmTool::class, $llmTools[1]);
     }
 
-    public function test_to_prism_tools_maps_name_and_description(): void
+    public function test_to_llm_tools_maps_name_and_description(): void
     {
         $this->registry->register($this->makeTool('my_tool', 'My description'));
 
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $this->assertSame('my_tool', $prismTools[0]->name());
-        $this->assertSame('My description', $prismTools[0]->description());
+        $this->assertSame('my_tool', $llmTools[0]->name());
+        $this->assertSame('My description', $llmTools[0]->description());
     }
 
-    public function test_to_prism_tools_maps_string_parameter(): void
+    public function test_to_llm_tools_maps_string_parameter(): void
     {
         $tool = $this->makeToolWithParams('t', [
             'path' => ['type' => 'string', 'description' => 'File path'],
         ], ['path']);
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $params = $prismTools[0]->parametersAsArray();
+        $params = $llmTools[0]->parametersAsArray();
         $this->assertArrayHasKey('path', $params);
         $this->assertSame('string', $params['path']['type']);
     }
 
-    public function test_to_prism_tools_maps_number_parameter(): void
+    public function test_to_llm_tools_maps_number_parameter(): void
     {
         $tool = $this->makeToolWithParams('t', [
             'count' => ['type' => 'number', 'description' => 'Count'],
         ], ['count']);
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $params = $prismTools[0]->parametersAsArray();
+        $params = $llmTools[0]->parametersAsArray();
         $this->assertArrayHasKey('count', $params);
         $this->assertSame('number', $params['count']['type']);
     }
 
-    public function test_to_prism_tools_maps_integer_parameter(): void
+    public function test_to_llm_tools_maps_integer_parameter(): void
     {
         $tool = $this->makeToolWithParams('t', [
             'offset' => ['type' => 'integer', 'description' => 'Offset'],
         ], ['offset']);
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $params = $prismTools[0]->parametersAsArray();
+        $params = $llmTools[0]->parametersAsArray();
         $this->assertArrayHasKey('offset', $params);
         // integer maps through withNumberParameter, which sets type to 'number'
         $this->assertSame('number', $params['offset']['type']);
     }
 
-    public function test_to_prism_tools_maps_boolean_parameter(): void
+    public function test_to_llm_tools_maps_boolean_parameter(): void
     {
         $tool = $this->makeToolWithParams('t', [
             'verbose' => ['type' => 'boolean', 'description' => 'Verbose'],
         ], ['verbose']);
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $params = $prismTools[0]->parametersAsArray();
+        $params = $llmTools[0]->parametersAsArray();
         $this->assertArrayHasKey('verbose', $params);
         $this->assertSame('boolean', $params['verbose']['type']);
     }
 
-    public function test_to_prism_tools_maps_unknown_type_as_string(): void
+    public function test_to_llm_tools_maps_unknown_type_as_string(): void
     {
         $tool = $this->makeToolWithParams('t', [
             'data' => ['type' => 'object', 'description' => 'Some data'],
         ], ['data']);
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $params = $prismTools[0]->parametersAsArray();
+        $params = $llmTools[0]->parametersAsArray();
         $this->assertArrayHasKey('data', $params);
         $this->assertSame('string', $params['data']['type']);
     }
 
-    public function test_to_prism_tools_marks_required_parameters(): void
+    public function test_to_llm_tools_marks_required_parameters(): void
     {
         $tool = $this->makeToolWithParams('t', [
             'path' => ['type' => 'string', 'description' => 'Required'],
@@ -157,14 +157,14 @@ class ToolRegistryTest extends TestCase
         ], ['path']);
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $required = $prismTools[0]->requiredParameters();
+        $required = $llmTools[0]->requiredParameters();
         $this->assertContains('path', $required);
         $this->assertNotContains('limit', $required);
     }
 
-    public function test_to_prism_tool_handler_calls_execute(): void
+    public function test_to_llm_tool_handler_calls_execute(): void
     {
         $tool = $this->createMock(ToolInterface::class);
         $tool->method('name')->willReturn('test_tool');
@@ -179,15 +179,15 @@ class ToolRegistryTest extends TestCase
             ->willReturn(ToolResult::success('result'));
 
         $this->registry->register($tool);
-        $prismTools = $this->registry->toPrismTools();
+        $llmTools = $this->registry->toLlmTools();
 
-        $output = $prismTools[0]->handle(input: 'hello');
+        $output = $llmTools[0]->handle(input: 'hello');
         $this->assertSame('result', $output);
     }
 
-    public function test_to_prism_tools_empty_registry(): void
+    public function test_to_llm_tools_empty_registry(): void
     {
-        $this->assertEmpty($this->registry->toPrismTools());
+        $this->assertEmpty($this->registry->toLlmTools());
     }
 
     private function makeTool(string $name, string $description = 'Test tool'): ToolInterface

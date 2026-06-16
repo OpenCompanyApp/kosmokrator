@@ -296,7 +296,15 @@ export function slugify(value: string): string {
 }
 
 export function siteUrl(path: string): string {
-  return `${SITE_URL}${path === '/' ? '' : path}`;
+  if (path === '/') {
+    return SITE_URL;
+  }
+
+  if (path.endsWith('/') || /\.[a-z0-9]+$/i.test(path)) {
+    return `${SITE_URL}${path}`;
+  }
+
+  return `${SITE_URL}${path}/`;
 }
 
 export function ogImageSlug(parts: Array<string | undefined>): string {

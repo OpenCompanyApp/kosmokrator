@@ -34,6 +34,23 @@ class SubagentStatsTest extends TestCase
         $this->assertSame(130, $stats->tokensOut);
     }
 
+    public function test_context_and_cache_telemetry(): void
+    {
+        $stats = new SubagentStats('x');
+        $stats->markContext(5000, 10000, 'tool:bash');
+        $stats->addCacheTokens(1200, 300);
+        $stats->incrementPruneCount();
+        $stats->incrementCompactionCount();
+
+        $this->assertSame(5000, $stats->contextTokens);
+        $this->assertSame(50.0, $stats->contextPercentUsed);
+        $this->assertSame('tool:bash', $stats->largestContextBucket);
+        $this->assertSame(1200, $stats->cacheReadTokens);
+        $this->assertSame(300, $stats->cacheWriteTokens);
+        $this->assertSame(1, $stats->pruneCount);
+        $this->assertSame(1, $stats->compactionCount);
+    }
+
     public function test_message_preview_is_normalized_and_truncated(): void
     {
         $stats = new SubagentStats('x');

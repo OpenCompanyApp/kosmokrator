@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Kosmokrator\Tests\Unit\LLM;
 
 use Illuminate\Config\Repository;
+use Kosmokrator\LLM\Codex\CodexToken;
 use Kosmokrator\LLM\Codex\SettingsCodexTokenStore;
 use Kosmokrator\LLM\ModelDiscovery\DiscoveredModel;
 use Kosmokrator\LLM\ModelDiscovery\ModelDiscoveryCacheRepository;
 use Kosmokrator\LLM\ProviderCatalog;
+use Kosmokrator\LLM\ProviderMeta;
+use Kosmokrator\LLM\RelayProviderRegistry;
 use Kosmokrator\Session\Database;
 use Kosmokrator\Session\SettingsRepository;
-use OpenCompany\PrismCodex\ValueObjects\CodexToken;
-use OpenCompany\PrismRelay\Meta\ProviderMeta;
-use OpenCompany\PrismRelay\Registry\RelayRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class ProviderCatalogTest extends TestCase
@@ -33,6 +33,7 @@ final class ProviderCatalogTest extends TestCase
                 'default_model' => 'glm-5.1',
                 'url' => 'https://api.z.ai/api/coding/paas/v4',
                 'models' => [
+                    'glm-5.2' => ['display_name' => 'GLM 5.2', 'context' => 1_000_000, 'max_output' => 131072, 'thinking' => true],
                     'glm-5.1' => ['display_name' => 'GLM 5.1', 'context' => 204800, 'max_output' => 131072, 'thinking' => true],
                     'glm-5-turbo' => ['display_name' => 'GLM 5 Turbo', 'context' => 204800, 'max_output' => 16384],
                 ],
@@ -65,14 +66,15 @@ final class ProviderCatalogTest extends TestCase
             email: 'dev@example.com',
         ));
 
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'codex' => ['url' => 'https://chatgpt.com/backend-api/codex', 'auth' => 'oauth'],
             'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4', 'auth' => 'api_key', 'driver' => 'glm-coding'],
             'ollama' => ['url' => 'http://localhost:11434/v1', 'auth' => 'none', 'driver' => 'ollama'],
         ]), $config, $settings, $tokens);
 
         $this->assertSame(['gpt-5.3-codex', 'gpt-5-codex-mini'], $catalog->modelIds('codex'));
-        $this->assertSame(['glm-5.1', 'glm-5-turbo'], $catalog->modelIds('z'));
+        $this->assertSame(['glm-5.2', 'glm-5.1', 'glm-5-turbo'], $catalog->modelIds('z'));
+        $this->assertTrue($catalog->supportsModel('z', 'glm-5.2'));
         $this->assertSame('Authenticated · dev@example.com', $catalog->authStatus('codex'));
         $this->assertSame('Configured · zai-secr...1234', $catalog->authStatus('z'));
         $this->assertSame('No authentication required', $catalog->authStatus('ollama'));
@@ -120,7 +122,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'mimo' => [
                 'source' => 'custom',
                 'label' => 'Xiaomi MiMo',
@@ -204,7 +206,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'z' => ['url' => 'https://api.z.ai/api/coding/paas/v4', 'auth' => 'api_key', 'driver' => 'glm-coding'],
             'mimo' => ['url' => 'https://token-plan-sgp.xiaomimimo.com/v1', 'auth' => 'api_key', 'driver' => 'openai-compatible'],
         ]), $config, $settings, new SettingsCodexTokenStore($settings));
@@ -263,7 +265,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
 
         $settings = new SettingsRepository(new Database(':memory:'));
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'z-api' => [
                 'url' => 'https://open.bigmodel.cn/api/paas/v4',
                 'auth' => 'api_key',
@@ -313,7 +315,7 @@ final class ProviderCatalogTest extends TestCase
             new DiscoveredModel(id: 'gpt-new', displayName: 'GPT New', contextWindow: 400000, maxOutput: 128000),
         ], 'provider_live', 3600);
 
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'openai' => ['url' => 'https://api.openai.com/v1', 'auth' => 'api_key', 'driver' => 'openai'],
         ]), $config, $settings, new SettingsCodexTokenStore($settings), $cache);
 
@@ -349,7 +351,7 @@ final class ProviderCatalogTest extends TestCase
         ]);
         $settings = new SettingsRepository(new Database(':memory:'));
 
-        $catalog = new ProviderCatalog($meta, new RelayRegistry([
+        $catalog = new ProviderCatalog($meta, new RelayProviderRegistry([
             'local-ai' => [
                 'url' => 'http://127.0.0.1:11434/v1',
                 'auth' => 'none',

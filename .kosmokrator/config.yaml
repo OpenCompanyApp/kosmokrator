@@ -2,7 +2,7 @@ kosmokrator:
   agent:
     mode: edit
     default_provider: z
-    default_model: glm-5.1
+    default_model: glm-5.2
   tools:
     default_permission_mode: prometheus
   provider_state:
@@ -11,4 +11,4 @@ kosmokrator:
     z-api:
       last_model: glm-5-turbo
     z:
-      last_model: glm-5.1
+      last_model: glm-5.2

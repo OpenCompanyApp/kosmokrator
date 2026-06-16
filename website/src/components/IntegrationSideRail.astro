@@ -1,0 +1,48 @@
+---
+import { integrationUrl, type Integration } from '../lib/integrations-catalog';
+
+type PageType = 'overview' | 'lua' | 'cli' | 'mcp';
+
+type Props = {
+  integration: Integration;
+  pageType: PageType;
+  feedbackIssueUrl: string;
+  packageUrl: string;
+};
+
+const { integration, pageType, feedbackIssueUrl, packageUrl } = Astro.props as Props;
+
+const surfaces = [
+  { label: 'Overview', href: integrationUrl(integration), type: 'overview' },
+  { label: 'CLI', href: integrationUrl(integration, 'cli'), type: 'cli' },
+  { label: 'MCP', href: integrationUrl(integration, 'mcp'), type: 'mcp' },
+  { label: 'Lua', href: integrationUrl(integration, 'lua'), type: 'lua' },
+];
+---
+
+<aside class="integration-side-rail" aria-label={`${integration.name} integration navigation`}>
+  <div class="rail-panel">
+    <p class="rail-eyebrow">{integration.category}</p>
+    <a class="rail-title" href={integrationUrl(integration)}>{integration.name}</a>
+    <dl class="rail-stats">
+      <div><dt>Functions</dt><dd>{integration.tools.length}</dd></div>
+      <div><dt>Read</dt><dd>{integration.read_tool_count}</dd></div>
+      <div><dt>Write</dt><dd>{integration.write_tool_count}</dd></div>
+      <div><dt>Auth</dt><dd>{integration.auth_strategy_label}</dd></div>
+    </dl>
+  </div>
+
+  <nav class="rail-panel rail-nav" aria-label={`${integration.name} surfaces`}>
+    {surfaces.map((surface) => (
+      <a class:list={[pageType === surface.type && 'active']} href={surface.href}>
+        <span>{surface.label}</span>
+      </a>
+    ))}
+  </nav>
+
+  <div class="rail-panel rail-actions">
+    <a href={feedbackIssueUrl}>Submit feedback</a>
+    <a href={packageUrl} data-analytics-event="integration_package_link_clicked" data-analytics-props={JSON.stringify({ package: integration.package, href: packageUrl })}>Package source</a>
+    {integration.docs_url && <a href={integration.docs_url} data-analytics-event="outbound_link_clicked" data-analytics-props={JSON.stringify({ href: integration.docs_url, label: 'Official docs' })}>Official docs</a>}
+  </div>
+</aside>

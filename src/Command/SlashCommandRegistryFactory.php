@@ -22,11 +22,13 @@ final class SlashCommandRegistryFactory
         $registry->register(new Slash\SeedCommand);
         $registry->register(new Slash\TheogonyCommand);
         $registry->register(new Slash\CompactCommand);
+        $registry->register(new Slash\ContextCommand);
         $registry->register(new Slash\ModelsCommand($container));
         $registry->register(new Slash\TasksClearCommand);
         $registry->register(new Slash\MemoriesCommand);
         $registry->register(new Slash\SessionsCommand);
         $registry->register(new Slash\ForgetCommand);
+        $registry->register(new Slash\GoalCommand);
 
         $registry->register(new Slash\GuardianCommand);
         $registry->register(new Slash\ArgusCommand);

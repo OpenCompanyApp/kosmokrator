@@ -48,7 +48,7 @@ Drop oldest message to reclaim token budget
 
 Emergency
 
-The pipeline is designed so that most sessions never reach the later stages. Output truncation and deduplication handle the bulk of token reduction silently, keeping the conversation lean without any loss of important context.
+The pipeline is designed so that most sessions never reach the later stages. Output truncation and deduplication handle the bulk of token reduction silently, keeping the conversation lean without any loss of important context. Use `/context` at any time to inspect the live token budget, cache stats, largest context items, and suggestions.
 
 ## Output Truncation
 
@@ -119,11 +119,11 @@ The pruner never touches recent context. The last 2 user turns and all messages 
 
 ### Importance Scoring
 
-Each candidate tool result is scored by importance. Lower-scoring results are pruned first. The score factors include:
+Each candidate tool result is scored by prune priority. Higher-priority results are pruned first. The score factors include:
 
--   **Tool type weight** — Tools with typically larger, less reusable output score lower (more likely to be pruned). Weights range from `bash` (70 — most pruneable) down to `glob` (10 — least pruneable). File edits and writes score 20 (often contain important decisions).
--   **Reference by later reasoning** — If an assistant message after the tool result references the file name or quotes part of the result, the score increases by 15 per reference, making it more likely to be kept.
--   **Decision language** — If subsequent assistant messages contain phrases like "based on", "I'll use", or "the issue is" that suggest the tool result influenced a decision, the score increases by 10.
+-   **Tool type priority** — Tools with typically larger, less reusable output score higher. Shell output is pruned before referenced file reads when both are old.
+-   **Reference by later reasoning** — If an assistant message after the tool result references the file name or quotes part of the result, the priority is reduced, making it more likely to be kept.
+-   **Decision language** — If subsequent assistant messages contain phrases like "based on", "I'll use", or "the issue is" that suggest the tool result influenced a decision, the priority is reduced.
 
 ### Context-Aware Placeholders
 
@@ -162,8 +162,10 @@ When pruning and deduplication are not sufficient and token usage crosses the au
 2.  Old messages are formatted into a plain-text transcript and sent to the LLM with a dedicated compaction system prompt. The LLM is instructed to _only summarize_, not respond to questions in the conversation.
 3.  The LLM produces a structured summary covering: the user's goal, key decisions made, work accomplished (with specific file paths), work in progress, and relevant files.
 4.  The old messages are replaced with a single system message containing the summary, followed by the preserved recent messages.
-5.  The summary is also stored as a **working memory** (with a 14-day expiration) so that the context persists even if the session ends.
-6.  A second LLM call extracts **durable memories** from the summary — facts about the codebase, user preferences, and technical decisions. These are saved permanently for cross-session recall.
+5.  The inserted summary is wrapped as historical reference only: the latest user message, current mode, current system prompt, and current tool results always override it.
+6.  A bounded **Current Working State** block restores recent files, active tasks, and active background work without rehydrating large outputs.
+7.  The summary is also stored as a **working memory** (with a 14-day expiration) so that the context persists even if the session ends.
+8.  Durable memories are extracted from the same compaction response — facts about the codebase, user preferences, and technical decisions. These are saved permanently for cross-session recall.
 
 ### Summary Format
 
@@ -202,6 +204,19 @@ If the compaction LLM call fails three times consecutively, the circuit breaker 
 | `compact_threshold` | 60% of context window | Percentage of the context window at which compaction triggers. Also bounded by the `auto_compact_buffer_tokens` budget if configured. |
 
 **Tip:** You can trigger compaction manually at any time with the `/compact` slash command. This is useful if you know a long tool output is no longer relevant and want to reclaim context space proactively.
+
+## Context Diagnostics
+
+The `/context` slash command shows live harness diagnostics:
+
+-   Model, context window, effective window, and thresholds
+-   Estimated tokens used and largest buckets
+-   Largest individual messages and tool results
+-   Last provider prompt-cache read/write tokens
+-   File-read and web transient cache hits, misses, evictions, and entries
+-   Suggestions for large shell output, memory bloat, high context pressure, or cache-read drops
+
+Use `/context --full` for more cache detail or `/context --json` for machine-readable output.
 
 ## Oldest-Turn Trimming
 

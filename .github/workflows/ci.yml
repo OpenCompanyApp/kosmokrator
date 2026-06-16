@@ -178,6 +178,7 @@ jobs:
   pint:
     name: Code Style
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -193,4 +194,4 @@ jobs:
         run: composer install --no-interaction
 
       - name: Check code style
-        run: php vendor/bin/pint --test
+        run: timeout 300s php vendor/bin/pint --test --no-interaction --verbose

@@ -38,6 +38,7 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 - Fixed official Symfony TUI loader integration so thinking and compacting messages no longer expose sanitized ANSI fragments.
 - Closed stdin for one-shot BashTool commands so test runners and other stdin-aware commands do not hang waiting for input.
 - Prevented large base64-like payloads and data URLs from being sent raw into compaction prompts.
+- Raised the CLI startup memory floor so static PHAR binaries can load the bundled integration catalog under micro SFX.
 
 ## [0.7.2] - 2026-05-04
 

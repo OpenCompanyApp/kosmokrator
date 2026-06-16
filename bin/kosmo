@@ -88,6 +88,12 @@ use NunoMaduro\Collision\Provider;
 
 define('KOSMOKRATOR_START', microtime(true));
 
+// Static PHP micro binaries default to 128M, which is too low for the bundled
+// integration catalog. Keep the CLI runtime aligned with normal dev installs.
+if (ini_get('memory_limit') !== '-1') {
+    ini_set('memory_limit', '1G');
+}
+
 // Autoloader
 $autoloader = require file_exists(__DIR__.'/../vendor/autoload.php')
     ? __DIR__.'/../vendor/autoload.php'

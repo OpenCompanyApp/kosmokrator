@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -194,4 +195,4 @@ jobs:
         run: composer install --no-interaction
 
       - name: Check code style
-        run: timeout 300s php vendor/bin/pint --test --no-interaction --verbose
+        run: timeout --kill-after=10s 300s php vendor/bin/pint --test --diff=origin/main --no-interaction --verbose

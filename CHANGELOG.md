@@ -11,6 +11,7 @@ This changelog follows the shape of [Keep a Changelog](https://keepachangelog.co
 ### Changed
 
 ### Fixed
+- Updated dependencies for security advisories: Guzzle 7.16.0, guzzlehttp/psr7 2.13.2, league/commonmark 2.10.4 (stable instead of the `dev-main` snapshot), Symfony http-foundation and YAML 8.1.9, and the website's Astro 6.4.8, Vite 7.3.7 and related npm packages. The website Docker build now pins Node.js 22.23.4.
 
 ## [0.8.0] - 2026-06-16
 
